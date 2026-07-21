@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>节点式图片文字画布</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app theme-light">
+    <header class="topbar">
+      <div class="project-shell">
+        <div class="brand">WEBIMAGE</div>
+        <button id="projectNameBtn" class="project-name-btn" title="单击切换项目，双击重命名">未命名项目</button>
+        <div id="projectMenu" class="project-menu hidden"></div>
+        <button id="newCanvasBtn" class="icon-btn subtle" title="新建项目">＋</button>
+      </div>
+
+      <div class="tool-shell">
+        <button id="saveJsonBtn" class="icon-btn" title="保存JSON" aria-label="保存JSON">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button id="loadJsonBtn" class="icon-btn" title="加载JSON" aria-label="加载JSON">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
+        <button id="autoOutputBtn" title="一键生成AI绘图节点">一键生成AI绘图节点</button>
+        <button id="aiGenerateBtn" title="批量执行">批量执行</button>
+        <button id="runBtn" class="primary" title="导出">导出</button>
+        <button id="themeBtn" class="icon-btn" title="皮肤切换">☾</button>
+        <button id="settingsBtn" class="icon-btn" title="设置">☰</button>
+      </div>
+    </header>
+
+    <div id="progressPanel" class="progress-panel hidden">
+      <div class="progress-row">
+        <span id="progressLabel">准备导出</span>
+        <span id="progressPercent">0%</span>
+        <button id="batchCancelAllBtn" class="batch-cancel-btn hidden" title="取消所有任务">取消全部</button>
+      </div>
+      <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+      <div id="batchTaskList" class="batch-task-list hidden"></div>
+    </div>
+
+    <main id="viewport" class="viewport" tabindex="0">
+      <div id="world" class="world">
+        <svg id="edges" class="edges"></svg>
+        <div id="nodes" class="nodes"></div>
+        <div id="selectionBox" class="selection-box hidden"></div>
+      </div>
+      <div class="minimap-panel">
+        <canvas id="minimap" class="minimap" width="180" height="120"></canvas>
+        <button id="centerViewBtn" class="center-view-btn" title="居中显示所有节点">居中显示</button>
+      </div>
+    </main>
+
+    <section class="composer">
+      <input id="composerText" type="text" placeholder="输入文字后回车创建文字节点；上传图片可创建图片节点">
+      <button id="composerUploadBtn" class="icon-btn" title="上传图片">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v7A2.5 2.5 0 0 1 18.5 18h-13A2.5 2.5 0 0 1 3 15.5v-9zm2.5-.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5h-7.33l-2-2H5.5z"/></svg>
+      </button>
+      <button id="composerSubmitBtn" class="primary" title="创建节点">创建</button>
+      <input id="composerFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+      <input id="composerFolderInput" type="file" webkitdirectory directory hidden>
+      <div id="composerImageName" class="composer-image-name"></div>
+    </section>
+
+    <aside id="settingsPanel" class="settings hidden">
+      <div class="panel-head">
+        <strong>设置</strong>
+        <button id="closeSettingsBtn" class="icon-btn" title="关闭">×</button>
+      </div>
+      <label>网格对齐距离
+        <input id="gridSizeInput" type="number" min="1" max="200" value="20">
+      </label>
+      <label class="check-row">
+        <input id="snapToggle" type="checkbox" checked>
+        <span>开启网格吸附</span>
+      </label>
+      <label class="check-row">
+        <input id="zipExportToggle" type="checkbox" checked>
+        <span>ZIP 压缩包导出（兼容性最好，推荐）</span>
+      </label>
+
+      <label>导出文件夹
+        <input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）">
+      </label>
+      <div class="export-folder-actions">
+        <button id="openExportFolderBtn">打开导出文件夹</button>
+        <button id="chooseFolderBtn">设置导出文件夹</button>
+      </div>
+      <p class="setting-desc export-warning">⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。</p>
+
+      <div class="ai-section-head">AI绘图</div>
+
+      <label>API Key
+        <div class="apikey-row">
+          <input id="apiKeyInput" type="password" placeholder="输入你的 API Key">
+          <button id="verifyKeyBtn" class="apikey-btn" title="验证 API Key 是否有效">验证</button>
+          <button id="saveKeyBtn" class="apikey-btn" title="保存 API Key">保存</button>
+          <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
+        </div>
+        <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
+        <div class="balance-row">
+          <span id="balanceDisplay" class="balance-text">积分：--</span>
+          <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
+        </div>
+      </label>
+
+      <label>默认模型
+        <select id="modelSelect">
+          <option value="gpt-image-2">GPT Image 2（0.085积分/张 · ~60s）</option>
+          <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash（0.3积分/张 · ~45s）</option>
+        </select>
+      </label>
+
+      <label>默认分辨率
+        <select id="resolutionSelect">
+          <option value="1k">1K</option>
+          <option value="2k">2K</option>
+          <option value="4k">4K</option>
+        </select>
+      </label>
+
+      <label id="qualityLabel">画质
+        <select id="qualitySelect">
+          <option value="auto">auto（自动）</option>
+          <option value="low">low（快速）</option>
+          <option value="medium">medium（平衡）</option>
+          <option value="high">high（最高）</option>
+        </select>
+      </label>
+
+      <label>默认图片比例
+        <select id="defaultRatioSelect">
+          <option value="1:1">1:1（正方）</option>
+          <option value="auto">auto（自动）</option>
+          <option value="3:2">3:2（横图）</option>
+          <option value="2:3">2:3（竖图）</option>
+          <option value="4:3">4:3（横图）</option>
+          <option value="3:4">3:4（竖图）</option>
+          <option value="5:4">5:4（横图）</option>
+          <option value="4:5">4:5（竖图）</option>
+          <option value="16:9">16:9（横图）</option>
+          <option value="9:16">9:16（竖图）</option>
+          <option value="2:1">2:1（横图）</option>
+          <option value="1:2">1:2（竖图）</option>
+          <option value="3:1">3:1（横图）</option>
+          <option value="1:3">1:3（竖图）</option>
+          <option value="21:9">21:9（横图）</option>
+          <option value="9:21">9:21（竖图）</option>
+        </select>
+      </label>
+
+      <div class="ai-section-head">Gemini Automation</div>
+
+      <label class="check-row">
+        <input id="geminiToggle" type="checkbox">
+        <span>开启 Gemini 自动化模式</span>
+      </label>
+
+      <p class="setting-desc">该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。</p>
+
+      <div class="gemini-actions">
+        <button id="geminiPluginBtn" class="gemini-plugin-btn" title="下载 Gemini Automation 浏览器插件">插件下载</button>
+        <button id="geminiExportBtn" class="primary hidden" title="按 Gemini 兼容格式导出">Gemini 导出</button>
+      </div>
+
+      <div class="shortcut-list">
+        <div class="shortcut-kicker">Keyboard</div>
+        <h2>快捷键说明</h2>
+        <div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div>
+        <div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div>
+        <div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div>
+        <div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div>
+        <div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div>
+        <div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点编组</span></div>
+        <div class="shortcut-row"><b>右键编组节点</b><span>取消编组，还原内部节点和连线</span></div>
+        <div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div>
+        <div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div>
+        <div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div>
+      </div>
+    </aside>
+
+    <div id="contextMenu" class="context-menu hidden"></div>
+    <input id="loadJsonInput" type="file" accept="application/json,.json" hidden>
+  </div>
+
+  <div id="lightbox" class="lightbox hidden">
+    <div class="lightbox-bg"></div>
+    <img id="lightboxImg" class="lightbox-img" alt="">
+    <button id="lightboxClose" class="lightbox-close" title="关闭">×</button>
+    <button id="lightboxPrev" class="lightbox-nav lightbox-prev hidden" title="上一张">‹</button>
+    <button id="lightboxNext" class="lightbox-nav lightbox-next hidden" title="下一张">›</button>
+    <span id="lightboxCounter" class="lightbox-counter hidden"></span>
+  </div>
+
+  <div id="executeDialog" class="execute-dialog hidden">
+    <div class="execute-dialog-bg"></div>
+    <div class="execute-dialog-panel">
+      <div class="execute-dialog-head">
+        <strong id="executeTitle">执行 AI 绘图</strong>
+        <button id="executeClose" class="icon-btn" title="关闭">×</button>
+      </div>
+      <div id="executeList" class="execute-list"></div>
+      <div class="execute-dialog-actions">
+        <button id="executeCancelBtn">取消</button>
+        <button id="executeRunBtn" class="primary">全部执行</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "webimage-server",
+  "version": "2.2.0",
+  "description": "WEBIMAGE node-based image canvas server",
+  "main": "server.js",
+  "bin": "server.js",
+  "pkg": {
+    "assets": [
+      "index.html",
+      "app.js",
+      "styles.css",
+      "download/images/*"
+    ],
+    "outputPath": "."
+  }
+}
