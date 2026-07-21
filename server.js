@@ -5,7 +5,7 @@ const path = require("path");
 
 const { execSync } = require("child_process");
 
-const root = path.resolve(__dirname);
+const root = __dirname;
 const dataRoot = typeof process.pkg !== "undefined" ? path.dirname(process.execPath) : path.resolve(__dirname);
 const port = Number(process.env.PORT || 5173);
 const mime = {
@@ -14,6 +14,21 @@ const mime = {
   ".js": "text/javascript;charset=utf-8",
   ".json": "application/json;charset=utf-8",
 };
+
+var staticCache = {};
+(function() {
+  var files = ["index.html", "app.js", "styles.css"];
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    try {
+      var filePath = __dirname + "/" + f;
+      staticCache["/" + f] = fs.readFileSync(filePath, "utf-8");
+    } catch(e) {
+      console.log("[静态文件] 无法加载 " + f + ": " + e.message + ", path=" + __dirname);
+    }
+  }
+  console.log("[静态文件] 预加载 " + Object.keys(staticCache).length + "/" + files.length + " 个文件");
+})();
 
 const API_BASE_URLS = [
   "https://api.apib.ai",
@@ -306,9 +321,17 @@ async function requestHandler(req, res) {
     return;
   }
 
-  // Static file serving
+  // Static file serving (优先内存缓存)
   if (pathname === "/") pathname = "/index.html";
-  const file = path.resolve(root, `.${pathname}`);
+  console.log(`[静态文件] root=${root}, pathname=${pathname}`);
+  if (staticCache[pathname]) {
+    var ext = path.extname(pathname);
+    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
+    res.end(staticCache[pathname]);
+    return;
+  }
+  // 回退到磁盘读取（download/images 等非缓存文件）
+  var file = path.join(root, pathname.replace(/^\//, ""));
   if (file !== root && !file.startsWith(root + path.sep)) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -316,6 +339,7 @@ async function requestHandler(req, res) {
   }
   fs.readFile(file, (err, data) => {
     if (err) {
+      console.log(`[静态文件] 读取失败: ${err.code} ${err.message}`);
       res.writeHead(404);
       res.end("Not found");
       return;

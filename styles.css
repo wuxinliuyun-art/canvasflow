@@ -1076,8 +1076,9 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   color: #fff;
   background: rgba(255, 255, 255, .12);
   font-size: 32px;
-  line-height: 48px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: background .15s ease;
 }
@@ -1086,7 +1087,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .lightbox-next { right: 20px; }
 .lightbox-counter {
   position: absolute;
-  bottom: 24px;
+  bottom: 64px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
@@ -1097,6 +1098,30 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   font-size: 14px;
   pointer-events: none;
 }
+.lightbox-dots {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+.lightbox-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .35);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.lightbox-dot.active {
+  background: #fff;
+  transform: scale(1.35);
+}
+.lightbox-dot:hover { background: rgba(255, 255, 255, .7); }
 
 /* Execute dialog */
 .execute-dialog {

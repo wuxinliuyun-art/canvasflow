@@ -76,6 +76,7 @@ const els = {
   lightboxPrev: $("lightboxPrev"),
   lightboxNext: $("lightboxNext"),
   lightboxCounter: $("lightboxCounter"),
+  lightboxDots: $("lightboxDots"),
   executeDialog: $("executeDialog"),
   executeTitle: $("executeTitle"),
   executeList: $("executeList"),
@@ -407,6 +408,7 @@ function ungroupNode(groupId) {
       for (const e of group._extOutTargets) state.edges.push({ id: uid("e"), from: { node: e.from.node, port: "out" }, to: { node: e.to.node, port: "in" } });
     }
   } else if (group.images && group.images.length) {
+    const incomingEdges = state.edges.filter(e => e.to.node === groupId);
     for (let i = 0; i < group.images.length; i++) {
       const gImg = group.images[i];
       const imgNode = addNode("image", group.x + i * 260, group.y + 60, false);
@@ -414,6 +416,9 @@ function ungroupNode(groupId) {
       imgNode.fileName = gImg.fileName || "";
       imgNode.mime = gImg.mime || "";
       restoredIds.add(imgNode.id);
+      for (const e of incomingEdges) {
+        state.edges.push({ id: uid("e"), from: { node: e.from.node, port: "out" }, to: { node: imgNode.id, port: "in" } });
+      }
     }
   } else {
     return toast("该编组节点无可取消的内容");
@@ -426,6 +431,33 @@ function ungroupNode(groupId) {
   pushHistory();
   render();
   toast("已取消编组");
+}
+
+function splitMultiInputAiNode(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "ai-image") return [nodeId];
+
+  const incoming = buildIncomingIndex();
+  const directEdges = incoming.get(nodeId) || [];
+  if (directEdges.length <= 1) return [nodeId];
+
+  const newNodeIds = [nodeId];
+  for (let i = 1; i < directEdges.length; i++) {
+    const newAi = JSON.parse(JSON.stringify(node));
+    newAi.id = uid("n");
+    newAi.x = node.x + i * (NODE_WIDTH + 40);
+    newAi.seq = state.nextNode++;
+    newAi.generating = false;
+    newAi.generatedImage = null;
+    newAi.taskId = null;
+    newAi.batchTasks = null;
+    state.nodes.push(newAi);
+    newNodeIds.push(newAi.id);
+    var edge = directEdges[i];
+    var existingEdge = state.edges.find(function(e) { return e.id === edge.id; });
+    if (existingEdge) existingEdge.to.node = newAi.id;
+  }
+  return newNodeIds;
 }
 
 function deleteNodes(ids) {
@@ -691,18 +723,26 @@ async function generateAiImage(nodeId) {
     return;
   }
 
-  refreshAiPrompt(nodeId);
+  const nodeIds = splitMultiInputAiNode(nodeId);
+  if (nodeIds.length > 1) pushHistory();
+  const total = nodeIds.length;
+  let idx = 0;
 
-  const upstream = collectUpstreamForAI(nodeId);
-  if (!upstream.texts.length && !upstream.images.length && !upstream.groupImages.length) {
-    toast("请连接文字节点或图片节点作为输入");
-    return;
-  }
+  for (const nid of nodeIds) {
+    const aiNode = findNode(nid);
+    if (!aiNode) continue;
 
-  if (upstream.groupImages.length > 0) {
-    await generateBatchFromGroup(node, upstream);
-  } else {
-    await generateSingle(node, upstream);
+    refreshAiPrompt(nid);
+    const upstream = collectUpstreamForAI(nid);
+    if (!upstream.texts.length && !upstream.images.length && !upstream.groupImages.length) continue;
+
+    if (total > 1) setProgress(idx / total * 100, `拆分生成 ${idx + 1}/${total}`);
+    if (upstream.groupImages.length > 0) {
+      await generateBatchFromGroup(aiNode, upstream);
+    } else {
+      await generateSingle(aiNode, upstream);
+    }
+    idx++;
   }
 }
 
@@ -1549,11 +1589,19 @@ function showLightbox(src) {
 function updateLightboxImage() {
   if (lightboxImages.length === 0) return;
   els.lightboxImg.src = lightboxImages[lightboxIdx];
-  const multi = lightboxImages.length > 1;
+  var multi = lightboxImages.length > 1;
   els.lightboxPrev.classList.toggle("hidden", !multi);
   els.lightboxNext.classList.toggle("hidden", !multi);
   els.lightboxCounter.classList.toggle("hidden", !multi);
-  if (multi) els.lightboxCounter.textContent = `${lightboxIdx + 1} / ${lightboxImages.length}`;
+  els.lightboxDots.classList.toggle("hidden", !multi);
+  if (multi) {
+    els.lightboxCounter.textContent = (lightboxIdx + 1) + " / " + lightboxImages.length;
+    var dotsHtml = "";
+    for (var i = 0; i < lightboxImages.length; i++) {
+      dotsHtml += '<button class="lightbox-dot' + (i === lightboxIdx ? ' active' : '') + '" data-idx="' + i + '"></button>';
+    }
+    els.lightboxDots.innerHTML = dotsHtml;
+  }
 }
 
 function lightboxPrev() {
@@ -1579,10 +1627,19 @@ els.lightboxClose.onclick = hideLightbox;
 els.lightboxPrev.onclick = lightboxPrev;
 els.lightboxNext.onclick = lightboxNext;
 els.lightbox.querySelector(".lightbox-bg").onclick = hideLightbox;
-els.lightboxImg.addEventListener("wheel", ev => {
+els.lightbox.addEventListener("wheel", ev => {
   if (lightboxImages.length <= 1) return;
   ev.preventDefault();
   if (ev.deltaY < 0) lightboxPrev(); else lightboxNext();
+});
+els.lightboxDots.addEventListener("click", ev => {
+  var dot = ev.target.closest(".lightbox-dot");
+  if (!dot) return;
+  var idx = parseInt(dot.getAttribute("data-idx"), 10);
+  if (idx >= 0 && idx < lightboxImages.length) {
+    lightboxIdx = idx;
+    updateLightboxImage();
+  }
 });
 document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
@@ -2742,6 +2799,16 @@ function closeExecuteDialog() {
 }
 
 async function executeAllAiNodes() {
+  // 先拆分多输入 AI 节点
+  const aiNodesToCheck = state.nodes.filter(n => n.type === "ai-image" && !n.disabled && !n.generating);
+  let anySplit = false;
+  for (const n of aiNodesToCheck) {
+    const result = splitMultiInputAiNode(n.id);
+    if (result.length > 1) anySplit = true;
+  }
+  if (anySplit) pushHistory();
+
+  // 重新获取所有 AI 节点（含拆分新建的）
   const aiNodes = state.nodes.filter(n => n.type === "ai-image" && !n.disabled && !n.generating);
   if (!aiNodes.length) return;
 
