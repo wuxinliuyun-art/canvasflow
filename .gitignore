@@ -3,3 +3,5 @@ node_modules/
 *.log
 *.exe
 export/
+download/案例.json
+download/images/
