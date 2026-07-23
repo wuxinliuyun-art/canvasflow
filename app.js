@@ -106,6 +106,7 @@ const UI_EN = {
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "标记颜色": "Label Color", "保存修改": "Save Changes",
+  "素材标记颜色": "Asset Label Color",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image",
@@ -216,6 +217,7 @@ const state = {
 let globalLibrary = loadGlobalLibrary();
 let pendingLibraryImport = null;
 let editingTextTemplate = null;
+let librarySaveQueue = Promise.resolve();
 
 function emptyLibrary() { return { textTemplates: [], imageMaterials: [] }; }
 function normalizeLibrary(lib) {
@@ -237,9 +239,37 @@ function loadGlobalLibrary() {
   try { return normalizeLibrary(JSON.parse(localStorage.getItem(GLOBAL_LIBRARY_KEY) || "{}")); }
   catch (e) { console.error("[加载] 全局素材库读取失败", e); return emptyLibrary(); }
 }
+async function loadGlobalLibraryFromDisk() {
+  const browserLibrary = normalizeLibrary(globalLibrary);
+  try {
+    const resp = await fetch("/api/custom-library");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    globalLibrary = normalizeLibrary(await resp.json());
+    let migrated = 0;
+    for (const kind of ["text", "image"]) {
+      const key = kind === "text" ? "textTemplates" : "imageMaterials";
+      for (const item of browserLibrary[key]) {
+        if (globalLibrary[key].some(existing => existing.id === item.id)) continue;
+        item.name = uniqueTemplateName(kind, item.name, globalLibrary);
+        globalLibrary[key].push(item); migrated++;
+      }
+    }
+    console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}`);
+    if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
+    saveGlobalLibrary();
+  } catch (e) {
+    console.error("[加载] 本地素材库文件读取失败，继续使用浏览器备份", e);
+    toast("本地素材库读取失败：将暂时使用浏览器备份，请检查程序目录写入权限");
+  }
+}
 function saveGlobalLibrary() {
   try { localStorage.setItem(GLOBAL_LIBRARY_KEY, JSON.stringify(globalLibrary)); }
   catch (e) { console.error("[保存] 全局素材库写入失败", e); toast("全局素材保存失败，可能是浏览器存储空间不足"); }
+  const snapshot = JSON.stringify(globalLibrary);
+  librarySaveQueue = librarySaveQueue.catch(() => {}).then(async () => {
+    const resp = await fetch("/api/custom-library", { method: "POST", headers: { "Content-Type": "application/json" }, body: snapshot });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).error || `HTTP ${resp.status}`);
+  }).catch(e => { console.error("[保存] 本地素材库文件写入失败", e); toast("素材未能保存到本地：请检查程序目录写入权限后重试"); });
 }
 function migrateLegacyMaterials(data) {
   const projectLibrary = normalizeLibrary(data?.customLibrary);
@@ -348,7 +378,6 @@ const els = {
   customTextsList: $("customTextsList"),
   customTextName: $("customTextName"),
   customTextContent: $("customTextContent"),
-  customTextColor: $("customTextColor"),
   customTextGlobal: $("customTextGlobal"),
   customTextAddBtn: $("customTextAddBtn"),
   customTextEditor: $("customTextEditor"),
@@ -542,15 +571,16 @@ function renderLibraryList(kind, container) {
   if (!container) return;
   const items = libraryItems(kind);
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
-    ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="">` : `<span class="material-swatch" style="background:${escHtml(item.color)}"></span>`}
+    ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="">` : ""}
     <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
-    <input type="color" class="material-color-input" value="${escHtml(item.color)}" title="节点边框颜色">
+    ${kind === "image" ? `<input type="color" class="material-color-input" value="${escHtml(item.color)}" title="素材标记颜色">` : ""}
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
   container.querySelectorAll(".material-item").forEach(row => {
     const kind = row.dataset.kind, id = row.dataset.id;
-    row.querySelector(".material-color-input").onchange = event => updateTemplateColor(kind, id, event.target.value);
+    const colorInput = row.querySelector(".material-color-input");
+    if (colorInput) colorInput.onchange = event => updateTemplateColor(kind, id, event.target.value);
     row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
   });
@@ -582,7 +612,6 @@ function editTemplate(kind, id) {
     if (textTab && !textTab.classList.contains("active")) textTab.click();
     els.customTextName.value = item.name;
     els.customTextContent.value = item.content || "";
-    els.customTextColor.value = item.color || TEMPLATE_COLORS[0];
     els.customTextAddBtn.textContent = "保存修改";
     els.customTextEditor.classList.remove("hidden");
     els.customTextContent.focus();
@@ -650,13 +679,13 @@ function addCustomText(source) {
     const loc = templateLocation("text", editingTextTemplate.id);
     if (!loc) { closeTextTemplateEditor(); toast("保存失败：原文字模板不存在"); return false; }
     const item = loc.library[loc.key][loc.index];
-    item.name = name; item.content = content; item.color = els.customTextColor.value || item.color;
+    item.name = name; item.content = content;
     persistLibraries(); syncCustomMaterialsList(); closeTextTemplateEditor(); toast("文字模板已更新");
     return true;
   }
   const target = globalLibrary;
   name = uniqueTemplateName("text", name, target);
-  target.textTemplates.push(normalizeTemplate({ name, content, color: source?.color || els.customTextColor?.value || nextTemplateColor(), revision: 1 }));
+  target.textTemplates.push(normalizeTemplate({ name, content, revision: 1 }));
   if (els.customTextName) els.customTextName.value = "";
   if (els.customTextContent) els.customTextContent.value = "";
   if (els.customTextEditor) els.customTextEditor.classList.add("hidden");
@@ -872,7 +901,7 @@ async function saveNodeAsTemplate(node) {
   const target = globalLibrary;
   const finalName = uniqueTemplateName(kind, name.trim(), target);
   if (kind === "text") {
-    const template = normalizeTemplate({ name: finalName, content, color: nextTemplateColor(), revision: 1 });
+    const template = normalizeTemplate({ name: finalName, content, revision: 1 });
     target.textTemplates.push(template);
   } else {
     const raw = stripDataUrl(content);
@@ -3703,7 +3732,8 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && !els.executeDialog.classList.contains("hidden")) closeExecuteDialog();
 });
 
-function init() {
+async function init() {
+  await loadGlobalLibraryFromDisk();
   if (!loadPagesFromStorage()) {
     const page = blankPage("项目1");
     state.pages = [page];
@@ -3726,4 +3756,4 @@ function init() {
   uiObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 
-init();
+init().catch(e => { console.error("[初始化] 启动失败", e); toast("启动失败：" + e.message); });

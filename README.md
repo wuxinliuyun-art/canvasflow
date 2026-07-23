@@ -131,7 +131,7 @@ Save frequently used reference images—such as model photos, logos, or watermar
 
 CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
 
-- Manage custom text and images under **Settings → Asset Library**. The library is shared by every project. Text rows show a shortened preview, while the editor always shows the complete content.
+- Manage custom text and images under **Settings → Asset Library**. The library is stored locally beside the app and shared by every project. Text rows show a shortened preview, while the editor always shows the complete content.
 - Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
 - Text or image nodes created from the library are regular independent copies. Editing or deleting an asset never changes nodes that were already created.
 - Import selected assets from a project JSON file. Duplicate names receive a numbered suffix automatically. Project JSON files back up the shared library, including complete custom image data.
@@ -358,7 +358,7 @@ MIT
 
 CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
 
-- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容。
+- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库自动保存在程序所在目录并由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容；文字素材不需要设置颜色。
 - 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
 - 通过素材创建的文字或图片是普通的独立节点；以后编辑或删除素材不会改变已经创建的节点。
 - 支持从项目 JSON 中勾选导入；同名素材会自动添加数字后缀。项目 JSON 会备份全局素材库，换电脑后也能恢复。

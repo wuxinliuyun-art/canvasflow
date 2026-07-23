@@ -119,6 +119,44 @@ async function requestHandler(req, res) {
   const parsedUrl = new URL(req.url, "http://localhost");
   let pathname = decodeURIComponent(parsedUrl.pathname);
 
+  if (pathname === "/api/custom-library" && req.method === "GET") {
+    try {
+      const libraryPath = path.join(dataRoot, "data", "custom-library.json");
+      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[]}';
+      JSON.parse(content);
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
+      res.end(content);
+    } catch (err) {
+      console.error("[加载] 本地素材库读取失败", err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/custom-library" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const library = JSON.parse(body.toString("utf-8"));
+      if (!Array.isArray(library.textTemplates) || !Array.isArray(library.imageMaterials)) throw new Error("素材库格式不正确");
+      const dataDir = path.join(dataRoot, "data");
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      const libraryPath = path.join(dataDir, "custom-library.json");
+      const tempPath = libraryPath + ".tmp";
+      fs.writeFileSync(tempPath, JSON.stringify(library, null, 2), "utf-8");
+      fs.copyFileSync(tempPath, libraryPath);
+      fs.unlinkSync(tempPath);
+      console.log(`[保存] 本地素材库：文字=${library.textTemplates.length}，图片=${library.imageMaterials.length}`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error("[保存] 本地素材库写入失败", err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // API proxy routes
   if (pathname === "/api/save-json" && req.method === "POST") {
     try {

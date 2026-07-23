@@ -1406,7 +1406,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .template-color-label input[type="color"] { width: 34px; height: 28px; padding: 2px; }
 .settings .check-row.compact { margin: 0; width: auto; }
 .custom-template-options .apikey-btn { margin-left: auto; }
-.material-swatch { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.16); }
 .settings .material-color-input { width: 22px; min-width: 22px; height: 22px; min-height: 22px; padding: 1px; border-radius: 5px; flex: 0 0 auto; }
 .custom-library-actions { display: flex; gap: 6px; margin: 0; flex-wrap: wrap; }
 .custom-library-actions button { min-height: 30px; padding: 0 9px; font-size: 12px; }

@@ -5,4 +5,5 @@ node_modules/
 export/
 download/案例.json
 download/images/
+data/
 .opencode/
