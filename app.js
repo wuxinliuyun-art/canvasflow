@@ -4,6 +4,173 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 172;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
+const LANGUAGE_KEY = "webimage.language";
+
+// UI language is stored separately from project data so switching projects never
+// changes the application language. New UI nodes are translated automatically.
+const UI_EN = {
+  "节点式图片文字画布": "Node-based Image & Text Canvas",
+  "单击切换项目，双击重命名": "Click to switch projects; double-click to rename",
+  "未命名项目": "Untitled Project", "未命名": "Untitled", "项目1": "Project 1",
+  "新建项目": "New Project", "保存JSON": "Save JSON", "加载JSON": "Load JSON",
+  "一键生成AI绘图节点": "Create AI Image Nodes", "批量执行": "Batch Run", "导出": "Export",
+  "皮肤切换": "Switch Theme", "设置": "Settings", "准备导出": "Preparing export",
+  "取消所有任务": "Cancel all tasks", "取消全部": "Cancel All",
+  "居中显示所有节点": "Center all nodes", "居中显示": "Center View",
+  "输入文字后回车创建文字节点；上传图片可创建图片节点": "Type text and press Enter to create a text node; upload images to create image nodes",
+  "上传图片": "Upload Image", "创建节点": "Create Node", "创建": "Create", "关闭": "Close",
+  "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
+  "简体中文": "Simplified Chinese", "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping",
+  "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
+  "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
+  "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder",
+  "⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。": "⚠ Due to browser security restrictions, the system drive (C:) cannot be written directly. Choose D: or another non-system drive to avoid export failures.",
+  "自定义素材": "Custom Assets", "添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。": "Add frequently used images as assets, then right-click an empty area of the canvas to insert them quickly.",
+  "素材名称（如：男模特）": "Asset name (e.g. male model)", "选择图片": "Choose Image", "添加": "Add",
+  "输入你的 API Key": "Enter your API Key", "验证 API Key 是否有效": "Verify API Key",
+  "验证": "Verify", "保存 API Key": "Save API Key", "保存": "Save",
+  "清除所有已保存的 API Key（分享前使用）": "Clear all saved API keys (before sharing)", "清除": "Clear",
+  "API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）": "API proxies: api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai (automatic failover)",
+  "积分：--": "Credits: --", "刷新余额": "Refresh Balance", "刷新": "Refresh",
+  "默认模型": "Default model", "默认分辨率": "Default resolution", "画质": "Quality",
+  "auto（自动）": "auto", "low（快速）": "low (fast)", "medium（平衡）": "medium (balanced)", "high（最高）": "high (best)",
+  "默认图片比例": "Default aspect ratio", "1:1（正方）": "1:1 (square)", "3:2（横图）": "3:2 (landscape)",
+  "2:3（竖图）": "2:3 (portrait)", "4:3（横图）": "4:3 (landscape)", "3:4（竖图）": "3:4 (portrait)",
+  "5:4（横图）": "5:4 (landscape)", "4:5（竖图）": "4:5 (portrait)", "16:9（横图）": "16:9 (landscape)",
+  "9:16（竖图）": "9:16 (portrait)", "2:1（横图）": "2:1 (landscape)", "1:2（竖图）": "1:2 (portrait)",
+  "3:1（横图）": "3:1 (landscape)", "1:3（竖图）": "1:3 (portrait)", "21:9（横图）": "21:9 (landscape)",
+  "9:21（竖图）": "9:21 (portrait)", "开启 Gemini 自动化模式": "Enable Gemini automation mode",
+  "该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。": "Use this with the Gemini Automation browser extension to export compatible content and batch-process image requests in Gemini on the web.",
+  "下载 Gemini Automation 浏览器插件": "Download the Gemini Automation browser extension", "插件下载": "Download Extension",
+  "按 Gemini 兼容格式导出": "Export in Gemini-compatible format", "Gemini 导出": "Gemini Export",
+  "快捷键说明": "Keyboard Shortcuts", "删除选中节点和相关连线": "Delete selected nodes and connected edges",
+  "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
+  "将选中节点编组": "Group selected nodes", "右键编组节点": "Right-click a group node",
+  "取消编组，还原内部节点和连线": "Ungroup and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
+  "多选节点": "Select multiple nodes", "Space + 拖拽": "Space + Drag", "平移画布": "Pan canvas",
+  "鼠标滚轮": "Mouse Wheel", "缩放画布": "Zoom canvas", "颜色": "Color", "大小": "Size",
+  "取消": "Cancel", "确认并生成节点": "Confirm & Create Node", "在图片上绘制色块": "Paint color blocks on image",
+  "画色块": "Paint", "上一张": "Previous", "下一张": "Next", "执行 AI 绘图": "Run AI Image Generation",
+  "全部执行": "Run All", "重命名": "Rename", "删除素材": "Delete Asset", "重命名素材": "Rename Asset",
+  "已撤回删除": "Deletion restored", "已撤销": "Undone", "已重做": "Redone", "素材已重命名": "Asset renamed",
+  "素材已删除": "Asset deleted", "请输入素材名称": "Enter an asset name", "请选择图片文件": "Choose an image file",
+  "素材已添加": "Asset added", "正在导出": "Exporting", "完成": "Done", "失败": "Failed", "已取消": "Cancelled",
+  "生成中": "Generating", "等待中": "Waiting", "请输入文字内容": "Enter text", "至少选中 2 个节点才能编组": "Select at least 2 nodes to create a group",
+  "不是编组节点": "This is not a group node", "该编组节点无可取消的内容": "This group has no content to ungroup",
+  "已取消编组": "Group dissolved", "不能连接到自己": "A node cannot connect to itself", "这两个端口已经连接": "These ports are already connected",
+  "等待提示词...": "Waiting for a prompt...", "重新生成": "Regenerate", "连接文字节点作为提示词": "Connect a text node as the prompt",
+  "生成": "Generate", "需要提示词或参考图": "A prompt or reference image is required", "提交失败": "Submission failed",
+  "未获取到任务ID": "No task ID received", "查询失败": "Query failed", "任务完成但无图片结果": "Task completed without an image result",
+  "生成失败": "Generation failed", "提交AI生成任务": "Submitting AI generation task", "等待生成结果": "Waiting for generation result",
+  "下载生成图片": "Downloading generated image", "AI生成完成": "AI generation complete", "AI绘图完成": "AI image generation complete",
+  "已取消剩余任务": "Remaining tasks cancelled", "批量生成失败": "Batch generation failed", "已创建 AI 绘图节点": "AI image node created",
+  "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
+  "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
+  "文字节点": "Text Node", "图片节点": "Image Node", "编组节点": "Group Node", "输入端口": "Input port", "输出端口": "Output port",
+  "拖拽缩放": "Drag to resize", "空编组": "Empty group", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
+  "无图片": "No image", "上传": "Upload", "图片节点粘贴后为空": "Image node is empty after pasting", "停用": "Disabled", "启用": "Enabled",
+  "取消连线": "Remove Connection", "已居中显示": "View centered", "已整理节点": "Nodes arranged", "没有需要添加的节点": "No nodes need to be added",
+  "已生成局部修改图片节点": "Edited image node created", "请输入文字或选择图片": "Enter text or choose an image", "已创建节点": "Node created",
+  "已从剪贴板创建图片节点": "Image node created from clipboard", "已从剪贴板创建文字节点": "Text node created from clipboard",
+  "切换启用/停用": "Toggle Enabled/Disabled", "编组": "Group", "取消编组": "Ungroup", "添加输出节点": "Add Output Node",
+  "打开本地文件夹": "Open Local Folder", "断开连接": "Disconnect", "复制": "Copy", "删除节点": "Delete Nodes", "粘贴节点": "Paste Nodes",
+  "批量停用": "Disable Selected", "批量启用": "Enable Selected", "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
+  "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "节点对齐": "Arrange Nodes",
+  "已新建标签页": "New project created", "至少保留一个项目": "At least one project must remain", "已删除项目（Ctrl+Z 可撤回）": "Project deleted (Ctrl+Z to restore)",
+  "上传图片文件": "Upload Image Files", "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
+  "请先输入 API Key": "Enter an API Key first", "API Key 有效": "API Key is valid", "API Key 无效": "API Key is invalid",
+  "验证失败，请检查网络": "Verification failed. Check your network connection", "积分：请先填入 API Key": "Credits: enter an API Key first",
+  "积分：查询中...": "Credits: loading...", "积分：查询失败": "Credits: query failed", "积分：网络错误": "Credits: network error",
+  "API Key 已保存": "API Key saved", "API Key 已从所有页面清除，可安全分享": "API Key cleared from all projects; it is now safe to share",
+  "JSON已加载": "JSON loaded", "JSON已保存到输出文件夹": "JSON saved to the output folder", "JSON已保存到 download 文件夹": "JSON saved to the download folder",
+  "JSON已下载（浏览器下载）": "JSON downloaded by the browser", "当前浏览器不支持直接选择文件夹，请使用 Chrome 或 Edge": "This browser cannot select folders directly. Use Chrome or Edge",
+  "已选择文件夹": "Folder selected", "已取消选择文件夹": "Folder selection cancelled", "请先设置导出文件夹路径": "Set an export folder path first",
+  "无法打开文件夹，请检查路径是否正确": "Could not open the folder. Check the path", "没有可导出的末端节点": "No terminal nodes to export",
+  "生成Excel": "Creating Excel file", "没有可导出内容": "Nothing to export", "没有可导出的文字或图片": "No text or images to export",
+  "写入文件": "Writing files", "导出完成": "Export complete", "导出失败": "Export failed",
+  "导出失败，请检查文件夹权限或内容大小": "Export failed. Check folder permissions or content size",
+  "当前项目还没有保存，确定要离开吗？": "This project has not been saved. Are you sure you want to leave?",
+  "画布上没有可执行的 AI 绘图节点": "There are no runnable AI image nodes on the canvas", "双击标题栏可最大化窗口": "Double-click the title bar to maximize",
+  "无参考图": "No reference image", "(无文字输入)": "(no text input)", "单图": "Single image"
+};
+
+let uiLanguage = (() => {
+  try { return localStorage.getItem(LANGUAGE_KEY) || (navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en"); }
+  catch { return "zh-CN"; }
+})();
+const uiTextSource = new WeakMap();
+const uiAttrSource = new WeakMap();
+
+function translateEnglishString(source) {
+  if (!source) return source;
+  const trimmed = source.trim();
+  if (trimmed !== source) {
+    const start = source.indexOf(trimmed);
+    return source.slice(0, start) + translateEnglishString(trimmed) + source.slice(start + trimmed.length);
+  }
+  if (UI_EN[source]) return UI_EN[source];
+  const rules = [
+    [/^项目(\d+)$/, "Project $1"], [/^AI绘图 #(\d+)$/, "AI Image #$1"], [/^输出节点 (\d+)$/, "Output Node $1"],
+    [/^图片(\d+)$/, "Image $1"], [/^(\d+) 张图片$/, "$1 images"], [/^已编组 (\d+) 个节点$/, "Grouped $1 nodes"],
+    [/^已复制 (\d+) 个节点$/, "Copied $1 nodes"], [/^已粘贴 (\d+) 个节点$/, "Pasted $1 nodes"],
+    [/^已添加 (\d+) 个 AI 绘图节点$/, "Added $1 AI image nodes"], [/^已选择图片：(.+)$/, "Selected image: $1"],
+    [/^已导入 (\d+) 张图片$/, "Imported $1 images"], [/^已创建编组节点，包含 (\d+) 张图片$/, "Created a group containing $1 images"],
+    [/^(\d+) 张图片已生成$/, "$1 images generated"], [/^批量生成 (\d+)\/(\d+)$/, "Batch generation $1/$2"],
+    [/^拆分生成 (\d+)\/(\d+)$/, "Split generation $1/$2"], [/^AI生成中 (\d+)%$/, "AI generating $1%"],
+    [/^收集输出 (\d+)\/(\d+)$/, "Collecting output $1/$2"], [/^写入文件 (\d+)\/(\d+)$/, "Writing files $1/$2"],
+    [/^任务(\d+)$/, "Task $1"], [/^共 (\d+) 个任务（(\d+) 个节点）· 双击标题放大$/, "$1 tasks ($2 nodes) · Double-click the title to maximize"],
+    [/^积分：([\d.]+)（已用 ([\d.]+)）$/, "Credits: $1 ($2 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
+    [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
+    [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"]
+  ];
+  for (const [pattern, replacement] of rules) if (pattern.test(source)) return source.replace(pattern, replacement);
+  return source;
+}
+
+function translateUiString(source) {
+  return uiLanguage === "en" ? translateEnglishString(source) : source;
+}
+
+function translateUiTree(root) {
+  if (!root) return;
+  const nodes = [];
+  if (root.nodeType === Node.TEXT_NODE) {
+    nodes.push(root);
+  } else {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let textNode;
+    while ((textNode = walker.nextNode())) nodes.push(textNode);
+  }
+  for (const node of nodes) {
+    if (!node.parentElement || ["SCRIPT", "STYLE"].includes(node.parentElement.tagName) || !node.nodeValue.trim()) continue;
+    let source = uiTextSource.get(node);
+    if (!source || (node.nodeValue !== source && node.nodeValue !== translateEnglishString(source))) source = node.nodeValue;
+    uiTextSource.set(node, source);
+    const translated = uiLanguage === "en" ? translateUiString(source) : source;
+    if (node.nodeValue !== translated) node.nodeValue = translated;
+  }
+  const elements = root.nodeType === Node.ELEMENT_NODE ? [root, ...root.querySelectorAll("*")] : [];
+  for (const el of elements) {
+    let sources = uiAttrSource.get(el) || {};
+    for (const attr of ["title", "placeholder", "aria-label"]) {
+      if (!el.hasAttribute(attr)) continue;
+      const current = el.getAttribute(attr);
+      if (!sources[attr] || (current !== sources[attr] && current !== translateEnglishString(sources[attr]))) sources[attr] = current;
+      const translated = uiLanguage === "en" ? translateUiString(sources[attr]) : sources[attr];
+      if (current !== translated) el.setAttribute(attr, translated);
+    }
+    uiAttrSource.set(el, sources);
+  }
+}
+
+function setUiLanguage(language) {
+  uiLanguage = language === "en" ? "en" : "zh-CN";
+  try { localStorage.setItem(LANGUAGE_KEY, uiLanguage); } catch {}
+  document.documentElement.lang = uiLanguage;
+  const select = document.getElementById("languageSelect");
+  if (select) select.value = uiLanguage;
+  translateUiTree(document.documentElement);
+}
 
 const state = {
   pages: [],
@@ -96,6 +263,7 @@ const els = {
   customMaterialFileInput: $("customMaterialFileInput"),
   customMaterialFileHint: $("customMaterialFileHint"),
   customMaterialAddBtn: $("customMaterialAddBtn"),
+  languageSelect: $("languageSelect"),
 };
 
 let drag = null;
@@ -231,6 +399,7 @@ function applySettings() {
 }
 
 function syncSettingsPanel() {
+  if (els.languageSelect) els.languageSelect.value = uiLanguage;
   els.gridSize.value = state.settings.gridSize;
   els.snap.checked = state.settings.snap;
   els.exportFolder.value = state.settings.exportFolderLabel || "export";
@@ -2342,6 +2511,14 @@ els.gridSize.onchange = () => {
   applySettings();
 };
 
+if (els.languageSelect) {
+  els.languageSelect.onchange = () => {
+    setUiLanguage(els.languageSelect.value);
+    render();
+    syncSettingsPanel();
+  };
+}
+
 els.apiKeyInput.onchange = () => {
   state.settings.apiKey = els.apiKeyInput.value.trim();
   pushHistory();
@@ -3201,6 +3378,14 @@ function init() {
   updateUndoRedo();
   applySettings();
   render();
+  setUiLanguage(uiLanguage);
+  const uiObserver = new MutationObserver(changes => {
+    for (const change of changes) {
+      if (change.type === "characterData") translateUiTree(change.target);
+      for (const node of change.addedNodes) translateUiTree(node);
+    }
+  });
+  uiObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 
 init();
