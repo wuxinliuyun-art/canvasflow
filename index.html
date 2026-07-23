@@ -105,8 +105,21 @@
         </div>
         <p class="setting-desc export-warning">⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。</p>
 
-        <div class="ai-section-head">自定义素材</div>
-        <p class="setting-desc">添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。</p>
+        <div class="ai-section-head">自定义文字</div>
+        <p class="setting-desc">保存常用整段文字。未勾选时仅当前项目可用，勾选“全局生效”后所有项目可用。</p>
+        <div id="customTextsList" class="custom-materials-list"></div>
+        <div class="custom-template-add">
+          <input id="customTextName" type="text" placeholder="模板名称（如：产品摄影）">
+          <textarea id="customTextContent" rows="4" placeholder="输入需要重复使用的完整文字"></textarea>
+          <div class="custom-template-options">
+            <label class="template-color-label">边框颜色 <input id="customTextColor" type="color" value="#7c5cfc"></label>
+            <label class="check-row compact"><input id="customTextGlobal" type="checkbox"><span>全局生效</span></label>
+            <button id="customTextAddBtn" class="apikey-btn">添加文字模板</button>
+          </div>
+        </div>
+
+        <div class="ai-section-head">自定义图片</div>
+        <p class="setting-desc">添加常用图片，或在图片节点上右键收藏。支持项目独立和全局共用。</p>
         <div id="customMaterialsList" class="custom-materials-list"></div>
         <div class="custom-material-add">
           <div class="custom-material-row">
@@ -114,8 +127,17 @@
             <button id="customMaterialFileBtn" class="apikey-btn">选择图片</button>
             <span id="customMaterialFileHint" class="material-file-hint"></span>
             <input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
-            <button id="customMaterialAddBtn" class="apikey-btn">添加</button>
           </div>
+          <div class="custom-template-options">
+            <label class="template-color-label">边框颜色 <input id="customMaterialColor" type="color" value="#19a974"></label>
+            <label class="check-row compact"><input id="customMaterialGlobal" type="checkbox"><span>全局生效</span></label>
+            <button id="customMaterialAddBtn" class="apikey-btn">添加图片素材</button>
+          </div>
+        </div>
+        <div class="custom-library-actions">
+          <button id="importLibraryProjectBtn">从已打开项目导入</button>
+          <button id="importLibraryJsonBtn">从 JSON 导入素材</button>
+          <input id="importLibraryJsonInput" type="file" accept="application/json,.json" hidden>
         </div>
       </div>
 
@@ -219,6 +241,14 @@
 
     <div id="contextMenu" class="context-menu hidden"></div>
     <input id="loadJsonInput" type="file" accept="application/json,.json" hidden>
+    <div id="libraryImportDialog" class="library-import-dialog hidden" role="dialog" aria-modal="true">
+      <div class="library-import-panel">
+        <div class="library-import-head"><strong>导入自定义图文</strong><button id="libraryImportCloseBtn" title="关闭">×</button></div>
+        <label>来源项目<select id="libraryImportSource"></select></label>
+        <div id="libraryImportItems" class="library-import-items"></div>
+        <div class="library-import-actions"><button id="libraryImportCancelBtn">取消</button><button id="libraryImportConfirmBtn" class="primary">导入所选内容</button></div>
+      </div>
+    </div>
   </div>
 
   <div id="lightbox" class="lightbox hidden">

@@ -1348,3 +1348,33 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .custom-material-add {
   margin-bottom: 4px;
 }
+
+.custom-template-add { display: grid; gap: 7px; margin-bottom: 14px; }
+.custom-template-add textarea { min-height: 82px; resize: vertical; }
+.custom-template-options { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.template-color-label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.template-color-label input[type="color"] { width: 34px; height: 28px; padding: 2px; }
+.check-row.compact { margin: 0; width: auto; }
+.custom-template-options .apikey-btn { margin-left: auto; }
+.material-swatch { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.16); }
+.material-scope { font-size: 11px; color: var(--text-2); flex: 0 0 auto; }
+.material-refresh-btn, .material-scope-btn { background: none; border: none; color: var(--text-2); cursor: pointer; padding: 0 3px; }
+.material-refresh-btn:hover, .material-scope-btn:hover { color: var(--primary); }
+.material-color-input { width: 28px; height: 24px; padding: 1px; flex: 0 0 auto; }
+.custom-library-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.node.custom-linked { border: 3px solid var(--custom-node-color, #7c5cfc); }
+.node.custom-linked::after { content: "自定义"; position: absolute; right: 8px; top: -11px; padding: 1px 6px; border-radius: 8px; background: var(--custom-node-color, #7c5cfc); color: #fff; font-size: 10px; pointer-events: none; }
+.node.custom-stale { border-style: dashed; }
+.node.custom-stale::after { content: "待刷新"; }
+html[lang="en"] .node.custom-linked::after { content: "Custom"; }
+html[lang="en"] .node.custom-stale::after { content: "Refresh"; }
+.library-import-dialog { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.42); display: grid; place-items: center; }
+.library-import-dialog.hidden { display: none; }
+.library-import-panel { width: min(560px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; background: var(--panel); color: var(--text); border-radius: 12px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.28); }
+.library-import-head, .library-import-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.library-import-head button { border: 0; background: none; font-size: 22px; }
+.library-import-panel > label { display: grid; gap: 6px; margin: 12px 0; }
+.library-import-items { display: grid; gap: 6px; max-height: 45vh; overflow: auto; }
+.library-import-item { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--panel-2); border-radius: 7px; }
+.library-import-item span:nth-child(2) { flex: 1; }
+.library-import-actions { justify-content: flex-end; margin-top: 14px; }

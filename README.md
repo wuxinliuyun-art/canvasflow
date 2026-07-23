@@ -125,6 +125,18 @@ Save frequently used reference images—such as model photos, logos, or watermar
 | Delete | Remove the asset from the list and right-click menu, and delete its server-side file. |
 | Insert from right-click | Right-click an empty area and select a saved asset to create an image node. |
 
+### Custom Text and Image Templates
+
+CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
+
+- Manage custom text and images under **Settings → Canvas**. Each template has its own border color.
+- Leave **Available in All Projects** disabled to keep a template in the current project, or enable it to share the template with every project.
+- Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
+- Nodes created from templates keep a visible colored border and can be refreshed manually after the template changes. Refreshing requires confirmation and preserves position, size, and connections.
+- Right-click a custom node and choose **Convert to Regular Node** to keep its current content without receiving future template updates.
+- Import selected templates from another open project or from a project JSON file. Duplicate names receive a numbered suffix automatically.
+- Project JSON files include custom text and the complete custom image data, so the library can be restored on another computer.
+
 ### Other Image Node Features
 
 | Feature | Instructions |
@@ -340,6 +352,18 @@ MIT
 | 重命名 | 点击素材名称旁的按钮修改显示名 |
 | 删除 | 从列表和右键菜单中移除（同时删除服务端文件） |
 | 右键插入 | 右键画布空白处，直接选择已有素材创建节点 |
+
+### 自定义图文模板
+
+CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
+
+- 在 **设置 → 画布** 中管理自定义文字和图片，每个模板都能设置独立边框颜色。
+- 不勾选 **全局生效** 时仅当前项目可用；勾选后所有项目都能使用。
+- 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
+- 通过模板创建的节点带有彩色边框。模板修改后可手动确认刷新，刷新不会改变节点位置、大小和连线。
+- 自定义节点可右键转换为普通节点，保留当前内容，并停止接收模板更新。
+- 支持从其他已打开项目或项目 JSON 中勾选导入；同名模板会自动添加数字后缀。
+- 项目 JSON 会同时保存完整文字和自定义图片本体，换电脑后也能恢复。
 
 ### 图片节点的其他能力
 
