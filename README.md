@@ -44,15 +44,15 @@ After startup, visit **http://127.0.0.1:5173** in your browser.
 
 ### 2. Choose the Interface Language
 
-1. Click the **☰ Settings** button in the upper-right corner.
-2. Open the **Canvas** tab.
+1. Click the **gear-shaped Settings** button in the upper-right corner.
+2. Choose **General** from the left navigation.
 3. Choose **Simplified Chinese** or **English** under **Interface Language**.
 
 The application follows your system language on first launch and remembers your selection afterward.
 
 ### 3. Configure the API Key (Required on First Use)
 
-1. Click the **☰ Settings** button in the upper-right corner.
+1. Click the **gear-shaped Settings** button in the upper-right corner.
 2. Open the **AI Image** section and enter your API Key.
 3. Click **Verify** to confirm that the key is valid.
 4. Click **Save**. The key will be loaded automatically the next time you start the application.
@@ -83,6 +83,8 @@ The application follows your system language on first launch and remembers your 
 | Delete nodes | Press Delete or use the right-click menu |
 | Arrange nodes | Right-click an empty area and choose **Arrange Nodes** |
 | Enable / disable | Right-click a node and choose **Toggle Enabled/Disabled**. Disabled nodes are excluded from AI generation and export. |
+
+Click the semi-transparent keyboard button in the lower-left corner to open the shortcut reference. Click outside it or press Esc to close it.
 
 ---
 
@@ -116,7 +118,7 @@ In addition to basic image nodes, CanvasFlow includes a custom asset system for 
 
 Save frequently used reference images—such as model photos, logos, or watermark templates—as custom assets. They can then be inserted from the right-click menu without uploading them each time.
 
-**Location:** Settings → Canvas → Custom Assets
+**Location:** Settings → Asset Library
 
 | Feature | Description |
 |------|------|
@@ -129,7 +131,7 @@ Save frequently used reference images—such as model photos, logos, or watermar
 
 CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
 
-- Manage custom text and images under **Settings → Canvas**. Each template has its own border color.
+- Manage custom text and images under **Settings → Asset Library**. Switch between the compact Text and Image lists; click **New** only when the editor is needed. Each template has its own border color.
 - Leave **Available in All Projects** disabled to keep a template in the current project, or enable it to share the template with every project.
 - Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
 - Nodes created from templates keep a visible colored border and can be refreshed manually after the template changes. Refreshing requires confirmation and preserves position, size, and connections.
@@ -272,15 +274,15 @@ MIT
 
 ### 2. 选择界面语言
 
-1. 点击界面右上角的 **☰ 设置** 按钮
-2. 打开 **画布** 标签页
+1. 点击界面右上角的 **齿轮形设置** 按钮
+2. 在左侧导航中选择 **常规**
 3. 在 **界面语言** 中选择 **简体中文** 或 **English**
 
 首次启动会跟随系统语言，之后自动记住你的选择。
 
 ### 3. 配置 API Key（首次使用必做）
 
-1. 点击界面右上角的 **☰ 设置** 按钮
+1. 点击界面右上角的 **齿轮形设置** 按钮
 2. 在"AI绘图"区域，输入你的 API Key
 3. 点击 **验证** 确认 Key 有效
 4. 点击 **保存** 保存 Key（下次启动自动读取）
@@ -311,6 +313,8 @@ MIT
 | 删除节点 | Delete 键或右键菜单 |
 | 节点对齐整理 | 右键空白处 → "节点对齐" |
 | 切换启用/停用 | 右键节点 → 切换启用/停用（停用的节点不参与 AI 生成和导出） |
+
+点击屏幕左下角的半透明键盘按钮可查看快捷键；点击空白区域或按 Esc 即可关闭。
 
 ---
 
@@ -344,7 +348,7 @@ MIT
 
 可以把常用的参考图（如模特图、Logo、水印模板等）预设为"自定义素材"，之后在右键菜单中一键插入，无需每次手动上传。
 
-**配置路径**：设置面板 → 画布 tab → "自定义素材"
+**配置路径**：设置面板 → 素材库
 
 | 功能 | 说明 |
 |------|------|
@@ -357,7 +361,7 @@ MIT
 
 CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
 
-- 在 **设置 → 画布** 中管理自定义文字和图片，每个模板都能设置独立边框颜色。
+- 在 **设置 → 素材库** 中管理自定义文字和图片。文字与图片使用紧凑切换列表，需要编辑时再点击“新建”展开表单；每个模板都能设置独立边框颜色。
 - 不勾选 **全局生效** 时仅当前项目可用；勾选后所有项目都能使用。
 - 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
 - 通过模板创建的节点带有彩色边框。模板修改后可手动确认刷新，刷新不会改变节点位置、大小和连线。

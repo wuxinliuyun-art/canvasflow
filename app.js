@@ -103,7 +103,15 @@ const UI_EN = {
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
   "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image",
-  "转为普通文字节点": "Convert to Regular Text Node", "转为普通图片节点": "Convert to Regular Image Node", "刷新同模板节点": "Refresh Matching Nodes"
+  "转为普通文字节点": "Convert to Regular Text Node", "转为普通图片节点": "Convert to Regular Image Node", "刷新同模板节点": "Refresh Matching Nodes",
+  "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出与集成": "Export & Integrations",
+  "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
+  "管理当前项目或所有项目共用的图文模板。": "Manage text and image templates for this project or every project.",
+  "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
+  "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
+  "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image",
+  "配置接口与默认生成参数。": "Configure the API and default generation parameters.",
+  "管理导出方式、文件夹和外部自动化。": "Manage export options, folders, and external automation.", "文件导出": "File Export"
 };
 
 let uiLanguage = (() => {
@@ -339,6 +347,15 @@ const els = {
   customTextColor: $("customTextColor"),
   customTextGlobal: $("customTextGlobal"),
   customTextAddBtn: $("customTextAddBtn"),
+  customTextEditor: $("customTextEditor"),
+  customImageEditor: $("customImageEditor"),
+  newCustomTextBtn: $("newCustomTextBtn"),
+  newCustomImageBtn: $("newCustomImageBtn"),
+  customTextCancelBtn: $("customTextCancelBtn"),
+  customImageCancelBtn: $("customImageCancelBtn"),
+  shortcutHelpBtn: $("shortcutHelpBtn"),
+  shortcutPopover: $("shortcutPopover"),
+  shortcutPopoverClose: $("shortcutPopoverClose"),
   importLibraryProjectBtn: $("importLibraryProjectBtn"),
   importLibraryJsonBtn: $("importLibraryJsonBtn"),
   importLibraryJsonInput: $("importLibraryJsonInput"),
@@ -483,8 +500,8 @@ function applySettings() {
   els.app.className = `app theme-${state.settings.theme}`;
   updateViewportGrid();
   $("themeBtn").innerHTML = state.settings.theme === "light"
-    ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
-    : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+    ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 }
 
 function syncSettingsPanel() {
@@ -634,6 +651,7 @@ async function addCustomMaterial(source) {
     els.customMaterialName.value = "";
     els.customMaterialFileInput.value = "";
     if (els.customMaterialFileHint) els.customMaterialFileHint.textContent = "";
+    if (els.customImageEditor) els.customImageEditor.classList.add("hidden");
     persistLibraries();
     syncCustomMaterialsList();
     toast("素材已添加");
@@ -656,6 +674,7 @@ function addCustomText(source) {
   target.textTemplates.push(normalizeTemplate({ name, content, color: source?.color || els.customTextColor?.value || nextTemplateColor(), revision: 1 }));
   if (els.customTextName) els.customTextName.value = "";
   if (els.customTextContent) els.customTextContent.value = "";
+  if (els.customTextEditor) els.customTextEditor.classList.add("hidden");
   persistLibraries(); syncCustomMaterialsList(); toast("文字模板已添加");
   return true;
 }
@@ -2700,6 +2719,37 @@ for (var t = 0; t < tabBtns.length; t++) {
     switchSettingsTab(this.getAttribute("data-tab"));
   };
 }
+var assetTabBtns = els.settings.querySelectorAll(".asset-type-btn");
+for (var at = 0; at < assetTabBtns.length; at++) {
+  assetTabBtns[at].onclick = function() {
+    var name = this.getAttribute("data-asset-tab");
+    assetTabBtns.forEach(btn => btn.classList.toggle("active", btn === this));
+    els.settings.querySelectorAll(".asset-pane").forEach(pane => pane.classList.toggle("hidden", pane.getAttribute("data-asset-pane") !== name));
+  };
+}
+els.newCustomTextBtn.onclick = () => {
+  els.customTextEditor.classList.toggle("hidden");
+  els.customImageEditor.classList.add("hidden");
+  if (!els.customTextEditor.classList.contains("hidden")) els.customTextName.focus();
+};
+els.newCustomImageBtn.onclick = () => {
+  els.customImageEditor.classList.toggle("hidden");
+  els.customTextEditor.classList.add("hidden");
+  if (!els.customImageEditor.classList.contains("hidden")) els.customMaterialName.focus();
+};
+els.customTextCancelBtn.onclick = () => els.customTextEditor.classList.add("hidden");
+els.customImageCancelBtn.onclick = () => els.customImageEditor.classList.add("hidden");
+
+function setShortcutPopover(open) {
+  els.shortcutPopover.classList.toggle("hidden", !open);
+  els.shortcutHelpBtn.classList.toggle("active", open);
+  els.shortcutHelpBtn.setAttribute("aria-expanded", String(open));
+}
+els.shortcutHelpBtn.onclick = ev => { ev.stopPropagation(); setShortcutPopover(els.shortcutPopover.classList.contains("hidden")); };
+els.shortcutPopoverClose.onclick = () => setShortcutPopover(false);
+els.shortcutPopover.onclick = ev => ev.stopPropagation();
+document.addEventListener("click", () => setShortcutPopover(false));
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") setShortcutPopover(false); });
 els.projectNameBtn.onclick = () => els.projectMenu.classList.toggle("hidden");
 els.projectNameBtn.ondblclick = ev => {
   ev.preventDefault();
