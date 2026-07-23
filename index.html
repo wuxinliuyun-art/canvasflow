@@ -69,115 +69,145 @@
         <strong>设置</strong>
         <button id="closeSettingsBtn" class="icon-btn" title="关闭">×</button>
       </div>
-      <label>网格对齐距离
-        <input id="gridSizeInput" type="number" min="1" max="200" value="20">
-      </label>
-      <label class="check-row">
-        <input id="snapToggle" type="checkbox" checked>
-        <span>开启网格吸附</span>
-      </label>
-      <label class="check-row">
-        <input id="zipExportToggle" type="checkbox" checked>
-        <span>ZIP 压缩包导出（兼容性最好，推荐）</span>
-      </label>
 
-      <label>导出文件夹
-        <input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）">
-      </label>
-      <div class="export-folder-actions">
-        <button id="openExportFolderBtn">打开导出文件夹</button>
-        <button id="chooseFolderBtn">设置导出文件夹</button>
-      </div>
-      <p class="setting-desc export-warning">⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。</p>
-
-      <div class="ai-section-head">AI绘图</div>
-
-      <label>API Key
-        <div class="apikey-row">
-          <input id="apiKeyInput" type="password" placeholder="输入你的 API Key">
-          <button id="verifyKeyBtn" class="apikey-btn" title="验证 API Key 是否有效">验证</button>
-          <button id="saveKeyBtn" class="apikey-btn" title="保存 API Key">保存</button>
-          <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
-        </div>
-        <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
-        <div class="balance-row">
-          <span id="balanceDisplay" class="balance-text">积分：--</span>
-          <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
-        </div>
-      </label>
-
-      <label>默认模型
-        <select id="modelSelect">
-          <option value="gpt-image-2">GPT Image 2（0.085积分/张 · ~60s）</option>
-          <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash（0.3积分/张 · ~45s）</option>
-        </select>
-      </label>
-
-      <label>默认分辨率
-        <select id="resolutionSelect">
-          <option value="1k">1K</option>
-          <option value="2k">2K</option>
-          <option value="4k">4K</option>
-        </select>
-      </label>
-
-      <label id="qualityLabel">画质
-        <select id="qualitySelect">
-          <option value="auto">auto（自动）</option>
-          <option value="low">low（快速）</option>
-          <option value="medium">medium（平衡）</option>
-          <option value="high">high（最高）</option>
-        </select>
-      </label>
-
-      <label>默认图片比例
-        <select id="defaultRatioSelect">
-          <option value="1:1">1:1（正方）</option>
-          <option value="auto">auto（自动）</option>
-          <option value="3:2">3:2（横图）</option>
-          <option value="2:3">2:3（竖图）</option>
-          <option value="4:3">4:3（横图）</option>
-          <option value="3:4">3:4（竖图）</option>
-          <option value="5:4">5:4（横图）</option>
-          <option value="4:5">4:5（竖图）</option>
-          <option value="16:9">16:9（横图）</option>
-          <option value="9:16">9:16（竖图）</option>
-          <option value="2:1">2:1（横图）</option>
-          <option value="1:2">1:2（竖图）</option>
-          <option value="3:1">3:1（横图）</option>
-          <option value="1:3">1:3（竖图）</option>
-          <option value="21:9">21:9（横图）</option>
-          <option value="9:21">9:21（竖图）</option>
-        </select>
-      </label>
-
-      <div class="ai-section-head">Gemini Automation</div>
-
-      <label class="check-row">
-        <input id="geminiToggle" type="checkbox">
-        <span>开启 Gemini 自动化模式</span>
-      </label>
-
-      <p class="setting-desc">该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。</p>
-
-      <div class="gemini-actions">
-        <button id="geminiPluginBtn" class="gemini-plugin-btn" title="下载 Gemini Automation 浏览器插件">插件下载</button>
-        <button id="geminiExportBtn" class="primary hidden" title="按 Gemini 兼容格式导出">Gemini 导出</button>
+      <div class="settings-tab-bar">
+        <button class="settings-tab-btn active" data-tab="canvas">画布</button>
+        <button class="settings-tab-btn" data-tab="ai">AI绘图</button>
+        <button class="settings-tab-btn" data-tab="shortcuts">快捷键</button>
       </div>
 
-      <div class="shortcut-list">
-        <div class="shortcut-kicker">Keyboard</div>
-        <h2>快捷键说明</h2>
-        <div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div>
-        <div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div>
-        <div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div>
-        <div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div>
-        <div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div>
-        <div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点编组</span></div>
-        <div class="shortcut-row"><b>右键编组节点</b><span>取消编组，还原内部节点和连线</span></div>
-        <div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div>
-        <div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div>
-        <div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div>
+      <!-- 画布 Tab -->
+      <div class="tab-page" data-tab="canvas">
+        <label>网格对齐距离
+          <input id="gridSizeInput" type="number" min="1" max="200" value="20">
+        </label>
+        <label class="check-row">
+          <input id="snapToggle" type="checkbox" checked>
+          <span>开启网格吸附</span>
+        </label>
+        <label class="check-row">
+          <input id="zipExportToggle" type="checkbox" checked>
+          <span>ZIP 压缩包导出（兼容性最好，推荐）</span>
+        </label>
+
+        <label>导出文件夹
+          <input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）">
+        </label>
+        <div class="export-folder-actions">
+          <button id="openExportFolderBtn">打开导出文件夹</button>
+          <button id="chooseFolderBtn">设置导出文件夹</button>
+        </div>
+        <p class="setting-desc export-warning">⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。</p>
+
+        <div class="ai-section-head">自定义素材</div>
+        <p class="setting-desc">添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。</p>
+        <div id="customMaterialsList" class="custom-materials-list"></div>
+        <div class="custom-material-add">
+          <div class="custom-material-row">
+            <input id="customMaterialName" type="text" placeholder="素材名称（如：男模特）">
+            <button id="customMaterialFileBtn" class="apikey-btn">选择图片</button>
+            <span id="customMaterialFileHint" class="material-file-hint"></span>
+            <input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+            <button id="customMaterialAddBtn" class="apikey-btn">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI绘图 Tab -->
+      <div class="tab-page hidden" data-tab="ai">
+        <div class="ai-section-head">API</div>
+
+        <label>API Key
+          <div class="apikey-row">
+            <input id="apiKeyInput" type="password" placeholder="输入你的 API Key">
+            <button id="verifyKeyBtn" class="apikey-btn" title="验证 API Key 是否有效">验证</button>
+            <button id="saveKeyBtn" class="apikey-btn" title="保存 API Key">保存</button>
+            <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
+          </div>
+          <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
+          <div class="balance-row">
+            <span id="balanceDisplay" class="balance-text">积分：--</span>
+            <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
+          </div>
+        </label>
+
+        <label>默认模型
+          <select id="modelSelect">
+            <option value="gpt-image-2">GPT Image 2（0.085积分/张 · ~60s）</option>
+            <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash（0.3积分/张 · ~45s）</option>
+          </select>
+        </label>
+
+        <label>默认分辨率
+          <select id="resolutionSelect">
+            <option value="1k">1K</option>
+            <option value="2k">2K</option>
+            <option value="4k">4K</option>
+          </select>
+        </label>
+
+        <label id="qualityLabel">画质
+          <select id="qualitySelect">
+            <option value="auto">auto（自动）</option>
+            <option value="low">low（快速）</option>
+            <option value="medium">medium（平衡）</option>
+            <option value="high">high（最高）</option>
+          </select>
+        </label>
+
+        <label>默认图片比例
+          <select id="defaultRatioSelect">
+            <option value="1:1">1:1（正方）</option>
+            <option value="auto">auto（自动）</option>
+            <option value="3:2">3:2（横图）</option>
+            <option value="2:3">2:3（竖图）</option>
+            <option value="4:3">4:3（横图）</option>
+            <option value="3:4">3:4（竖图）</option>
+            <option value="5:4">5:4（横图）</option>
+            <option value="4:5">4:5（竖图）</option>
+            <option value="16:9">16:9（横图）</option>
+            <option value="9:16">9:16（竖图）</option>
+            <option value="2:1">2:1（横图）</option>
+            <option value="1:2">1:2（竖图）</option>
+            <option value="3:1">3:1（横图）</option>
+            <option value="1:3">1:3（竖图）</option>
+            <option value="21:9">21:9（横图）</option>
+            <option value="9:21">9:21（竖图）</option>
+          </select>
+        </label>
+
+        <div class="ai-section-head">Gemini Automation</div>
+
+        <label class="check-row">
+          <input id="geminiToggle" type="checkbox">
+          <span>开启 Gemini 自动化模式</span>
+        </label>
+
+        <p class="setting-desc">该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。</p>
+
+        <div class="gemini-actions">
+          <button id="geminiPluginBtn" class="gemini-plugin-btn" title="下载 Gemini Automation 浏览器插件">插件下载</button>
+          <button id="geminiExportBtn" class="primary hidden" title="按 Gemini 兼容格式导出">Gemini 导出</button>
+        </div>
+
+      </div>
+
+      <!-- 快捷键 Tab -->
+      <div class="tab-page hidden" data-tab="shortcuts">
+        <div class="shortcut-list">
+          <div class="shortcut-kicker">Keyboard</div>
+          <h2>快捷键说明</h2>
+          <div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div>
+          <div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div>
+          <div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div>
+          <div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div>
+          <div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div>
+          <div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点编组</span></div>
+          <div class="shortcut-row"><b>右键编组节点</b><span>取消编组，还原内部节点和连线</span></div>
+          <div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div>
+          <div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div>
+          <div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div>
+        </div>
       </div>
     </aside>
 
@@ -188,6 +218,14 @@
   <div id="lightbox" class="lightbox hidden">
     <div class="lightbox-bg"></div>
     <img id="lightboxImg" class="lightbox-img" alt="">
+    <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
+    <div id="lightboxPaintToolbar" class="lightbox-paint-toolbar hidden">
+      <label>颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
+      <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+      <button id="lightboxPaintCancel">取消</button>
+      <button id="lightboxPaintConfirm" class="primary">确认并生成节点</button>
+    </div>
+    <button id="lightboxPaintBtn" class="lightbox-paint-btn hidden" title="在图片上绘制色块">画色块</button>
     <button id="lightboxClose" class="lightbox-close" title="关闭">×</button>
     <button id="lightboxPrev" class="lightbox-nav lightbox-prev hidden" title="上一张">‹</button>
     <button id="lightboxNext" class="lightbox-nav lightbox-next hidden" title="下一张">›</button>

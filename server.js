@@ -2,7 +2,6 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
-
 const { execSync } = require("child_process");
 
 const root = __dirname;
@@ -69,6 +68,7 @@ function readBody(req) {
   });
 }
 
+
 function proxyRequest(method, targetUrl, headers, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(targetUrl);
@@ -117,7 +117,7 @@ async function tryProxyRequest(method, pathStr, headers, body) {
 
 async function requestHandler(req, res) {
   const parsedUrl = new URL(req.url, "http://localhost");
-  let pathname = parsedUrl.pathname;
+  let pathname = decodeURIComponent(parsedUrl.pathname);
 
   // API proxy routes
   if (pathname === "/api/save-json" && req.method === "POST") {
@@ -321,6 +321,42 @@ async function requestHandler(req, res) {
     return;
   }
 
+  if (pathname === "/api/custom-material" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const { name, data } = JSON.parse(body.toString());
+      const imagesDir = path.join(dataRoot, "download", "images");
+      if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+      const ext = (name.match(/\.(\w+)$/) || [])[1] || "png";
+      const safeName = name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5\.]/g, "_");
+      const fileName = `custom_${Date.now()}_${safeName}`;
+      const filePath = path.join(imagesDir, fileName);
+      const buf = Buffer.from(data, "base64");
+      fs.writeFileSync(filePath, buf);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, fileName }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/custom-material" && req.method === "DELETE") {
+    try {
+      const body = await readBody(req);
+      const { fileName } = JSON.parse(body.toString());
+      const filePath = path.join(dataRoot, "download", "images", fileName);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // Static file serving (优先内存缓存)
   if (pathname === "/") pathname = "/index.html";
   console.log(`[静态文件] root=${root}, pathname=${pathname}`);
@@ -331,19 +367,40 @@ async function requestHandler(req, res) {
     return;
   }
   // 回退到磁盘读取（download/images 等非缓存文件）
-  var file = path.join(root, pathname.replace(/^\//, ""));
+  var relPath = pathname.replace(/^\//, "");
+  var file = path.join(root, relPath);
   if (file !== root && !file.startsWith(root + path.sep)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
   }
+  console.log(`[静态文件] 尝试 root: ${file}`);
   fs.readFile(file, (err, data) => {
     if (err) {
-      console.log(`[静态文件] 读取失败: ${err.code} ${err.message}`);
+      console.log(`[静态文件] root 未命中, 尝试 dataRoot`);
+      // 如果在 root 下没找到，尝试 dataRoot（自定义素材等文件保存在 exe 所在目录）
+      var altFile = path.join(dataRoot, relPath);
+      if (altFile !== dataRoot && altFile !== file && altFile.startsWith(dataRoot + path.sep)) {
+        fs.readFile(altFile, (err2, data2) => {
+          if (err2) {
+            console.log(`[静态文件] dataRoot 读取失败: ${err2.code} ${err2.message}, altFile=${altFile}`);
+            res.writeHead(404);
+            res.end("Not found");
+            return;
+          }
+          console.log(`[静态文件] dataRoot 命中: ${altFile}`);
+          const ext2 = path.extname(altFile);
+          res.writeHead(200, { "Content-Type": mime[ext2] || "application/octet-stream" });
+          res.end(data2);
+        });
+        return;
+      }
+      console.log(`[静态文件] dataRoot 前缀检查失败, altFile=${altFile}, dataRoot=${dataRoot}`);
       res.writeHead(404);
       res.end("Not found");
       return;
     }
+    console.log(`[静态文件] root 命中: ${file}`);
     const ext = path.extname(file);
     res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
     res.end(data);

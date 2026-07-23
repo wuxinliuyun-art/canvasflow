@@ -12,7 +12,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true },
+  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, customMaterials: [] },
   nextNode: 1,
   nextEdge: 1,
   nextPageNum: 1,
@@ -77,12 +77,25 @@ const els = {
   lightboxNext: $("lightboxNext"),
   lightboxCounter: $("lightboxCounter"),
   lightboxDots: $("lightboxDots"),
+  lightboxPaintBtn: $("lightboxPaintBtn"),
+  lightboxPaintCanvas: $("lightboxPaintCanvas"),
+  lightboxPaintToolbar: $("lightboxPaintToolbar"),
+  lightboxPaintColor: $("lightboxPaintColor"),
+  lightboxPaintSize: $("lightboxPaintSize"),
+  lightboxPaintCancel: $("lightboxPaintCancel"),
+  lightboxPaintConfirm: $("lightboxPaintConfirm"),
   executeDialog: $("executeDialog"),
   executeTitle: $("executeTitle"),
   executeList: $("executeList"),
   executeClose: $("executeClose"),
   executeCancelBtn: $("executeCancelBtn"),
   executeRunBtn: $("executeRunBtn"),
+  customMaterialsList: $("customMaterialsList"),
+  customMaterialName: $("customMaterialName"),
+  customMaterialFileBtn: $("customMaterialFileBtn"),
+  customMaterialFileInput: $("customMaterialFileInput"),
+  customMaterialFileHint: $("customMaterialFileHint"),
+  customMaterialAddBtn: $("customMaterialAddBtn"),
 };
 
 let drag = null;
@@ -138,7 +151,7 @@ function saveCurrentPage() {
 function restoreData(data) {
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, customMaterials: [], ...(data.settings || {}) };
   state.view = { x: 120, y: 90, scale: 1, ...(data.view || {}) };
   state.nextNode = data.nextNode || inferNext("n", state.nodes.map(n => n.id));
   state.nextEdge = data.nextEdge || inferNext("e", state.edges.map(e => e.id));
@@ -231,12 +244,130 @@ function syncSettingsPanel() {
   els.runBtn.classList.toggle("hidden", !state.settings.geminiAutomation);
   els.zipExportToggle.checked = state.settings.zipExport !== false;
   syncQualityVisibility();
+  syncCustomMaterialsList();
 }
 
 function syncQualityVisibility() {
   const isGpt = (state.settings.model || "gpt-image-2") === "gpt-image-2";
   const labelEl = $("qualityLabel");
   if (labelEl) labelEl.classList.toggle("hidden", !isGpt);
+}
+
+function syncCustomMaterialsList() {
+  if (!els.customMaterialsList) return;
+  const materials = state.settings.customMaterials || [];
+  let html = "";
+  for (let i = 0; i < materials.length; i++) {
+    const m = materials[i];
+    html += '<div class="material-item">'
+      + '<img class="material-thumb" src="" data-fn="' + escHtml(m.fileName) + '" alt="">'
+      + '<span class="material-name">' + escHtml(m.name) + '</span>'
+      + '<button class="material-rename-btn" data-idx="' + i + '" title="重命名">✎</button>'
+      + '<button class="material-del-btn" data-idx="' + i + '" title="删除素材">×</button>'
+      + '</div>';
+  }
+  els.customMaterialsList.innerHTML = html;
+
+  var thumbs = els.customMaterialsList.querySelectorAll(".material-thumb");
+  for (var t = 0; t < thumbs.length; t++) {
+    (function(thumb) {
+      var fn = thumb.getAttribute("data-fn");
+      if (fn) {
+        thumb.src = "/download/images/" + encodeURIComponent(fn);
+        thumb.onerror = function() { thumb.style.display = "none"; };
+      }
+    })(thumbs[t]);
+  }
+
+  var delBtns = els.customMaterialsList.querySelectorAll(".material-del-btn");
+  for (var j = 0; j < delBtns.length; j++) {
+    delBtns[j].onclick = function(e) {
+      var idx = Number(this.getAttribute("data-idx"));
+      deleteCustomMaterial(idx);
+      e.stopPropagation();
+    };
+  }
+
+  var renameBtns = els.customMaterialsList.querySelectorAll(".material-rename-btn");
+  for (var k = 0; k < renameBtns.length; k++) {
+    renameBtns[k].onclick = function(e) {
+      var idx = Number(this.getAttribute("data-idx"));
+      renameCustomMaterial(idx);
+      e.stopPropagation();
+    };
+  }
+}
+
+function renameCustomMaterial(idx) {
+  var mats = state.settings.customMaterials || [];
+  if (idx < 0 || idx >= mats.length) return;
+  var item = mats[idx];
+  var newName = prompt("重命名素材", item.name);
+  if (newName !== null && newName.trim() !== "") {
+    item.name = newName.trim();
+    state.settings.customMaterials = mats;
+    pushHistory();
+    syncCustomMaterialsList();
+    toast("素材已重命名");
+  }
+}
+
+function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+async function deleteCustomMaterial(idx) {
+  var mats = state.settings.customMaterials || [];
+  if (idx < 0 || idx >= mats.length) return;
+  var item = mats[idx];
+  console.log("[自定义素材] 删除: " + item.name + " (" + item.fileName + ")");
+  mats.splice(idx, 1);
+  state.settings.customMaterials = mats;
+  try {
+    await fetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) });
+    console.log("[自定义素材] 服务端删除成功: " + item.fileName);
+  } catch (e) { console.error("[自定义素材] 服务端删除失败:", e); }
+  pushHistory();
+  syncCustomMaterialsList();
+  toast("素材已删除");
+}
+
+async function addCustomMaterial() {
+  var name = (els.customMaterialName.value || "").trim();
+  if (!name) { toast("请输入素材名称"); return; }
+  var file = els.customMaterialFileInput.files?.[0];
+  if (!file) { toast("请选择图片文件"); return; }
+  console.log("[自定义素材] 添加: 名称=" + name + ", 原始文件=" + file.name + ", size=" + file.size);
+  var base64 = await fileToBase64(file);
+  try {
+    var resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, data: base64 }) });
+    var result = await resp.json();
+    if (!result.success) { toast("保存失败: " + (result.error || "")); return; }
+    console.log("[自定义素材] 服务端保存成功: fileName=" + result.fileName);
+    var mats = state.settings.customMaterials || [];
+    mats.push({ name: name, fileName: result.fileName });
+    state.settings.customMaterials = mats;
+    els.customMaterialName.value = "";
+    els.customMaterialFileInput.value = "";
+    if (els.customMaterialFileHint) els.customMaterialFileHint.textContent = "";
+    pushHistory();
+    syncCustomMaterialsList();
+    toast("素材已添加");
+  } catch (e) {
+    console.error("[自定义素材] 保存失败:", e);
+    toast("保存失败: " + e.message);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() {
+      var result = reader.result;
+      var comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.substring(comma + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function updateViewportGrid() {
@@ -1517,7 +1648,7 @@ els.nodes.addEventListener("dblclick", ev => {
       if (allImages.length) showLightbox(allImages);
     } else {
       const src = node.type === "ai-image" ? node.generatedImage : node.image;
-      if (src) showLightbox(src);
+      if (src) showLightbox(src, node.id);
     }
   }
 });
@@ -1573,8 +1704,11 @@ function fileToDataUrl(file) {
 
 let lightboxImages = [];
 let lightboxIdx = 0;
+let lightboxSourceNodeId = "";
+let lightboxPainting = false;
+let lightboxDrawing = false;
 
-function showLightbox(src) {
+function showLightbox(src, sourceNodeId = "") {
   if (Array.isArray(src)) {
     lightboxImages = src;
     lightboxIdx = 0;
@@ -1582,6 +1716,7 @@ function showLightbox(src) {
     lightboxImages = [src];
     lightboxIdx = 0;
   }
+  lightboxSourceNodeId = Array.isArray(src) ? "" : sourceNodeId;
   updateLightboxImage();
   els.lightbox.classList.remove("hidden");
 }
@@ -1590,6 +1725,7 @@ function updateLightboxImage() {
   if (lightboxImages.length === 0) return;
   els.lightboxImg.src = lightboxImages[lightboxIdx];
   var multi = lightboxImages.length > 1;
+  els.lightboxPaintBtn.classList.toggle("hidden", multi || !lightboxSourceNodeId || lightboxPainting);
   els.lightboxPrev.classList.toggle("hidden", !multi);
   els.lightboxNext.classList.toggle("hidden", !multi);
   els.lightboxCounter.classList.toggle("hidden", !multi);
@@ -1617,11 +1753,90 @@ function lightboxNext() {
 }
 
 function hideLightbox() {
+  cancelLightboxPaint();
   els.lightbox.classList.add("hidden");
   els.lightboxImg.src = "";
   lightboxImages = [];
   lightboxIdx = 0;
+  lightboxSourceNodeId = "";
 }
+
+function startLightboxPaint() {
+  if (!lightboxSourceNodeId || !els.lightboxImg.naturalWidth) return;
+  const canvas = els.lightboxPaintCanvas;
+  canvas.width = els.lightboxImg.naturalWidth;
+  canvas.height = els.lightboxImg.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(els.lightboxImg, 0, 0, canvas.width, canvas.height);
+  lightboxPainting = true;
+  els.lightboxImg.classList.add("hidden");
+  canvas.classList.remove("hidden");
+  els.lightboxPaintToolbar.classList.remove("hidden");
+  els.lightboxPaintBtn.classList.add("hidden");
+}
+
+function cancelLightboxPaint() {
+  lightboxPainting = false;
+  lightboxDrawing = false;
+  els.lightboxPaintCanvas.classList.add("hidden");
+  els.lightboxPaintToolbar.classList.add("hidden");
+  els.lightboxImg.classList.remove("hidden");
+  const editable = lightboxImages.length === 1 && !!lightboxSourceNodeId;
+  els.lightboxPaintBtn.classList.toggle("hidden", !editable);
+}
+
+function paintCanvasPoint(ev) {
+  const canvas = els.lightboxPaintCanvas;
+  const rect = canvas.getBoundingClientRect();
+  return { x: (ev.clientX - rect.left) * canvas.width / rect.width, y: (ev.clientY - rect.top) * canvas.height / rect.height, scale: canvas.width / rect.width };
+}
+
+els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
+  if (!lightboxPainting) return;
+  lightboxDrawing = true;
+  els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
+  const p = paintCanvasPoint(ev);
+  const ctx = els.lightboxPaintCanvas.getContext("2d");
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 0.01, p.y + 0.01);
+  ctx.strokeStyle = els.lightboxPaintColor.value;
+  ctx.lineWidth = Number(els.lightboxPaintSize.value) * p.scale;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.stroke();
+});
+
+els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
+  if (!lightboxDrawing) return;
+  const p = paintCanvasPoint(ev);
+  const ctx = els.lightboxPaintCanvas.getContext("2d");
+  ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = els.lightboxPaintColor.value;
+  ctx.lineWidth = Number(els.lightboxPaintSize.value) * p.scale;
+  ctx.stroke();
+});
+
+els.lightboxPaintCanvas.addEventListener("pointerup", () => { lightboxDrawing = false; });
+els.lightboxPaintCanvas.addEventListener("pointercancel", () => { lightboxDrawing = false; });
+els.lightboxPaintBtn.onclick = startLightboxPaint;
+els.lightboxPaintCancel.onclick = cancelLightboxPaint;
+els.lightboxPaintConfirm.onclick = () => {
+  if (!lightboxPainting) return;
+  const source = findNode(lightboxSourceNodeId);
+  const image = els.lightboxPaintCanvas.toDataURL("image/png");
+  const x = source ? source.x + NODE_WIDTH + 40 : lastPointerWorld.x;
+  const y = source ? source.y : lastPointerWorld.y;
+  const node = addNode("image", x, y, false);
+  node.image = image;
+  node.fileName = `局部修改_${Date.now()}.png`;
+  node.mime = "image/png";
+  pushHistory();
+  render();
+  hideLightbox();
+  toast("已生成局部修改图片节点");
+};
 
 els.lightboxClose.onclick = hideLightbox;
 els.lightboxPrev.onclick = lightboxPrev;
@@ -1791,32 +2006,26 @@ els.viewport.addEventListener("contextmenu", ev => {
     items.push(
       ["添加文字节点", () => addNode("text", p.x, p.y)],
       ["添加图片节点", () => addNode("image", p.x, p.y)],
-      ["男模特", async () => {
+      ...((state.settings.customMaterials || []).map(mat => [mat.name, async () => {
         const imgNode = addNode("image", p.x, p.y, false);
         try {
-          const resp = await fetch("/download/images/man.png");
+          const url = "/download/images/" + encodeURIComponent(mat.fileName);
+          console.log("[自定义素材] 加载图片: " + url);
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
           const blob = await resp.blob();
           imgNode.image = await blobToBase64(blob);
-          imgNode.fileName = "man.png";
-          imgNode.mime = "image/png";
-        } catch (e) { /* ignore */ }
+          imgNode.fileName = mat.fileName;
+          imgNode.mime = "image/" + ((mat.fileName.match(/\.(\w+)$/) || [])[1] || "png");
+          console.log("[自定义素材] 加载成功: " + mat.fileName);
+        } catch (e) {
+          console.error("[自定义素材] 加载失败: " + mat.fileName, e);
+          toast("素材图片加载失败，文件可能已被删除: " + mat.fileName);
+        }
         state.selected = new Set([imgNode.id]);
         pushHistory();
         render();
-      }],
-      ["女模特", async () => {
-        const imgNode = addNode("image", p.x, p.y, false);
-        try {
-          const resp = await fetch("/download/images/woman.png");
-          const blob = await resp.blob();
-          imgNode.image = await blobToBase64(blob);
-          imgNode.fileName = "woman.png";
-          imgNode.mime = "image/png";
-        } catch (e) { /* ignore */ }
-        state.selected = new Set([imgNode.id]);
-        pushHistory();
-        render();
-      }],
+      }])),
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
       ["节点对齐", () => tidyNodes()],
       ["添加输出节点", () => {
@@ -2030,6 +2239,24 @@ $("settingsBtn").onclick = () => {
   if (!els.settings.classList.contains("hidden")) { syncSettingsPanel(); fetchBalance(); }
 };
 $("closeSettingsBtn").onclick = () => els.settings.classList.add("hidden");
+
+function switchSettingsTab(name) {
+  var btns = els.settings.querySelectorAll(".settings-tab-btn");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle("active", btns[i].getAttribute("data-tab") === name);
+  }
+  var pages = els.settings.querySelectorAll(".tab-page");
+  for (var j = 0; j < pages.length; j++) {
+    pages[j].classList.toggle("hidden", pages[j].getAttribute("data-tab") !== name);
+  }
+}
+
+var tabBtns = els.settings.querySelectorAll(".settings-tab-btn");
+for (var t = 0; t < tabBtns.length; t++) {
+  tabBtns[t].onclick = function() {
+    switchSettingsTab(this.getAttribute("data-tab"));
+  };
+}
 els.projectNameBtn.onclick = () => els.projectMenu.classList.toggle("hidden");
 els.projectNameBtn.ondblclick = ev => {
   ev.preventDefault();
@@ -2236,6 +2463,7 @@ els.geminiPluginBtn.onclick = () => {
   window.open("https://chromewebstore.google.com/detail/gemini-automation-auto-ge/jlhacppkbcmonaanlkbgipimelfbjgpb", "_blank");
 };
 
+
 $("chooseFolderBtn").onclick = chooseFolder;
 els.openExportFolderBtn.onclick = openExportFolder;
 
@@ -2244,6 +2472,19 @@ els.exportFolder.onchange = () => {
   saveCurrentPage();
   persistPages();
 };
+
+els.customMaterialFileBtn.onclick = () => {
+  els.customMaterialFileInput.click();
+};
+
+els.customMaterialFileInput.onchange = function() {
+  var file = els.customMaterialFileInput.files?.[0];
+  if (els.customMaterialFileHint) {
+    els.customMaterialFileHint.textContent = file ? file.name : "";
+  }
+};
+
+els.customMaterialAddBtn.onclick = addCustomMaterial;
 
 els.loadJson.onchange = async () => {
   const file = els.loadJson.files?.[0];

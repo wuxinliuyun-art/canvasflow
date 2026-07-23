@@ -809,6 +809,41 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   padding: 20px;
 }
 
+.settings-tab-bar {
+  display: flex;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--panel-2);
+}
+
+.settings-tab-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab-btn:hover {
+  color: var(--text);
+}
+
+.settings-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.tab-page {
+  display: block;
+}
+
+.tab-page.hidden {
+  display: none;
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -850,9 +885,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 
 .shortcut-list {
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--panel-2);
 }
 
 .shortcut-kicker {
@@ -1040,6 +1072,13 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   pointer-events: none;
 }
 
+.lightbox-paint-canvas { position: relative; z-index: 2; max-width: 90vw; max-height: 82vh; width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 18px 60px rgba(0,0,0,.45); cursor: crosshair; touch-action: none; }
+.lightbox-paint-btn { position: fixed; z-index: 4; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 10px 20px; border-color: rgba(255,255,255,.3); background: rgba(20,20,24,.86); color: #fff; }
+.lightbox-paint-toolbar { position: fixed; z-index: 4; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid rgba(255,255,255,.22); border-radius: 12px; background: rgba(20,20,24,.9); color: #fff; backdrop-filter: blur(12px); }
+.lightbox-paint-toolbar label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.lightbox-paint-toolbar input[type="color"] { width: 38px; height: 30px; padding: 1px; border: 0; background: transparent; }
+.lightbox-paint-toolbar input[type="range"] { width: 120px; }
+
 .lightbox-close {
   position: absolute;
   top: 20px;
@@ -1225,3 +1264,87 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 .execute-dialog-head { cursor: default; }
 
+.custom-materials-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.material-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.material-item .material-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--panel-3);
+}
+.material-item .material-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.material-rename-btn {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.material-rename-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+}
+.material-del-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.material-del-btn:hover {
+  opacity: 1;
+}
+.material-file-hint {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+  flex-shrink: 1;
+}
+.custom-material-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.custom-material-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+.custom-material-add {
+  margin-bottom: 4px;
+}
