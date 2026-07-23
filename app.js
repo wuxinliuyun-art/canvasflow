@@ -94,19 +94,18 @@ const UI_EN = {
   "当前项目还没有保存，确定要离开吗？": "This project has not been saved. Are you sure you want to leave?",
   "画布上没有可执行的 AI 绘图节点": "There are no runnable AI image nodes on the canvas", "双击标题栏可最大化窗口": "Double-click the title bar to maximize",
   "无参考图": "No reference image", "(无文字输入)": "(no text input)", "单图": "Single image",
-  "自定义文字": "Custom Text", "自定义图片": "Custom Images", "全局生效": "Available in All Projects",
-  "保存常用整段文字。未勾选时仅当前项目可用，勾选“全局生效”后所有项目可用。": "Save reusable full-text templates. Leave global disabled for this project only, or enable it for every project.",
+  "自定义文字": "Custom Text", "自定义图片": "Custom Images",
   "添加常用图片，或在图片节点上右键收藏。支持项目独立和全局共用。": "Add reusable images or save one from an image node. Assets can be project-only or global.",
   "模板名称（如：产品摄影）": "Template name (e.g. product photography)", "输入需要重复使用的完整文字": "Enter the complete reusable text",
   "边框颜色": "Border color", "添加文字模板": "Add Text Template", "添加图片素材": "Add Image Asset",
-  "从已打开项目导入": "Import from Open Project", "从 JSON 导入素材": "Import Assets from JSON",
+  "从 JSON 导入素材": "Import Assets from JSON",
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
   "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image",
-  "转为普通文字节点": "Convert to Regular Text Node", "转为普通图片节点": "Convert to Regular Image Node", "刷新同模板节点": "Refresh Matching Nodes",
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出与集成": "Export & Integrations",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
-  "管理当前项目或所有项目共用的图文模板。": "Manage text and image templates for this project or every project.",
+  "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
+  "导入素材": "Import Assets", "标记颜色": "Label Color", "保存修改": "Save Changes",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image",
@@ -216,6 +215,7 @@ const state = {
 
 let globalLibrary = loadGlobalLibrary();
 let pendingLibraryImport = null;
+let editingTextTemplate = null;
 
 function emptyLibrary() { return { textTemplates: [], imageMaterials: [] }; }
 function normalizeLibrary(lib) {
@@ -242,28 +242,32 @@ function saveGlobalLibrary() {
   catch (e) { console.error("[保存] 全局素材库写入失败", e); toast("全局素材保存失败，可能是浏览器存储空间不足"); }
 }
 function migrateLegacyMaterials(data) {
-  const old = data?.settings?.customMaterials;
-  if (!Array.isArray(old) || !old.length || state.customLibrary.imageMaterials.length) return;
-  state.customLibrary.imageMaterials = old.map((m, i) => normalizeTemplate({ ...m, color: TEMPLATE_COLORS[i % TEMPLATE_COLORS.length], revision: 1 }, i));
-  console.log(`[迁移] 已将 ${old.length} 个旧自定义图片迁移到当前项目`);
+  const projectLibrary = normalizeLibrary(data?.customLibrary);
+  const oldImages = Array.isArray(data?.settings?.customMaterials) ? data.settings.customMaterials : [];
+  if (oldImages.length) projectLibrary.imageMaterials.push(...oldImages.map((m, i) => normalizeTemplate({ ...m, color: TEMPLATE_COLORS[i % TEMPLATE_COLORS.length] }, i)));
+  let migrated = 0;
+  for (const kind of ["text", "image"]) {
+    const key = kind === "text" ? "textTemplates" : "imageMaterials";
+    for (const item of projectLibrary[key]) {
+      if (globalLibrary[key].some(existing => existing.id === item.id)) continue;
+      item.name = uniqueTemplateName(kind, item.name, globalLibrary);
+      globalLibrary[key].push(item); migrated++;
+    }
+  }
+  if (migrated) { saveGlobalLibrary(); console.log(`[迁移] 已将 ${migrated} 个项目素材合并到全局素材库`); }
 }
 function libraryItems(kind) {
   const key = kind === "text" ? "textTemplates" : "imageMaterials";
-  return [
-    ...(state.customLibrary[key] || []).map(item => ({ ...item, global: false })),
-    ...(globalLibrary[key] || []).map(item => ({ ...item, global: true })),
-  ];
+  return globalLibrary[key] || [];
 }
 function findTemplate(kind, id) {
   const key = kind === "text" ? "textTemplates" : "imageMaterials";
-  return (state.customLibrary[key] || []).find(x => x.id === id) || (globalLibrary[key] || []).find(x => x.id === id) || null;
+  return (globalLibrary[key] || []).find(x => x.id === id) || null;
 }
 function nextTemplateColor() {
-  return TEMPLATE_COLORS[(state.customLibrary.textTemplates.length + state.customLibrary.imageMaterials.length + globalLibrary.textTemplates.length + globalLibrary.imageMaterials.length) % TEMPLATE_COLORS.length];
+  return TEMPLATE_COLORS[(globalLibrary.textTemplates.length + globalLibrary.imageMaterials.length) % TEMPLATE_COLORS.length];
 }
 function persistLibraries() {
-  saveCurrentPage();
-  persistPages();
   saveGlobalLibrary();
 }
 
@@ -424,8 +428,9 @@ function restoreData(data) {
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
   state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, customMaterials: [], ...(data.settings || {}) };
-  state.customLibrary = normalizeLibrary(data.customLibrary);
   migrateLegacyMaterials(data);
+  state.customLibrary = emptyLibrary();
+  walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
   state.view = { x: 120, y: 90, scale: 1, ...(data.view || {}) };
   state.nextNode = data.nextNode || inferNext("n", state.nodes.map(n => n.id));
   state.nextEdge = data.nextEdge || inferNext("e", state.edges.map(e => e.id));
@@ -538,17 +543,13 @@ function renderLibraryList(kind, container) {
   const items = libraryItems(kind);
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
     ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="">` : `<span class="material-swatch" style="background:${escHtml(item.color)}"></span>`}
-    <span class="material-name" title="${escHtml(kind === "text" ? item.content || "" : item.name)}">${escHtml(item.name)}</span>
+    <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
     <input type="color" class="material-color-input" value="${escHtml(item.color)}" title="节点边框颜色">
-    <label class="material-scope" title="勾选后所有项目可用"><input type="checkbox" class="material-global-toggle" ${item.global ? "checked" : ""}> 全局生效</label>
-    <button class="material-refresh-btn" title="刷新当前项目">↻</button>
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
   container.querySelectorAll(".material-item").forEach(row => {
     const kind = row.dataset.kind, id = row.dataset.id;
-    row.querySelector(".material-refresh-btn").onclick = () => refreshTemplateNodes(kind, id, "current");
-    row.querySelector(".material-global-toggle").onchange = () => toggleTemplateGlobal(kind, id);
     row.querySelector(".material-color-input").onchange = event => updateTemplateColor(kind, id, event.target.value);
     row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
@@ -559,10 +560,8 @@ function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"
 
 function templateLocation(kind, id) {
   const key = kind === "text" ? "textTemplates" : "imageMaterials";
-  let index = state.customLibrary[key].findIndex(x => x.id === id);
-  if (index >= 0) return { library: state.customLibrary, key, index, global: false };
-  index = globalLibrary[key].findIndex(x => x.id === id);
-  return index >= 0 ? { library: globalLibrary, key, index, global: true } : null;
+  const index = globalLibrary[key].findIndex(x => x.id === id);
+  return index >= 0 ? { library: globalLibrary, key, index } : null;
 }
 
 function uniqueTemplateName(kind, desired, library) {
@@ -577,56 +576,36 @@ function uniqueTemplateName(kind, desired, library) {
 function editTemplate(kind, id) {
   const loc = templateLocation(kind, id); if (!loc) return;
   const item = loc.library[loc.key][loc.index];
-  const newName = prompt("修改素材名称", item.name); if (newName === null || !newName.trim()) return;
-  let newContent = item.content;
-  if (kind === "text") { newContent = prompt("修改完整文字内容", item.content || ""); if (newContent === null || !newContent.trim()) return; }
-  item.name = newName.trim(); item.content = kind === "text" ? newContent : item.content;
-  item.revision = (item.revision || 1) + 1;
-  persistLibraries(); syncCustomMaterialsList();
-  const currentCount = countTemplateNodes(id, "current");
-  if (!loc.global) {
-    if (currentCount && confirm(`设置已更新。是否刷新当前项目中的 ${currentCount} 个节点？`)) refreshTemplateNodes(kind, id, "current", true);
-  } else {
-    const allCount = countTemplateNodes(id, "all");
-    if (currentCount && confirm(`全局设置已更新。是否仅刷新当前项目中的 ${currentCount} 个节点？\n选择“取消”后可继续选择刷新所有项目。`)) refreshTemplateNodes(kind, id, "current", true);
-    else if (allCount && confirm(`是否刷新所有项目中的 ${allCount} 个关联节点？\n选择“取消”则暂不刷新。`)) refreshTemplateNodes(kind, id, "all", true);
+  if (kind === "text") {
+    editingTextTemplate = { id };
+    const textTab = els.settings.querySelector('.asset-type-btn[data-asset-tab="text"]');
+    if (textTab && !textTab.classList.contains("active")) textTab.click();
+    els.customTextName.value = item.name;
+    els.customTextContent.value = item.content || "";
+    els.customTextColor.value = item.color || TEMPLATE_COLORS[0];
+    els.customTextAddBtn.textContent = "保存修改";
+    els.customTextEditor.classList.remove("hidden");
+    els.customTextContent.focus();
+    return;
   }
+  const newName = prompt("修改素材名称", item.name); if (newName === null || !newName.trim()) return;
+  item.name = newName.trim();
+  persistLibraries(); syncCustomMaterialsList();
 }
 
 function updateTemplateColor(kind, id, color) {
   const loc = templateLocation(kind, id); if (!loc) return;
-  const item = loc.library[loc.key][loc.index]; item.color = color; item.revision = (item.revision || 1) + 1;
-  persistLibraries(); syncCustomMaterialsList(); render();
-  const currentCount = countTemplateNodes(id, "current");
-  if (currentCount && confirm(`边框颜色已更新。是否仅刷新当前项目中的 ${currentCount} 个关联节点？`)) refreshTemplateNodes(kind, id, "current", true);
-  else if (loc.global) {
-    const allCount = countTemplateNodes(id, "all");
-    if (allCount && confirm(`是否刷新所有项目中的 ${allCount} 个关联节点？\n选择“取消”则暂不刷新。`)) refreshTemplateNodes(kind, id, "all", true);
-  }
-}
-
-function toggleTemplateGlobal(kind, id) {
-  const loc = templateLocation(kind, id); if (!loc) return;
-  const item = loc.library[loc.key].splice(loc.index, 1)[0];
-  if (loc.global) {
-    state.customLibrary[loc.key].push(item);
-    convertTemplateRefsOutsideCurrent(id);
-    toast("已改为仅当前项目生效；其他项目的关联节点已转为普通节点");
-  } else {
-    item.name = uniqueTemplateName(kind, item.name, globalLibrary);
-    globalLibrary[loc.key].push(item);
-    toast("已设为全局生效");
-  }
-  persistLibraries(); syncCustomMaterialsList(); render();
+  loc.library[loc.key][loc.index].color = color;
+  persistLibraries(); syncCustomMaterialsList();
 }
 
 async function deleteTemplate(kind, id) {
   const loc = templateLocation(kind, id); if (!loc) return;
   const item = loc.library[loc.key][loc.index];
-  if (!confirm(`删除“${item.name}”？关联节点会保留内容并转为普通节点。`)) return;
-  loc.library[loc.key].splice(loc.index, 1); convertTemplateRefs(id, loc.global ? "all" : "current");
+  if (!confirm(`删除“${item.name}”？已创建的节点不会受影响。`)) return;
+  loc.library[loc.key].splice(loc.index, 1);
   if (kind === "image" && item.fileName) try { await fetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) }); } catch (e) { console.error("[自定义图片] 删除文件失败", e); }
-  persistLibraries(); syncCustomMaterialsList(); render(); toast("素材已删除，关联节点已转为普通节点");
+  persistLibraries(); syncCustomMaterialsList(); toast("素材已删除");
 }
 
 async function addCustomMaterial(source) {
@@ -636,8 +615,7 @@ async function addCustomMaterial(source) {
   var file = source?.file || els.customMaterialFileInput.files?.[0];
   var base64 = source?.data || "";
   if (!file && !base64) { toast("请选择图片文件"); return; }
-  const isGlobal = source?.global ?? !!els.customMaterialGlobal?.checked;
-  const target = isGlobal ? globalLibrary : state.customLibrary;
+  const target = globalLibrary;
   name = uniqueTemplateName("image", name, target);
   console.log("[自定义图片] 添加: 名称=" + name + ", 原始文件=" + (file?.name || source?.fileName || "节点图片") + ", size=" + (file?.size || "base64"));
   if (!base64) base64 = await fileToBase64(file);
@@ -668,8 +646,15 @@ function addCustomText(source) {
   const content = String(source?.content || els.customTextContent?.value || "").trim();
   if (!name) { toast("请输入模板名称"); return false; }
   if (!content) { toast("请输入完整文字内容"); return false; }
-  const isGlobal = source?.global ?? !!els.customTextGlobal?.checked;
-  const target = isGlobal ? globalLibrary : state.customLibrary;
+  if (!source && editingTextTemplate) {
+    const loc = templateLocation("text", editingTextTemplate.id);
+    if (!loc) { closeTextTemplateEditor(); toast("保存失败：原文字模板不存在"); return false; }
+    const item = loc.library[loc.key][loc.index];
+    item.name = name; item.content = content; item.color = els.customTextColor.value || item.color;
+    persistLibraries(); syncCustomMaterialsList(); closeTextTemplateEditor(); toast("文字模板已更新");
+    return true;
+  }
+  const target = globalLibrary;
   name = uniqueTemplateName("text", name, target);
   target.textTemplates.push(normalizeTemplate({ name, content, color: source?.color || els.customTextColor?.value || nextTemplateColor(), revision: 1 }));
   if (els.customTextName) els.customTextName.value = "";
@@ -677,6 +662,14 @@ function addCustomText(source) {
   if (els.customTextEditor) els.customTextEditor.classList.add("hidden");
   persistLibraries(); syncCustomMaterialsList(); toast("文字模板已添加");
   return true;
+}
+
+function closeTextTemplateEditor() {
+  editingTextTemplate = null;
+  els.customTextName.value = "";
+  els.customTextContent.value = "";
+  els.customTextAddBtn.textContent = "添加文字模板";
+  els.customTextEditor.classList.add("hidden");
 }
 
 function stripDataUrl(value) { return String(value || "").replace(/^data:[^,]+,/, ""); }
@@ -699,8 +692,7 @@ function renderLibraryImportItems() {
   els.libraryImportItems.innerHTML = rows.length ? rows.map(row => `<label class="library-import-item">
     <input type="checkbox" class="library-import-check" data-kind="${row.kind}" data-id="${escHtml(row.item.id)}" checked>
     <span>${row.kind === "text" ? "文字" : "图片"}：${escHtml(row.item.name)}</span>
-    <label title="勾选后所有项目可用"><input type="checkbox" class="library-import-global" ${source.defaultGlobal ? "checked" : ""}> 全局</label>
-  </label>`).join("") : '<div class="setting-desc">该项目没有自定义图文素材</div>';
+  </label>`).join("") : '<div class="setting-desc">没有可导入的自定义图文素材</div>';
 }
 
 async function confirmLibraryImport() {
@@ -713,9 +705,8 @@ async function confirmLibraryImport() {
     const kind = checkbox.dataset.kind;
     const key = kind === "text" ? "textTemplates" : "imageMaterials";
     const item = source.library[key].find(x => x.id === checkbox.dataset.id); if (!item) continue;
-    const makeGlobal = checkbox.closest(".library-import-item").querySelector(".library-import-global").checked;
     try {
-      if (kind === "text") { if (addCustomText({ ...item, global: makeGlobal })) textCount++; else failed++; }
+      if (kind === "text") { if (addCustomText({ ...item })) textCount++; else failed++; }
       else {
         let data = item.data || "";
         if (!data && item.fileName) {
@@ -723,7 +714,7 @@ async function confirmLibraryImport() {
           if (!resp.ok) throw new Error("图片文件不存在");
           data = await blobToBase64(await resp.blob());
         }
-        if (await addCustomMaterial({ ...item, data, global: makeGlobal })) imageCount++; else failed++;
+        if (await addCustomMaterial({ ...item, data })) imageCount++; else failed++;
       }
     } catch (e) { failed++; console.error("[导入] 素材导入失败", item.name, e); }
   }
@@ -842,7 +833,6 @@ function addNode(type, x = 160, y = 120, commit = true) {
     items: null,
     internalEdges: null,
     seq: 0,
-    customRef: null,
   };
   state.nodes.push(node);
   state.selected = new Set([node.id]);
@@ -860,58 +850,6 @@ function walkNodes(nodes, fn) {
   }
 }
 
-function pageNodeSets(scope) {
-  saveCurrentPage();
-  if (scope === "all") return state.pages.map(page => ({ page, nodes: page.id === state.activePageId ? state.nodes : (page.data?.nodes || []) }));
-  return [{ page: currentPage(), nodes: state.nodes }];
-}
-
-function countTemplateNodes(templateId, scope) {
-  let count = 0;
-  pageNodeSets(scope).forEach(set => walkNodes(set.nodes, node => { if (node.customRef?.templateId === templateId) count++; }));
-  return count;
-}
-
-async function refreshTemplateNodes(kind, templateId, scope = "current", confirmed = false) {
-  const template = findTemplate(kind, templateId);
-  if (!template) return toast("模板不存在，可能已被删除");
-  const count = countTemplateNodes(templateId, scope);
-  if (!count) return toast("当前范围内没有关联节点");
-  if (!confirmed && !confirm(`将覆盖 ${count} 个关联节点的${kind === "text" ? "文字" : "图片"}内容，位置和连线不会改变。是否继续？`)) return;
-  let imageData = null;
-  if (kind === "image") {
-    try {
-      const resp = await fetch("/download/images/" + encodeURIComponent(template.fileName));
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      imageData = await blobToBase64(await resp.blob());
-    } catch (e) { console.error("[刷新] 图片读取失败", e); return toast("刷新失败：素材图片无法读取，请检查文件是否存在"); }
-  }
-  pageNodeSets(scope).forEach(set => walkNodes(set.nodes, node => {
-    if (node.customRef?.templateId !== templateId) return;
-    if (kind === "text" && node.type === "text") node.text = template.content;
-    if (kind === "image" && node.type === "image") { node.image = imageData; node.fileName = template.fileName; node.mime = template.mime || "image/png"; }
-    node.customRef.revision = template.revision || 1;
-    node.customRef.color = template.color;
-  }));
-  saveCurrentPage(); persistPages(); pushHistory(); render();
-  console.log(`[刷新] ${scope === "all" ? "所有项目" : "当前项目"} ${count} 个节点，模板=${template.name}`);
-  toast(`已刷新 ${count} 个自定义节点`);
-}
-
-function convertTemplateRefs(templateId, scope) {
-  pageNodeSets(scope).forEach(set => walkNodes(set.nodes, node => { if (node.customRef?.templateId === templateId) node.customRef = null; }));
-}
-
-function convertTemplateRefsOutsideCurrent(templateId) {
-  saveCurrentPage();
-  state.pages.filter(page => page.id !== state.activePageId).forEach(page => walkNodes(page.data?.nodes || [], node => { if (node.customRef?.templateId === templateId) node.customRef = null; }));
-}
-
-function convertNodeToNormal(node) {
-  if (!node?.customRef) return;
-  node.customRef = null; pushHistory(); render(); toast("已转为普通节点，不再随模板刷新");
-}
-
 async function createNodeFromTemplate(kind, template, x, y) {
   const node = addNode(kind === "text" ? "text" : "image", x, y, false);
   if (kind === "text") node.text = template.content || "";
@@ -922,7 +860,6 @@ async function createNodeFromTemplate(kind, template, x, y) {
       node.image = await blobToBase64(await resp.blob()); node.fileName = template.fileName; node.mime = template.mime || "image/png";
     } catch (e) { state.nodes = state.nodes.filter(x => x.id !== node.id); console.error("[自定义图片] 创建失败", e); return toast("创建失败：素材图片无法读取"); }
   }
-  node.customRef = { kind, templateId: template.id, revision: template.revision || 1, color: template.color };
   pushHistory(); render(); toast(kind === "text" ? "已创建自定义文字节点" : "已创建自定义图片节点");
 }
 
@@ -932,12 +869,11 @@ async function saveNodeAsTemplate(node) {
   if (!content) return toast(kind === "text" ? "无法收藏：文字节点内容为空" : "无法收藏：图片节点没有图片");
   const suggested = kind === "text" ? content.split(/\r?\n/)[0].slice(0, 30) : (node.fileName || "自定义图片");
   const name = prompt("自定义素材名称", suggested); if (name === null || !name.trim()) return;
-  const makeGlobal = confirm("是否全局生效？\n确定：所有项目可用；取消：仅当前项目可用。");
-  const target = makeGlobal ? globalLibrary : state.customLibrary;
+  const target = globalLibrary;
   const finalName = uniqueTemplateName(kind, name.trim(), target);
   if (kind === "text") {
     const template = normalizeTemplate({ name: finalName, content, color: nextTemplateColor(), revision: 1 });
-    target.textTemplates.push(template); node.customRef = { kind, templateId: template.id, revision: 1, color: template.color };
+    target.textTemplates.push(template);
   } else {
     const raw = stripDataUrl(content);
     const originalName = node.fileName || "custom.png";
@@ -945,10 +881,10 @@ async function saveNodeAsTemplate(node) {
       const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: raw }) });
       const result = await resp.json(); if (!result.success) throw new Error(result.error || "保存失败");
       const template = normalizeTemplate({ name: finalName, fileName: result.fileName, mime: node.mime || "image/png", color: nextTemplateColor(), revision: 1 });
-      target.imageMaterials.push(template); node.customRef = { kind, templateId: template.id, revision: 1, color: template.color };
+      target.imageMaterials.push(template);
     } catch (e) { console.error("[自定义图片] 节点收藏失败", e); return toast("收藏失败：" + e.message); }
   }
-  persistLibraries(); pushHistory(); syncCustomMaterialsList(); render(); toast("已保存为自定义节点");
+  persistLibraries(); syncCustomMaterialsList(); toast("已保存到全局素材库");
 }
 
 function groupSelection() {
@@ -1116,7 +1052,7 @@ function pasteNodes(data, anchor = null) {
       h: NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
-    walkNodes([nn], pastedNode => { if (pastedNode.customRef && !findTemplate(pastedNode.customRef.kind, pastedNode.customRef.templateId)) pastedNode.customRef = null; });
+    walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
     map.set(n.id, nn.id);
     pasted.push(nn);
   });
@@ -1676,10 +1612,7 @@ function renderNodes() {
   els.nodes.innerHTML = "";
   for (const node of state.nodes) {
     const div = document.createElement("div");
-    const template = node.customRef ? findTemplate(node.customRef.kind, node.customRef.templateId) : null;
-    const stale = !!(template && Number(node.customRef.revision || 0) < Number(template.revision || 1));
-    div.className = `node ${node.type} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${template ? "custom-linked" : ""} ${stale ? "custom-stale" : ""}`;
-    if (template) div.style.setProperty("--custom-node-color", node.customRef.color || template.color || TEMPLATE_COLORS[0]);
+    div.className = `node ${node.type} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""}`;
     div.dataset.id = node.id;
     div.style.left = `${node.x}px`;
     div.style.top = `${node.y}px`;
@@ -2432,8 +2365,7 @@ els.viewport.addEventListener("contextmenu", ev => {
     const isGroupWithItems = selectedNode?.type === "group" && (selectedNode?.items || (selectedNode?.images && selectedNode?.images.length));
     const items = [
       ["切换启用/停用", () => toggleDisabled(state.selected)],
-      ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) && !selectedNode.customRef ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-      ...(selectedNode?.customRef ? [[selectedNode.type === "text" ? "转为普通文字节点" : "转为普通图片节点", () => convertNodeToNormal(selectedNode)], ["刷新同模板节点", () => refreshTemplateNodes(selectedNode.customRef.kind, selectedNode.customRef.templateId, "current")]] : []),
+      ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
       ...(state.selected.size > 1 ? [["编组", () => groupSelection()]] : []),
       ...(isGroupWithItems ? [["取消编组", () => ungroupNode(id)]] : []),
       ["AI绘图", () => {
@@ -2728,6 +2660,7 @@ for (var at = 0; at < assetTabBtns.length; at++) {
   };
 }
 els.newCustomTextBtn.onclick = () => {
+  if (editingTextTemplate) closeTextTemplateEditor();
   els.customTextEditor.classList.toggle("hidden");
   els.customImageEditor.classList.add("hidden");
   if (!els.customTextEditor.classList.contains("hidden")) els.customTextName.focus();
@@ -2737,7 +2670,7 @@ els.newCustomImageBtn.onclick = () => {
   els.customTextEditor.classList.add("hidden");
   if (!els.customImageEditor.classList.contains("hidden")) els.customMaterialName.focus();
 };
-els.customTextCancelBtn.onclick = () => els.customTextEditor.classList.add("hidden");
+els.customTextCancelBtn.onclick = closeTextTemplateEditor;
 els.customImageCancelBtn.onclick = () => els.customImageEditor.classList.add("hidden");
 
 function setShortcutPopover(open) {
@@ -2985,23 +2918,17 @@ els.customMaterialFileInput.onchange = function() {
   }
 };
 
-els.customMaterialAddBtn.onclick = addCustomMaterial;
+els.customMaterialAddBtn.onclick = () => addCustomMaterial();
 els.customTextAddBtn.onclick = () => addCustomText();
-els.importLibraryProjectBtn.onclick = () => {
-  saveCurrentPage();
-  const sources = state.pages.filter(page => page.id !== state.activePageId).map(page => ({ id: page.id, name: page.name, library: normalizeLibrary(page.data?.customLibrary) }));
-  if (!sources.length) return toast("没有其他已打开项目可供导入");
-  openLibraryImport(sources);
-};
 els.importLibraryJsonBtn.onclick = () => els.importLibraryJsonInput.click();
 els.importLibraryJsonInput.onchange = async () => {
   const file = els.importLibraryJsonInput.files?.[0]; if (!file) return;
   try {
     const data = JSON.parse(await file.text());
     const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: file.name.replace(/\.json$/i, ""), data }];
-    const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary), defaultGlobal: false }));
+    const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary) }));
     const importedGlobalLibrary = normalizeLibrary(data.globalLibrary);
-    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length) sources.unshift({ id: "global", name: "全局素材", library: importedGlobalLibrary, defaultGlobal: true });
+    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
     if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length)) return toast("该 JSON 中没有可导入的自定义图文");
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
@@ -3154,6 +3081,7 @@ async function embedLibraryImages(data) {
 
 async function restoreLibrariesFromJson(data) {
   const pages = Array.isArray(data.pages) ? data.pages : [];
+  const importedGlobal = normalizeLibrary(data.globalLibrary);
   for (const page of pages) {
     const library = normalizeLibrary(page.data?.customLibrary);
     for (const item of library.imageMaterials) {
@@ -3164,29 +3092,29 @@ async function restoreLibrariesFromJson(data) {
         item.fileName = result.fileName; delete item.data;
       } catch (e) { console.error("[加载] 项目自定义图片恢复失败", item.name, e); }
     }
-    if (page.data) page.data.customLibrary = library;
+    importedGlobal.textTemplates.push(...library.textTemplates);
+    importedGlobal.imageMaterials.push(...library.imageMaterials);
+    if (page.data) {
+      page.data.customLibrary = emptyLibrary();
+      walkNodes(page.data.nodes || [], node => { if (node.customRef) delete node.customRef; });
+    }
   }
-  const importedGlobal = normalizeLibrary(data.globalLibrary);
-  const globalIdMap = new Map();
   for (const item of importedGlobal.textTemplates) {
     const existing = globalLibrary.textTemplates.find(x => x.id === item.id);
-    if (existing) { globalIdMap.set(item.id, existing.id); continue; }
-    item.name = uniqueTemplateName("text", item.name, globalLibrary); globalLibrary.textTemplates.push(item); globalIdMap.set(item.id, item.id);
+    if (existing) continue;
+    item.name = uniqueTemplateName("text", item.name, globalLibrary); globalLibrary.textTemplates.push(item);
   }
   for (const item of importedGlobal.imageMaterials) {
     try {
       const existing = globalLibrary.imageMaterials.find(x => x.id === item.id);
-      if (existing) { globalIdMap.set(item.id, existing.id); continue; }
+      if (existing) continue;
       if (item.data) {
         const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: item.fileName || "custom.png", data: stripDataUrl(item.data) }) });
         const result = await resp.json(); if (!result.success) throw new Error(result.error || "恢复失败"); item.fileName = result.fileName;
       }
-      item.name = uniqueTemplateName("image", item.name, globalLibrary); delete item.data; globalLibrary.imageMaterials.push(item); globalIdMap.set(item.id, item.id);
+      item.name = uniqueTemplateName("image", item.name, globalLibrary); delete item.data; globalLibrary.imageMaterials.push(item);
     } catch (e) { console.error("[加载] 全局自定义图片恢复失败", item.name, e); }
   }
-  if (globalIdMap.size) pages.forEach(page => walkNodes(page.data?.nodes || [], node => {
-    if (node.customRef && globalIdMap.has(node.customRef.templateId)) node.customRef.templateId = globalIdMap.get(node.customRef.templateId);
-  }));
   saveGlobalLibrary();
 }
 

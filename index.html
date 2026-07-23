@@ -92,7 +92,7 @@
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
-        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>管理当前项目或所有项目共用的图文模板。</p></div><div class="custom-library-actions"><button id="importLibraryProjectBtn">从项目导入</button><button id="importLibraryJsonBtn">从 JSON 导入</button><input id="importLibraryJsonInput" type="file" accept="application/json,.json" hidden></div></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept="application/json,.json" hidden></div></div>
         <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button></div>
         <section class="asset-pane" data-asset-pane="text">
           <div class="asset-pane-head"><div><h3>自定义文字</h3><p>保存可重复使用的完整多行文字。</p></div><button id="newCustomTextBtn" class="primary">＋ 新建文字</button></div>
@@ -100,7 +100,7 @@
           <div id="customTextEditor" class="custom-template-add asset-editor hidden">
             <input id="customTextName" type="text" placeholder="模板名称（如：产品摄影）">
             <textarea id="customTextContent" rows="4" placeholder="输入需要重复使用的完整文字"></textarea>
-            <div class="custom-template-options"><label class="template-color-label">边框颜色 <input id="customTextColor" type="color" value="#7c5cfc"></label><label class="check-row compact"><input id="customTextGlobal" type="checkbox"><span>全局生效</span></label><div class="asset-editor-actions"><button id="customTextCancelBtn">取消</button><button id="customTextAddBtn" class="primary">添加文字模板</button></div></div>
+            <div class="custom-template-options"><label class="template-color-label">标记颜色 <input id="customTextColor" type="color" value="#7c5cfc"></label><div class="asset-editor-actions"><button id="customTextCancelBtn">取消</button><button id="customTextAddBtn" class="primary">添加文字模板</button></div></div>
           </div>
         </section>
         <section class="asset-pane hidden" data-asset-pane="image">
@@ -108,7 +108,7 @@
           <div id="customMaterialsList" class="custom-materials-list"></div>
           <div id="customImageEditor" class="custom-material-add asset-editor hidden">
             <div class="custom-material-row"><input id="customMaterialName" type="text" placeholder="素材名称（如：男模特）"><button id="customMaterialFileBtn">选择图片</button><span id="customMaterialFileHint" class="material-file-hint"></span><input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden></div>
-            <div class="custom-template-options"><label class="template-color-label">边框颜色 <input id="customMaterialColor" type="color" value="#19a974"></label><label class="check-row compact"><input id="customMaterialGlobal" type="checkbox"><span>全局生效</span></label><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
+            <div class="custom-template-options"><label class="template-color-label">标记颜色 <input id="customMaterialColor" type="color" value="#19a974"></label><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
           </div>
         </section>
       </div>

@@ -131,13 +131,10 @@ Save frequently used reference images—such as model photos, logos, or watermar
 
 CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
 
-- Manage custom text and images under **Settings → Asset Library**. Switch between the compact Text and Image lists; click **New** only when the editor is needed. Each template has its own border color.
-- Leave **Available in All Projects** disabled to keep a template in the current project, or enable it to share the template with every project.
+- Manage custom text and images under **Settings → Asset Library**. The library is shared by every project. Text rows show a shortened preview, while the editor always shows the complete content.
 - Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
-- Nodes created from templates keep a visible colored border and can be refreshed manually after the template changes. Refreshing requires confirmation and preserves position, size, and connections.
-- Right-click a custom node and choose **Convert to Regular Node** to keep its current content without receiving future template updates.
-- Import selected templates from another open project or from a project JSON file. Duplicate names receive a numbered suffix automatically.
-- Project JSON files include custom text and the complete custom image data, so the library can be restored on another computer.
+- Text or image nodes created from the library are regular independent copies. Editing or deleting an asset never changes nodes that were already created.
+- Import selected assets from a project JSON file. Duplicate names receive a numbered suffix automatically. Project JSON files back up the shared library, including complete custom image data.
 
 ### Other Image Node Features
 
@@ -361,13 +358,10 @@ MIT
 
 CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
 
-- 在 **设置 → 素材库** 中管理自定义文字和图片。文字与图片使用紧凑切换列表，需要编辑时再点击“新建”展开表单；每个模板都能设置独立边框颜色。
-- 不勾选 **全局生效** 时仅当前项目可用；勾选后所有项目都能使用。
+- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容。
 - 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
-- 通过模板创建的节点带有彩色边框。模板修改后可手动确认刷新，刷新不会改变节点位置、大小和连线。
-- 自定义节点可右键转换为普通节点，保留当前内容，并停止接收模板更新。
-- 支持从其他已打开项目或项目 JSON 中勾选导入；同名模板会自动添加数字后缀。
-- 项目 JSON 会同时保存完整文字和自定义图片本体，换电脑后也能恢复。
+- 通过素材创建的文字或图片是普通的独立节点；以后编辑或删除素材不会改变已经创建的节点。
+- 支持从项目 JSON 中勾选导入；同名素材会自动添加数字后缀。项目 JSON 会备份全局素材库，换电脑后也能恢复。
 
 ### 图片节点的其他能力
 

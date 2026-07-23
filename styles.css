@@ -1338,12 +1338,14 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   background: var(--panel-3);
 }
 .material-item .material-name {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
+.material-copy { min-width: 0; flex: 1; display: block; }
+.material-copy.with-preview { display: grid; grid-template-columns: minmax(68px, .55fr) minmax(0, 1.45fr); align-items: center; gap: 8px; }
+.material-content-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .material-rename-btn {
   background: none;
   border: none;
@@ -1405,10 +1407,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .settings .check-row.compact { margin: 0; width: auto; }
 .custom-template-options .apikey-btn { margin-left: auto; }
 .material-swatch { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.16); }
-.material-item .material-scope { display: flex; grid-template-columns: 16px auto; align-items: center; gap: 4px; margin: 0; font-size: 11px; color: var(--text-2); flex: 0 0 auto; }
-.material-refresh-btn, .material-scope-btn { background: none; border: none; color: var(--text-2); cursor: pointer; padding: 0 3px; }
-.material-refresh-btn:hover, .material-scope-btn:hover { color: var(--primary); }
-.material-color-input { width: 28px; height: 24px; padding: 1px; flex: 0 0 auto; }
+.settings .material-color-input { width: 22px; min-width: 22px; height: 22px; min-height: 22px; padding: 1px; border-radius: 5px; flex: 0 0 auto; }
 .custom-library-actions { display: flex; gap: 6px; margin: 0; flex-wrap: wrap; }
 .custom-library-actions button { min-height: 30px; padding: 0 9px; font-size: 12px; }
 .shortcut-help-btn { position: fixed; z-index: 35; left: 18px; bottom: 18px; width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 13px; background: color-mix(in srgb, var(--panel) 64%, transparent); color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.12); backdrop-filter: blur(16px) saturate(1.2); opacity: .7; transition: opacity .15s, transform .15s, background .15s; }
@@ -1429,12 +1428,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   .settings-field-grid { grid-template-columns: 1fr; }
   .settings-page-head-row, .asset-pane-head { align-items: stretch; flex-direction: column; }
 }
-.node.custom-linked { border: 3px solid var(--custom-node-color, #7c5cfc); }
-.node.custom-linked::after { content: "自定义"; position: absolute; right: 8px; top: -11px; padding: 1px 6px; border-radius: 8px; background: var(--custom-node-color, #7c5cfc); color: #fff; font-size: 10px; pointer-events: none; }
-.node.custom-stale { border-style: dashed; }
-.node.custom-stale::after { content: "待刷新"; }
-html[lang="en"] .node.custom-linked::after { content: "Custom"; }
-html[lang="en"] .node.custom-stale::after { content: "Refresh"; }
 .library-import-dialog { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.42); display: grid; place-items: center; }
 .library-import-dialog.hidden { display: none; }
 .library-import-panel { width: min(560px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; background: var(--panel); color: var(--text); border-radius: 12px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.28); }
