@@ -1,10 +1,12 @@
-# WEBIMAGE 节点式图片文字画布
+# CanvasFlow
+
+> Visual AI Image Workflow
 
 [English](README.md) | **简体中文**
 
 一个可视化的节点式画布工具，通过拖拽、连线的方式组合文字和图片，一键调用 AI 生成图片，支持批量导出。
 
-![WEBIMAGE 界面截图](screenshot.png)
+![CanvasFlow 界面截图](screenshot.png)
 
 ---
 
@@ -34,7 +36,7 @@
 
 ### 1. 启动服务
 
-直接双击 `webimage-server.exe`，程序会自动启动并打开浏览器。
+直接双击 `CanvasFlow-Windows-x64.exe`，程序会自动启动并打开浏览器。
 
 > 无需安装 Node.js，无需安装任何依赖。
 
@@ -184,7 +186,7 @@
 ├── index.html          # 页面骨架
 ├── styles.css          # 样式
 ├── server.js           # Node.js HTTP 服务器
-├── webimage-server.exe # pkg 编译的独立可执行文件（免装 Node.js）
+├── CanvasFlow-Windows-x64.exe # pkg 编译的独立可执行文件（免装 Node.js）
 ├── package.json        # pkg 打包配置
 ├── start.bat           # 开发启动脚本
 └── download/images/    # 本地图片资源（模特图等）
@@ -196,10 +198,10 @@
 
 ```bash
 npm install -g pkg
-pkg server.js --targets node18-win-x64 --output webimage-server.exe
+pkg server.js --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
 ```
 
-编译后 `webimage-server.exe` 可独立运行，发给他人无需 Node.js 或其他依赖。
+编译后 `CanvasFlow-Windows-x64.exe` 可独立运行，发给他人无需 Node.js 或其他依赖。
 
 ---
 

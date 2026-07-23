@@ -425,7 +425,7 @@ server.on("error", (err) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log("=".repeat(44));
-  console.log("  WEBIMAGE 服务器已启动");
+  console.log("  CanvasFlow 服务器已启动");
   console.log(`  访问地址: http://127.0.0.1:${port}/`);
   console.log("  关闭本窗口即可停止服务器");
   console.log("=".repeat(44));

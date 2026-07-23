@@ -1,7 +1,7 @@
 {
-  "name": "webimage-server",
+  "name": "canvasflow",
   "version": "2.2.0",
-  "description": "WEBIMAGE node-based image canvas server",
+  "description": "CanvasFlow visual AI image workflow",
   "main": "server.js",
   "bin": "server.js",
   "pkg": {

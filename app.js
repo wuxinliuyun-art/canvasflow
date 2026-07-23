@@ -9,7 +9,7 @@ const LANGUAGE_KEY = "webimage.language";
 // UI language is stored separately from project data so switching projects never
 // changes the application language. New UI nodes are translated automatically.
 const UI_EN = {
-  "节点式图片文字画布": "Node-based Image & Text Canvas",
+  "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
   "单击切换项目，双击重命名": "Click to switch projects; double-click to rename",
   "未命名项目": "Untitled Project", "未命名": "Untitled", "项目1": "Project 1",
   "新建项目": "New Project", "保存JSON": "Save JSON", "加载JSON": "Load JSON",

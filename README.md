@@ -1,10 +1,12 @@
-# WEBIMAGE Node-based Image & Text Canvas
+# CanvasFlow
+
+> Visual AI Image Workflow
 
 **English** | [简体中文](README_CN.md)
 
 A visual node-based canvas for combining text and images through drag-and-drop connections, generating images with AI, and exporting results in batches.
 
-![WEBIMAGE interface screenshot](screenshot.png)
+![CanvasFlow interface screenshot](screenshot.png)
 
 ---
 
@@ -34,7 +36,7 @@ A visual node-based canvas for combining text and images through drag-and-drop c
 
 ### 1. Start the Server
 
-Double-click `webimage-server.exe`. The application starts the local server and opens your browser automatically.
+Double-click `CanvasFlow-Windows-x64.exe`. The application starts the local server and opens your browser automatically.
 
 > Node.js and other dependencies are not required.
 
@@ -98,7 +100,7 @@ The application follows your system language on first launch and remembers your 
 
 ## Custom Image Nodes
 
-In addition to basic image nodes, WEBIMAGE includes a custom asset system for quickly reusing frequently needed images.
+In addition to basic image nodes, CanvasFlow includes a custom asset system for quickly reusing frequently needed images.
 
 ### Five Ways to Create Image Nodes
 
@@ -185,7 +187,7 @@ Browser app.js ──fetch──▶ localhost:5173 /api/* ──proxy──▶ a
 ├── index.html          # Page structure
 ├── styles.css          # Styles
 ├── server.js           # Node.js HTTP server
-├── webimage-server.exe # Standalone executable compiled with pkg (Node.js not required)
+├── CanvasFlow-Windows-x64.exe # Standalone executable compiled with pkg (Node.js not required)
 ├── package.json        # pkg build configuration
 ├── start.bat           # Development startup script
 └── download/images/    # Local image assets, including model images
@@ -197,10 +199,10 @@ Browser app.js ──fetch──▶ localhost:5173 /api/* ──proxy──▶ a
 
 ```bash
 npm install -g pkg
-pkg server.js --targets node18-win-x64 --output webimage-server.exe
+pkg server.js --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
 ```
 
-After compilation, `webimage-server.exe` runs independently and can be distributed without Node.js or other dependencies.
+After compilation, `CanvasFlow-Windows-x64.exe` runs independently and can be distributed without Node.js or other dependencies.
 
 ---
 
