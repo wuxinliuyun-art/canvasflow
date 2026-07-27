@@ -57,6 +57,8 @@ The application follows your system language on first launch and remembers your 
 3. Click **Verify** to confirm that the key is valid.
 4. Click **Save**. The key will be loaded automatically the next time you start the application.
 
+Need a key? [Register through the API page](https://apib.ai/register?aff=W5d401).
+
 > The API Key is stored in the browser's localStorage and is not uploaded to any other server. Before sharing the application, click **Clear** to remove saved keys.
 
 ### 4. Start Using the Canvas
@@ -125,13 +127,13 @@ Save frequently used reference images—such as model photos, logos, or watermar
 | Add an asset | Enter a name and choose an image. The image is saved by the local server. |
 | Rename | Click the button beside the asset name to change its display name. |
 | Delete | Remove the asset from the list and right-click menu, and delete its server-side file. |
-| Insert from right-click | Right-click an empty area and select a saved asset to create an image node. |
+| Insert from right-click | Right-click an empty area, hover over **Custom Nodes**, then choose a saved text or image asset. |
 
 ### Custom Text and Image Templates
 
 CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
 
-- Manage custom text and images under **Settings → Asset Library**. The library is stored locally beside the app and shared by every project. Text rows show a shortened preview, while the editor always shows the complete content.
+- Manage custom text and images under **Settings → Asset Library**. The library is stored locally beside the app and shared by every project. Text rows show a shortened preview, while the editor always shows the complete content. Custom assets do not require color settings.
 - Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
 - Text or image nodes created from the library are regular independent copies. Editing or deleting an asset never changes nodes that were already created.
 - Import selected assets from a project JSON file. Duplicate names receive a numbered suffix automatically. Project JSON files back up the shared library, including complete custom image data.
@@ -156,7 +158,7 @@ Text Node + Image Node ──connect──▶ AI Image Node ──connect──�
 
 1. Create a Text Node for the prompt and/or an Image Node for a reference image.
 2. Connect them to an AI Image Node.
-3. Click **Generate** in the AI Image Node and wait for the result.
+3. Set the model, resolution, quality, and aspect ratio in that AI Image Node, then click **Generate**.
 4. The generated image appears automatically in a new Image Node on the right.
 5. Connect the generated Image Node to an Output Node, then export it.
 
@@ -284,6 +286,8 @@ MIT
 3. 点击 **验证** 确认 Key 有效
 4. 点击 **保存** 保存 Key（下次启动自动读取）
 
+还没有 Key？可前往 [API 注册页面](https://apib.ai/register?aff=W5d401) 获取。
+
 > API Key 保存在浏览器 localStorage 中，不会上传到任何服务器。分享给他人使用前记得点击 **清除**。
 
 ### 4. 开始使用
@@ -358,7 +362,7 @@ MIT
 
 CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
 
-- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库自动保存在程序所在目录并由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容；文字素材不需要设置颜色。
+- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库自动保存在程序所在目录并由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容；图文素材都不需要设置颜色。
 - 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
 - 通过素材创建的文字或图片是普通的独立节点；以后编辑或删除素材不会改变已经创建的节点。
 - 支持从项目 JSON 中勾选导入；同名素材会自动添加数字后缀。项目 JSON 会备份全局素材库，换电脑后也能恢复。
@@ -383,7 +387,7 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 
 1. 创建文字节点（写提示词）和/或图片节点（参考图）
 2. 将它们连接到 AI绘图节点
-3. 点击 AI绘图节点的 **生成** 按钮，等待结果
+3. 在该 AI绘图节点中设置模型、分辨率、画质和比例，然后点击 **生成**
 4. 生成的图片会自动连接到右侧新创建的图片节点
 5. 将生成的图片节点连接到输出节点，即可导出
 
@@ -401,7 +405,7 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 
 ### 导出文件夹设置
 
-⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请在设置中将导出路径改为 D 盘或其他非系统盘。
+点击 **设置导出文件夹** 选择本地目录，程序会保存完整路径。之后可用 **打开导出文件夹** 直接打开；也可以手动输入完整路径。
 
 ---
 

@@ -621,6 +621,12 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   min-height: 30px;
 }
 
+.ai-node-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.ai-node-settings label { min-width: 0; display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.ai-node-settings .ai-model-field { grid-column: 1 / -1; }
+.ai-node-settings select { width: 100%; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid var(--panel-2); border-radius: 7px; color: var(--text); background: var(--panel-solid); font-size: 11px; outline: none; }
+.ai-node-settings select:focus { border-color: var(--selected); }
+
 .ai-generate-btn {
   color: #fff;
   border-color: transparent;
@@ -799,6 +805,12 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 
 .context-menu button:hover { background: var(--accent-soft); }
+.context-menu-item { position: relative; }
+.context-menu .has-submenu::after { content: "›"; float: right; margin-left: 14px; color: var(--muted); }
+.context-submenu { display: none; position: absolute; z-index: 2; left: calc(100% - 2px); top: -8px; min-width: 190px; max-height: min(420px, calc(100vh - 40px)); overflow-y: auto; padding: 8px; border: 1px solid var(--panel-2); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
+.context-menu.submenu-left .context-submenu { right: calc(100% - 2px); left: auto; }
+.context-menu-item:hover > .context-submenu { display: block; }
+.context-menu button:disabled { color: var(--muted); cursor: default; opacity: .65; }
 
 .settings {
   right: 18px;
@@ -1025,26 +1037,8 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .asset-editor { margin: 10px 0 0; padding: 12px; border-top: 1px solid var(--panel-2); background: color-mix(in srgb, var(--panel-2) 38%, transparent); border-radius: 9px; }
 .asset-editor-actions { display: flex; gap: 6px; margin-left: auto; }
 
-.gemini-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.gemini-plugin-btn {
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  color: #2f80ed;
-  border-color: rgba(47, 128, 237, .3);
-  background: rgba(47, 128, 237, .06);
-}
-
-.gemini-plugin-btn:hover {
-  background: rgba(47, 128, 237, .14);
-  border-color: rgba(47, 128, 237, .5);
-}
+.api-register-link { display: inline-flex; width: fit-content; margin-top: 7px; color: var(--primary); font-size: 12px; text-decoration: none; }
+.api-register-link:hover { text-decoration: underline; }
 
 .api-url-hint {
   display: block;
@@ -1402,11 +1396,8 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .custom-template-add { display: grid; gap: 7px; margin-bottom: 0; }
 .custom-template-add textarea { min-height: 82px; resize: vertical; }
 .custom-template-options { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.settings .template-color-label { display: flex; grid-template-columns: auto 34px; align-items: center; gap: 6px; margin: 0; }
-.template-color-label input[type="color"] { width: 34px; height: 28px; padding: 2px; }
 .settings .check-row.compact { margin: 0; width: auto; }
 .custom-template-options .apikey-btn { margin-left: auto; }
-.settings .material-color-input { width: 22px; min-width: 22px; height: 22px; min-height: 22px; padding: 1px; border-radius: 5px; flex: 0 0 auto; }
 .custom-library-actions { display: flex; gap: 6px; margin: 0; flex-wrap: wrap; }
 .custom-library-actions button { min-height: 30px; padding: 0 9px; font-size: 12px; }
 .shortcut-help-btn { position: fixed; z-index: 35; left: 18px; bottom: 18px; width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 13px; background: color-mix(in srgb, var(--panel) 64%, transparent); color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.12); backdrop-filter: blur(16px) saturate(1.2); opacity: .7; transition: opacity .15s, transform .15s, background .15s; }

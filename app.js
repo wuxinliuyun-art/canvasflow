@@ -6,7 +6,6 @@ const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
 const LANGUAGE_KEY = "webimage.language";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
-const TEMPLATE_COLORS = ["#7c5cfc", "#19a974", "#e67e22", "#2f80ed", "#e0568a", "#8e6c4a", "#00a3a3", "#d64545"];
 
 // UI language is stored separately from project data so switching projects never
 // changes the application language. New UI nodes are translated automatically.
@@ -26,6 +25,7 @@ const UI_EN = {
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
   "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder",
+  "选择文件夹后会保存完整路径；若手动填写，请输入完整路径。": "The full path is saved after choosing a folder. Enter a full path when editing manually.",
   "⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。": "⚠ Due to browser security restrictions, the system drive (C:) cannot be written directly. Choose D: or another non-system drive to avoid export failures.",
   "自定义素材": "Custom Assets", "添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。": "Add frequently used images as assets, then right-click an empty area of the canvas to insert them quickly.",
   "素材名称（如：男模特）": "Asset name (e.g. male model)", "选择图片": "Choose Image", "添加": "Add",
@@ -34,17 +34,14 @@ const UI_EN = {
   "清除所有已保存的 API Key（分享前使用）": "Clear all saved API keys (before sharing)", "清除": "Clear",
   "API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）": "API proxies: api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai (automatic failover)",
   "积分：--": "Credits: --", "刷新余额": "Refresh Balance", "刷新": "Refresh",
-  "默认模型": "Default model", "默认分辨率": "Default resolution", "画质": "Quality",
+  "模型": "Model", "分辨率": "Resolution", "画质": "Quality", "比例": "Aspect ratio",
   "auto（自动）": "auto", "low（快速）": "low (fast)", "medium（平衡）": "medium (balanced)", "high（最高）": "high (best)",
   "默认图片比例": "Default aspect ratio", "1:1（正方）": "1:1 (square)", "3:2（横图）": "3:2 (landscape)",
   "2:3（竖图）": "2:3 (portrait)", "4:3（横图）": "4:3 (landscape)", "3:4（竖图）": "3:4 (portrait)",
   "5:4（横图）": "5:4 (landscape)", "4:5（竖图）": "4:5 (portrait)", "16:9（横图）": "16:9 (landscape)",
   "9:16（竖图）": "9:16 (portrait)", "2:1（横图）": "2:1 (landscape)", "1:2（竖图）": "1:2 (portrait)",
   "3:1（横图）": "3:1 (landscape)", "1:3（竖图）": "1:3 (portrait)", "21:9（横图）": "21:9 (landscape)",
-  "9:21（竖图）": "9:21 (portrait)", "开启 Gemini 自动化模式": "Enable Gemini automation mode",
-  "该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。": "Use this with the Gemini Automation browser extension to export compatible content and batch-process image requests in Gemini on the web.",
-  "下载 Gemini Automation 浏览器插件": "Download the Gemini Automation browser extension", "插件下载": "Download Extension",
-  "按 Gemini 兼容格式导出": "Export in Gemini-compatible format", "Gemini 导出": "Gemini Export",
+  "9:21（竖图）": "9:21 (portrait)",
   "快捷键说明": "Keyboard Shortcuts", "删除选中节点和相关连线": "Delete selected nodes and connected edges",
   "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
   "将选中节点编组": "Group selected nodes", "右键编组节点": "Right-click a group node",
@@ -102,16 +99,16 @@ const UI_EN = {
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
   "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image",
-  "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出与集成": "Export & Integrations",
+  "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
-  "导入素材": "Import Assets", "标记颜色": "Label Color", "保存修改": "Save Changes",
-  "素材标记颜色": "Asset Label Color",
+  "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key",
+  "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
-  "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image",
-  "配置接口与默认生成参数。": "Configure the API and default generation parameters.",
-  "管理导出方式、文件夹和外部自动化。": "Manage export options, folders, and external automation.", "文件导出": "File Export"
+  "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets",
+  "配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。": "Configure the API key; set model and image options separately in each AI Image node.",
+  "文件导出": "File Export"
 };
 
 let uiLanguage = (() => {
@@ -201,7 +198,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, customMaterials: [] },
+  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", zipExport: true, customMaterials: [] },
   customLibrary: { textTemplates: [], imageMaterials: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -231,7 +228,7 @@ function normalizeTemplate(item, idx) {
   const value = { ...(item || {}) };
   value.id = value.id || `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   value.name = String(value.name || "未命名").trim();
-  value.color = value.color || TEMPLATE_COLORS[idx % TEMPLATE_COLORS.length] || TEMPLATE_COLORS[0];
+  delete value.color;
   value.revision = Math.max(1, Number(value.revision) || 1);
   return value;
 }
@@ -274,7 +271,7 @@ function saveGlobalLibrary() {
 function migrateLegacyMaterials(data) {
   const projectLibrary = normalizeLibrary(data?.customLibrary);
   const oldImages = Array.isArray(data?.settings?.customMaterials) ? data.settings.customMaterials : [];
-  if (oldImages.length) projectLibrary.imageMaterials.push(...oldImages.map((m, i) => normalizeTemplate({ ...m, color: TEMPLATE_COLORS[i % TEMPLATE_COLORS.length] }, i)));
+  if (oldImages.length) projectLibrary.imageMaterials.push(...oldImages.map((m, i) => normalizeTemplate(m, i)));
   let migrated = 0;
   for (const kind of ["text", "image"]) {
     const key = kind === "text" ? "textTemplates" : "imageMaterials";
@@ -293,9 +290,6 @@ function libraryItems(kind) {
 function findTemplate(kind, id) {
   const key = kind === "text" ? "textTemplates" : "imageMaterials";
   return (globalLibrary[key] || []).find(x => x.id === id) || null;
-}
-function nextTemplateColor() {
-  return TEMPLATE_COLORS[(globalLibrary.textTemplates.length + globalLibrary.imageMaterials.length) % TEMPLATE_COLORS.length];
 }
 function persistLibraries() {
   saveGlobalLibrary();
@@ -332,19 +326,12 @@ const els = {
   composerImageName: $("composerImageName"),
   centerViewBtn: $("centerViewBtn"),
   apiKeyInput: $("apiKeyInput"),
-  modelSelect: $("modelSelect"),
-  resolutionSelect: $("resolutionSelect"),
-  qualitySelect: $("qualitySelect"),
-  defaultRatioSelect: $("defaultRatioSelect"),
   aiGenerateBtn: $("aiGenerateBtn"),
   verifyKeyBtn: $("verifyKeyBtn"),
   saveKeyBtn: $("saveKeyBtn"),
   clearKeyBtn: $("clearKeyBtn"),
   balanceDisplay: $("balanceDisplay"),
   balanceRefreshBtn: $("balanceRefreshBtn"),
-  geminiToggle: $("geminiToggle"),
-  geminiExportBtn: $("geminiExportBtn"),
-  geminiPluginBtn: $("geminiPluginBtn"),
   runBtn: $("runBtn"),
   zipExportToggle: $("zipExportToggle"),
   lightbox: $("lightbox"),
@@ -373,7 +360,6 @@ const els = {
   customMaterialFileInput: $("customMaterialFileInput"),
   customMaterialFileHint: $("customMaterialFileHint"),
   customMaterialAddBtn: $("customMaterialAddBtn"),
-  customMaterialColor: $("customMaterialColor"),
   customMaterialGlobal: $("customMaterialGlobal"),
   customTextsList: $("customTextsList"),
   customTextName: $("customTextName"),
@@ -456,10 +442,17 @@ function saveCurrentPage() {
 function restoreData(data) {
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", geminiAutomation: false, zipExport: true, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, customMaterials: [], ...(data.settings || {}) };
+  const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
+  delete state.settings.geminiAutomation;
+  delete state.settings.model;
+  delete state.settings.resolution;
+  delete state.settings.quality;
+  delete state.settings.defaultRatio;
   migrateLegacyMaterials(data);
   state.customLibrary = emptyLibrary();
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
+  walkNodes(state.nodes, node => normalizeAiNodeSettings(node, legacyAiSettings));
   state.view = { x: 120, y: 90, scale: 1, ...(data.view || {}) };
   state.nextNode = data.nextNode || inferNext("n", state.nodes.map(n => n.id));
   state.nextEdge = data.nextEdge || inferNext("e", state.edges.map(e => e.id));
@@ -544,22 +537,8 @@ function syncSettingsPanel() {
   els.snap.checked = state.settings.snap;
   els.exportFolder.value = state.settings.exportFolderLabel || "export";
   els.apiKeyInput.value = state.settings.apiKey || "";
-  els.modelSelect.value = state.settings.model || "gpt-image-2";
-  els.resolutionSelect.value = state.settings.resolution || "1k";
-  els.qualitySelect.value = state.settings.quality || "medium";
-  els.defaultRatioSelect.value = state.settings.defaultRatio || "1:1";
-  els.geminiToggle.checked = state.settings.geminiAutomation || false;
-  els.geminiExportBtn.classList.toggle("hidden", !state.settings.geminiAutomation);
-  els.runBtn.classList.toggle("hidden", !state.settings.geminiAutomation);
   els.zipExportToggle.checked = state.settings.zipExport !== false;
-  syncQualityVisibility();
   syncCustomMaterialsList();
-}
-
-function syncQualityVisibility() {
-  const isGpt = (state.settings.model || "gpt-image-2") === "gpt-image-2";
-  const labelEl = $("qualityLabel");
-  if (labelEl) labelEl.classList.toggle("hidden", !isGpt);
 }
 
 function syncCustomMaterialsList() {
@@ -573,14 +552,11 @@ function renderLibraryList(kind, container) {
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
     ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="">` : ""}
     <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
-    ${kind === "image" ? `<input type="color" class="material-color-input" value="${escHtml(item.color)}" title="素材标记颜色">` : ""}
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
   container.querySelectorAll(".material-item").forEach(row => {
     const kind = row.dataset.kind, id = row.dataset.id;
-    const colorInput = row.querySelector(".material-color-input");
-    if (colorInput) colorInput.onchange = event => updateTemplateColor(kind, id, event.target.value);
     row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
   });
@@ -622,12 +598,6 @@ function editTemplate(kind, id) {
   persistLibraries(); syncCustomMaterialsList();
 }
 
-function updateTemplateColor(kind, id, color) {
-  const loc = templateLocation(kind, id); if (!loc) return;
-  loc.library[loc.key][loc.index].color = color;
-  persistLibraries(); syncCustomMaterialsList();
-}
-
 async function deleteTemplate(kind, id) {
   const loc = templateLocation(kind, id); if (!loc) return;
   const item = loc.library[loc.key][loc.index];
@@ -654,7 +624,7 @@ async function addCustomMaterial(source) {
     var result = await resp.json();
     if (!result.success) { toast("保存失败: " + (result.error || "")); return; }
     console.log("[自定义素材] 服务端保存成功: fileName=" + result.fileName);
-    target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: source?.mime || file?.type || "image/png", color: source?.color || els.customMaterialColor?.value || nextTemplateColor(), revision: 1 }));
+    target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: source?.mime || file?.type || "image/png", revision: 1 }));
     els.customMaterialName.value = "";
     els.customMaterialFileInput.value = "";
     if (els.customMaterialFileHint) els.customMaterialFileHint.textContent = "";
@@ -847,7 +817,7 @@ function addNode(type, x = 160, y = 120, commit = true) {
     x: snap(x),
     y: snap(y),
     w: NODE_WIDTH,
-    h: type === "group" ? 200 : NODE_HEIGHT,
+    h: type === "ai-image" ? 330 : type === "group" ? 200 : NODE_HEIGHT,
     disabled: false,
     created: Date.now() + state.nextNode,
     text: type === "text" ? "请输入文字内容" : "",
@@ -909,7 +879,7 @@ async function saveNodeAsTemplate(node) {
     try {
       const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: raw }) });
       const result = await resp.json(); if (!result.success) throw new Error(result.error || "保存失败");
-      const template = normalizeTemplate({ name: finalName, fileName: result.fileName, mime: node.mime || "image/png", color: nextTemplateColor(), revision: 1 });
+      const template = normalizeTemplate({ name: finalName, fileName: result.fileName, mime: node.mime || "image/png", revision: 1 });
       target.imageMaterials.push(template);
     } catch (e) { console.error("[自定义图片] 节点收藏失败", e); return toast("收藏失败：" + e.message); }
   }
@@ -1124,10 +1094,39 @@ function findNode(id) {
   return state.nodes.find(n => n.id === id);
 }
 
+function normalizeAiNodeSettings(node, fallback = {}) {
+  if (!node || node.type !== "ai-image") return node;
+  node._model = node._model || fallback.model || "gpt-image-2";
+  node._resolution = node._resolution || fallback.resolution || "1k";
+  node._size = node._size || fallback.size || "1:1";
+  node._quality = node._model === "gpt-image-2" ? (node._quality || fallback.quality || "medium") : null;
+  return node;
+}
+
+function selectOptions(options, selected) {
+  return options.map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function aiNodeControls(node) {
+  normalizeAiNodeSettings(node);
+  const isGpt = node._model === "gpt-image-2";
+  const models = [["gpt-image-2", "GPT Image 2"], ["gemini-3.1-flash-image-preview", "Gemini 3.1 Flash"]];
+  const resolutions = [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
+  const qualities = [["auto", "auto"], ["low", "low"], ["medium", "medium"], ["high", "high"]];
+  const ratios = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"].map(value => [value, value]);
+  return `<div class="ai-node-settings">
+    <label class="ai-model-field"><span>模型</span><select data-role="ai-model">${selectOptions(models, node._model)}</select></label>
+    <label><span>分辨率</span><select data-role="ai-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
+    <label class="${isGpt ? "" : "hidden"}"><span>画质</span><select data-role="ai-quality">${selectOptions(qualities, node._quality || "medium")}</select></label>
+    <label><span>比例</span><select data-role="ai-size">${selectOptions(ratios, node._size)}</select></label>
+  </div>`;
+}
+
 function aiImageBody(node) {
+  const controls = aiNodeControls(node);
   if (node.generating) {
     return `<div class="ai-generating"><div class="ai-spinner"></div>生成中...</div>
-      <div class="ai-prompt">${escapeHtml(node.prompt || "等待提示词...")}</div>`;
+      <div class="ai-prompt">${escapeHtml(node.prompt || "等待提示词...")}</div>${controls}`;
   }
   if (node.generatedImage) {
     return `<div class="image-preview"><img src="${node.generatedImage}" alt=""></div>
@@ -1135,13 +1134,13 @@ function aiImageBody(node) {
         <button data-role="ai-generate" class="ai-generate-btn">重新生成</button>
         <button data-role="clear-image">清除</button>
       </div>
-      <div class="ai-prompt">${escapeHtml(node.prompt || "")}</div>`;
+      <div class="ai-prompt">${escapeHtml(node.prompt || "")}</div>${controls}`;
   }
   return `<div class="ai-preview">${node.prompt ? escapeHtml(node.prompt) : "连接文字节点作为提示词"}</div>
     <div class="ai-actions">
       <button data-role="ai-generate" class="ai-generate-btn">生成</button>
     </div>
-    ${node.prompt ? `<div class="ai-prompt">${escapeHtml(node.prompt)}</div>` : ""}`;
+    ${node.prompt ? `<div class="ai-prompt">${escapeHtml(node.prompt)}</div>` : ""}${controls}`;
 }
 
 function collectUpstreamForAI(nodeId, incoming) {
@@ -1213,17 +1212,18 @@ function refreshAiPrompt(nodeId) {
   render();
 }
 
-async function submitGeneration(prompt, imageUrls, size, resolution) {
+async function submitGeneration(prompt, imageUrls, node) {
   if (!prompt && !imageUrls.length) throw new Error("需要提示词或参考图");
+  normalizeAiNodeSettings(node);
   const payload = {
-    model: state.settings.model || "gpt-image-2",
+    model: node._model,
     prompt: prompt || "generate an image",
     n: 1,
-    size: size || state.settings.defaultRatio || "1:1",
-    resolution: resolution || state.settings.resolution || "1k",
+    size: node._size,
+    resolution: node._resolution,
   };
-  if ((state.settings.model || "gpt-image-2") === "gpt-image-2") {
-    payload.quality = state.settings.quality || "medium";
+  if (node._model === "gpt-image-2") {
+    payload.quality = node._quality || "medium";
   }
   if (imageUrls.length) payload.image_urls = imageUrls;
 
@@ -1329,7 +1329,7 @@ async function generateSingle(node, upstream) {
   try {
     setProgress(5, "提交AI生成任务");
     await nextPaint();
-    const taskId = await submitGeneration(texts.join("，"), imageUrls, node._size, node._resolution);
+    const taskId = await submitGeneration(texts.join("，"), imageUrls, node);
     node.taskId = taskId;
     setProgress(10, "等待生成结果");
     await nextPaint();
@@ -1405,7 +1405,7 @@ async function generateBatchFromGroup(node, upstream) {
       await nextPaint();
       try {
         const taskImages = [...regularUrls, groupImages[t.index].image];
-        t.taskId = await submitGeneration(prompt, taskImages, node._size, node._resolution);
+        t.taskId = await submitGeneration(prompt, taskImages, node);
         if (node._batchCancelled) return;
         const imageUrl = await pollTask(t.taskId);
         if (node._batchCancelled) return;
@@ -1486,6 +1486,7 @@ async function generateBatchFromGroup(node, upstream) {
 
 function addAiImageNode(x, y, sourceIds) {
   const node = addNode("ai-image", x, y, false);
+  normalizeAiNodeSettings(node);
   if (sourceIds && sourceIds.length) {
     sourceIds.forEach(sourceId => {
       const source = findNode(sourceId);
@@ -1540,18 +1541,11 @@ function addOutputNode(sourceId) {
 
 
 
-function geminiExport() {
-  if (!state.settings.apiKey) {
-    toast("请先在设置中填入 API Key");
-    return;
-  }
-  runExport();
-}
-
 function normalizeNodeSizes() {
   state.nodes.forEach(n => {
     if (!n.w) n.w = NODE_WIDTH;
-    if (!n.h) n.h = n.type === "ai-image" ? 200 : n.type === "group" ? 200 : NODE_HEIGHT;
+    if (!n.h) n.h = n.type === "ai-image" ? 330 : n.type === "group" ? 200 : NODE_HEIGHT;
+    if (n.type === "ai-image" && n.h < 300) n.h = 330;
   });
 }
 
@@ -1880,7 +1874,7 @@ els.viewport.addEventListener("mousedown", ev => {
   if (ev.target.closest(".edge-hit")) return; // 点击连线不做任何操作，交给 dblclick / contextmenu
   const port = ev.target.closest(".port");
   const nodeEl = ev.target.closest(".node");
-  const interactive = ev.target.closest("textarea,button,input");
+  const interactive = ev.target.closest("textarea,button,input,select");
   if (!interactive) els.viewport.focus();
   if (port && port.dataset.port === "out") {
     const node = findNode(nodeEl.dataset.id);
@@ -2042,7 +2036,22 @@ els.nodes.addEventListener("input", ev => {
 });
 
 els.nodes.addEventListener("change", ev => {
-  if (ev.target.dataset.role === "text") pushHistory();
+  const nodeEl = ev.target.closest(".node");
+  const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
+  const role = ev.target.dataset.role;
+  if (role === "text") pushHistory();
+  if (!node || node.type !== "ai-image") return;
+  if (role === "ai-model") {
+    node._model = ev.target.value;
+    node._quality = node._model === "gpt-image-2" ? (node._quality || "medium") : null;
+    pushHistory(); render();
+  } else if (role === "ai-resolution") {
+    node._resolution = ev.target.value; pushHistory();
+  } else if (role === "ai-quality") {
+    node._quality = ev.target.value; pushHistory();
+  } else if (role === "ai-size") {
+    node._size = ev.target.value; pushHistory();
+  }
 });
 
 els.nodes.addEventListener("click", ev => {
@@ -2444,11 +2453,15 @@ els.viewport.addEventListener("contextmenu", ev => {
   } else {
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
+    const textTemplates = libraryItems("text");
+    const imageTemplates = libraryItems("image");
     items.push(
       ["添加文字节点", () => addNode("text", p.x, p.y)],
-      ...(libraryItems("text").map(template => [`自定义文字：${template.name}`, () => createNodeFromTemplate("text", template, p.x, p.y)])),
       ["添加图片节点", () => addNode("image", p.x, p.y)],
-      ...(libraryItems("image").map(template => [`自定义图片：${template.name}`, () => createNodeFromTemplate("image", template, p.x, p.y)])),
+      ["自定义节点", [
+        ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
+        ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
+      ]],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
       ["节点对齐", () => tidyNodes()],
       ["添加输出节点", () => {
@@ -2469,13 +2482,32 @@ els.viewport.addEventListener("contextmenu", ev => {
 
 function showMenu(x, y, items) {
   els.contextMenu.innerHTML = "";
-  items.forEach(([label, fn]) => {
-    const btn = document.createElement("button");
-    btn.textContent = label;
-    btn.onclick = () => { hideMenu(); fn(); };
-    els.contextMenu.appendChild(btn);
-  });
+  function buildMenu(container, menuItems) {
+    menuItems.forEach(([label, action]) => {
+      const item = document.createElement("div");
+      item.className = "context-menu-item";
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      if (Array.isArray(action)) {
+        btn.classList.add("has-submenu");
+        const submenu = document.createElement("div");
+        submenu.className = "context-submenu";
+        buildMenu(submenu, action);
+        item.appendChild(btn);
+        item.appendChild(submenu);
+      } else if (typeof action === "function") {
+        btn.onclick = () => { hideMenu(); action(); };
+        item.appendChild(btn);
+      } else {
+        btn.disabled = true;
+        item.appendChild(btn);
+      }
+      container.appendChild(item);
+    });
+  }
+  buildMenu(els.contextMenu, items);
   els.contextMenu.style.left = `${x}px`;
+  els.contextMenu.classList.toggle("submenu-left", x + 590 > window.innerWidth);
   els.contextMenu.style.top = "";
   els.contextMenu.style.bottom = "";
   // 菜单高度估算，优先向上展开
@@ -2493,7 +2525,7 @@ function hideMenu() {
 }
 
 window.addEventListener("keydown", ev => {
-  if (ev.target.matches("textarea,input")) return;
+  if (ev.target.matches("textarea,input,select")) return;
   if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); }
   if (ev.key === "Delete") deleteNodes(state.selected);
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") undo();
@@ -2537,7 +2569,7 @@ window.addEventListener("paste", async ev => {
     }
     return;
   }
-  if (ev.target.matches("textarea,input")) return;
+  if (ev.target.matches("textarea,input,select")) return;
   if (hasExternalContent) pasteHandledByClipboardEvent = true;
   const handled = await createNodeFromClipboard(ev);
   if (handled) {
@@ -2883,27 +2915,6 @@ els.clearKeyBtn.onclick = () => {
   toast("API Key 已从所有页面清除，可安全分享");
 };
 
-els.modelSelect.onchange = () => {
-  state.settings.model = els.modelSelect.value;
-  syncQualityVisibility();
-  pushHistory();
-};
-
-els.resolutionSelect.onchange = () => {
-  state.settings.resolution = els.resolutionSelect.value;
-  pushHistory();
-};
-
-els.qualitySelect.onchange = () => {
-  state.settings.quality = els.qualitySelect.value;
-  pushHistory();
-};
-
-els.defaultRatioSelect.onchange = () => {
-  state.settings.defaultRatio = els.defaultRatioSelect.value;
-  pushHistory();
-};
-
 els.zipExportToggle.onchange = () => {
   state.settings.zipExport = els.zipExportToggle.checked;
   if (!state.settings.zipExport) {
@@ -2912,20 +2923,6 @@ els.zipExportToggle.onchange = () => {
   }
   pushHistory();
 };
-
-els.geminiToggle.onchange = () => {
-  state.settings.geminiAutomation = els.geminiToggle.checked;
-  els.geminiExportBtn.classList.toggle("hidden", !state.settings.geminiAutomation);
-  els.runBtn.classList.toggle("hidden", !state.settings.geminiAutomation);
-  pushHistory();
-};
-
-els.geminiExportBtn.onclick = geminiExport;
-
-els.geminiPluginBtn.onclick = () => {
-  window.open("https://chromewebstore.google.com/detail/gemini-automation-auto-ge/jlhacppkbcmonaanlkbgipimelfbjgpb", "_blank");
-};
-
 
 $("chooseFolderBtn").onclick = chooseFolder;
 els.openExportFolderBtn.onclick = openExportFolder;
@@ -3148,23 +3145,23 @@ async function restoreLibrariesFromJson(data) {
 }
 
 async function chooseFolder() {
-  if (!window.showDirectoryPicker) {
-    toast("当前浏览器不支持直接选择文件夹，请使用 Chrome 或 Edge");
-    return false;
-  }
   try {
-    state.exportDirHandle = await window.showDirectoryPicker();
-    state.settings.exportFolderLabel = state.exportDirHandle.name || "已选择文件夹";
-    els.exportFolder.value = state.settings.exportFolderLabel;
+    const resp = await fetch("/api/choose-folder", { method: "POST" });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    if (data.cancelled) { toast("已取消选择文件夹"); return false; }
+    if (!data.folderPath) throw new Error("没有返回文件夹路径");
+    state.exportDirHandle = null;
+    state.settings.exportFolderLabel = data.folderPath;
+    els.exportFolder.value = data.folderPath;
+    saveCurrentPage();
+    persistPages();
     pushHistory();
-    applySettings();
+    toast("导出文件夹已保存");
     return true;
   } catch (err) {
-    if (err.name === "AbortError") {
-      toast("已取消选择文件夹");
-    } else {
-      toast("无法使用此文件夹（系统限制），请选择桌面、文档或下载等目录");
-    }
+    console.error("[导出] 选择文件夹失败", err);
+    toast("无法设置导出文件夹：可能是系统选择窗口启动失败，请手动输入完整路径");
     return false;
   }
 }
@@ -3185,10 +3182,11 @@ async function openExportFolder() {
     if (data.success) {
       toast(`已打开文件夹: ${folderPath}`);
     } else {
-      toast("无法打开文件夹，请检查路径是否正确");
+      toast(`无法打开文件夹：${data.error || "路径不存在"}；请重新设置完整路径`);
     }
   } catch (err) {
-    toast("无法打开文件夹，请检查路径是否正确");
+    console.error("[导出] 打开文件夹失败", err);
+    toast("无法打开文件夹：本地服务没有响应；请重启程序后重试");
   }
 }
 
@@ -3367,7 +3365,7 @@ async function saveFiles(files, folderName, onProgress = () => {}) {
     const resp = await fetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName, files: fileData }),
+      body: JSON.stringify({ folderName, baseFolder: state.settings.exportFolderLabel || "export", files: fileData }),
     });
     const result = await resp.json();
     if (result.error) throw new Error(result.error);
@@ -3645,7 +3643,7 @@ async function executeAllAiNodes() {
       } else {
         taskImages = regularUrls;
       }
-      t.taskId = await submitGeneration(prompt, taskImages, node._size, node._resolution);
+      t.taskId = await submitGeneration(prompt, taskImages, node);
       if (cancelled) return;
       const imageUrl = await pollTask(t.taskId);
       if (cancelled) return;

@@ -76,7 +76,7 @@
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon">⌁</span><span>常规</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon">◇</span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon">✦</span><span>AI绘图</span></button>
-          <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon">⇩</span><span>导出与集成</span></button>
+          <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon">⇩</span><span>导出</span></button>
         </nav>
         <div class="settings-content">
       <div class="tab-page" data-tab="general">
@@ -108,13 +108,13 @@
           <div id="customMaterialsList" class="custom-materials-list"></div>
           <div id="customImageEditor" class="custom-material-add asset-editor hidden">
             <div class="custom-material-row"><input id="customMaterialName" type="text" placeholder="素材名称（如：男模特）"><button id="customMaterialFileBtn">选择图片</button><span id="customMaterialFileHint" class="material-file-hint"></span><input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden></div>
-            <div class="custom-template-options"><label class="template-color-label">标记颜色 <input id="customMaterialColor" type="color" value="#19a974"></label><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
+            <div class="custom-template-options"><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
           </div>
         </section>
       </div>
 
       <div class="tab-page hidden" data-tab="ai">
-        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置接口与默认生成参数。</p></div>
+        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。</p></div>
         <section class="settings-card">
         <div class="ai-section-head">API</div>
 
@@ -126,64 +126,19 @@
             <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
           </div>
           <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
+          <a class="api-register-link" href="https://apib.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key</a>
           <div class="balance-row">
             <span id="balanceDisplay" class="balance-text">积分：--</span>
             <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
           </div>
         </label>
 
-        <label>默认模型
-          <select id="modelSelect">
-            <option value="gpt-image-2">GPT Image 2（0.085积分/张 · ~60s）</option>
-            <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash（0.3积分/张 · ~45s）</option>
-          </select>
-        </label>
-
-        <label>默认分辨率
-          <select id="resolutionSelect">
-            <option value="1k">1K</option>
-            <option value="2k">2K</option>
-            <option value="4k">4K</option>
-          </select>
-        </label>
-
-        <label id="qualityLabel">画质
-          <select id="qualitySelect">
-            <option value="auto">auto（自动）</option>
-            <option value="low">low（快速）</option>
-            <option value="medium">medium（平衡）</option>
-            <option value="high">high（最高）</option>
-          </select>
-        </label>
-
-        <label>默认图片比例
-          <select id="defaultRatioSelect">
-            <option value="1:1">1:1（正方）</option>
-            <option value="auto">auto（自动）</option>
-            <option value="3:2">3:2（横图）</option>
-            <option value="2:3">2:3（竖图）</option>
-            <option value="4:3">4:3（横图）</option>
-            <option value="3:4">3:4（竖图）</option>
-            <option value="5:4">5:4（横图）</option>
-            <option value="4:5">4:5（竖图）</option>
-            <option value="16:9">16:9（横图）</option>
-            <option value="9:16">9:16（竖图）</option>
-            <option value="2:1">2:1（横图）</option>
-            <option value="1:2">1:2（竖图）</option>
-            <option value="3:1">3:1（横图）</option>
-            <option value="1:3">1:3（竖图）</option>
-            <option value="21:9">21:9（横图）</option>
-            <option value="9:21">9:21（竖图）</option>
-          </select>
-        </label>
-
         </section>
       </div>
 
       <div class="tab-page hidden" data-tab="export">
-        <div class="settings-page-head"><h2>导出与集成</h2><p>管理导出方式、文件夹和外部自动化。</p></div>
-        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label>导出文件夹<input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）"></label><div class="export-folder-actions"><button id="openExportFolderBtn">打开导出文件夹</button><button id="chooseFolderBtn">设置导出文件夹</button></div><p class="setting-desc export-warning">⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。</p></section>
-        <section class="settings-card"><h3>Gemini Automation</h3><label class="check-row"><input id="geminiToggle" type="checkbox"><span>开启 Gemini 自动化模式</span></label><p class="setting-desc">该选项配合 Gemini Automation 浏览器插件使用，可导出指定格式内容，在网页版 Gemini 中批量处理图片需求。</p><div class="gemini-actions"><button id="geminiPluginBtn" class="gemini-plugin-btn" title="下载 Gemini Automation 浏览器插件">插件下载</button><button id="geminiExportBtn" class="primary hidden" title="按 Gemini 兼容格式导出">Gemini 导出</button></div></section>
+        <div class="settings-page-head"><h2>导出</h2><p>管理导出方式和本地文件夹。</p></div>
+        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label>导出文件夹<input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）"></label><div class="export-folder-actions"><button id="openExportFolderBtn">打开导出文件夹</button><button id="chooseFolderBtn">设置导出文件夹</button></div><p class="setting-desc">选择文件夹后会保存完整路径；若手动填写，请输入完整路径。</p></section>
       </div>
         </div>
       </div>

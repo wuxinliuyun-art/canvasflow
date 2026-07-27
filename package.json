@@ -4,6 +4,9 @@
   "description": "CanvasFlow visual AI image workflow",
   "main": "server.js",
   "bin": "server.js",
+  "scripts": {
+    "build:windows": "pkg . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe"
+  },
   "pkg": {
     "assets": [
       "index.html",

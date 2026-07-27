@@ -178,11 +178,12 @@ async function requestHandler(req, res) {
   if (pathname === "/api/save-export-files" && req.method === "POST") {
     try {
       const body = await readBody(req);
-      const { folderName, files } = JSON.parse(body.toString());
-      const exportDir = path.join(dataRoot, "export", folderName);
+      const { folderName, baseFolder, files } = JSON.parse(body.toString());
+      const configuredRoot = baseFolder && baseFolder !== "export" ? (path.isAbsolute(baseFolder) ? path.normalize(baseFolder) : path.resolve(dataRoot, baseFolder)) : path.join(dataRoot, "export");
+      const exportDir = path.join(configuredRoot, path.basename(folderName));
       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
       for (const file of files) {
-        const filePath = path.join(exportDir, file.name);
+        const filePath = path.join(exportDir, path.basename(file.name));
         const buf = Buffer.from(file.data.split(",")[1] || file.data, "base64");
         fs.writeFileSync(filePath, buf);
       }
@@ -195,18 +196,39 @@ async function requestHandler(req, res) {
     return;
   }
 
+  if (pathname === "/api/choose-folder" && req.method === "POST") {
+    if (process.platform !== "win32") {
+      res.writeHead(501, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "当前系统暂不支持文件夹选择器，请手动输入完整路径" }));
+      return;
+    }
+    const { execFile } = require("child_process");
+    const pickerScript = "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择 CanvasFlow 导出文件夹'; $d.ShowNewFolderButton=$true; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.SelectedPath}";
+    execFile("powershell.exe", ["-NoProfile", "-STA", "-Command", pickerScript], { encoding: "utf8", windowsHide: true }, (err, stdout) => {
+      if (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "无法打开文件夹选择窗口" }));
+        return;
+      }
+      const folderPath = String(stdout || "").trim();
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
+      res.end(JSON.stringify(folderPath ? { success: true, folderPath } : { success: false, cancelled: true }));
+    });
+    return;
+  }
+
   if (pathname === "/api/open-folder" && req.method === "POST") {
     try {
       const body = await readBody(req);
       const { folderPath } = JSON.parse(body.toString());
-      const absPath = path.resolve(dataRoot, folderPath);
+      const absPath = path.isAbsolute(folderPath) ? path.normalize(folderPath) : path.resolve(dataRoot, folderPath);
       if (!fs.existsSync(absPath)) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "文件夹不存在" }));
         return;
       }
-      const { exec } = require("child_process");
-      exec(`explorer "${absPath}"`, (err) => {
+      const { execFile } = require("child_process");
+      execFile("explorer.exe", [absPath], { windowsHide: true }, (err) => {
         if (err) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "无法打开文件夹" }));
