@@ -107,7 +107,7 @@
           <div class="asset-pane-head"><div><h3>自定义图片</h3><p>保存常用图片，也可从图片节点右键收藏。</p></div><button id="newCustomImageBtn" class="primary">＋ 新建图片</button></div>
           <div id="customMaterialsList" class="custom-materials-list"></div>
           <div id="customImageEditor" class="custom-material-add asset-editor hidden">
-            <div class="custom-material-row"><input id="customMaterialName" type="text" placeholder="素材名称（如：男模特）"><button id="customMaterialFileBtn">选择图片</button><span id="customMaterialFileHint" class="material-file-hint"></span><input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden></div>
+            <div class="custom-material-row"><img id="customMaterialEditorPreview" class="material-editor-preview hidden" alt="当前素材预览"><input id="customMaterialName" type="text" placeholder="素材名称（如：男模特）"><button id="customMaterialFileBtn">选择图片</button><span id="customMaterialFileHint" class="material-file-hint"></span><input id="customMaterialFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden></div>
             <div class="custom-template-options"><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
           </div>
         </section>
@@ -126,7 +126,7 @@
             <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
           </div>
           <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
-          <a class="api-register-link" href="https://apib.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key</a>
+          <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key</a>
           <div class="balance-row">
             <span id="balanceDisplay" class="balance-text">积分：--</span>
             <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
@@ -138,7 +138,7 @@
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>导出</h2><p>管理导出方式和本地文件夹。</p></div>
-        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label>导出文件夹<input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）"></label><div class="export-folder-actions"><button id="openExportFolderBtn">打开导出文件夹</button><button id="chooseFolderBtn">设置导出文件夹</button></div><p class="setting-desc">选择文件夹后会保存完整路径；若手动填写，请输入完整路径。</p></section>
+        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<input id="exportFolderInput" type="text" value="export（项目文件夹）" placeholder="export（项目文件夹）"></label><div class="export-folder-actions"><button id="openExportFolderBtn">打开导出文件夹</button><button id="chooseFolderBtn">设置导出文件夹</button></div><p class="setting-desc">选择文件夹后会保存完整路径；若手动填写，请输入完整路径。</p></section>
       </div>
         </div>
       </div>

@@ -496,6 +496,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   width: 100%;
   height: 100%;
   object-fit: contain;
+  cursor: zoom-in;
 }
 
 .image-seq {
@@ -805,10 +806,13 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 
 .context-menu button:hover { background: var(--accent-soft); }
+.context-menu { width: max-content; max-width: min(420px, calc(100vw - 24px)); }
 .context-menu-item { position: relative; }
 .context-menu .has-submenu::after { content: "›"; float: right; margin-left: 14px; color: var(--muted); }
-.context-submenu { display: none; position: absolute; z-index: 2; left: calc(100% - 2px); top: -8px; min-width: 190px; max-height: min(420px, calc(100vh - 40px)); overflow-y: auto; padding: 8px; border: 1px solid var(--panel-2); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
-.context-menu.submenu-left .context-submenu { right: calc(100% - 2px); left: auto; }
+.context-menu button { white-space: normal; overflow-wrap: anywhere; }
+.context-submenu { display: none; position: absolute; z-index: 2; left: calc(100% - 2px); top: -8px; width: max-content; min-width: 190px; max-width: min(420px, calc(100vw - 24px)); max-height: min(420px, calc(100vh - 24px)); overflow-y: auto; overflow-x: hidden; padding: 8px; border: 1px solid var(--panel-2); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
+.context-submenu.open-left { right: calc(100% - 2px); left: auto; }
+.context-submenu.context-submenu-branch { max-height: none; overflow: visible; }
 .context-menu-item:hover > .context-submenu { display: block; }
 .context-menu button:disabled { color: var(--muted); cursor: default; opacity: .65; }
 
@@ -1330,6 +1334,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   object-fit: cover;
   flex-shrink: 0;
   background: var(--panel-3);
+  cursor: zoom-in;
 }
 .material-item .material-name {
   overflow: hidden;
@@ -1380,6 +1385,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   max-width: 160px;
   flex-shrink: 1;
 }
+.material-editor-preview { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 7px; object-fit: cover; background: var(--panel-3); }
 .custom-material-row {
   display: flex;
   gap: 6px;

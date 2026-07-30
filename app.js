@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 172;
+const AI_NODE_HEIGHT = 370;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
 const LANGUAGE_KEY = "webimage.language";
@@ -21,7 +22,7 @@ const UI_EN = {
   "输入文字后回车创建文字节点；上传图片可创建图片节点": "Type text and press Enter to create a text node; upload images to create image nodes",
   "上传图片": "Upload Image", "创建节点": "Create Node", "创建": "Create", "关闭": "Close",
   "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
-  "简体中文": "Simplified Chinese", "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping",
+  "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
   "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder",
@@ -106,9 +107,10 @@ const UI_EN = {
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
-  "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets",
+  "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets", "双击放大预览": "Double-click to enlarge", "当前素材预览": "Current asset preview",
   "配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。": "Configure the API key; set model and image options separately in each AI Image node.",
-  "文件导出": "File Export"
+  "文件导出": "File Export", "同时导出输入素材（关键词和参考图）": "Also export inputs (prompts and reference images)",
+  "默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。": "By default, export only AI results. Inputs are stored separately and project JSON is never included."
 };
 
 let uiLanguage = (() => {
@@ -140,6 +142,7 @@ function translateEnglishString(source) {
     [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
     [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"],
     [/^自定义文字：(.+)$/, "Custom Text: $1"], [/^自定义图片：(.+)$/, "Custom Image: $1"],
+    [/^当前图片：(.+)（可选择新图片替换）$/, "Current image: $1 (choose a new image to replace it)"],
     [/^文字：(.+)$/, "Text: $1"], [/^图片：(.+)$/, "Image: $1"]
   ];
   for (const [pattern, replacement] of rules) if (pattern.test(source)) return source.replace(pattern, replacement);
@@ -198,7 +201,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", zipExport: true, customMaterials: [] },
+  settings: { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", zipExport: true, exportInputs: false, customMaterials: [] },
   customLibrary: { textTemplates: [], imageMaterials: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -214,6 +217,7 @@ const state = {
 let globalLibrary = loadGlobalLibrary();
 let pendingLibraryImport = null;
 let editingTextTemplate = null;
+let editingImageTemplate = null;
 let librarySaveQueue = Promise.resolve();
 
 function emptyLibrary() { return { textTemplates: [], imageMaterials: [] }; }
@@ -334,6 +338,7 @@ const els = {
   balanceRefreshBtn: $("balanceRefreshBtn"),
   runBtn: $("runBtn"),
   zipExportToggle: $("zipExportToggle"),
+  exportInputsToggle: $("exportInputsToggle"),
   lightbox: $("lightbox"),
   lightboxImg: $("lightboxImg"),
   lightboxClose: $("lightboxClose"),
@@ -359,6 +364,7 @@ const els = {
   customMaterialFileBtn: $("customMaterialFileBtn"),
   customMaterialFileInput: $("customMaterialFileInput"),
   customMaterialFileHint: $("customMaterialFileHint"),
+  customMaterialEditorPreview: $("customMaterialEditorPreview"),
   customMaterialAddBtn: $("customMaterialAddBtn"),
   customMaterialGlobal: $("customMaterialGlobal"),
   customTextsList: $("customTextsList"),
@@ -442,7 +448,7 @@ function saveCurrentPage() {
 function restoreData(data) {
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
   const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
   delete state.settings.geminiAutomation;
   delete state.settings.model;
@@ -538,6 +544,7 @@ function syncSettingsPanel() {
   els.exportFolder.value = state.settings.exportFolderLabel || "export";
   els.apiKeyInput.value = state.settings.apiKey || "";
   els.zipExportToggle.checked = state.settings.zipExport !== false;
+  els.exportInputsToggle.checked = state.settings.exportInputs === true;
   syncCustomMaterialsList();
 }
 
@@ -550,13 +557,19 @@ function renderLibraryList(kind, container) {
   if (!container) return;
   const items = libraryItems(kind);
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
-    ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="">` : ""}
+    ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="" title="双击放大预览">` : ""}
     <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
   container.querySelectorAll(".material-item").forEach(row => {
     const kind = row.dataset.kind, id = row.dataset.id;
+    const thumb = row.querySelector(".material-thumb");
+    if (thumb) thumb.ondblclick = ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      showLightbox(thumb.src);
+    };
     row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
   });
@@ -593,9 +606,17 @@ function editTemplate(kind, id) {
     els.customTextContent.focus();
     return;
   }
-  const newName = prompt("修改素材名称", item.name); if (newName === null || !newName.trim()) return;
-  item.name = newName.trim();
-  persistLibraries(); syncCustomMaterialsList();
+  editingImageTemplate = { id };
+  const imageTab = els.settings.querySelector('.asset-type-btn[data-asset-tab="image"]');
+  if (imageTab && !imageTab.classList.contains("active")) imageTab.click();
+  els.customMaterialName.value = item.name;
+  els.customMaterialFileInput.value = "";
+  els.customMaterialFileHint.textContent = `当前图片：${item.fileName || "未知文件"}（可选择新图片替换）`;
+  els.customMaterialEditorPreview.src = "/download/images/" + encodeURIComponent(item.fileName || "");
+  els.customMaterialEditorPreview.classList.remove("hidden");
+  els.customMaterialAddBtn.textContent = "保存修改";
+  els.customImageEditor.classList.remove("hidden");
+  els.customMaterialName.focus();
 }
 
 async function deleteTemplate(kind, id) {
@@ -613,10 +634,19 @@ async function addCustomMaterial(source) {
   if (!name) { toast("请输入素材名称"); return; }
   var file = source?.file || els.customMaterialFileInput.files?.[0];
   var base64 = source?.data || "";
-  if (!file && !base64) { toast("请选择图片文件"); return; }
+  const editingLoc = !source && editingImageTemplate ? templateLocation("image", editingImageTemplate.id) : null;
+  if (editingImageTemplate && !source && !editingLoc) { closeImageTemplateEditor(); toast("保存失败：原图片素材不存在"); return false; }
+  if (!file && !base64 && !editingLoc) { toast("请选择图片文件"); return; }
+  if (editingLoc && !file && !base64) {
+    const item = editingLoc.library[editingLoc.key][editingLoc.index];
+    item.name = name;
+    item.revision = (item.revision || 1) + 1;
+    persistLibraries(); syncCustomMaterialsList(); closeImageTemplateEditor(); toast("图片素材已更新");
+    return true;
+  }
   const target = globalLibrary;
-  name = uniqueTemplateName("image", name, target);
-  console.log("[自定义图片] 添加: 名称=" + name + ", 原始文件=" + (file?.name || source?.fileName || "节点图片") + ", size=" + (file?.size || "base64"));
+  if (!editingLoc) name = uniqueTemplateName("image", name, target);
+  console.log(`[自定义图片] ${editingLoc ? "替换" : "添加"}: 名称=${name}, 原始文件=${file?.name || source?.fileName || "节点图片"}, size=${file?.size || "base64"}`);
   if (!base64) base64 = await fileToBase64(file);
   try {
     const originalName = source?.fileName || file?.name || "custom.png";
@@ -624,14 +654,25 @@ async function addCustomMaterial(source) {
     var result = await resp.json();
     if (!result.success) { toast("保存失败: " + (result.error || "")); return; }
     console.log("[自定义素材] 服务端保存成功: fileName=" + result.fileName);
-    target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: source?.mime || file?.type || "image/png", revision: 1 }));
-    els.customMaterialName.value = "";
-    els.customMaterialFileInput.value = "";
-    if (els.customMaterialFileHint) els.customMaterialFileHint.textContent = "";
-    if (els.customImageEditor) els.customImageEditor.classList.add("hidden");
+    if (editingLoc) {
+      const item = editingLoc.library[editingLoc.key][editingLoc.index];
+      const oldFileName = item.fileName;
+      item.name = name;
+      item.fileName = result.fileName;
+      item.mime = source?.mime || file?.type || "image/png";
+      item.revision = (item.revision || 1) + 1;
+      if (oldFileName && oldFileName !== result.fileName) {
+        try {
+          await fetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: oldFileName }) });
+        } catch (cleanupError) { console.error("[自定义图片] 旧图片清理失败", cleanupError); }
+      }
+    } else {
+      target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: source?.mime || file?.type || "image/png", revision: 1 }));
+    }
+    closeImageTemplateEditor();
     persistLibraries();
     syncCustomMaterialsList();
-    toast("素材已添加");
+    toast(editingLoc ? "图片素材已更新" : "素材已添加");
     return true;
   } catch (e) {
     console.error("[自定义素材] 保存失败:", e);
@@ -669,6 +710,17 @@ function closeTextTemplateEditor() {
   els.customTextContent.value = "";
   els.customTextAddBtn.textContent = "添加文字模板";
   els.customTextEditor.classList.add("hidden");
+}
+
+function closeImageTemplateEditor() {
+  editingImageTemplate = null;
+  els.customMaterialName.value = "";
+  els.customMaterialFileInput.value = "";
+  els.customMaterialFileHint.textContent = "";
+  els.customMaterialEditorPreview.src = "";
+  els.customMaterialEditorPreview.classList.add("hidden");
+  els.customMaterialAddBtn.textContent = "添加图片素材";
+  els.customImageEditor.classList.add("hidden");
 }
 
 function stripDataUrl(value) { return String(value || "").replace(/^data:[^,]+,/, ""); }
@@ -817,7 +869,7 @@ function addNode(type, x = 160, y = 120, commit = true) {
     x: snap(x),
     y: snap(y),
     w: NODE_WIDTH,
-    h: type === "ai-image" ? 330 : type === "group" ? 200 : NODE_HEIGHT,
+    h: type === "ai-image" ? AI_NODE_HEIGHT : type === "group" ? 200 : NODE_HEIGHT,
     disabled: false,
     created: Date.now() + state.nextNode,
     text: type === "text" ? "请输入文字内容" : "",
@@ -1048,7 +1100,7 @@ function pasteNodes(data, anchor = null) {
       x: anchor ? anchor.x + (n.x - minX) : n.x + 36,
       y: anchor ? anchor.y + (n.y - minY) : n.y + 36,
       w: NODE_WIDTH,
-      h: NODE_HEIGHT,
+      h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "group" ? Math.max(Number(n.h) || 0, 200) : NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
@@ -1321,6 +1373,7 @@ async function generateSingle(node, upstream) {
   const { texts, images } = upstream;
   const imageUrls = images.map(img => img.image);
 
+  node.batchTasks = null;
   node.generating = true;
   node.generatedImage = null;
   node.taskId = null;
@@ -1346,11 +1399,6 @@ async function generateSingle(node, upstream) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName: "ai_generated", files: [{ name: node.fileName, data: base64 }] }),
     }).catch(() => {});
-    // 在 AI 节点右侧自动创建图片节点
-    const imgNode = addNode("image", node.x + NODE_WIDTH + 40, node.y, false);
-    imgNode.image = base64;
-    imgNode.fileName = node.fileName;
-    imgNode.mime = node.mime;
     setProgress(100, "AI生成完成");
     pushHistory();
     render();
@@ -1374,6 +1422,7 @@ async function generateBatchFromGroup(node, upstream) {
   const totalTasks = groupImages.length;
   const MAX_CONCURRENT = 5;
 
+  node.generatedImage = null;
   node.generating = true;
   node.batchTasks = groupImages.map((gImg, i) => ({
     index: i,
@@ -1466,6 +1515,8 @@ async function generateBatchFromGroup(node, upstream) {
       imgNode.image = t.result;
       imgNode.fileName = t.fileName || `ai_batch_${seqNum}.png`;
       imgNode.mime = "image/png";
+      imgNode.aiSourceNodeId = node.id;
+      imgNode.aiBatchIndex = t.index;
     }
     node.generating = false;
     node._batchCancelled = false;
@@ -1544,8 +1595,8 @@ function addOutputNode(sourceId) {
 function normalizeNodeSizes() {
   state.nodes.forEach(n => {
     if (!n.w) n.w = NODE_WIDTH;
-    if (!n.h) n.h = n.type === "ai-image" ? 330 : n.type === "group" ? 200 : NODE_HEIGHT;
-    if (n.type === "ai-image" && n.h < 300) n.h = 330;
+    if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "group" ? 200 : NODE_HEIGHT;
+    if (n.type === "ai-image" && n.h < AI_NODE_HEIGHT) n.h = AI_NODE_HEIGHT;
   });
 }
 
@@ -1563,7 +1614,9 @@ function terminalSourceNodes() {
 function exportTargets() {
   const outputs = outputNodes();
   if (outputs.length) return outputs.filter(n => !n.disabled).map(n => ({ id: n.id, virtual: false }));
-  return terminalSourceNodes().map(n => ({ id: n.id, virtual: true }));
+  return terminalSourceNodes()
+    .filter(n => (n.type === "ai-image" && (n.generatedImage || n.batchTasks?.some(t => t.status === "done" && t.result))) || (n.type === "image" && n.aiSourceNodeId && n.image))
+    .map(n => ({ id: n.id, virtual: true }));
 }
 
 function outputNumber(id) {
@@ -1695,7 +1748,7 @@ function nodeTemplate(node) {
     }
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
-    body = `<div class="image-preview">${node.image ? `<img src="${node.image}" alt="">` : "无图片"}${seqTag}</div>
+    body = `<div class="image-preview" title="双击放大预览">${node.image ? `<img src="${node.image}" alt="">` : "无图片"}${seqTag}</div>
       <div class="image-actions">
         <button data-role="upload">上传</button>
         <button data-role="clear-image">清除</button>
@@ -1936,7 +1989,8 @@ window.addEventListener("mousemove", ev => {
     if (node) {
       const scale = state.view.scale;
       node.w = Math.max(180, drag.sw + (ev.clientX - drag.sx) / scale);
-      node.h = Math.max(120, drag.sh + (ev.clientY - drag.sy) / scale);
+      const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : 120;
+      node.h = Math.max(minHeight, drag.sh + (ev.clientY - drag.sy) / scale);
       const el = document.querySelector(`.node[data-id="${node.id}"]`);
       if (el) {
         el.style.width = `${node.w}px`;
@@ -2082,6 +2136,8 @@ els.nodes.addEventListener("click", ev => {
 
 els.nodes.addEventListener("dblclick", ev => {
   if (ev.target.closest(".image-preview") || ev.target.closest(".ai-preview") || ev.target.closest(".group-preview")) {
+    ev.preventDefault();
+    ev.stopPropagation();
     const nodeEl = ev.target.closest(".node");
     if (!nodeEl) return;
     const node = findNode(nodeEl.dataset.id);
@@ -2482,6 +2538,35 @@ els.viewport.addEventListener("contextmenu", ev => {
 
 function showMenu(x, y, items) {
   els.contextMenu.innerHTML = "";
+  function positionSubmenu(item, submenu) {
+    submenu.classList.remove("open-left");
+    submenu.style.top = "-8px";
+    submenu.style.minWidth = "";
+    submenu.style.maxWidth = "";
+    const previousDisplay = submenu.style.display;
+    const previousVisibility = submenu.style.visibility;
+    submenu.style.display = "block";
+    submenu.style.visibility = "hidden";
+
+    const itemRect = item.getBoundingClientRect();
+    const rightSpace = window.innerWidth - itemRect.right - 12;
+    const leftSpace = itemRect.left - 12;
+    const preferredWidth = Math.min(submenu.scrollWidth + 2, 420);
+    const openLeft = rightSpace < preferredWidth && leftSpace > rightSpace;
+    const availableWidth = Math.max(120, openLeft ? leftSpace : rightSpace);
+    submenu.classList.toggle("open-left", openLeft);
+    submenu.style.minWidth = `${Math.min(190, availableWidth)}px`;
+    submenu.style.maxWidth = `${availableWidth}px`;
+
+    const submenuRect = submenu.getBoundingClientRect();
+    let top = -8;
+    if (submenuRect.bottom > window.innerHeight - 12) top -= submenuRect.bottom - (window.innerHeight - 12);
+    if (itemRect.top + top < 12) top = 12 - itemRect.top;
+    submenu.style.top = `${top}px`;
+    submenu.style.display = previousDisplay;
+    submenu.style.visibility = previousVisibility;
+  }
+
   function buildMenu(container, menuItems) {
     menuItems.forEach(([label, action]) => {
       const item = document.createElement("div");
@@ -2492,9 +2577,11 @@ function showMenu(x, y, items) {
         btn.classList.add("has-submenu");
         const submenu = document.createElement("div");
         submenu.className = "context-submenu";
+        if (action.some(entry => Array.isArray(entry?.[1]))) submenu.classList.add("context-submenu-branch");
         buildMenu(submenu, action);
         item.appendChild(btn);
         item.appendChild(submenu);
+        item.addEventListener("pointerenter", () => positionSubmenu(item, submenu));
       } else if (typeof action === "function") {
         btn.onclick = () => { hideMenu(); action(); };
         item.appendChild(btn);
@@ -2507,17 +2594,14 @@ function showMenu(x, y, items) {
   }
   buildMenu(els.contextMenu, items);
   els.contextMenu.style.left = `${x}px`;
-  els.contextMenu.classList.toggle("submenu-left", x + 590 > window.innerWidth);
-  els.contextMenu.style.top = "";
+  els.contextMenu.style.top = `${y}px`;
   els.contextMenu.style.bottom = "";
-  // 菜单高度估算，优先向上展开
-  const estHeight = items.length * 36 + 16;
-  if (y + estHeight > window.innerHeight - 20) {
-    els.contextMenu.style.bottom = `${window.innerHeight - y}px`;
-  } else {
-    els.contextMenu.style.top = `${y}px`;
-  }
   els.contextMenu.classList.remove("hidden");
+  const menuRect = els.contextMenu.getBoundingClientRect();
+  const safeLeft = Math.max(12, Math.min(x, window.innerWidth - menuRect.width - 12));
+  const safeTop = Math.max(12, Math.min(y, window.innerHeight - menuRect.height - 12));
+  els.contextMenu.style.left = `${safeLeft}px`;
+  els.contextMenu.style.top = `${safeTop}px`;
 }
 
 function hideMenu() {
@@ -2727,12 +2811,13 @@ els.newCustomTextBtn.onclick = () => {
   if (!els.customTextEditor.classList.contains("hidden")) els.customTextName.focus();
 };
 els.newCustomImageBtn.onclick = () => {
+  if (editingImageTemplate) closeImageTemplateEditor();
   els.customImageEditor.classList.toggle("hidden");
   els.customTextEditor.classList.add("hidden");
   if (!els.customImageEditor.classList.contains("hidden")) els.customMaterialName.focus();
 };
 els.customTextCancelBtn.onclick = closeTextTemplateEditor;
-els.customImageCancelBtn.onclick = () => els.customImageEditor.classList.add("hidden");
+els.customImageCancelBtn.onclick = closeImageTemplateEditor;
 
 function setShortcutPopover(open) {
   els.shortcutPopover.classList.toggle("hidden", !open);
@@ -2924,6 +3009,11 @@ els.zipExportToggle.onchange = () => {
   pushHistory();
 };
 
+els.exportInputsToggle.onchange = () => {
+  state.settings.exportInputs = els.exportInputsToggle.checked;
+  pushHistory();
+};
+
 $("chooseFolderBtn").onclick = chooseFolder;
 els.openExportFolderBtn.onclick = openExportFolder;
 
@@ -2937,10 +3027,19 @@ els.customMaterialFileBtn.onclick = () => {
   els.customMaterialFileInput.click();
 };
 
-els.customMaterialFileInput.onchange = function() {
+els.customMaterialFileInput.onchange = async function() {
   var file = els.customMaterialFileInput.files?.[0];
   if (els.customMaterialFileHint) {
     els.customMaterialFileHint.textContent = file ? file.name : "";
+  }
+  if (file && els.customMaterialEditorPreview) {
+    try {
+      els.customMaterialEditorPreview.src = await fileToBase64(file);
+      els.customMaterialEditorPreview.classList.remove("hidden");
+    } catch (error) {
+      console.error("[自定义图片] 预览失败", error);
+      toast("图片预览失败：文件可能损坏，请重新选择");
+    }
   }
 };
 
@@ -3192,7 +3291,7 @@ async function openExportFolder() {
 
 async function runExport() {
   const targets = exportTargets();
-  if (!targets.length) return toast("没有可导出的末端节点");
+  if (!targets.length) return toast("没有可导出的 AI 生成结果");
   try {
     setProgress(5, "准备导出");
     await nextPaint();
@@ -3203,39 +3302,63 @@ async function runExport() {
     const rows = [];
     const files = [];
     const incoming = buildIncomingIndex();
+    const usedPaths = new Set();
+    const referenceNames = new Map();
+    let resultNumber = 0;
+
+    function uniqueExportPath(folder, preferredName, fallbackName, mime) {
+      const ext = extensionFor(preferredName, mime);
+      const stem = safeName(baseName(preferredName) || fallbackName) || fallbackName;
+      let candidate = `${folder}/${stem}.${ext}`;
+      let suffix = 2;
+      while (usedPaths.has(candidate.toLowerCase())) candidate = `${folder}/${stem}_${suffix++}.${ext}`;
+      usedPaths.add(candidate.toLowerCase());
+      return candidate;
+    }
+
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
       if (i === 0 || i === targets.length - 1 || i % 5 === 0) {
         setProgress(10 + (i / Math.max(1, targets.length)) * 35, `收集输出 ${i + 1}/${targets.length}`);
         await nextPaint();
       }
-      const label = `图片${i + 1}`;
       const collected = target.virtual ? collectForTerminal(target.id, incoming) : collectForOutput(target.id, incoming);
-      const multipleImages = collected.images.length > 1;
-      const imageNames = collected.images.map((_, index) => multipleImages ? `${label}_${index + 1}` : label);
-      if (imageNames.length) {
-        const prefix = imageNames.join("、");
-        collected.texts.forEach(text => {
-          rows.push([`${prefix}${text}`]);
-        });
-      } else {
-        collected.texts.forEach(text => rows.push([text]));
-      }
-      collected.images.forEach((img, index) => {
+      for (const img of collected.images) {
+        resultNumber++;
         const ext = extensionFor(img.fileName, img.mime);
-        const imageName = imageNames[index];
-        files.push({ name: `${imageName}.${ext}`, blob: dataUrlToBlob(img.image) });
-      });
+        files.push({ name: `生成结果/图片${resultNumber}.${ext}`, blob: dataUrlToBlob(img.image) });
+
+        if (state.settings.exportInputs && img.aiSourceNodeId) {
+          const upstream = collectUpstreamForAI(img.aiSourceNodeId, incoming);
+          const refs = [...upstream.images];
+          if (Number.isInteger(img.aiBatchIndex) && upstream.groupImages[img.aiBatchIndex]) refs.push(upstream.groupImages[img.aiBatchIndex]);
+          else if (!Number.isInteger(img.aiBatchIndex)) refs.push(...upstream.groupImages);
+
+          const refFileNames = [];
+          for (const ref of refs) {
+            if (!ref.image) continue;
+            let path = referenceNames.get(ref.image);
+            if (!path) {
+              path = uniqueExportPath("参考图", ref.fileName || "参考图.png", `参考图${referenceNames.size + 1}`, ref.mime);
+              referenceNames.set(ref.image, path);
+              files.push({ name: path, blob: dataUrlToBlob(ref.image) });
+            }
+            refFileNames.push(path.slice(path.lastIndexOf("/") + 1));
+          }
+          const prompt = upstream.texts.join("，");
+          if (refFileNames.length || prompt) rows.push([[refFileNames.join("、"), prompt].filter(Boolean).join("，")]);
+        }
+      }
     }
     if (rows.length) {
       setProgress(52, "生成Excel");
       await nextPaint();
-      files.unshift({ name: `导出内容_${timestamp()}.xlsx`, blob: makeXlsx([[""], ...rows]) });
+      files.push({ name: "关键词.xlsx", blob: makeXlsx([["关键词"], ...rows]) });
     }
     if (!files.length) {
       setProgress(100, "没有可导出内容");
       hideProgressSoon();
-      return toast("没有可导出的文字或图片");
+      return toast("没有可导出的 AI 生成结果");
     }
     setProgress(62, "写入文件");
     await nextPaint();
@@ -3269,39 +3392,41 @@ function buildIncomingIndex() {
 function collectForOutput(outputId, incoming = buildIncomingIndex()) {
   const result = { texts: [], images: [] };
   const visited = new Set();
+  function appendAiResults(n) {
+    const completedBatch = n.batchTasks?.filter(t => t.status === "done" && t.result) || [];
+    if (completedBatch.length) {
+      completedBatch.forEach(t => result.images.push({ image: t.result, fileName: t.fileName || "ai_generated.png", mime: "image/png", aiSourceNodeId: n.id, aiBatchIndex: t.index }));
+    } else if (n.generatedImage) {
+      result.images.push({ image: n.generatedImage, fileName: n.fileName || "ai_generated.png", mime: n.mime || "image/png", aiSourceNodeId: n.id });
+    }
+  }
   function visit(nodeId) {
     if (visited.has(nodeId)) return;
     visited.add(nodeId);
-    const incomingEdges = incoming.get(nodeId) || [];
-    incomingEdges.forEach(e => {
-      visit(e.from.node);
-      const n = findNode(e.from.node);
-      if (!n || n.disabled) return;
-      if (n.type === "text" && n.text.trim()) result.texts.push(n.text.trim());
-      if (n.type === "image" && n.image) result.images.push({ image: n.image, fileName: n.fileName, mime: n.mime });
-      if (n.type === "ai-image" && n.generatedImage) result.images.push({ image: n.generatedImage, fileName: n.fileName || "ai_generated.png", mime: n.mime || "image/png" });
-    });
+    const n = findNode(nodeId);
+    if (!n || n.disabled) return;
+    // AI 节点等同一张成图：收集结果后停止追溯它之前的提示词和参考图。
+    if (n.type === "ai-image") {
+      appendAiResults(n);
+      return;
+    }
+    if (n.type === "image" && n.aiSourceNodeId && n.image) {
+      result.images.push({ image: n.image, fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex });
+      return;
+    }
+    (incoming.get(nodeId) || []).forEach(e => visit(e.from.node));
   }
   visit(outputId);
   return result;
 }
 
 function collectForTerminal(nodeId, incoming = buildIncomingIndex()) {
-  const result = { texts: [], images: [] };
-  const visited = new Set();
-  function visit(id) {
-    if (visited.has(id)) return;
-    visited.add(id);
-    const incomingEdges = incoming.get(id) || [];
-    incomingEdges.forEach(e => visit(e.from.node));
-    const n = findNode(id);
-    if (!n || n.disabled) return;
-    if (n.type === "text" && n.text.trim()) result.texts.push(n.text.trim());
-    if (n.type === "image" && n.image) result.images.push({ image: n.image, fileName: n.fileName, mime: n.mime });
-    if (n.type === "ai-image" && n.generatedImage) result.images.push({ image: n.generatedImage, fileName: n.fileName || "ai_generated.png", mime: n.mime || "image/png" });
+  const n = findNode(nodeId);
+  if (!n || n.disabled) return { texts: [], images: [] };
+  if (n.type === "image" && n.aiSourceNodeId && n.image) {
+    return { texts: [], images: [{ image: n.image, fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex }] };
   }
-  visit(nodeId);
-  return result;
+  return collectForOutput(nodeId, incoming);
 }
 
 function extensionFor(name, mime) {
@@ -3341,7 +3466,10 @@ async function saveFiles(files, folderName, onProgress = () => {}) {
     const dir = await state.exportDirHandle.getDirectoryHandle(folderName, { create: true });
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const handle = await dir.getFileHandle(file.name, { create: true });
+      const parts = file.name.replace(/\\/g, "/").split("/").filter(Boolean);
+      let targetDir = dir;
+      for (const part of parts.slice(0, -1)) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+      const handle = await targetDir.getFileHandle(parts.at(-1), { create: true });
       const writable = await handle.createWritable();
       await writable.write(file.blob);
       await writable.close();

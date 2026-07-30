@@ -183,7 +183,13 @@ async function requestHandler(req, res) {
       const exportDir = path.join(configuredRoot, path.basename(folderName));
       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
       for (const file of files) {
-        const filePath = path.join(exportDir, path.basename(file.name));
+        const parts = String(file.name || "").replace(/\\/g, "/").split("/").filter(part => part && part !== ".");
+        if (!parts.length || parts.includes("..")) throw new Error("导出文件路径不安全");
+        const filePath = path.resolve(exportDir, ...parts);
+        const exportPrefix = path.resolve(exportDir) + path.sep;
+        if (!filePath.startsWith(exportPrefix)) throw new Error("导出文件超出目标目录");
+        const parentDir = path.dirname(filePath);
+        if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
         const buf = Buffer.from(file.data.split(",")[1] || file.data, "base64");
         fs.writeFileSync(filePath, buf);
       }

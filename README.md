@@ -57,7 +57,7 @@ The application follows your system language on first launch and remembers your 
 3. Click **Verify** to confirm that the key is valid.
 4. Click **Save**. The key will be loaded automatically the next time you start the application.
 
-Need a key? [Register through the API page](https://apib.ai/register?aff=W5d401).
+Need a key? [Register through the API page](https://apimart.ai/register?aff=W5d401).
 
 > The API Key is stored in the browser's localStorage and is not uploaded to any other server. Before sharing the application, click **Clear** to remove saved keys.
 
@@ -174,6 +174,8 @@ Select an Output Node and click **Export** in the top toolbar:
 
 - Enable **Export as ZIP** (recommended for best compatibility) to download a ZIP archive.
 - Disable it to write files directly to a local folder.
+- By default, only final AI-generated images are exported under `生成结果/`. Regular text, reference images, and project JSON are excluded.
+- Enable **Also export inputs** to add separate `参考图/` and `关键词.xlsx` outputs. Each prompt starts with the exact exported reference-image filenames.
 
 ### Export Folder Settings
 
@@ -286,7 +288,7 @@ MIT
 3. 点击 **验证** 确认 Key 有效
 4. 点击 **保存** 保存 Key（下次启动自动读取）
 
-还没有 Key？可前往 [API 注册页面](https://apib.ai/register?aff=W5d401) 获取。
+还没有 Key？可前往 [API 注册页面](https://apimart.ai/register?aff=W5d401) 获取。
 
 > API Key 保存在浏览器 localStorage 中，不会上传到任何服务器。分享给他人使用前记得点击 **清除**。
 
@@ -388,8 +390,8 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 1. 创建文字节点（写提示词）和/或图片节点（参考图）
 2. 将它们连接到 AI绘图节点
 3. 在该 AI绘图节点中设置模型、分辨率、画质和比例，然后点击 **生成**
-4. 生成的图片会自动连接到右侧新创建的图片节点
-5. 将生成的图片节点连接到输出节点，即可导出
+4. 单张生成结果保留在 AI 绘图节点中，可直接连接到其他 AI 节点或输出节点
+5. 批量生成仍会为每张结果创建独立图片节点，方便分别处理
 
 **批量生成**：选中多个节点，点击工具栏的 **批量执行**，会依次为每个节点生成 AI 图片。
 
@@ -402,6 +404,8 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 选中输出节点，点击顶部 **导出** 按钮：
 - 勾选 **ZIP 压缩包导出**（推荐，兼容性最好）：导出为 zip 文件
 - 不勾选：直接写入本地文件夹
+- 默认只导出 AI 生成结果，并统一放入 `生成结果/`；普通文字、参考图和项目 JSON 不会进入成果导出
+- 勾选 **同时导出输入素材** 后，额外生成独立的 `参考图/` 和 `关键词.xlsx`；每条关键词开头使用与参考图文件完全一致的文件名
 
 ### 导出文件夹设置
 
