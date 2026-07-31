@@ -371,6 +371,33 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   transform-origin: 0 0;
 }
 
+.viewport.image-drag-active::after {
+  content: "释放以创建图片节点";
+  position: absolute;
+  z-index: 24;
+  inset: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgba(59, 130, 246, .72);
+  border-radius: 22px;
+  background: rgba(59, 130, 246, .09);
+  color: var(--selected);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+.node.image.image-drop-target {
+  outline: 3px solid #22c55e;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 7px rgba(34, 197, 94, .14), var(--soft-shadow);
+}
+
+.nodes .node img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 .edges, .nodes {
   position: absolute;
   inset: 0;
@@ -425,6 +452,15 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   outline-offset: 3px;
 }
 .node.disabled { opacity: .42; }
+
+.node.ai-image { transition: border-color .2s ease, box-shadow .2s ease; }
+.node.ai-status-waiting { border-color: #94a3b8; }
+.node.ai-status-submitting { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, .16), var(--soft-shadow); }
+.node.ai-status-generating { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, .18), var(--soft-shadow); }
+.node.ai-status-downloading { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, .18), var(--soft-shadow); }
+.node.ai-status-done { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, .18), var(--soft-shadow); }
+.node.ai-status-failed { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, .18), var(--soft-shadow); }
+.node.ai-status-cancelled { border-color: #94a3b8; border-style: dashed; }
 
 .node-head {
   height: 38px;
@@ -627,6 +663,30 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .ai-node-settings .ai-model-field { grid-column: 1 / -1; }
 .ai-node-settings select { width: 100%; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid var(--panel-2); border-radius: 7px; color: var(--text); background: var(--panel-solid); font-size: 11px; outline: none; }
 .ai-node-settings select:focus { border-color: var(--selected); }
+
+.ai-node-progress {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 9px;
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.ai-node-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.ai-node-progress-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-node-progress-row b { flex: 0 0 auto; color: var(--text); font-size: 10px; }
+.ai-node-progress-track { height: 4px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .22); }
+.ai-node-progress-track span { display: block; height: 100%; border-radius: inherit; transition: width .25s ease; background: #8b5cf6; }
+.ai-progress-waiting .ai-node-progress-track span, .ai-progress-cancelled .ai-node-progress-track span { background: #94a3b8; }
+.ai-progress-submitting .ai-node-progress-track span { background: #3b82f6; }
+.ai-progress-downloading .ai-node-progress-track span { background: #f59e0b; }
+.ai-progress-done .ai-node-progress-track span { background: #22c55e; }
+.ai-progress-failed .ai-node-progress-track span { background: #ef4444; }
+.ai-node-progress-track .indeterminate { width: 38%; animation: ai-progress-slide 1.15s ease-in-out infinite; }
+@keyframes ai-progress-slide { from { transform: translateX(-110%); } to { transform: translateX(270%); } }
 
 .ai-generate-btn {
   color: #fff;
@@ -926,6 +986,26 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 
 .theme-dark .settings input { background: rgba(255, 255, 255, .06); }
 
+.settings #exportFolderInput {
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  resize: vertical;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--panel-2);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, .58);
+  outline: none;
+  line-height: 1.45;
+  user-select: text;
+}
+.theme-dark .settings #exportFolderInput { background: rgba(255, 255, 255, .06); }
+.settings #exportFolderInput:focus {
+  border-color: rgba(47, 128, 237, .55);
+  box-shadow: 0 0 0 4px rgba(47, 128, 237, .12);
+}
+
 .settings input[type="checkbox"] {
   width: 16px;
   min-height: 16px;
@@ -1041,8 +1121,28 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .asset-editor { margin: 10px 0 0; padding: 12px; border-top: 1px solid var(--panel-2); background: color-mix(in srgb, var(--panel-2) 38%, transparent); border-radius: 9px; }
 .asset-editor-actions { display: flex; gap: 6px; margin-left: auto; }
 
-.api-register-link { display: inline-flex; width: fit-content; margin-top: 7px; color: var(--primary); font-size: 12px; text-decoration: none; }
-.api-register-link:hover { text-decoration: underline; }
+.api-register-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 32px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 36%, var(--panel-2));
+  border-radius: 9px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.api-register-link:hover {
+  border-color: color-mix(in srgb, var(--primary) 62%, var(--panel-2));
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+  transform: translateY(-1px);
+}
 
 .api-url-hint {
   display: block;

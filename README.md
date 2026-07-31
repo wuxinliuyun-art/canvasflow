@@ -26,13 +26,37 @@ A visual node-based canvas for combining text and images through drag-and-drop c
 - **Undo / redo** — Full history with up to 20 undo and redo steps.
 - **Lightbox preview** — Double-click an image to view it in a lightbox and navigate with the keyboard or mouse wheel.
 - **Create from clipboard** — Copy an image or text, then press Ctrl+V on the canvas to create a node directly.
-- **Quick model-image insertion** — Right-click an empty area to insert built-in male or female model images.
+- **Drag images onto the canvas** — Drop local images or supported web images to create image nodes; dropping one image onto an existing image node replaces it.
+- **Reusable custom assets** — Save complete text blocks and images locally, then insert them quickly from the canvas context menu.
+- **Per-node AI progress** — Every AI Image node shows its own generation stage and progress while batch tasks continue independently.
+- **Quick custom-asset insertion** — Right-click an empty area and choose a saved text or image asset from the compact submenu.
 - **Automatic port cleanup** — Detect and release an occupied server port during startup to prevent launch failures.
 - **Bilingual interface** — Switch between Simplified Chinese and English in Settings. The selected language is remembered automatically.
+- **Windows-friendly startup** — The packaged EXE starts the local server and opens CanvasFlow in the default browser automatically.
 
 ---
 
 ## Quick Start (Read This First)
+
+### Runtime Requirements
+
+**Using the Windows Release ZIP:** Windows 10/11 only. No Node.js installation is required. Folder selection and automatic browser launch use the PowerShell 5.1 included with Windows.
+
+**Running from source:** Install Node.js 18 or later. CanvasFlow uses only Node.js built-in modules, so there are no runtime npm dependencies and no `npm install` step is required.
+
+```powershell
+node server.js
+```
+
+Then open `http://127.0.0.1:5173/`. On Windows, you can also double-click `start.bat`.
+
+**Building the Windows EXE:** Install or temporarily run `pkg` 5.8.1, then execute:
+
+```powershell
+npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
+```
+
+The source code does not bundle Node.js. The Release EXE does. Antivirus software may ask for permission when the EXE starts PowerShell to open the default browser or choose a folder.
 
 ### 1. Start the Server
 
@@ -164,6 +188,8 @@ Text Node + Image Node ──connect──▶ AI Image Node ──connect──�
 
 **Batch generation:** Select multiple nodes and click **Batch Run** in the toolbar to generate AI images for them in sequence.
 
+During single or batch generation, every AI Image node shows its own colored border, current stage, and progress bar. The toolbar progress indicator remains available for the overall batch.
+
 ---
 
 ## Export
@@ -205,7 +231,7 @@ Browser app.js ──fetch──▶ localhost:5173 /api/* ──proxy──▶ a
 ├── CanvasFlow-Windows-x64.exe # Standalone executable compiled with pkg (Node.js not required)
 ├── package.json        # pkg build configuration
 ├── start.bat           # Development startup script
-└── download/images/    # Local image assets, including model images
+└── download/images/    # Runtime-only custom image assets (created locally, ignored by Git)
 ```
 
 ---
@@ -257,13 +283,36 @@ MIT
 - **撤回 / 重做** — 完整的历史记录，支持 20 步撤回和重做
 - **灯箱预览** — 双击图片以灯箱模式查看，支持键盘/滚轮翻页
 - **剪贴板直创建** — 复制图片或文字后，在画布上 Ctrl+V 直接创建节点
-- **模特图快捷插入** — 右键空白处一键插入内置的男/女模特图
+- **自定义素材快捷插入** — 右键画布空白处，从紧凑的三级菜单中选择已保存的文字或图片素材
+- **拖拽图片创建节点** — 可将本地图片或支持的网页图片拖入画布；拖到已有图片节点上可直接替换
+- **AI 节点独立进度** — 单张与批量任务都在对应 AI 绘图节点上显示阶段和进度
+- **Windows 便捷启动** — 发布版 EXE启动本地服务后自动使用默认浏览器打开 CanvasFlow
 - **端口自动清理** — 启动时自动检测并释放被占用的端口，避免闪退
 - **中英双语界面** — 可在设置中切换简体中文和 English，并自动记住选择
 
 ---
 
 ## 快速开始（第一次使用必读）
+
+### 运行环境
+
+**使用 Windows Release ZIP：** 仅支持 Windows 10/11，不需要安装 Node.js。选择文件夹和自动打开默认浏览器依赖 Windows自带的 PowerShell 5.1。
+
+**从源码运行：** 需要 Node.js 18 或更高版本。CanvasFlow 运行时只使用 Node.js内置模块，没有 npm运行依赖，不需要执行 `npm install`。
+
+```powershell
+node server.js
+```
+
+然后访问 `http://127.0.0.1:5173/`。Windows也可以双击 `start.bat`。
+
+**构建 Windows EXE：** 使用 `pkg` 5.8.1，执行：
+
+```powershell
+npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
+```
+
+源码不包含 Node.js环境，Release EXE已包含。EXE调用 PowerShell自动打开浏览器或选择文件夹时，杀毒软件可能首次询问授权。
 
 ### 1. 启动服务
 
@@ -395,6 +444,8 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 
 **批量生成**：选中多个节点，点击工具栏的 **批量执行**，会依次为每个节点生成 AI 图片。
 
+单张或批量生成时，每个 AI 绘图节点都会显示独立的彩色边框、当前阶段和进度条；顶部进度仍用于查看整体批次。
+
 ---
 
 ## 导出
@@ -409,7 +460,7 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 
 ### 导出文件夹设置
 
-点击 **设置导出文件夹** 选择本地目录，程序会保存完整路径。之后可用 **打开导出文件夹** 直接打开；也可以手动输入完整路径。
+点击 **设置导出文件夹** 选择本地目录，程序会保存并显示完整路径。可以点击 **复制路径**，再粘贴到资源管理器地址栏；也可以直接手动输入完整路径。
 
 ---
 
@@ -435,7 +486,7 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 ├── CanvasFlow-Windows-x64.exe # pkg 编译的独立可执行文件（免装 Node.js）
 ├── package.json        # pkg 打包配置
 ├── start.bat           # 开发启动脚本
-└── download/images/    # 本地图片资源（模特图等）
+└── download/images/    # 运行时自定义图片（本地创建，Git忽略）
 ```
 
 ---

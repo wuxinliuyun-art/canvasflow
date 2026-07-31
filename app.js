@@ -2,9 +2,17 @@ const $ = (id) => document.getElementById(id);
 
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 172;
-const AI_NODE_HEIGHT = 370;
+const AI_NODE_HEIGHT = 400;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
+let runtimeExportFolder = "export";
+
+function resolvedExportFolderLabel(value) {
+  const label = String(value || "").trim();
+  return !label || label === "export" || label === "export（项目文件夹）" || label === "export (project folder)"
+    ? runtimeExportFolder
+    : label;
+}
 const LANGUAGE_KEY = "webimage.language";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
 
@@ -25,7 +33,9 @@ const UI_EN = {
   "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
-  "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder",
+  "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder", "复制路径": "Copy Path", "查看导出文件": "View Exported Files",
+  "完整路径可直接选择或复制；打开和设置文件夹使用相同的 Windows 授权方式。": "Select or copy the full path directly. Opening and choosing folders use the same Windows permission flow.",
+  "完整路径可直接选择或复制；如果无法自动打开目录，可将路径粘贴到资源管理器地址栏。": "Select or copy the full path directly. Paste it into File Explorer's address bar if the folder cannot be opened automatically.",
   "选择文件夹后会保存完整路径；若手动填写，请输入完整路径。": "The full path is saved after choosing a folder. Enter a full path when editing manually.",
   "⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。": "⚠ Due to browser security restrictions, the system drive (C:) cannot be written directly. Choose D: or another non-system drive to avoid export failures.",
   "自定义素材": "Custom Assets", "添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。": "Add frequently used images as assets, then right-click an empty area of the canvas to insert them quickly.",
@@ -63,6 +73,7 @@ const UI_EN = {
   "未获取到任务ID": "No task ID received", "查询失败": "Query failed", "任务完成但无图片结果": "Task completed without an image result",
   "生成失败": "Generation failed", "提交AI生成任务": "Submitting AI generation task", "等待生成结果": "Waiting for generation result",
   "下载生成图片": "Downloading generated image", "AI生成完成": "AI generation complete", "AI绘图完成": "AI image generation complete",
+  "正在提交任务": "Submitting task", "正在提交": "Submitting", "正在生成": "Generating", "正在下载": "Downloading", "正在下载结果": "Downloading result", "生成完成": "Generation complete", "提交中": "Submitting", "下载中": "Downloading",
   "已取消剩余任务": "Remaining tasks cancelled", "批量生成失败": "Batch generation failed", "已创建 AI 绘图节点": "AI image node created",
   "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
@@ -103,7 +114,7 @@ const UI_EN = {
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
-  "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key",
+  "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
@@ -136,6 +147,9 @@ function translateEnglishString(source) {
     [/^已导入 (\d+) 张图片$/, "Imported $1 images"], [/^已创建编组节点，包含 (\d+) 张图片$/, "Created a group containing $1 images"],
     [/^(\d+) 张图片已生成$/, "$1 images generated"], [/^批量生成 (\d+)\/(\d+)$/, "Batch generation $1/$2"],
     [/^拆分生成 (\d+)\/(\d+)$/, "Split generation $1/$2"], [/^AI生成中 (\d+)%$/, "AI generating $1%"],
+    [/^等待中 · 已完成 (\d+)\/(\d+)$/, "Waiting · $1/$2 completed"], [/^正在提交 · 已完成 (\d+)\/(\d+)$/, "Submitting · $1/$2 completed"],
+    [/^正在生成 · 已完成 (\d+)\/(\d+)$/, "Generating · $1/$2 completed"], [/^正在下载 · 已完成 (\d+)\/(\d+)$/, "Downloading · $1/$2 completed"],
+    [/^已完成 (\d+)\/(\d+)$/, "$1/$2 completed"], [/^完成 (\d+)\/(\d+)，失败 (\d+)$/, "$1/$2 completed, $3 failed"], [/^已取消，完成 (\d+)\/(\d+)$/, "Cancelled, $1/$2 completed"],
     [/^收集输出 (\d+)\/(\d+)$/, "Collecting output $1/$2"], [/^写入文件 (\d+)\/(\d+)$/, "Writing files $1/$2"],
     [/^任务(\d+)$/, "Task $1"], [/^共 (\d+) 个任务（(\d+) 个节点）· 双击标题放大$/, "$1 tasks ($2 nodes) · Double-click the title to maximize"],
     [/^积分：([\d.]+)（已用 ([\d.]+)）$/, "Credits: $1 ($2 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
@@ -312,7 +326,7 @@ const els = {
   gridSize: $("gridSizeInput"),
   snap: $("snapToggle"),
   exportFolder: $("exportFolderInput"),
-  openExportFolderBtn: $("openExportFolderBtn"),
+  copyExportPathBtn: $("copyExportPathBtn"),
   loadJson: $("loadJsonInput"),
   projectNameBtn: $("projectNameBtn"),
   projectMenu: $("projectMenu"),
@@ -541,7 +555,8 @@ function syncSettingsPanel() {
   if (els.languageSelect) els.languageSelect.value = uiLanguage;
   els.gridSize.value = state.settings.gridSize;
   els.snap.checked = state.settings.snap;
-  els.exportFolder.value = state.settings.exportFolderLabel || "export";
+  state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
+  els.exportFolder.value = state.settings.exportFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
   els.zipExportToggle.checked = state.settings.zipExport !== false;
   els.exportInputsToggle.checked = state.settings.exportInputs === true;
@@ -815,9 +830,10 @@ function setBatchProgress(total, done, tasks) {
   // Build task list with cancel buttons
   els.batchTaskList.classList.remove("hidden");
   els.batchTaskList.innerHTML = tasks.map((t, i) => {
-    let statusText = t.status === "done" ? "✓ 完成" : t.status === "failed" ? "✗ 失败" : t.status === "cancelled" ? "已取消" : t.status === "generating" ? "⏳ 生成中" : "等待中";
-    let cls = t.status === "done" ? "done" : t.status === "failed" ? "failed" : t.status === "cancelled" ? "cancelled" : t.status === "generating" ? "generating" : "";
-    let cancelBtn = (t.status === "waiting" || t.status === "generating") ? `<button class="batch-task-cancel" data-task="${i}">✕</button>` : "";
+    const active = ["submitting", "generating", "downloading"].includes(t.status);
+    let statusText = t.status === "done" ? "✓ 完成" : t.status === "failed" ? "✗ 失败" : t.status === "cancelled" ? "已取消" : t.status === "submitting" ? "⏳ 提交中" : t.status === "downloading" ? "⇩ 下载中" : t.status === "generating" ? "⏳ 生成中" : "等待中";
+    let cls = t.status === "done" ? "done" : t.status === "failed" ? "failed" : t.status === "cancelled" ? "cancelled" : active ? "generating" : "";
+    let cancelBtn = (t.status === "waiting" || active) ? `<button class="batch-task-cancel" data-task="${i}">✕</button>` : "";
     return `<div class="batch-task-item ${cls}"><span>${i + 1}. ${t.fileName || `任务${i + 1}`}</span><span>${statusText}${cancelBtn}</span></div>`;
   }).join("");
   // Bind task cancel clicks
@@ -825,6 +841,8 @@ function setBatchProgress(total, done, tasks) {
     btn.onclick = () => {
       const ti = parseInt(btn.dataset.task);
       if (tasks[ti]) tasks[ti].status = "cancelled";
+      const owner = tasks[ti]?.nodeId ? findNode(tasks[ti].nodeId) : state.nodes.find(n => n.batchTasks === tasks);
+      if (owner) syncAiNodeTaskProgress(owner, tasks[ti]?.nodeId ? tasks.filter(t => t.nodeId === tasks[ti].nodeId) : tasks);
       setBatchProgress(total, tasks.filter(t => t.status === "done").length, tasks);
     };
   });
@@ -1069,12 +1087,13 @@ function toggleDisabled(ids, disabled = null) {
   render();
 }
 
-function copySelection() {
+function copySelection(clearSystemClipboard = true) {
   const nodes = state.nodes.filter(n => state.selected.has(n.id)).map(stripCopiedImage);
   state.clipboard = {
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
   };
+  if (clearSystemClipboard && navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {});
   toast(`已复制 ${nodes.length} 个节点`);
 }
 
@@ -1174,6 +1193,58 @@ function aiNodeControls(node) {
   </div>`;
 }
 
+function setAiNodeProgress(node, status, label, percent = null, error = "") {
+  if (!node || node.type !== "ai-image") return;
+  node._aiProgress = {
+    status: ["waiting", "submitting", "generating", "downloading", "done", "failed", "cancelled"].includes(status) ? status : "generating",
+    label: String(label || "生成中"),
+    percent: Number.isFinite(Number(percent)) ? Math.max(0, Math.min(100, Number(percent))) : null,
+    error: String(error || ""),
+  };
+  renderNodes();
+}
+
+function clearAiNodeProgressSoon(node, delay = 1800) {
+  const expected = node?._aiProgress;
+  window.setTimeout(() => {
+    if (!node || node._aiProgress !== expected) return;
+    node._aiProgress = null;
+    renderNodes();
+  }, delay);
+}
+
+function syncAiNodeTaskProgress(node, tasks) {
+  if (!node || !tasks?.length) return;
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === "done").length;
+  const failed = tasks.filter(t => t.status === "failed").length;
+  const cancelled = tasks.filter(t => t.status === "cancelled").length;
+  const active = tasks.filter(t => ["submitting", "generating", "downloading"].includes(t.status));
+  const progressSum = tasks.reduce((sum, t) => sum + (t.status === "done" ? 100 : Number(t.progress) || 0), 0);
+  const percent = Math.round(progressSum / total);
+  if (done + failed + cancelled === total) {
+    if (failed) setAiNodeProgress(node, "failed", `完成 ${done}/${total}，失败 ${failed}`, percent, tasks.find(t => t.error)?.error || "");
+    else if (cancelled) setAiNodeProgress(node, "cancelled", `已取消，完成 ${done}/${total}`, percent);
+    else { setAiNodeProgress(node, "done", `已完成 ${done}/${total}`, 100); clearAiNodeProgressSoon(node); }
+    return;
+  }
+  const status = active.some(t => t.status === "downloading") ? "downloading" : active.some(t => t.status === "generating") ? "generating" : active.some(t => t.status === "submitting") ? "submitting" : "waiting";
+  const label = status === "waiting" ? `等待中 · 已完成 ${done}/${total}` : `${status === "submitting" ? "正在提交" : status === "downloading" ? "正在下载" : "正在生成"} · 已完成 ${done}/${total}`;
+  setAiNodeProgress(node, status, label, active.length || done ? percent : null);
+}
+
+function aiNodeProgressMarkup(node) {
+  const progress = node._aiProgress;
+  if (!progress) return "";
+  const hasPercent = progress.percent !== null;
+  const percentText = hasPercent ? `${Math.round(progress.percent)}%` : "";
+  const title = progress.error || progress.label;
+  return `<div class="ai-node-progress ai-progress-${progress.status}" title="${escapeHtml(title)}">
+    <div class="ai-node-progress-row"><span>${escapeHtml(progress.label)}</span><b>${percentText}</b></div>
+    <div class="ai-node-progress-track"><span class="${hasPercent ? "" : "indeterminate"}" style="${hasPercent ? `width:${progress.percent}%` : ""}"></span></div>
+  </div>`;
+}
+
 function aiImageBody(node) {
   const controls = aiNodeControls(node);
   if (node.generating) {
@@ -1181,7 +1252,7 @@ function aiImageBody(node) {
       <div class="ai-prompt">${escapeHtml(node.prompt || "等待提示词...")}</div>${controls}`;
   }
   if (node.generatedImage) {
-    return `<div class="image-preview"><img src="${node.generatedImage}" alt=""></div>
+    return `<div class="image-preview"><img src="${node.generatedImage}" alt="" draggable="false"></div>
       <div class="ai-actions">
         <button data-role="ai-generate" class="ai-generate-btn">重新生成</button>
         <button data-role="clear-image">清除</button>
@@ -1292,7 +1363,7 @@ async function submitGeneration(prompt, imageUrls, node) {
   return data.data[0].task_id;
 }
 
-async function pollTask(taskId) {
+async function pollTask(taskId, onProgress = null) {
   const maxAttempts = 120;
   let lastErr = null;
   for (let i = 0; i < maxAttempts; i++) {
@@ -1310,6 +1381,7 @@ async function pollTask(taskId) {
     if (data.error) throw new Error(data.error.message || "查询失败");
     if (data.data) {
       if (data.data.status === "completed") {
+        if (onProgress) onProgress(100, "completed");
         const images = data.data.result?.images;
         if (images && images.length && images[0].url) {
           const url = images[0].url;
@@ -1321,6 +1393,7 @@ async function pollTask(taskId) {
         throw new Error(data.data.error?.message || "生成失败");
       }
       const pct = data.data.progress || 0;
+      if (onProgress) onProgress(pct || null, data.data.status || "processing");
       setProgress(15 + pct * 0.75, `AI生成中 ${pct}%`);
     }
   }
@@ -1377,6 +1450,7 @@ async function generateSingle(node, upstream) {
   node.generating = true;
   node.generatedImage = null;
   node.taskId = null;
+  setAiNodeProgress(node, "submitting", "正在提交任务");
   render();
 
   try {
@@ -1384,9 +1458,11 @@ async function generateSingle(node, upstream) {
     await nextPaint();
     const taskId = await submitGeneration(texts.join("，"), imageUrls, node);
     node.taskId = taskId;
+    setAiNodeProgress(node, "generating", "正在生成");
     setProgress(10, "等待生成结果");
     await nextPaint();
-    const imageUrl = await pollTask(taskId);
+    const imageUrl = await pollTask(taskId, pct => setAiNodeProgress(node, "generating", "正在生成", pct));
+    setAiNodeProgress(node, "downloading", "正在下载结果", 96);
     setProgress(92, "下载生成图片");
     await nextPaint();
     const base64 = await fetchImageAsBase64(imageUrl);
@@ -1399,6 +1475,8 @@ async function generateSingle(node, upstream) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName: "ai_generated", files: [{ name: node.fileName, data: base64 }] }),
     }).catch(() => {});
+    setAiNodeProgress(node, "done", "生成完成", 100);
+    clearAiNodeProgressSoon(node);
     setProgress(100, "AI生成完成");
     pushHistory();
     render();
@@ -1407,6 +1485,7 @@ async function generateSingle(node, upstream) {
   } catch (err) {
     node.generating = false;
     node.taskId = null;
+    setAiNodeProgress(node, "failed", "生成失败", null, err.message);
     setProgress(100, "生成失败");
     hideProgressSoon();
     render();
@@ -1432,11 +1511,13 @@ async function generateBatchFromGroup(node, upstream) {
     result: null,
   }));
   node._batchCancelled = false;
+  syncAiNodeTaskProgress(node, node.batchTasks);
   render();
 
   els.batchCancelAllBtn.onclick = () => {
     node._batchCancelled = true;
     node.batchTasks.forEach(t => { if (t.status === "waiting") t.status = "cancelled"; });
+    syncAiNodeTaskProgress(node, node.batchTasks);
     setBatchProgress(totalTasks, node.batchTasks.filter(t => t.status === "done").length, node.batchTasks);
     toast("已取消剩余任务");
   };
@@ -1449,25 +1530,37 @@ async function generateBatchFromGroup(node, upstream) {
 
     const submitOne = async (t) => {
       if (node._batchCancelled || t.status === "cancelled") return;
-      t.status = "generating";
+      t.status = "submitting";
+      t.progress = null;
+      syncAiNodeTaskProgress(node, node.batchTasks);
       setBatchProgress(totalTasks, node.batchTasks.filter(bt => bt.status === "done").length, node.batchTasks);
       await nextPaint();
       try {
         const taskImages = [...regularUrls, groupImages[t.index].image];
         t.taskId = await submitGeneration(prompt, taskImages, node);
-        if (node._batchCancelled) return;
-        const imageUrl = await pollTask(t.taskId);
-        if (node._batchCancelled) return;
+        if (node._batchCancelled || t.status === "cancelled") { t.status = "cancelled"; return; }
+        t.status = "generating";
+        syncAiNodeTaskProgress(node, node.batchTasks);
+        const imageUrl = await pollTask(t.taskId, pct => {
+          t.progress = pct;
+          syncAiNodeTaskProgress(node, node.batchTasks);
+        });
+        if (node._batchCancelled || t.status === "cancelled") { t.status = "cancelled"; return; }
+        t.status = "downloading";
+        t.progress = 96;
+        syncAiNodeTaskProgress(node, node.batchTasks);
         t.result = await fetchImageAsBase64(imageUrl);
         t.status = "done";
+        t.progress = 100;
       } catch (err) {
-        if (node._batchCancelled) return;
-        t.status = "failed";
-        t.error = err.message;
+        if (node._batchCancelled) t.status = "cancelled";
+        else { t.status = "failed"; t.error = err.message; }
+      } finally {
+        running--;
+        syncAiNodeTaskProgress(node, node.batchTasks);
+        setBatchProgress(totalTasks, node.batchTasks.filter(bt => bt.status === "done").length, node.batchTasks);
+        await nextPaint();
       }
-      running--;
-      setBatchProgress(totalTasks, node.batchTasks.filter(bt => bt.status === "done").length, node.batchTasks);
-      await nextPaint();
     };
 
     const startNext = () => {
@@ -1503,6 +1596,7 @@ async function generateBatchFromGroup(node, upstream) {
 
     if (node._batchCancelled) {
       node.batchTasks.forEach(t => { if (t.status === "waiting") t.status = "cancelled"; });
+      syncAiNodeTaskProgress(node, node.batchTasks);
     }
 
     // Create resulting image nodes
@@ -1520,6 +1614,7 @@ async function generateBatchFromGroup(node, upstream) {
     }
     node.generating = false;
     node._batchCancelled = false;
+    syncAiNodeTaskProgress(node, node.batchTasks);
     pushHistory();
     render();
     toast(`${seqNum} 张图片已生成`);
@@ -1527,7 +1622,7 @@ async function generateBatchFromGroup(node, upstream) {
   } catch (err) {
     node.generating = false;
     node._batchCancelled = false;
-    node.batchTasks = [];
+    setAiNodeProgress(node, "failed", "批量生成失败", null, err.message);
     render();
     toast("批量生成失败: " + err.message);
     console.error(err);
@@ -1688,7 +1783,8 @@ function renderNodes() {
   els.nodes.innerHTML = "";
   for (const node of state.nodes) {
     const div = document.createElement("div");
-    div.className = `node ${node.type} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""}`;
+    const progressClass = node.type === "ai-image" && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
+    div.className = `node ${node.type} ${progressClass} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""}`;
     div.dataset.id = node.id;
     div.style.left = `${node.x}px`;
     div.style.top = `${node.y}px`;
@@ -1723,7 +1819,7 @@ function nodeTemplate(node) {
       const show = Math.min(totalImgs.length, maxShow);
       for (let i = 0; i < show; i++) {
         const src = totalImgs[i].type === "ai-image" ? totalImgs[i].generatedImage : totalImgs[i].image;
-        if (src) thumbs += `<img src="${src}" alt="">`;
+        if (src) thumbs += `<img src="${src}" alt="" draggable="false">`;
       }
       if (totalImgs.length > maxShow) thumbs += `<div class="group-more">+${totalImgs.length - maxShow}</div>`;
       body = `<div class="group-preview">${thumbs || "暂无图片"}</div>
@@ -1735,7 +1831,7 @@ function nodeTemplate(node) {
         const maxShow = 8;
         const show = Math.min(total, maxShow);
         for (let i = 0; i < show; i++) {
-          thumbs += `<img src="${node.images[i].image}" alt="">`;
+          thumbs += `<img src="${node.images[i].image}" alt="" draggable="false">`;
         }
         if (total > maxShow) thumbs += `<div class="group-more">+${total - maxShow}</div>`;
       }
@@ -1748,14 +1844,14 @@ function nodeTemplate(node) {
     }
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
-    body = `<div class="image-preview" title="双击放大预览">${node.image ? `<img src="${node.image}" alt="">` : "无图片"}${seqTag}</div>
+    body = `<div class="image-preview" title="双击放大预览">${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}</div>
       <div class="image-actions">
         <button data-role="upload">上传</button>
         <button data-role="clear-image">清除</button>
       </div>
       <div class="file-hint">${escapeHtml(node.fileName || "图片节点粘贴后为空")}</div>`;
   } else if (node.type === "ai-image") {
-    body = aiImageBody(node);
+    body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
@@ -1942,12 +2038,6 @@ els.viewport.addEventListener("mousedown", ev => {
     if (!state.selected.has(id)) state.selected = new Set([id]);
     drag = { type: "resize", nodeId: id, sx: ev.clientX, sy: ev.clientY, sw: node.w, sh: node.h };
     renderNodes();
-    return;
-  }
-  if (nodeEl && ev.target.closest(".image-preview,.ai-preview,.group-preview")) {
-    const id = nodeEl.dataset.id;
-    if (!ev.shiftKey && !state.selected.has(id)) state.selected = new Set([id]);
-    else if (ev.shiftKey) state.selected.add(id);
     return;
   }
   if (nodeEl && interactive) {
@@ -2614,13 +2704,6 @@ window.addEventListener("keydown", ev => {
   if (ev.key === "Delete") deleteNodes(state.selected);
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") undo();
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "y") redo();
-  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "c") copySelection();
-  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "v" && state.clipboard) {
-    ev.preventDefault();
-    pasteHandledByClipboardEvent = true;
-    pasteNodes(state.clipboard);
-    window.setTimeout(() => { pasteHandledByClipboardEvent = false; }, 100);
-  }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "g") {
     ev.preventDefault();
     groupSelection();
@@ -2631,21 +2714,23 @@ window.addEventListener("keyup", ev => {
   if (ev.code === "Space") spaceDown = false;
 });
 
-let pasteHandledByClipboardEvent = false;
+window.addEventListener("copy", ev => {
+  if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
+  ev.preventDefault();
+  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
+  ev.clipboardData.setData("text/plain", "");
+  copySelection(false);
+});
 
 window.addEventListener("paste", async ev => {
-  if (state.clipboard && pasteHandledByClipboardEvent) {
-    ev.preventDefault();
-    return;
-  }
   const data = ev.clipboardData;
+  const internalNodeCopy = !!data && Array.from(data.types || []).includes("application/x-canvasflow-nodes");
   const hasExternalContent = !!data && (Array.from(data.items || []).some(item => item.kind === "file" && item.type.startsWith("image/")) || !!data.getData("text/plain").trim());
   if (ev.target === els.composerText && data) {
     const imageItem = Array.from(data.items || []).find(item => item.kind === "file" && item.type.startsWith("image/"));
     if (imageItem) {
       const file = imageItem.getAsFile();
       if (file) {
-        pasteHandledByClipboardEvent = true;
         ev.preventDefault();
         await createFromImageFile(file);
         return;
@@ -2654,12 +2739,130 @@ window.addEventListener("paste", async ev => {
     return;
   }
   if (ev.target.matches("textarea,input,select")) return;
-  if (hasExternalContent) pasteHandledByClipboardEvent = true;
-  const handled = await createNodeFromClipboard(ev);
-  if (handled) {
+  if (internalNodeCopy && state.clipboard?.nodes?.length) {
     ev.preventDefault();
+    pasteNodes(state.clipboard);
+    return;
   }
-  window.setTimeout(() => { pasteHandledByClipboardEvent = false; }, 300);
+  if (hasExternalContent && await createNodeFromClipboard(ev)) {
+    ev.preventDefault();
+    return;
+  }
+  if (state.clipboard?.nodes?.length) {
+    ev.preventDefault();
+    pasteNodes(state.clipboard);
+  }
+});
+
+function isSupportedImageFile(file) {
+  return !!file && (String(file.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name || ""));
+}
+
+async function droppedImageSources(dataTransfer) {
+  const files = Array.from(dataTransfer?.files || []).filter(isSupportedImageFile);
+  if (files.length) {
+    return Promise.all(files.map(async file => ({ image: await fileToDataUrl(file), fileName: file.name || `drop_${timestamp()}.png`, mime: file.type || "image/png" })));
+  }
+  const urls = [];
+  const uriList = String(dataTransfer?.getData("text/uri-list") || "").split(/\r?\n/).map(v => v.trim()).filter(v => v && !v.startsWith("#"));
+  urls.push(...uriList);
+  if (!urls.length) {
+    const html = dataTransfer?.getData("text/html") || "";
+    const src = html ? new DOMParser().parseFromString(html, "text/html").querySelector("img")?.src : "";
+    if (src) urls.push(src);
+  }
+  const uniqueUrls = [...new Set(urls)].filter(url => /^(https?:|data:image\/)/i.test(url));
+  const results = [];
+  for (const url of uniqueUrls) {
+    if (url.startsWith("data:image/")) {
+      const mime = url.match(/^data:([^;,]+)/)?.[1] || "image/png";
+      results.push({ image: url, fileName: `drop_${timestamp()}.${extensionFor("", mime)}`, mime });
+      continue;
+    }
+    const resp = await fetch("/api/download-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: url }) });
+    const data = await resp.json();
+    if (!resp.ok || !data.base64) throw new Error(data.error || `HTTP ${resp.status}`);
+    const urlName = decodeURIComponent(new URL(url).pathname.split("/").pop() || "").split("?")[0];
+    const mime = data.base64.match(/^data:([^;,]+)/)?.[1] || "image/png";
+    results.push({ image: data.base64, fileName: /\.(png|jpe?g|webp|gif)$/i.test(urlName) ? urlName : `drop_${timestamp()}.${extensionFor("", mime)}`, mime });
+  }
+  return results;
+}
+
+let imageDragDepth = 0;
+function clearImageDragState() {
+  imageDragDepth = 0;
+  els.viewport.classList.remove("image-drag-active");
+  els.nodes.querySelectorAll(".image-drop-target").forEach(el => el.classList.remove("image-drop-target"));
+}
+
+els.nodes.addEventListener("dragstart", ev => {
+  if (!ev.target.closest("img")) return;
+  if (ev.dataTransfer) ev.dataTransfer.setData("application/x-canvasflow-internal-image", "1");
+  ev.preventDefault();
+  clearImageDragState();
+});
+
+els.viewport.addEventListener("dragenter", ev => {
+  if (!Array.from(ev.dataTransfer?.types || []).includes("Files") && !ev.dataTransfer?.getData("text/uri-list") && !ev.dataTransfer?.getData("text/html")) return;
+  ev.preventDefault();
+  imageDragDepth++;
+  els.viewport.classList.add("image-drag-active");
+});
+
+els.viewport.addEventListener("dragover", ev => {
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+  els.nodes.querySelectorAll(".image-drop-target").forEach(el => el.classList.remove("image-drop-target"));
+  ev.target.closest(".node.image")?.classList.add("image-drop-target");
+});
+
+els.viewport.addEventListener("dragleave", ev => {
+  imageDragDepth = Math.max(0, imageDragDepth - 1);
+  if (!imageDragDepth || !els.viewport.contains(ev.relatedTarget)) clearImageDragState();
+});
+
+els.viewport.addEventListener("drop", async ev => {
+  ev.preventDefault();
+  if (ev.dataTransfer?.getData("application/x-canvasflow-internal-image") === "1") {
+    clearImageDragState();
+    return;
+  }
+  const targetNodeEl = ev.target.closest(".node.image");
+  clearImageDragState();
+  try {
+    const sources = await droppedImageSources(ev.dataTransfer);
+    if (!sources.length) return toast("未发现支持的图片；请拖入 PNG、JPG、WebP 或 GIF 文件");
+    if (targetNodeEl && sources.length === 1) {
+      const node = findNode(targetNodeEl.dataset.id);
+      if (!node) return;
+      node.image = sources[0].image;
+      node.fileName = sources[0].fileName;
+      node.mime = sources[0].mime;
+      state.selected = new Set([node.id]);
+      pushHistory();
+      render();
+      toast("已替换图片节点");
+      return;
+    }
+    const p = screenToWorld(ev.clientX, ev.clientY);
+    const cols = Math.min(sources.length, 4);
+    const createdIds = [];
+    sources.forEach((source, i) => {
+      const node = addNode("image", p.x + (i % cols) * 280, p.y + Math.floor(i / cols) * 220, false);
+      node.image = source.image;
+      node.fileName = source.fileName;
+      node.mime = source.mime;
+      createdIds.push(node.id);
+    });
+    state.selected = new Set(createdIds);
+    pushHistory();
+    render();
+    toast(`已拖入 ${sources.length} 张图片`);
+  } catch (err) {
+    console.error("[拖入] 图片读取失败", err);
+    toast(`图片拖入失败：${err.message || "文件无法读取"}；请检查图片格式或网络后重试`);
+  }
 });
 
 function newPage() {
@@ -3015,7 +3218,7 @@ els.exportInputsToggle.onchange = () => {
 };
 
 $("chooseFolderBtn").onclick = chooseFolder;
-els.openExportFolderBtn.onclick = openExportFolder;
+els.copyExportPathBtn.onclick = copyExportPath;
 
 els.exportFolder.onchange = () => {
   state.settings.exportFolderLabel = els.exportFolder.value.trim();
@@ -3265,27 +3468,28 @@ async function chooseFolder() {
   }
 }
 
-async function openExportFolder() {
+async function copyExportPath() {
   const folderPath = els.exportFolder.value.trim();
   if (!folderPath) {
     toast("请先设置导出文件夹路径");
-    return;
+    return false;
   }
   try {
-    const resp = await fetch("/api/open-folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderPath }),
-    });
-    const data = await resp.json();
-    if (data.success) {
-      toast(`已打开文件夹: ${folderPath}`);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(folderPath);
     } else {
-      toast(`无法打开文件夹：${data.error || "路径不存在"}；请重新设置完整路径`);
+      els.exportFolder.focus();
+      els.exportFolder.select();
+      if (!document.execCommand("copy")) throw new Error("copy command failed");
     }
+    toast(`已复制导出路径：${folderPath}`);
+    return true;
   } catch (err) {
-    console.error("[导出] 打开文件夹失败", err);
-    toast("无法打开文件夹：本地服务没有响应；请重启程序后重试");
+    console.error("[导出] 复制路径失败", err);
+    els.exportFolder.focus();
+    els.exportFolder.select();
+    toast("无法自动复制路径：可能是浏览器权限受限；已为你选中完整路径，请按 Ctrl+C 复制");
+    return false;
   }
 }
 
@@ -3710,6 +3914,10 @@ function closeExecuteDialog() {
 }
 
 async function executeAllAiNodes() {
+  if (!state.settings.apiKey) {
+    toast("请先在设置中填入 API Key");
+    return;
+  }
   // 先拆分多输入 AI 节点
   const aiNodesToCheck = state.nodes.filter(n => n.type === "ai-image" && !n.disabled && !n.generating);
   let anySplit = false;
@@ -3741,10 +3949,22 @@ async function executeAllAiNodes() {
   const totalTasks = allTasks.length;
   const MAX_CONCURRENT = 5;
   let cancelled = false;
+  const progressTasksByNode = new Map();
+  allTasks.forEach(t => {
+    if (!progressTasksByNode.has(t.nodeId)) progressTasksByNode.set(t.nodeId, []);
+    progressTasksByNode.get(t.nodeId).push(t);
+  });
+  progressTasksByNode.forEach((tasks, nodeId) => {
+    const node = findNode(nodeId);
+    if (!node) return;
+    node.generating = true;
+    syncAiNodeTaskProgress(node, tasks);
+  });
 
   els.batchCancelAllBtn.onclick = () => {
     cancelled = true;
     allTasks.forEach(t => { if (t.status === "waiting") t.status = "cancelled"; });
+    progressTasksByNode.forEach((tasks, nodeId) => syncAiNodeTaskProgress(findNode(nodeId), tasks));
     setBatchProgress(totalTasks, allTasks.filter(t => t.status === "done").length, allTasks);
     toast("已取消剩余任务");
   };
@@ -3757,11 +3977,15 @@ async function executeAllAiNodes() {
 
   const runOne = async (t) => {
     if (cancelled || t.status === "cancelled") return;
-    t.status = "generating";
+    const node = findNode(t.nodeId);
+    if (!node) return;
+    const nodeTasks = progressTasksByNode.get(t.nodeId) || [t];
+    t.status = "submitting";
+    t.progress = null;
+    syncAiNodeTaskProgress(node, nodeTasks);
     setBatchProgress(totalTasks, allTasks.filter(bt => bt.status === "done").length, allTasks);
     await nextPaint();
     try {
-      const node = findNode(t.nodeId);
       const upstream = collectUpstreamForAI(t.nodeId);
       const regularUrls = upstream.images.map(img => img.image);
       const prompt = upstream.texts.join("，");
@@ -3772,19 +3996,29 @@ async function executeAllAiNodes() {
         taskImages = regularUrls;
       }
       t.taskId = await submitGeneration(prompt, taskImages, node);
-      if (cancelled) return;
-      const imageUrl = await pollTask(t.taskId);
-      if (cancelled) return;
+      if (cancelled || t.status === "cancelled") { t.status = "cancelled"; return; }
+      t.status = "generating";
+      syncAiNodeTaskProgress(node, nodeTasks);
+      const imageUrl = await pollTask(t.taskId, pct => {
+        t.progress = pct;
+        syncAiNodeTaskProgress(node, nodeTasks);
+      });
+      if (cancelled || t.status === "cancelled") { t.status = "cancelled"; return; }
+      t.status = "downloading";
+      t.progress = 96;
+      syncAiNodeTaskProgress(node, nodeTasks);
       t.result = await fetchImageAsBase64(imageUrl);
       t.status = "done";
+      t.progress = 100;
     } catch (err) {
-      if (cancelled) return;
-      t.status = "failed";
-      t.error = err.message;
+      if (cancelled) t.status = "cancelled";
+      else { t.status = "failed"; t.error = err.message; }
+    } finally {
+      running--;
+      syncAiNodeTaskProgress(node, nodeTasks);
+      setBatchProgress(totalTasks, allTasks.filter(bt => bt.status === "done").length, allTasks);
+      await nextPaint();
     }
-    running--;
-    setBatchProgress(totalTasks, allTasks.filter(bt => bt.status === "done").length, allTasks);
-    await nextPaint();
   };
 
   function pump() {
@@ -3800,7 +4034,7 @@ async function executeAllAiNodes() {
   // 每 1 秒检查队列
   await new Promise(resolve => {
     const interval = setInterval(() => {
-      if (cancelled) { clearInterval(interval); resolve(); return; }
+      if (cancelled) { if (running === 0) { clearInterval(interval); resolve(); } return; }
       pump();
       const allDone = allTasks.every(t => t.status === "done" || t.status === "failed" || t.status === "cancelled");
       if (allDone && running === 0) { clearInterval(interval); resolve(); }
@@ -3810,6 +4044,12 @@ async function executeAllAiNodes() {
   if (cancelled) {
     allTasks.forEach(t => { if (t.status === "waiting") t.status = "cancelled"; });
   }
+  progressTasksByNode.forEach((tasks, nodeId) => {
+    const node = findNode(nodeId);
+    if (!node) return;
+    node.generating = false;
+    syncAiNodeTaskProgress(node, tasks);
+  });
 
   // 为已完成的任务创建图片节点（按 AI 节点分组排列）
   const byNode = new Map();
@@ -3828,6 +4068,8 @@ async function executeAllAiNodes() {
       imgNode.image = t.result;
       imgNode.fileName = t.fileName || `ai_batch_${i + 1}.png`;
       imgNode.mime = "image/png";
+      imgNode.aiSourceNodeId = node.id;
+      imgNode.aiBatchIndex = t.groupIdx >= 0 ? t.groupIdx : null;
     });
   });
   const doneCount = allTasks.filter(t => t.status === "done").length;
@@ -3860,6 +4102,16 @@ document.addEventListener("keydown", ev => {
 
 async function init() {
   await loadGlobalLibraryFromDisk();
+  try {
+    const resp = await fetch("/api/runtime-paths", { cache: "no-store" });
+    const data = await resp.json();
+    if (!resp.ok || !data.exportFolder) throw new Error(data.error || `HTTP ${resp.status}`);
+    runtimeExportFolder = data.exportFolder;
+    console.info("[初始化] 默认导出目录", { exportFolder: runtimeExportFolder });
+  } catch (err) {
+    console.error("[初始化] 无法识别默认导出目录", err);
+    toast("无法识别程序所在目录：将暂时使用 export；请在设置中确认完整导出路径");
+  }
   if (!loadPagesFromStorage()) {
     const page = blankPage("项目1");
     state.pages = [page];

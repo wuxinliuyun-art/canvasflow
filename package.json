@@ -1,6 +1,6 @@
 {
   "name": "canvasflow",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "CanvasFlow visual AI image workflow",
   "main": "server.js",
   "bin": "server.js",
@@ -11,8 +11,7 @@
     "assets": [
       "index.html",
       "app.js",
-      "styles.css",
-      "download/images/*"
+      "styles.css"
     ],
     "outputPath": "."
   }

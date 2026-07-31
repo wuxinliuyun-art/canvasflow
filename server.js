@@ -2,6 +2,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { execSync } = require("child_process");
 
 const root = __dirname;
@@ -12,7 +13,53 @@ const mime = {
   ".css": "text/css;charset=utf-8",
   ".js": "text/javascript;charset=utf-8",
   ".json": "application/json;charset=utf-8",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
 };
+
+const exportBrowseRoots = new Map();
+function openDefaultBrowser(url) {
+  if (process.env.CANVASFLOW_NO_BROWSER === "1") {
+    console.info("[启动] 已跳过自动打开浏览器（测试模式）");
+    return;
+  }
+  if (process.platform !== "win32") {
+    console.info(`[启动] 请在浏览器中打开: ${url}`);
+    return;
+  }
+  const { execFile } = require("child_process");
+  const encodedUrl = Buffer.from(url, "utf16le").toString("base64");
+  const script = `$ErrorActionPreference='Stop'; $u=[System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encodedUrl}')); Start-Process -FilePath $u`;
+  const encodedScript = Buffer.from(script, "utf16le").toString("base64");
+  const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 15000 }, err => {
+    if (err) console.error("[启动] 自动打开默认浏览器失败", { code: err.code, killed: err.killed, message: err.message });
+    else console.info("[启动] 已请求默认浏览器打开", { url });
+  });
+}
+
+function configuredExportRoot(folderPath) {
+  return folderPath && folderPath !== "export"
+    ? (path.isAbsolute(folderPath) ? path.normalize(folderPath) : path.resolve(dataRoot, folderPath))
+    : path.join(dataRoot, "export");
+}
+function htmlEscape(value) {
+  return String(value || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function exportBrowseTarget(token, relativePath = "") {
+  const session = exportBrowseRoots.get(token);
+  if (!session || session.expires < Date.now()) { exportBrowseRoots.delete(token); return null; }
+  const normalized = String(relativePath || "").replace(/\\/g, "/").split("/").filter(part => part && part !== ".");
+  if (normalized.includes("..")) return null;
+  const target = path.resolve(session.root, ...normalized);
+  const rootPath = path.resolve(session.root);
+  if (target !== rootPath && !target.startsWith(rootPath + path.sep)) return null;
+  if (fs.existsSync(target)) {
+    const realTarget = fs.realpathSync(target);
+    if (realTarget !== rootPath && !realTarget.startsWith(rootPath + path.sep)) return null;
+    return { session, target: realTarget, relative: normalized.join("/") };
+  }
+  return { session, target, relative: normalized.join("/") };
+}
 
 var staticCache = {};
 (function() {
@@ -119,6 +166,68 @@ async function requestHandler(req, res) {
   const parsedUrl = new URL(req.url, "http://localhost");
   let pathname = decodeURIComponent(parsedUrl.pathname);
 
+  if (pathname === "/api/runtime-paths" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ dataRoot, exportFolder: path.join(dataRoot, "export") }));
+    return;
+  }
+
+  if (pathname === "/api/export-browser" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req)).toString("utf-8"));
+      const exportRoot = configuredExportRoot(String(body.folderPath || "export"));
+      if (!fs.existsSync(exportRoot)) fs.mkdirSync(exportRoot, { recursive: true });
+      const realRoot = fs.realpathSync(exportRoot);
+      const token = crypto.randomBytes(18).toString("hex");
+      const now = Date.now();
+      for (const [key, value] of exportBrowseRoots) if (value.expires < now) exportBrowseRoots.delete(key);
+      exportBrowseRoots.set(token, { root: realRoot, label: exportRoot, expires: now + 15 * 60 * 1000 });
+      console.log(`[导出查看] 已授权目录: ${realRoot}`);
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ success: true, url: `/export-browser?token=${token}` }));
+    } catch (err) {
+      console.error("[导出查看] 创建访问令牌失败", err);
+      res.writeHead(500, { "Content-Type": "application/json;charset=utf-8" });
+      res.end(JSON.stringify({ error: `无法查看导出目录：${err.message}` }));
+    }
+    return;
+  }
+
+  if (pathname === "/export-browser" && req.method === "GET") {
+    const token = parsedUrl.searchParams.get("token") || "";
+    const info = exportBrowseTarget(token, parsedUrl.searchParams.get("path") || "");
+    if (!info || !fs.existsSync(info.target) || !fs.statSync(info.target).isDirectory()) {
+      res.writeHead(403, { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" });
+      res.end("<!doctype html><meta charset='utf-8'><title>无法查看</title><p>访问已过期或目录不存在，请返回 CanvasFlow 重新打开。</p>");
+      return;
+    }
+    const entries = fs.readdirSync(info.target, { withFileTypes: true }).sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, "zh-CN"));
+    const parent = info.relative.split("/").slice(0, -1).join("/");
+    const rows = entries.map(entry => {
+      const relative = [info.relative, entry.name].filter(Boolean).join("/");
+      const query = `token=${encodeURIComponent(token)}&path=${encodeURIComponent(relative)}`;
+      if (entry.isDirectory()) return `<a class="item folder" href="/export-browser?${query}"><span class="icon">📁</span><span>${htmlEscape(entry.name)}</span></a>`;
+      const ext = path.extname(entry.name).toLowerCase();
+      const isImage = [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext);
+      const preview = isImage ? `<img src="/api/export-browser-file?${query}" alt="">` : `<span class="icon">📄</span>`;
+      return `<a class="item file" href="/api/export-browser-file?${query}" target="_blank" rel="noopener">${preview}<span>${htmlEscape(entry.name)}</span></a>`;
+    }).join("");
+    const upLink = info.relative ? `<a class="up" href="/export-browser?token=${encodeURIComponent(token)}&path=${encodeURIComponent(parent)}">← 返回上级</a>` : "";
+    const page = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasFlow 导出文件</title><style>body{margin:0;padding:28px;font:14px system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7fb;color:#172033}main{max-width:1100px;margin:auto}header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:20px}h1{margin:0 0 5px;font-size:24px}p{margin:0;color:#667085;word-break:break-all}.up{color:#3467eb;text-decoration:none}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.item{min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:1px solid #e3e7ef;border-radius:14px;background:#fff;color:#172033;text-decoration:none;box-shadow:0 5px 18px rgba(30,45,70,.05);overflow:hidden}.item:hover{border-color:#7aa2ff;transform:translateY(-1px)}.item img{width:100%;height:92px;object-fit:contain;border-radius:8px;background:#f4f5f7}.item span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.icon{font-size:38px}.empty{padding:50px;text-align:center;color:#98a2b3;background:#fff;border-radius:14px}@media(max-width:600px){body{padding:16px}header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}</style></head><body><main><header><div><h1>CanvasFlow 导出文件</h1><p>${htmlEscape(info.session.label)}${info.relative ? ` / ${htmlEscape(info.relative)}` : ""}</p></div>${upLink}</header>${rows ? `<div class="grid">${rows}</div>` : '<div class="empty">此文件夹暂无内容</div>'}</main></body></html>`;
+    res.writeHead(200, { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+    res.end(page);
+    return;
+  }
+
+  if (pathname === "/api/export-browser-file" && req.method === "GET") {
+    const info = exportBrowseTarget(parsedUrl.searchParams.get("token") || "", parsedUrl.searchParams.get("path") || "");
+    if (!info || !fs.existsSync(info.target) || !fs.statSync(info.target).isFile()) { res.writeHead(404); res.end("Not found"); return; }
+    const ext = path.extname(info.target).toLowerCase();
+    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream", "Content-Length": fs.statSync(info.target).size, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+    fs.createReadStream(info.target).pipe(res);
+    return;
+  }
+
   if (pathname === "/api/custom-library" && req.method === "GET") {
     try {
       const libraryPath = path.join(dataRoot, "data", "custom-library.json");
@@ -209,14 +318,19 @@ async function requestHandler(req, res) {
       return;
     }
     const { execFile } = require("child_process");
-    const pickerScript = "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择 CanvasFlow 导出文件夹'; $d.ShowNewFolderButton=$true; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.SelectedPath}";
-    execFile("powershell.exe", ["-NoProfile", "-STA", "-Command", pickerScript], { encoding: "utf8", windowsHide: true }, (err, stdout) => {
+    const pickerScript = "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Windows.Forms; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $owner=New-Object System.Windows.Forms.Form; $owner.TopMost=$true; $owner.ShowInTaskbar=$false; $owner.Opacity=0; $owner.StartPosition='CenterScreen'; $owner.Show(); $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择 CanvasFlow 导出文件夹'; $d.ShowNewFolderButton=$true; try { if($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK){ Write-Output $d.SelectedPath } } finally { $d.Dispose(); $owner.Close(); $owner.Dispose() }";
+    const encodedScript = Buffer.from(pickerScript, "utf16le").toString("base64");
+    const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    console.info("[导出] 打开文件夹选择窗口");
+    execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 300000 }, (err, stdout) => {
       if (err) {
+        console.error("[导出] 文件夹选择窗口失败", { code: err.code, killed: err.killed, message: err.message });
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "无法打开文件夹选择窗口" }));
+        res.end(JSON.stringify({ error: "无法打开文件夹选择窗口，可能被安全软件拦截；请直接粘贴完整路径" }));
         return;
       }
       const folderPath = String(stdout || "").trim();
+      console.info("[导出] 文件夹选择完成", { selected: Boolean(folderPath) });
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
       res.end(JSON.stringify(folderPath ? { success: true, folderPath } : { success: false, cancelled: true }));
     });
@@ -234,11 +348,18 @@ async function requestHandler(req, res) {
         return;
       }
       const { execFile } = require("child_process");
-      execFile("explorer.exe", [absPath], { windowsHide: true }, (err) => {
+      const encodedPath = Buffer.from(absPath, "utf16le").toString("base64");
+      const openScript = `$ErrorActionPreference='Stop'; $p=[System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encodedPath}')); $explorer=Join-Path $env:WINDIR 'explorer.exe'; $quotedPath='"' + $p + '"'; $process=Start-Process -FilePath $explorer -ArgumentList @($quotedPath) -PassThru; if($null -eq $process){ throw '资源管理器进程未创建' }`;
+      const encodedScript = Buffer.from(openScript, "utf16le").toString("base64");
+      const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      console.info("[导出] 请求打开导出文件夹", { path: absPath });
+      execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 15000 }, (err) => {
         if (err) {
+          console.error("[导出] 打开导出文件夹失败", { code: err.code, killed: err.killed, message: err.message });
           res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "无法打开文件夹" }));
+          res.end(JSON.stringify({ error: "Windows Shell 未能打开文件夹，可能被安全软件拦截" }));
         } else {
+          console.info("[导出] 已提交文件夹打开请求", { path: absPath });
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true }));
         }
@@ -490,11 +611,13 @@ server.on("error", (err) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
+  const appUrl = `http://127.0.0.1:${port}/`;
   console.log("=".repeat(44));
   console.log("  CanvasFlow 服务器已启动");
-  console.log(`  访问地址: http://127.0.0.1:${port}/`);
+  console.log(`  访问地址: ${appUrl}`);
   console.log("  关闭本窗口即可停止服务器");
   console.log("=".repeat(44));
+  openDefaultBrowser(appUrl);
 });
 
 // 关闭窗口时自动结束进程
