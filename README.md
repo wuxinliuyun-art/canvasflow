@@ -29,10 +29,12 @@ A visual node-based canvas for combining text and images through drag-and-drop c
 - **Drag images onto the canvas** — Drop local images or supported web images to create image nodes; dropping one image onto an existing image node replaces it.
 - **Reusable custom assets** — Save complete text blocks and images locally, then insert them quickly from the canvas context menu.
 - **Per-node AI progress** — Every AI Image node shows its own generation stage and progress while batch tasks continue independently.
+- **Camera-angle transformation (Beta)** — Connect one reference image, adjust pitch, yaw, roll, and zoom across ±180°, optionally reverse left/right wording, then generate a connected image node with Gemini 3.1 Flash. Prompts describe changes relative to the source view instead of assuming a top-down or eye-level camera.
 - **Quick custom-asset insertion** — Right-click an empty area and choose a saved text or image asset from the compact submenu.
 - **Automatic port cleanup** — Detect and release an occupied server port during startup to prevent launch failures.
 - **Bilingual interface** — Switch between Simplified Chinese and English in Settings. The selected language is remembered automatically.
 - **Windows-friendly startup** — The packaged EXE starts the local server and opens CanvasFlow in the default browser automatically.
+- **Automatic updates** — Checks GitHub Releases at startup, downloads the single Windows ZIP, backs up the current project, then replaces and restarts the packaged EXE.
 
 ---
 
@@ -121,6 +123,7 @@ Click the semi-transparent keyboard button in the lower-left corner to open the 
 | **Text Node** | Enter a prompt and resize the node from its lower-right corner. |
 | **Image Node** | Upload or paste an image to use as a reference. |
 | **AI Image Node** | Connect text and image nodes, then generate an image with AI. |
+| **Angle Change Node (Beta)** | Adjust camera pitch, yaw, roll, and zoom from a connected reference image, then generate the selected viewpoint. |
 | **Group Node** | Package multiple nodes together with expanded and thumbnail preview modes. |
 | **Output Node** | Mark an export target by connecting it to the node you want to export. |
 
@@ -156,6 +159,8 @@ Save frequently used reference images—such as model photos, logos, or watermar
 ### Custom Text and Image Templates
 
 CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
+
+On a fresh installation with an entirely empty asset library, CanvasFlow adds two starter text assets: **Image to Line Art** and **Multi-view Reference**. Existing libraries are never overwritten or appended to automatically.
 
 - Manage custom text and images under **Settings → Asset Library**. The library is stored locally beside the app and shared by every project. Text rows show a shortened preview, while the editor always shows the complete content. Custom assets do not require color settings.
 - Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
@@ -206,6 +211,14 @@ Select an Output Node and click **Export** in the top toolbar:
 ### Export Folder Settings
 
 ⚠ Due to browser security restrictions, the application cannot write directly to the system drive (C:). Set the export path to D: or another non-system drive.
+
+### Automatic Project Backup
+
+CanvasFlow automatically backs up the current project to `download/自动备份/` while you work and makes a final save attempt when the page closes. The filename uses `CanvasFlow_MMDD_HHmm.json`; repeated saves during the same session overwrite that file. API keys are excluded from backups.
+
+### Software Updates
+
+The packaged Windows EXE checks the latest [GitHub Release](https://github.com/wuxinliuyun-art/canvasflow/releases) at startup. You can also use **Settings → General → Check for Updates**. When an update is accepted, CanvasFlow downloads `CanvasFlow-Windows-x64.zip`, saves the current project first, closes the local server, replaces the EXE, and restarts. If downloading, backup, or updater startup fails, the running application remains open.
 
 ---
 
@@ -286,7 +299,9 @@ MIT
 - **自定义素材快捷插入** — 右键画布空白处，从紧凑的三级菜单中选择已保存的文字或图片素材
 - **拖拽图片创建节点** — 可将本地图片或支持的网页图片拖入画布；拖到已有图片节点上可直接替换
 - **AI 节点独立进度** — 单张与批量任务都在对应 AI 绘图节点上显示阶段和进度
+- **角度变化节点（测试功能）** — 连接一张参考图后，可在 ±180° 范围内调整俯仰、水平、滚转和缩放，也可反转关键词中的左右方向；关键词以原图视角为基准，不预设俯拍或平视，生成结果会自动创建并连接图片节点
 - **Windows 便捷启动** — 发布版 EXE启动本地服务后自动使用默认浏览器打开 CanvasFlow
+- **自动更新** — 启动时检查 GitHub Releases，下载唯一的 Windows ZIP，备份当前项目后覆盖并重启 EXE
 - **端口自动清理** — 启动时自动检测并释放被占用的端口，避免闪退
 - **中英双语界面** — 可在设置中切换简体中文和 English，并自动记住选择
 
@@ -377,6 +392,7 @@ npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.e
 | **文字节点** | 输入提示词，可拖拽右下角缩放 |
 | **图片节点** | 上传或粘贴图片作为参考图 |
 | **AI绘图节点** | 连接文字/图片节点后，一键调用 AI 生成图片 |
+| **角度变化节点（测试功能）** | 连接参考图，在编辑器中调整俯仰、水平、滚转和缩放后生成新视角 |
 | **编组节点** | 将多个节点打包成一个，支持展开/缩略图预览 |
 | **输出节点** | 标记导出目标，连接到需要导出的节点 |
 
@@ -412,6 +428,8 @@ npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.e
 ### 自定义图文模板
 
 CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
+
+全新安装且素材库完全为空时，会自动加入 **图片转线稿** 和 **多视角参考** 两条默认文字素材；已有素材库不会被覆盖，也不会自动追加。
 
 - 在 **设置 → 素材库** 中管理自定义文字和图片。素材库自动保存在程序所在目录并由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容；图文素材都不需要设置颜色。
 - 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
@@ -461,6 +479,14 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 ### 导出文件夹设置
 
 点击 **设置导出文件夹** 选择本地目录，程序会保存并显示完整路径。可以点击 **复制路径**，再粘贴到资源管理器地址栏；也可以直接手动输入完整路径。
+
+### 项目自动备份
+
+CanvasFlow 会在操作过程中自动把当前项目备份到 `download/自动备份/`，关闭页面时还会再尝试保存一次。文件名格式为 `CanvasFlow_月日_时分.json`，同一次运行中重复保存会覆盖该文件；备份不会包含 API Key。
+
+### 软件更新
+
+打包后的 Windows EXE 会在启动时检查最新的 [GitHub Release](https://github.com/wuxinliuyun-art/canvasflow/releases)，也可以通过 **设置 → 常规 → 检查更新** 手动检查。确认更新后，CanvasFlow 会下载 `CanvasFlow-Windows-x64.zip`，先保存当前项目，再关闭本地服务、覆盖 EXE 并重新启动。下载、备份或更新器启动失败时，程序会保持运行。
 
 ---
 

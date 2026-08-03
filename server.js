@@ -3,11 +3,18 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { execSync } = require("child_process");
+const packageInfo = require("./package.json");
 
 const root = __dirname;
 const dataRoot = typeof process.pkg !== "undefined" ? path.dirname(process.execPath) : path.resolve(__dirname);
 const port = Number(process.env.PORT || 5173);
+const APP_VERSION = packageInfo.version;
+const RELEASES_API = "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest";
+const RELEASES_LATEST = "https://github.com/wuxinliuyun-art/canvasflow/releases/latest";
+let releaseCache = null;
+let releaseCacheAt = 0;
 const mime = {
   ".html": "text/html;charset=utf-8",
   ".css": "text/css;charset=utf-8",
@@ -115,6 +122,179 @@ function readBody(req) {
   });
 }
 
+function githubRequest(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 5) { reject(new Error("下载重定向次数过多")); return; }
+    const request = https.get(url, {
+      headers: {
+        "User-Agent": `CanvasFlow/${APP_VERSION}`,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      timeout: 20000,
+    }, response => {
+      if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
+        response.resume();
+        githubRequest(new URL(response.headers.location, url).toString(), redirects + 1).then(resolve, reject);
+        return;
+      }
+      resolve(response);
+    });
+    request.on("timeout", () => request.destroy(new Error("连接 GitHub 超时")));
+    request.on("error", reject);
+  });
+}
+
+async function githubJson(url) {
+  const response = await githubRequest(url);
+  const chunks = [];
+  for await (const chunk of response) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString("utf-8");
+  if (response.statusCode < 200 || response.statusCode >= 300) throw new Error(`GitHub 返回 HTTP ${response.statusCode}`);
+  return JSON.parse(text);
+}
+
+function versionParts(value) {
+  return String(value || "").replace(/^v/i, "").split(/[.-]/).slice(0, 3).map(part => Number.parseInt(part, 10) || 0);
+}
+
+function isNewerVersion(candidate, current) {
+  const next = versionParts(candidate);
+  const now = versionParts(current);
+  for (let i = 0; i < 3; i++) {
+    if (next[i] !== now[i]) return next[i] > now[i];
+  }
+  return false;
+}
+
+async function latestReleaseInfo() {
+  if (releaseCache && Date.now() - releaseCacheAt < 10 * 60 * 1000) return releaseCache;
+  let info;
+  try {
+    const release = await githubJson(RELEASES_API);
+    const zipAssets = (release.assets || []).filter(asset => /^CanvasFlow-Windows-x64.*\.zip$/i.test(asset.name));
+    if (zipAssets.length !== 1) throw new Error(`最新 Release 应包含且只包含一个 Windows ZIP，当前检测到 ${zipAssets.length} 个`);
+    const asset = zipAssets[0];
+    info = {
+      latestVersion: String(release.tag_name || release.name || "").replace(/^v/i, ""),
+      releaseName: release.name || release.tag_name,
+      notes: release.body || "",
+      pageUrl: release.html_url,
+      asset: { name: asset.name, size: asset.size, url: asset.browser_download_url },
+    };
+  } catch (apiError) {
+    console.warn("[自动更新] GitHub API 不可用，改用公开 Release 地址", { message: apiError.message });
+    const response = await new Promise((resolve, reject) => {
+      const request = https.get(RELEASES_LATEST, { headers: { "User-Agent": `CanvasFlow/${APP_VERSION}` }, timeout: 20000 }, resolve);
+      request.on("timeout", () => request.destroy(new Error("连接 GitHub 超时")));
+      request.on("error", reject);
+    });
+    const location = response.headers.location || "";
+    response.resume();
+    const match = location.match(/\/releases\/tag\/([^/?#]+)/i);
+    if (!match) throw apiError;
+    const tag = decodeURIComponent(match[1]);
+    info = {
+      latestVersion: tag.replace(/^v/i, ""), releaseName: tag, notes: "", pageUrl: new URL(location, RELEASES_LATEST).toString(),
+      asset: { name: "CanvasFlow-Windows-x64.zip", size: 0, url: `https://github.com/wuxinliuyun-art/canvasflow/releases/download/${encodeURIComponent(tag)}/CanvasFlow-Windows-x64.zip` },
+    };
+  }
+  releaseCache = {
+    currentVersion: APP_VERSION,
+    ...info,
+    hasUpdate: isNewerVersion(info.latestVersion, APP_VERSION),
+    canAutoInstall: process.platform === "win32" && typeof process.pkg !== "undefined",
+  };
+  releaseCacheAt = Date.now();
+  return releaseCache;
+}
+
+async function downloadUpdateZip(asset) {
+  const updateDir = path.join(dataRoot, "download", "updates");
+  fs.mkdirSync(updateDir, { recursive: true });
+  const safeName = path.basename(asset.name);
+  if (!/^CanvasFlow-Windows-x64.*\.zip$/i.test(safeName)) throw new Error("更新包文件名不正确");
+  const target = path.join(updateDir, safeName);
+  const temp = `${target}.${process.pid}.tmp`;
+  const response = await githubRequest(asset.url);
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    response.resume();
+    throw new Error(`更新包下载失败：HTTP ${response.statusCode}`);
+  }
+  await new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(temp);
+    response.pipe(output);
+    output.on("finish", () => output.close(resolve));
+    output.on("error", reject);
+    response.on("error", reject);
+  });
+  const size = fs.statSync(temp).size;
+  if (!size || (asset.size && size !== asset.size)) {
+    fs.unlinkSync(temp);
+    throw new Error(`更新包大小校验失败：期望 ${asset.size || "未知"}，实际 ${size}`);
+  }
+  fs.copyFileSync(temp, target);
+  fs.unlinkSync(temp);
+  return target;
+}
+
+function extractCanvasFlowExe(zipPath, outputPath) {
+  const data = fs.readFileSync(zipPath);
+  let eocd = -1;
+  for (let i = data.length - 22; i >= Math.max(0, data.length - 65557); i--) {
+    if (data.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("更新 ZIP 的目录结构无效");
+  const count = data.readUInt16LE(eocd + 10);
+  let offset = data.readUInt32LE(eocd + 16);
+  for (let i = 0; i < count; i++) {
+    if (data.readUInt32LE(offset) !== 0x02014b50) throw new Error("更新 ZIP 的文件目录损坏");
+    const method = data.readUInt16LE(offset + 10);
+    const compressedSize = data.readUInt32LE(offset + 20);
+    const expectedSize = data.readUInt32LE(offset + 24);
+    const nameLength = data.readUInt16LE(offset + 28);
+    const extraLength = data.readUInt16LE(offset + 30);
+    const commentLength = data.readUInt16LE(offset + 32);
+    const localOffset = data.readUInt32LE(offset + 42);
+    const name = data.subarray(offset + 46, offset + 46 + nameLength).toString("utf-8").replace(/\\/g, "/");
+    if (/^(?:.*\/)?CanvasFlow-Windows-x64(?:-[^/]*)?\.exe$/i.test(name)) {
+      if (data.readUInt32LE(localOffset) !== 0x04034b50) throw new Error("更新 ZIP 的 EXE 数据损坏");
+      const localNameLength = data.readUInt16LE(localOffset + 26);
+      const localExtraLength = data.readUInt16LE(localOffset + 28);
+      const start = localOffset + 30 + localNameLength + localExtraLength;
+      const compressed = data.subarray(start, start + compressedSize);
+      const executable = method === 0 ? compressed : method === 8 ? zlib.inflateRawSync(compressed) : null;
+      if (!executable) throw new Error(`更新 ZIP 使用了不支持的压缩方式：${method}`);
+      if (expectedSize && executable.length !== expectedSize) throw new Error("更新 EXE 大小校验失败");
+      fs.writeFileSync(outputPath, executable);
+      return;
+    }
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  throw new Error("更新 ZIP 中没有 CanvasFlow Windows EXE");
+}
+
+function processExists(pid) {
+  try { process.kill(pid, 0); return true; } catch (_) { return false; }
+}
+
+async function runPackagedUpdater(payload) {
+  const log = message => console.info(`[CanvasFlow Updater] ${message}`);
+  const zipPath = path.resolve(payload.zipPath);
+  const exePath = path.resolve(payload.exePath);
+  const temporaryExe = `${exePath}.update-new`;
+  log(`正在解压 ${zipPath}`);
+  extractCanvasFlowExe(zipPath, temporaryExe);
+  const deadline = Date.now() + 30000;
+  while (processExists(payload.pid) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 200));
+  if (processExists(payload.pid)) throw new Error("CanvasFlow 未能在 30 秒内关闭");
+  fs.copyFileSync(temporaryExe, exePath);
+  fs.unlinkSync(temporaryExe);
+  log(`已覆盖 ${exePath}，正在重新启动`);
+  const restarted = require("child_process").spawn(exePath, [], { detached: true, stdio: ["ignore", "inherit", "inherit"], windowsHide: false, cwd: path.dirname(exePath) });
+  restarted.unref();
+}
+
 
 function proxyRequest(method, targetUrl, headers, body) {
   return new Promise((resolve, reject) => {
@@ -169,6 +349,65 @@ async function requestHandler(req, res) {
   if (pathname === "/api/runtime-paths" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
     res.end(JSON.stringify({ dataRoot, exportFolder: path.join(dataRoot, "export") }));
+    return;
+  }
+
+  if (pathname === "/api/update/check" && req.method === "GET") {
+    try {
+      const info = await latestReleaseInfo();
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(info));
+    } catch (err) {
+      console.error("[自动更新] 检查失败", { message: err.message });
+      res.writeHead(502, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ error: `无法检查更新：${err.message}` }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/update/download" && req.method === "POST") {
+    try {
+      const info = await latestReleaseInfo();
+      if (!info.hasUpdate) throw new Error("当前已经是最新版本");
+      const filePath = await downloadUpdateZip(info.asset);
+      console.info("[自动更新] 下载完成", { version: info.latestVersion, file: filePath, bytes: info.asset.size });
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ success: true, version: info.latestVersion, file: filePath }));
+    } catch (err) {
+      console.error("[自动更新] 下载失败", { message: err.message });
+      res.writeHead(502, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ error: `更新包下载失败：${err.message}` }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/update/apply" && req.method === "POST") {
+    try {
+      if (process.platform !== "win32" || typeof process.pkg === "undefined") throw new Error("自动覆盖更新仅支持打包后的 Windows EXE");
+      const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
+      const zipPath = path.resolve(String(body.file || ""));
+      const allowedDir = path.resolve(dataRoot, "download", "updates");
+      if (!zipPath.startsWith(allowedDir + path.sep) || !fs.existsSync(zipPath) || !zipPath.toLowerCase().endsWith(".zip")) throw new Error("找不到已下载的更新包");
+      const exePath = process.execPath;
+      const updateLogPath = path.join(allowedDir, "update.log");
+      const updaterPath = path.join(allowedDir, "CanvasFlow-Updater.exe");
+      fs.copyFileSync(exePath, updaterPath);
+      const encoded = Buffer.from(JSON.stringify({ pid: process.pid, zipPath, exePath }), "utf-8").toString("base64");
+      const updateLog = fs.openSync(updateLogPath, "a");
+      const child = require("child_process").spawn(updaterPath, ["--apply-update", encoded], {
+        detached: true, stdio: ["ignore", updateLog, updateLog], windowsHide: true,
+      });
+      fs.closeSync(updateLog);
+      child.unref();
+      console.info("[自动更新] 已启动 CanvasFlow 更新器，准备关闭", { zip: zipPath, executable: exePath, updater: updaterPath, log: updateLogPath });
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ success: true }));
+      setTimeout(() => server.close(() => process.exit(0)), 600);
+    } catch (err) {
+      console.error("[自动更新] 启动失败", { message: err.message });
+      res.writeHead(400, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ error: `无法安装更新：${err.message}` }));
+    }
     return;
   }
 
@@ -280,6 +519,35 @@ async function requestHandler(req, res) {
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/auto-backup" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req)).toString("utf-8"));
+      const name = path.basename(String(body.name || ""));
+      const content = String(body.content || "");
+      if (!/^CanvasFlow_\d{4}_\d{4}\.json$/.test(name)) throw new Error("自动备份文件名格式不正确");
+      if (!content) throw new Error("自动备份内容为空");
+      JSON.parse(content);
+      const backupDir = path.join(dataRoot, "download", "自动备份");
+      if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+      const filePath = path.join(backupDir, name);
+      const tempPath = path.join(backupDir, `.${name}.${process.pid}.${Date.now()}.tmp`);
+      fs.writeFileSync(tempPath, content, "utf-8");
+      try {
+        fs.copyFileSync(tempPath, filePath);
+      } finally {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      }
+      console.info("[自动备份] 已写入", { file: filePath, bytes: Buffer.byteLength(content, "utf-8") });
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ success: true, path: filePath }));
+    } catch (err) {
+      console.error("[自动备份] 写入失败", { message: err.message });
+      res.writeHead(400, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ error: `自动备份失败：${err.message}` }));
     }
     return;
   }
@@ -594,7 +862,19 @@ async function requestHandler(req, res) {
   });
 }
 
-// --- 启动服务器 ---
+// --- 启动服务器或独立更新器 ---
+if (process.argv[2] === "--apply-update") {
+  try {
+    const payload = JSON.parse(Buffer.from(process.argv[3] || "", "base64").toString("utf-8"));
+    runPackagedUpdater(payload).then(() => process.exit(0)).catch(err => {
+      console.error("[CanvasFlow Updater] 更新失败", { message: err.message, stack: err.stack });
+      process.exit(1);
+    });
+  } catch (err) {
+    console.error("[CanvasFlow Updater] 参数无效", { message: err.message });
+    process.exit(1);
+  }
+} else {
 cleanupPort(port);
 
 const server = http.createServer(requestHandler);
@@ -625,3 +905,4 @@ process.on("SIGINT", () => {
   console.log("\n正在关闭...");
   server.close(() => process.exit(0));
 });
+}

@@ -3,9 +3,17 @@ const $ = (id) => document.getElementById(id);
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 172;
 const AI_NODE_HEIGHT = 400;
+const ANGLE_NODE_HEIGHT = 430;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
 let runtimeExportFolder = "export";
+let autoBackupReady = false;
+let autoBackupTimer = null;
+let availableUpdate = null;
+let lastUpdateCheckResult = null;
+let updateCheckStarted = false;
+const autoBackupStartedAt = new Date();
+const autoBackupFileName = `CanvasFlow_${String(autoBackupStartedAt.getMonth() + 1).padStart(2, "0")}${String(autoBackupStartedAt.getDate()).padStart(2, "0")}_${String(autoBackupStartedAt.getHours()).padStart(2, "0")}${String(autoBackupStartedAt.getMinutes()).padStart(2, "0")}.json`;
 
 function resolvedExportFolderLabel(value) {
   const label = String(value || "").trim();
@@ -15,11 +23,20 @@ function resolvedExportFolderLabel(value) {
 }
 const LANGUAGE_KEY = "webimage.language";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
+const DEFAULT_TEXT_TEMPLATES = [
+  { id: "default_text_line_art", name: "图片转线稿", content: "照片变成线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
+  { id: "default_text_multi_view", name: "多视角参考", content: "生成参考图的正前侧、左侧、右侧、顶侧，四个视角的视图", revision: 1 },
+];
 
 // UI language is stored separately from project data so switching projects never
 // changes the application language. New UI nodes are translated automatically.
 const UI_EN = {
   "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
+  "软件更新": "Software Updates", "检查更新": "Check for Updates", "下载并安装更新": "Download and Install",
+  "启动时自动检查 GitHub Releases；安装前会先备份当前项目。": "Automatically check GitHub Releases at startup. The current project is backed up before installation.",
+  "当前版本：正在读取…": "Current version: loading…", "查看 Release": "View Release",
+  "角度变化（测试功能）": "Angle Change (Beta)", "添加角度变化节点（测试功能）": "Add Angle Change Node (Beta)",
+  "反转左右关键词": "Reverse left/right prompt directions", "仅交换自动关键词中的左、右，不镜像图片": "Only swaps left and right in the automatic prompt; the image is not mirrored",
   "单击切换项目，双击重命名": "Click to switch projects; double-click to rename",
   "未命名项目": "Untitled Project", "未命名": "Untitled", "项目1": "Project 1",
   "新建项目": "New Project", "保存JSON": "Save JSON", "加载JSON": "Load JSON",
@@ -35,7 +52,7 @@ const UI_EN = {
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
   "打开导出文件夹": "Open Export Folder", "设置导出文件夹": "Set Export Folder", "复制路径": "Copy Path", "查看导出文件": "View Exported Files",
   "完整路径可直接选择或复制；打开和设置文件夹使用相同的 Windows 授权方式。": "Select or copy the full path directly. Opening and choosing folders use the same Windows permission flow.",
-  "完整路径可直接选择或复制；如果无法自动打开目录，可将路径粘贴到资源管理器地址栏。": "Select or copy the full path directly. Paste it into File Explorer's address bar if the folder cannot be opened automatically.",
+  "完整路径可直接选择或复制；如果杀毒软件误判，请复制路径打开。": "Select or copy the full path directly. If antivirus software blocks the action by mistake, copy the path and open it manually.",
   "选择文件夹后会保存完整路径；若手动填写，请输入完整路径。": "The full path is saved after choosing a folder. Enter a full path when editing manually.",
   "⚠ 由于浏览器安全限制，无法直接写入系统盘（C 盘）。请将导出文件夹设置在 D 盘或其他非系统盘，否则可能导致导出失败。": "⚠ Due to browser security restrictions, the system drive (C:) cannot be written directly. Choose D: or another non-system drive to avoid export failures.",
   "自定义素材": "Custom Assets", "添加常用图片作为素材，右键画布空白处可快速插入对应图片节点。": "Add frequently used images as assets, then right-click an empty area of the canvas to insert them quickly.",
@@ -269,6 +286,10 @@ async function loadGlobalLibraryFromDisk() {
         globalLibrary[key].push(item); migrated++;
       }
     }
+    if (!globalLibrary.textTemplates.length && !globalLibrary.imageMaterials.length) {
+      globalLibrary.textTemplates = DEFAULT_TEXT_TEMPLATES.map(item => normalizeTemplate({ ...item }));
+      console.log(`[初始化] 已创建 ${globalLibrary.textTemplates.length} 个默认文字素材`);
+    }
     console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}`);
     if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
     saveGlobalLibrary();
@@ -405,6 +426,11 @@ const els = {
   libraryImportCancelBtn: $("libraryImportCancelBtn"),
   libraryImportConfirmBtn: $("libraryImportConfirmBtn"),
   languageSelect: $("languageSelect"),
+  checkUpdateBtn: $("checkUpdateBtn"),
+  updateStatus: $("updateStatus"),
+  updateActions: $("updateActions"),
+  installUpdateBtn: $("installUpdateBtn"),
+  releasePageLink: $("releasePageLink"),
 };
 
 let drag = null;
@@ -887,7 +913,7 @@ function addNode(type, x = 160, y = 120, commit = true) {
     x: snap(x),
     y: snap(y),
     w: NODE_WIDTH,
-    h: type === "ai-image" ? AI_NODE_HEIGHT : type === "group" ? 200 : NODE_HEIGHT,
+    h: type === "ai-image" ? AI_NODE_HEIGHT : type === "angle-image" ? ANGLE_NODE_HEIGHT : type === "group" ? 200 : NODE_HEIGHT,
     disabled: false,
     created: Date.now() + state.nextNode,
     text: type === "text" ? "请输入文字内容" : "",
@@ -898,6 +924,14 @@ function addNode(type, x = 160, y = 120, commit = true) {
     generatedImage: null,
     taskId: null,
     generating: false,
+    anglePitch: type === "angle-image" ? 0 : undefined,
+    angleYaw: type === "angle-image" ? 0 : undefined,
+    angleRoll: type === "angle-image" ? 0 : undefined,
+    angleZoom: type === "angle-image" ? 1 : undefined,
+    angleReverseDirection: type === "angle-image" ? false : undefined,
+    _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : undefined,
+    _resolution: type === "angle-image" ? "1k" : undefined,
+    _size: type === "angle-image" ? "1:1" : undefined,
     images: type === "group" ? [] : undefined,
     items: null,
     internalEdges: null,
@@ -1099,7 +1133,7 @@ function copySelection(clearSystemClipboard = true) {
 
 function stripCopiedImage(n) {
   const copy = JSON.parse(JSON.stringify(n));
-  if (copy.type === "ai-image") {
+  if (copy.type === "ai-image" || copy.type === "angle-image") {
     copy.generatedImage = null;
     copy.taskId = null;
     copy.generating = false;
@@ -1119,7 +1153,7 @@ function pasteNodes(data, anchor = null) {
       x: anchor ? anchor.x + (n.x - minX) : n.x + 36,
       y: anchor ? anchor.y + (n.y - minY) : n.y + 36,
       w: NODE_WIDTH,
-      h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "group" ? Math.max(Number(n.h) || 0, 200) : NODE_HEIGHT,
+      h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "angle-image" ? Math.max(Number(n.h) || 0, ANGLE_NODE_HEIGHT) : n.type === "group" ? Math.max(Number(n.h) || 0, 200) : NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
@@ -1141,11 +1175,21 @@ function pasteNodes(data, anchor = null) {
 function addEdge(fromNode, toNode) {
   if (fromNode === toNode) return toast("不能连接到自己");
   const target = findNode(toNode);
-  if (!target || target.type !== "output" && !target) return;
+  if (!target) return;
   if (state.edges.some(e => e.from.node === fromNode && e.to.node === toNode)) return toast("这两个端口已经连接");
+  let replacedAngleInputs = 0;
+  if (target.type === "angle-image") {
+    const before = state.edges.length;
+    state.edges = state.edges.filter(e => e.to.node !== toNode);
+    replacedAngleInputs = before - state.edges.length;
+  }
   state.edges.push({ id: uid("e"), from: { node: fromNode, port: "out" }, to: { node: toNode, port: "in" } });
+  if (target.type === "angle-image") {
+    console.log("[角度变化] 输入连线已更新", { nodeId: toNode, sourceNodeId: fromNode, replaced: replacedAngleInputs });
+  }
   pushHistory();
   render();
+  if (replacedAngleInputs) toast("已断开旧参考图并接入新图片");
 }
 
 function removeEdge(id) {
@@ -1190,6 +1234,53 @@ function aiNodeControls(node) {
     <label><span>分辨率</span><select data-role="ai-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
     <label class="${isGpt ? "" : "hidden"}"><span>画质</span><select data-role="ai-quality">${selectOptions(qualities, node._quality || "medium")}</select></label>
     <label><span>比例</span><select data-role="ai-size">${selectOptions(ratios, node._size)}</select></label>
+  </div>`;
+}
+
+function normalizeAngleNodeSettings(node) {
+  if (!node || node.type !== "angle-image") return node;
+  const clampAngle = (value, fallback) => Math.max(-180, Math.min(180, Number.isFinite(Number(value)) ? Number(value) : fallback));
+  node.anglePitch = clampAngle(node.anglePitch, 0);
+  node.angleYaw = clampAngle(node.angleYaw, 0);
+  node.angleRoll = clampAngle(node.angleRoll, 0);
+  node.angleZoom = Number.isFinite(Number(node.angleZoom)) ? Number(node.angleZoom) : 1;
+  node.angleReverseDirection = node.angleReverseDirection === true;
+  node._model = "gemini-3.1-flash-image-preview";
+  node._resolution = node._resolution || "1k";
+  node._size = node._size || "1:1";
+  return node;
+}
+
+function anglePrompt(node) {
+  normalizeAngleNodeSettings(node);
+  const horizontal = node.angleYaw;
+  const vertical = -node.anglePitch;
+  const roll = -node.angleRoll;
+  let horizontalDirection = horizontal > 0 ? "左" : "右";
+  if (node.angleReverseDirection) horizontalDirection = horizontalDirection === "左" ? "右" : "左";
+  const changes = [];
+  if (Math.abs(horizontal) >= 4) changes.push(`将观察视角向${horizontalDirection}水平旋转约 ${Math.abs(horizontal)}°`);
+  if (Math.abs(vertical) >= 4) changes.push(`向${vertical > 0 ? "上" : "下"}垂直旋转约 ${Math.abs(vertical)}°`);
+  if (Math.abs(roll) >= 3) changes.push(`将画面${roll > 0 ? "顺时针" : "逆时针"}旋转约 ${Math.abs(roll)}°`);
+  if (node.angleZoom >= 1.05) changes.push("采用更近距离的构图");
+  else if (node.angleZoom <= .95) changes.push("采用更远距离的构图");
+  const viewpoint = changes.length
+    ? `以参考图当前视角为基准，${changes.join("，")}。`
+    : "以参考图当前视角为基准，保持原有观察角度、画面方向和构图距离。";
+  return `${viewpoint}保持主体的造型、结构、比例、材质、颜色、图案、文字和品牌细节一致。保持主体位于画面中心，仅改变观察角度、透视关系和构图距离，不改变主体本身，不添加参考图中不存在的部件。`;
+}
+
+function resolvedAnglePrompt(node) {
+  return String(node?.anglePromptCustom || "").trim() || anglePrompt(node);
+}
+
+function angleNodeControls(node) {
+  normalizeAngleNodeSettings(node);
+  const resolutions = [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
+  const ratios = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"].map(value => [value, value]);
+  return `<div class="angle-node-settings">
+    <label><span>分辨率</span><select data-role="angle-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
+    <label><span>比例</span><select data-role="angle-size">${selectOptions(ratios, node._size)}</select></label>
   </div>`;
 }
 
@@ -1266,6 +1357,140 @@ function aiImageBody(node) {
     ${node.prompt ? `<div class="ai-prompt">${escapeHtml(node.prompt)}</div>` : ""}${controls}`;
 }
 
+function angleNodeInput(nodeId) {
+  const upstream = collectUpstreamForAI(nodeId);
+  return upstream.images[0]?.image || upstream.groupImages[0]?.image || null;
+}
+
+function angleImageBody(node) {
+  normalizeAngleNodeSettings(node);
+  const source = angleNodeInput(node.id);
+  const transform = `perspective(1600px) rotateX(${node.anglePitch}deg) rotateY(${node.angleYaw}deg) rotateZ(${node.angleRoll}deg) scale(${node.angleZoom})`;
+  const status = node.generating ? `<div class="angle-node-busy">生成中...</div>` : source ? `<div class="angle-node-grid"></div><div class="angle-node-plane" style="transform:${transform}"><img src="${source}" alt="三维角度预览" draggable="false"></div>` : `<div class="angle-node-empty">连接图片节点使用</div>`;
+  return `<div class="angle-node-preview ${node.generating ? "is-generating" : ""}">${status}</div>
+    <div class="angle-node-actions">
+      <button data-role="angle-edit">编辑角度</button>
+      <button data-role="angle-generate" class="ai-generate-btn">生成</button>
+    </div>
+    <div class="angle-prompt-preview" data-role="angle-prompt" title="双击编辑关键词">${escapeHtml(resolvedAnglePrompt(node))}</div>
+    ${angleNodeControls(node)}${node._aiProgress ? aiNodeProgressMarkup(node) : ""}`;
+}
+
+async function generateAngleImage(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "angle-image") return;
+  if (!state.settings.apiKey) return toast("请先在设置中填入 API Key");
+  const source = angleNodeInput(node.id);
+  if (!source) return toast("请先连接一个图片节点");
+  normalizeAngleNodeSettings(node);
+  node.generating = true;
+  node.prompt = resolvedAnglePrompt(node);
+  node._aiProgress = { status: "submitting", label: "正在提交", percent: null, error: "" };
+  render();
+  console.log("[角度变化] 提交生成", { nodeId, pitch: node.anglePitch, yaw: node.angleYaw, roll: node.angleRoll, zoom: node.angleZoom, resolution: node._resolution, size: node._size });
+  try {
+    const taskId = await submitGeneration(node.prompt, [source], node);
+    node.taskId = taskId;
+    node._aiProgress = { status: "generating", label: "正在生成", percent: null, error: "" };
+    renderNodes();
+    const imageUrl = await pollTask(taskId, pct => {
+      node._aiProgress = { status: "generating", label: "正在生成", percent: pct, error: "" };
+      renderNodes();
+    });
+    node._aiProgress = { status: "downloading", label: "正在下载", percent: 96, error: "" };
+    renderNodes();
+    const generatedImage = await fetchImageAsBase64(imageUrl);
+    const fileName = `angle_generated_${Date.now()}.png`;
+    const existingResults = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id);
+    const resultNode = addNode("image", node.x + NODE_WIDTH + 40, node.y + existingResults.length * 220, false);
+    resultNode.image = generatedImage;
+    resultNode.fileName = fileName;
+    resultNode.mime = "image/png";
+    resultNode.aiSourceNodeId = node.id;
+    resultNode.angleSourceNodeId = node.id;
+    state.edges.push({ id: uid("e"), from: { node: node.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
+    node.generating = false;
+    node._aiProgress = { status: "done", label: "生成完成", percent: 100, error: "" };
+    console.log("[角度变化] 已创建结果图片节点", { nodeId, resultNodeId: resultNode.id, fileName });
+    fetch("/api/save-export-files", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folderName: "ai_generated", files: [{ name: fileName, data: generatedImage }] }) }).catch(err => {
+      console.warn("[角度变化] 结果图片保存到本地失败", err);
+    });
+    pushHistory(); render();
+    toast("角度变化图片已生成并连接");
+    window.setTimeout(() => { if (node._aiProgress?.status === "done") { node._aiProgress = null; renderNodes(); } }, 1800);
+  } catch (err) {
+    node.generating = false;
+    node._aiProgress = { status: "failed", label: "生成失败", percent: null, error: err.message || String(err) };
+    console.error("[角度变化] 生成失败", err);
+    render();
+    toast(`角度变化生成失败：${err.message || err}`);
+  }
+}
+
+function openAngleEditor(nodeId) {
+  const node = findNode(nodeId);
+  const source = node ? angleNodeInput(node.id) : null;
+  if (!node || node.type !== "angle-image") return;
+  if (!source) return toast("请先连接一个图片节点");
+  normalizeAngleNodeSettings(node);
+  const draft = { pitch: node.anglePitch, yaw: node.angleYaw, roll: node.angleRoll, zoom: node.angleZoom, reverseDirection: node.angleReverseDirection };
+  const overlay = document.createElement("div");
+  overlay.className = "angle-editor-backdrop";
+  overlay.innerHTML = `<div class="angle-editor" role="dialog" aria-modal="true" aria-label="角度变化编辑器">
+    <div class="angle-editor-head"><div><strong>角度变化</strong><span>拖动预览调整视角，滚轮缩放</span></div><button data-angle-close>×</button></div>
+    <div class="angle-editor-main">
+      <div class="angle-source"><span>原始参考图</span><div><img src="${source}" draggable="false" alt="原始参考图"></div></div>
+      <div class="angle-stage-wrap"><span>三维视角预览</span><div class="angle-stage"><div class="angle-grid"></div><div class="angle-plane"><img src="${source}" draggable="false" alt="三维预览"></div><small>拖动调整 X / Y · 滚轮缩放</small></div></div>
+    </div>
+    <div class="angle-editor-controls"></div>
+    <label class="angle-direction-toggle"><input type="checkbox" data-angle-reverse><span><strong>反转左右关键词</strong><small>仅交换自动关键词中的左、右，不镜像图片</small></span></label>
+    <div class="angle-editor-prompt"></div>
+    <div class="angle-editor-actions"><button data-angle-reset>恢复默认</button><div><button data-angle-close>取消</button><button class="primary" data-angle-confirm>确认角度</button></div></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const stage = overlay.querySelector(".angle-stage");
+  const plane = overlay.querySelector(".angle-plane");
+  const controls = overlay.querySelector(".angle-editor-controls");
+  const reverseDirectionToggle = overlay.querySelector("[data-angle-reverse]");
+  const promptBox = overlay.querySelector(".angle-editor-prompt");
+  let dragging = false, start = null;
+  const fields = [["pitch","X","俯仰",-180,180,1],["yaw","Y","水平",-180,180,1],["roll","Z","滚转",-180,180,1],["zoom","S","缩放",.35,1.8,.05]];
+  controls.innerHTML = fields.map(([key,axis,label,min,max,step]) => `<label><span><b>${axis}</b>${label}</span><input data-angle-key="${key}" type="range" min="${min}" max="${max}" step="${step}"><output></output></label>`).join("");
+  function updateEditor() {
+    plane.style.transform = `perspective(1800px) rotateX(${draft.pitch}deg) rotateY(${draft.yaw}deg) rotateZ(${draft.roll}deg) scale(${draft.zoom})`;
+    controls.querySelectorAll("input").forEach(input => { input.value = draft[input.dataset.angleKey]; input.nextElementSibling.textContent = `${draft[input.dataset.angleKey]}${input.dataset.angleKey === "zoom" ? "×" : "°"}`; });
+    reverseDirectionToggle.checked = draft.reverseDirection;
+    const temp = { ...node, anglePitch: draft.pitch, angleYaw: draft.yaw, angleRoll: draft.roll, angleZoom: draft.zoom, angleReverseDirection: draft.reverseDirection };
+    promptBox.textContent = anglePrompt(temp);
+  }
+  stage.addEventListener("pointerdown", ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    dragging = true;
+    start = { x: ev.clientX, y: ev.clientY, pitch: draft.pitch, yaw: draft.yaw };
+    stage.setPointerCapture(ev.pointerId);
+  });
+  stage.addEventListener("pointermove", ev => {
+    if (!dragging || !start) return;
+    ev.preventDefault();
+    draft.yaw = Math.max(-180, Math.min(180, Math.round(start.yaw + (ev.clientX-start.x)*.35)));
+    draft.pitch = Math.max(-180, Math.min(180, Math.round(start.pitch - (ev.clientY-start.y)*.35)));
+    updateEditor();
+  });
+  const stopAngleDrag = () => { dragging = false; start = null; };
+  stage.addEventListener("pointerup", stopAngleDrag);
+  stage.addEventListener("pointercancel", stopAngleDrag);
+  stage.addEventListener("lostpointercapture", stopAngleDrag);
+  stage.addEventListener("dragstart", ev => { ev.preventDefault(); ev.stopPropagation(); });
+  stage.addEventListener("wheel", ev => { ev.preventDefault(); ev.stopPropagation(); draft.zoom = Math.max(.35, Math.min(1.8, Number((draft.zoom + (ev.deltaY > 0 ? -.08 : .08)).toFixed(2)))); updateEditor(); }, { passive: false });
+  controls.addEventListener("input", ev => { const key = ev.target.dataset.angleKey; if (!key) return; draft[key] = Number(ev.target.value); updateEditor(); });
+  reverseDirectionToggle.addEventListener("change", () => { draft.reverseDirection = reverseDirectionToggle.checked; updateEditor(); });
+  overlay.querySelectorAll("[data-angle-close]").forEach(btn => btn.onclick = () => overlay.remove());
+  overlay.querySelector("[data-angle-reset]").onclick = () => { Object.assign(draft, { pitch: 0, yaw: 0, roll: 0, zoom: 1, reverseDirection: false }); updateEditor(); };
+  overlay.querySelector("[data-angle-confirm]").onclick = () => { node.anglePitch=draft.pitch; node.angleYaw=draft.yaw; node.angleRoll=draft.roll; node.angleZoom=draft.zoom; node.angleReverseDirection=draft.reverseDirection; node.anglePromptCustom=""; node.prompt=anglePrompt(node); pushHistory(); render(); overlay.remove(); };
+  updateEditor();
+}
+
 function collectUpstreamForAI(nodeId, incoming) {
   incoming = incoming || buildIncomingIndex();
   const result = { texts: [], images: [], groupImages: [], orderedRefs: [] };
@@ -1276,7 +1501,7 @@ function collectUpstreamForAI(nodeId, incoming) {
     const n = findNode(id);
     if (!n) return;
     // AI 节点截断：收集已生成图片后不再向上追溯（包括停用的 AI 节点）
-    if (n.type === "ai-image") {
+    if (n.type === "ai-image" || n.type === "angle-image") {
       if (n.generatedImage) {
         const ref = { image: n.generatedImage, fileName: n.fileName, mime: n.mime, _x: n.x };
         result.images.push(ref);
@@ -1649,6 +1874,18 @@ function addAiImageNode(x, y, sourceIds) {
   return node;
 }
 
+function addAngleImageNode(x, y, sourceIds = []) {
+  const node = addNode("angle-image", x, y, false);
+  normalizeAngleNodeSettings(node);
+  sourceIds.slice(0, 1).forEach(sourceId => {
+    const source = findNode(sourceId);
+    if (source && source.type !== "output") state.edges.push({ id: uid("e"), from: { node: sourceId, port: "out" }, to: { node: node.id, port: "in" } });
+  });
+  node.prompt = anglePrompt(node);
+  pushHistory(); render(); toast("已创建角度变化节点（测试功能）");
+  return node;
+}
+
 function addOutputNode(sourceId) {
   const source = findNode(sourceId);
   if (!source) return;
@@ -1690,8 +1927,9 @@ function addOutputNode(sourceId) {
 function normalizeNodeSizes() {
   state.nodes.forEach(n => {
     if (!n.w) n.w = NODE_WIDTH;
-    if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "group" ? 200 : NODE_HEIGHT;
+    if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "angle-image" ? ANGLE_NODE_HEIGHT : n.type === "group" ? 200 : NODE_HEIGHT;
     if (n.type === "ai-image" && n.h < AI_NODE_HEIGHT) n.h = AI_NODE_HEIGHT;
+    if (n.type === "angle-image") { if (n.h < ANGLE_NODE_HEIGHT) n.h = ANGLE_NODE_HEIGHT; normalizeAngleNodeSettings(n); }
   });
 }
 
@@ -1783,9 +2021,10 @@ function renderNodes() {
   els.nodes.innerHTML = "";
   for (const node of state.nodes) {
     const div = document.createElement("div");
-    const progressClass = node.type === "ai-image" && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
+    const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
     div.className = `node ${node.type} ${progressClass} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""}`;
     div.dataset.id = node.id;
+    div.draggable = false;
     div.style.left = `${node.x}px`;
     div.style.top = `${node.y}px`;
     div.style.width = `${node.w}px`;
@@ -1797,7 +2036,7 @@ function renderNodes() {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "image" ? "图片节点" : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "group" ? "编组节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "image" ? "图片节点" : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化（测试功能）" : node.type === "group" ? "编组节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = node.type === "output" ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
@@ -1848,10 +2087,11 @@ function nodeTemplate(node) {
       <div class="image-actions">
         <button data-role="upload">上传</button>
         <button data-role="clear-image">清除</button>
-      </div>
-      <div class="file-hint">${escapeHtml(node.fileName || "图片节点粘贴后为空")}</div>`;
+      </div>`;
   } else if (node.type === "ai-image") {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
+  } else if (node.type === "angle-image") {
+    body = angleImageBody(node);
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
@@ -1922,7 +2162,7 @@ function renderMinimap() {
     ctx.stroke();
   }
   for (const n of state.nodes) {
-    ctx.fillStyle = n.disabled ? "#999999" : (n.type === "output" ? "#0078d4" : n.type === "image" ? "#b15c00" : n.type === "ai-image" ? "#6c5ce7" : n.type === "group" ? "#b8860b" : "#006f62");
+    ctx.fillStyle = n.disabled ? "#999999" : (n.type === "output" ? "#0078d4" : n.type === "image" ? "#b15c00" : n.type === "ai-image" ? "#6c5ce7" : n.type === "angle-image" ? "#2563eb" : n.type === "group" ? "#b8860b" : "#006f62");
     ctx.fillRect(n.x * scale + ox, n.y * scale + oy, Math.max(3, n.w * scale), Math.max(3, n.h * scale));
   }
 }
@@ -2023,7 +2263,7 @@ els.viewport.addEventListener("mousedown", ev => {
   if (ev.target.closest(".edge-hit")) return; // 点击连线不做任何操作，交给 dblclick / contextmenu
   const port = ev.target.closest(".port");
   const nodeEl = ev.target.closest(".node");
-  const interactive = ev.target.closest("textarea,button,input,select");
+  const interactive = ev.target.closest("textarea,button,input,select,[contenteditable='true']");
   if (!interactive) els.viewport.focus();
   if (port && port.dataset.port === "out") {
     const node = findNode(nodeEl.dataset.id);
@@ -2079,7 +2319,7 @@ window.addEventListener("mousemove", ev => {
     if (node) {
       const scale = state.view.scale;
       node.w = Math.max(180, drag.sw + (ev.clientX - drag.sx) / scale);
-      const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : 120;
+      const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : node.type === "angle-image" ? ANGLE_NODE_HEIGHT : 120;
       node.h = Math.max(minHeight, drag.sh + (ev.clientY - drag.sy) / scale);
       const el = document.querySelector(`.node[data-id="${node.id}"]`);
       if (el) {
@@ -2184,7 +2424,15 @@ els.nodes.addEventListener("change", ev => {
   const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
   const role = ev.target.dataset.role;
   if (role === "text") pushHistory();
-  if (!node || node.type !== "ai-image") return;
+  if (!node) return;
+  if (node.type === "angle-image") {
+    if (role === "angle-resolution") node._resolution = ev.target.value;
+    else if (role === "angle-size") node._size = ev.target.value;
+    else return;
+    pushHistory();
+    return;
+  }
+  if (node.type !== "ai-image") return;
   if (role === "ai-model") {
     node._model = ev.target.value;
     node._quality = node._model === "gpt-image-2" ? (node._quality || "medium") : null;
@@ -2205,8 +2453,10 @@ els.nodes.addEventListener("click", ev => {
   if (ev.target.dataset.role === "upload") uploadImage(node);
   if (ev.target.dataset.role === "upload-group") uploadGroupImages(node);
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
+  if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
+  if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
   if (ev.target.dataset.role === "clear-image") {
-    if (node.type === "ai-image") {
+    if (node.type === "ai-image" || node.type === "angle-image") {
       node.generatedImage = null;
       node.taskId = null;
     } else {
@@ -2225,6 +2475,21 @@ els.nodes.addEventListener("click", ev => {
 });
 
 els.nodes.addEventListener("dblclick", ev => {
+  const promptEl = ev.target.closest('[data-role="angle-prompt"]');
+  if (promptEl) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    promptEl.dataset.originalText = promptEl.textContent;
+    promptEl.contentEditable = "true";
+    promptEl.classList.add("is-editing");
+    promptEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(promptEl);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return;
+  }
   if (ev.target.closest(".image-preview") || ev.target.closest(".ai-preview") || ev.target.closest(".group-preview")) {
     ev.preventDefault();
     ev.stopPropagation();
@@ -2245,6 +2510,35 @@ els.nodes.addEventListener("dblclick", ev => {
       const src = node.type === "ai-image" ? node.generatedImage : node.image;
       if (src) showLightbox(src, node.id);
     }
+  }
+});
+
+els.nodes.addEventListener("focusout", ev => {
+  const promptEl = ev.target.closest?.('[data-role="angle-prompt"][contenteditable="true"]');
+  if (!promptEl) return;
+  const nodeEl = promptEl.closest(".node");
+  const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
+  if (node?.type === "angle-image") {
+    node.anglePromptCustom = promptEl.textContent.trim();
+    node.prompt = resolvedAnglePrompt(node);
+    console.log("[角度变化] 关键词已编辑", { nodeId: node.id, length: node.prompt.length });
+    pushHistory();
+  }
+  promptEl.contentEditable = "false";
+  promptEl.classList.remove("is-editing");
+  render();
+});
+
+els.nodes.addEventListener("keydown", ev => {
+  const promptEl = ev.target.closest?.('[data-role="angle-prompt"][contenteditable="true"]');
+  if (!promptEl) return;
+  if (ev.key === "Escape") {
+    ev.preventDefault();
+    promptEl.textContent = promptEl.dataset.originalText || "";
+    promptEl.blur();
+  } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+    ev.preventDefault();
+    promptEl.blur();
   }
 });
 
@@ -2609,6 +2903,7 @@ els.viewport.addEventListener("contextmenu", ev => {
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
       ]],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
+      ["添加角度变化节点（测试功能）", () => addAngleImageNode(p.x, p.y, [])],
       ["节点对齐", () => tidyNodes()],
       ["添加输出节点", () => {
         const out = {
@@ -2797,11 +3092,21 @@ function clearImageDragState() {
 }
 
 els.nodes.addEventListener("dragstart", ev => {
-  if (!ev.target.closest("img")) return;
+  const nodeEl = ev.target.closest(".node");
+  if (!nodeEl) return;
   if (ev.dataTransfer) ev.dataTransfer.setData("application/x-canvasflow-internal-image", "1");
   ev.preventDefault();
+  ev.stopPropagation();
   clearImageDragState();
+  console.info("[节点拖动] 已阻止浏览器原生拖放", { nodeId: nodeEl.dataset.id, source: ev.target.tagName });
 });
+
+// Canvas images are visual content, not browser-draggable objects. Keeping this
+// capture guard makes node movement reliable even if a browser ignores the CSS
+// user-drag rule or restores native dragging for a cached image.
+els.nodes.addEventListener("mousedown", ev => {
+  if (ev.target.closest(".image-preview,.ai-preview,.group-preview")) ev.preventDefault();
+}, true);
 
 els.viewport.addEventListener("dragenter", ev => {
   if (!Array.from(ev.dataTransfer?.types || []).includes("Files") && !ev.dataTransfer?.getData("text/uri-list") && !ev.dataTransfer?.getData("text/html")) return;
@@ -2945,7 +3250,140 @@ function persistPages() {
   } catch {
     // Large base64 images can exceed local storage; JSON save still works.
   }
+  scheduleAutoBackup();
 }
+
+function autoBackupContent() {
+  saveCurrentPage();
+  const data = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, globalLibrary }));
+  for (const page of data.pages || []) {
+    if (page.data?.settings) page.data.settings.apiKey = "";
+  }
+  return JSON.stringify(data, null, 2);
+}
+
+async function writeAutoBackup(reason = "change") {
+  if (!autoBackupReady) return false;
+  const started = Date.now();
+  try {
+    const content = autoBackupContent();
+    const resp = await fetch("/api/auto-backup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: autoBackupFileName, content }),
+    });
+    const result = await resp.json().catch(() => ({}));
+    if (!resp.ok || !result.success) throw new Error(result.error || `HTTP ${resp.status}`);
+    console.info("[自动备份] 保存完成", { reason, file: autoBackupFileName, bytes: content.length, elapsedMs: Date.now() - started });
+    return true;
+  } catch (err) {
+    console.error("[自动备份] 保存失败", { reason, file: autoBackupFileName, message: err.message, elapsedMs: Date.now() - started });
+    return false;
+  }
+}
+
+function scheduleAutoBackup() {
+  if (!autoBackupReady) return;
+  if (autoBackupTimer) clearTimeout(autoBackupTimer);
+  autoBackupTimer = window.setTimeout(() => {
+    autoBackupTimer = null;
+    writeAutoBackup("change");
+  }, 2000);
+}
+
+function updateText(zh, en) {
+  return uiLanguage === "en" ? en : zh;
+}
+
+function renderCheckedUpdateStatus(data = lastUpdateCheckResult) {
+  if (!data || !els.updateStatus) return;
+  els.updateStatus.textContent = data.hasUpdate
+    ? updateText(`发现新版本 ${data.latestVersion}（当前 ${data.currentVersion}）`, `Version ${data.latestVersion} is available (current: ${data.currentVersion})`)
+    : updateText(`当前版本 ${data.currentVersion}，已经是最新版`, `Version ${data.currentVersion} is up to date`);
+}
+
+async function checkForUpdates({ silent = false, prompt = false } = {}) {
+  if (!els.updateStatus || (updateCheckStarted && silent)) return null;
+  updateCheckStarted = true;
+  els.checkUpdateBtn.disabled = true;
+  els.updateStatus.textContent = updateText("正在连接 GitHub 检查更新…", "Checking GitHub for updates…");
+  try {
+    const resp = await fetch("/api/update/check", { cache: "no-store" });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    lastUpdateCheckResult = data;
+    availableUpdate = data.hasUpdate ? data : null;
+    els.updateActions.classList.toggle("hidden", !data.hasUpdate);
+    els.releasePageLink.href = data.pageUrl || "https://github.com/wuxinliuyun-art/canvasflow/releases";
+    renderCheckedUpdateStatus(data);
+    console.info("[自动更新] 检查完成", { current: data.currentVersion, latest: data.latestVersion, hasUpdate: data.hasUpdate, asset: data.asset && data.asset.name });
+    if (data.hasUpdate && prompt) {
+      const notes = String(data.notes || "").trim().slice(0, 600);
+      const accepted = window.confirm(updateText(
+        `发现 CanvasFlow ${data.latestVersion}。\n\n${notes || "有新的 Windows 版本可用。"}\n\n现在下载并安装吗？安装前会自动备份当前项目。`,
+        `CanvasFlow ${data.latestVersion} is available.\n\n${notes || "A new Windows version is available."}\n\nDownload and install it now? The current project will be backed up first.`
+      ));
+      if (accepted) await installAvailableUpdate();
+    }
+    return data;
+  } catch (err) {
+    els.updateStatus.textContent = updateText("检查失败；可能是网络或 GitHub 暂时不可用，请稍后重试。", "Update check failed. GitHub or the network may be temporarily unavailable; try again later.");
+    if (!silent) toast(updateText(`无法检查更新：${err.message}；请检查网络后重试`, `Unable to check for updates: ${err.message}. Check the network and try again.`));
+    console.error("[自动更新] 检查失败", { message: err.message });
+    return null;
+  } finally {
+    els.checkUpdateBtn.disabled = false;
+  }
+}
+
+async function installAvailableUpdate() {
+  if (!availableUpdate || els.installUpdateBtn.disabled) return;
+  els.installUpdateBtn.disabled = true;
+  els.checkUpdateBtn.disabled = true;
+  try {
+    els.updateStatus.textContent = updateText("正在下载更新包，请不要关闭程序…", "Downloading the update; keep CanvasFlow open…");
+    const downloadResp = await fetch("/api/update/download", { method: "POST" });
+    const download = await downloadResp.json();
+    if (!downloadResp.ok) throw new Error(download.error || `HTTP ${downloadResp.status}`);
+
+    els.updateStatus.textContent = updateText("下载完成，正在备份当前项目…", "Download complete. Backing up the current project…");
+    const backedUp = await writeAutoBackup("before-update");
+    if (!backedUp) throw new Error(updateText("项目备份失败，已取消关闭和安装", "Project backup failed; shutdown and installation were cancelled"));
+
+    els.updateStatus.textContent = updateText("备份完成，正在启动更新器…", "Backup complete. Starting the updater…");
+    state.dirty = false;
+    const applyResp = await fetch("/api/update/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: download.file }),
+    });
+    const applied = await applyResp.json();
+    if (!applyResp.ok) throw new Error(applied.error || `HTTP ${applyResp.status}`);
+    els.updateStatus.textContent = updateText("项目已保存，程序即将关闭、更新并重新启动…", "Project saved. CanvasFlow will close, update, and restart…");
+    toast(updateText("项目已备份，正在更新 CanvasFlow", "Project backed up; updating CanvasFlow"));
+  } catch (err) {
+    state.dirty = true;
+    els.updateStatus.textContent = updateText("更新未完成，程序保持运行。请检查网络或杀毒软件后重试。", "Update did not complete; CanvasFlow remains open. Check the network or antivirus software and try again.");
+    toast(updateText(`更新失败：${err.message}；程序不会关闭`, `Update failed: ${err.message}. CanvasFlow will remain open.`));
+    console.error("[自动更新] 安装失败", { message: err.message });
+    els.installUpdateBtn.disabled = false;
+    els.checkUpdateBtn.disabled = false;
+  }
+}
+
+window.addEventListener("pagehide", () => {
+  if (!autoBackupReady || !navigator.sendBeacon) return;
+  if (autoBackupTimer) clearTimeout(autoBackupTimer);
+  autoBackupTimer = null;
+  try {
+    const content = autoBackupContent();
+    const payload = new Blob([JSON.stringify({ name: autoBackupFileName, content })], { type: "application/json" });
+    const queued = navigator.sendBeacon("/api/auto-backup", payload);
+    console.info("[自动备份] 页面关闭补发", { file: autoBackupFileName, bytes: content.length, queued });
+  } catch (err) {
+    console.error("[自动备份] 页面关闭补发失败", { file: autoBackupFileName, message: err.message });
+  }
+});
 
 function loadPagesFromStorage() {
   try {
@@ -3122,8 +3560,12 @@ if (els.languageSelect) {
     setUiLanguage(els.languageSelect.value);
     render();
     syncSettingsPanel();
+    renderCheckedUpdateStatus();
   };
 }
+
+if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
+if (els.installUpdateBtn) els.installUpdateBtn.onclick = installAvailableUpdate;
 
 els.apiKeyInput.onchange = () => {
   state.settings.apiKey = els.apiKeyInput.value.trim();
@@ -4132,6 +4574,10 @@ async function init() {
     }
   });
   uiObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+  autoBackupReady = true;
+  scheduleAutoBackup();
+  console.info("[自动备份] 已启用", { file: autoBackupFileName, intervalMs: 2000 });
+  window.setTimeout(() => checkForUpdates({ silent: true, prompt: true }), 1200);
 }
 
 init().catch(e => { console.error("[初始化] 启动失败", e); toast("启动失败：" + e.message); });

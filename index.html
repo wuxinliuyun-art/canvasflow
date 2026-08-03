@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260803-angle-copy">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -89,6 +89,11 @@
           </div>
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
         </section>
+        <section class="settings-card update-settings-card">
+          <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；安装前会先备份当前项目。</p></div><button id="checkUpdateBtn">检查更新</button></div>
+          <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
+          <div id="updateActions" class="update-actions hidden"><button id="installUpdateBtn" class="primary">下载并安装更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">查看 Release</a></div>
+        </section>
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
@@ -138,7 +143,7 @@
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>导出</h2><p>管理导出方式和本地文件夹。</p></div>
-        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="copyExportPathBtn">复制路径</button><button id="chooseFolderBtn" class="primary">设置导出文件夹</button></div><p class="setting-desc">完整路径可直接选择或复制；如果无法自动打开目录，可将路径粘贴到资源管理器地址栏。</p></section>
+        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="copyExportPathBtn">复制路径</button><button id="chooseFolderBtn" class="primary">设置导出文件夹</button></div><p class="setting-desc">完整路径可直接选择或复制；如果杀毒软件误判，请复制路径打开。</p></section>
       </div>
         </div>
       </div>
@@ -195,6 +200,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=20260803-angle-copy"></script>
 </body>
 </html>
