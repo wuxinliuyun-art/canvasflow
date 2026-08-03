@@ -528,7 +528,9 @@ async function requestHandler(req, res) {
       const body = JSON.parse((await readBody(req)).toString("utf-8"));
       const name = path.basename(String(body.name || ""));
       const content = String(body.content || "");
-      if (!/^CanvasFlow_\d{4}_\d{4}\.json$/.test(name)) throw new Error("自动备份文件名格式不正确");
+      if (!name || name.length > 100 || !name.toLowerCase().endsWith(".json") || /[<>:"/\\|?*\x00-\x1f]/.test(name)) {
+        throw new Error("自动备份文件名格式不正确");
+      }
       if (!content) throw new Error("自动备份内容为空");
       JSON.parse(content);
       const backupDir = path.join(dataRoot, "download", "自动备份");

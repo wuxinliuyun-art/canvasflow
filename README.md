@@ -214,7 +214,7 @@ Select an Output Node and click **Export** in the top toolbar:
 
 ### Automatic Project Backup
 
-CanvasFlow automatically backs up the current project to `download/自动备份/` while you work and makes a final save attempt when the page closes. The filename uses `CanvasFlow_MMDD_HHmm.json`; repeated saves during the same session overwrite that file. API keys are excluded from backups.
+CanvasFlow automatically backs up the current project to `download/自动备份/` while you work and makes a final save attempt when the page closes. The backup uses the current project name, and later saves overwrite the same file so only the latest copy of each named project is retained. API keys are excluded from backups.
 
 ### Software Updates
 
@@ -482,7 +482,7 @@ CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义
 
 ### 项目自动备份
 
-CanvasFlow 会在操作过程中自动把当前项目备份到 `download/自动备份/`，关闭页面时还会再尝试保存一次。文件名格式为 `CanvasFlow_月日_时分.json`，同一次运行中重复保存会覆盖该文件；备份不会包含 API Key。
+CanvasFlow 会在操作过程中自动把当前项目备份到 `download/自动备份/`，关闭页面时还会再尝试保存一次。文件名使用当前项目名称，同名项目后续保存会覆盖同一文件，因此每个项目名称只保留最新版本；备份不会包含 API Key。
 
 ### 软件更新
 

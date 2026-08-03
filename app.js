@@ -12,8 +12,11 @@ let autoBackupTimer = null;
 let availableUpdate = null;
 let lastUpdateCheckResult = null;
 let updateCheckStarted = false;
-const autoBackupStartedAt = new Date();
-const autoBackupFileName = `CanvasFlow_${String(autoBackupStartedAt.getMonth() + 1).padStart(2, "0")}${String(autoBackupStartedAt.getDate()).padStart(2, "0")}_${String(autoBackupStartedAt.getHours()).padStart(2, "0")}${String(autoBackupStartedAt.getMinutes()).padStart(2, "0")}.json`;
+
+function autoBackupFileName() {
+  const projectName = safeName(currentPage()?.name || "未命名项目").slice(0, 80) || "未命名项目";
+  return `${projectName}.json`;
+}
 
 function resolvedExportFolderLabel(value) {
   const label = String(value || "").trim();
@@ -3265,19 +3268,20 @@ function autoBackupContent() {
 async function writeAutoBackup(reason = "change") {
   if (!autoBackupReady) return false;
   const started = Date.now();
+  const fileName = autoBackupFileName();
   try {
     const content = autoBackupContent();
     const resp = await fetch("/api/auto-backup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: autoBackupFileName, content }),
+      body: JSON.stringify({ name: fileName, content }),
     });
     const result = await resp.json().catch(() => ({}));
     if (!resp.ok || !result.success) throw new Error(result.error || `HTTP ${resp.status}`);
-    console.info("[自动备份] 保存完成", { reason, file: autoBackupFileName, bytes: content.length, elapsedMs: Date.now() - started });
+    console.info("[自动备份] 保存完成", { reason, file: fileName, bytes: content.length, elapsedMs: Date.now() - started });
     return true;
   } catch (err) {
-    console.error("[自动备份] 保存失败", { reason, file: autoBackupFileName, message: err.message, elapsedMs: Date.now() - started });
+    console.error("[自动备份] 保存失败", { reason, file: fileName, message: err.message, elapsedMs: Date.now() - started });
     return false;
   }
 }
@@ -3376,12 +3380,13 @@ window.addEventListener("pagehide", () => {
   if (autoBackupTimer) clearTimeout(autoBackupTimer);
   autoBackupTimer = null;
   try {
+    const fileName = autoBackupFileName();
     const content = autoBackupContent();
-    const payload = new Blob([JSON.stringify({ name: autoBackupFileName, content })], { type: "application/json" });
+    const payload = new Blob([JSON.stringify({ name: fileName, content })], { type: "application/json" });
     const queued = navigator.sendBeacon("/api/auto-backup", payload);
-    console.info("[自动备份] 页面关闭补发", { file: autoBackupFileName, bytes: content.length, queued });
+    console.info("[自动备份] 页面关闭补发", { file: fileName, bytes: content.length, queued });
   } catch (err) {
-    console.error("[自动备份] 页面关闭补发失败", { file: autoBackupFileName, message: err.message });
+    console.error("[自动备份] 页面关闭补发失败", { file: autoBackupFileName(), message: err.message });
   }
 });
 
@@ -4576,7 +4581,7 @@ async function init() {
   uiObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
   autoBackupReady = true;
   scheduleAutoBackup();
-  console.info("[自动备份] 已启用", { file: autoBackupFileName, intervalMs: 2000 });
+  console.info("[自动备份] 已启用", { file: autoBackupFileName(), intervalMs: 2000 });
   window.setTimeout(() => checkForUpdates({ silent: true, prompt: true }), 1200);
 }
 
