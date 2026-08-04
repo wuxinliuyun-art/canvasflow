@@ -1,533 +1,196 @@
-﻿# CanvasFlow
+# CanvasFlow
 
-> Visual AI Image Workflow
+**本地运行的可视化 AI 图片工作流工具**
 
-**English** | [简体中文](#简体中文)
+CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快速生成、整理和保存图片，无需编程。
 
-A visual node-based canvas for combining text and images through drag-and-drop connections, generating images with AI, and exporting results in batches.
+[下载 Windows 版](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [English](README_EN.md)
 
-![CanvasFlow interface screenshot](screenshot.png)
-
----
-
-## Features
-
-- **Visual node canvas** — Combine text and images by dragging and connecting nodes. No coding experience required.
-- **One-click AI image generation** — Mix text prompts and reference images with support for the following models:
-
-| Model | Cost | Speed |
-|------|------|------|
-| GPT Image 2 | 0.085 credits/image | ~60s |
-| Gemini 3.1 Flash | 0.3 credits/image | ~45s |
-
-- **Batch generation** — Import a group of reference images and process them one by one, with concurrency control and progress tracking.
-- **Grouping and ungrouping** — Combine selected nodes into a group node, with expansion and thumbnail previews.
-- **Multiple projects** — Create multiple project tabs with automatic local browser storage.
-- **Undo / redo** — Full history with up to 20 undo and redo steps.
-- **Lightbox preview** — Double-click an image to view it in a lightbox and navigate with the keyboard or mouse wheel.
-- **Create from clipboard** — Copy an image or text, then press Ctrl+V on the canvas to create a node directly.
-- **Drag images onto the canvas** — Drop local images or supported web images to create image nodes; dropping one image onto an existing image node replaces it.
-- **Reusable custom assets** — Save complete text blocks and images locally, then insert them quickly from the canvas context menu.
-- **Per-node AI progress** — Every AI Image node shows its own generation stage and progress while batch tasks continue independently.
-- **Camera-angle transformation (Beta)** — Connect one reference image, adjust pitch, yaw, roll, and zoom across ±180°, optionally reverse left/right wording, then generate a connected image node with Gemini 3.1 Flash. Prompts describe changes relative to the source view instead of assuming a top-down or eye-level camera.
-- **Quick custom-asset insertion** — Right-click an empty area and choose a saved text or image asset from the compact submenu.
-- **Automatic port cleanup** — Detect and release an occupied server port during startup to prevent launch failures.
-- **Bilingual interface** — Switch between Simplified Chinese and English in Settings. The selected language is remembered automatically.
-- **Windows-friendly startup** — The packaged EXE starts the local server and opens CanvasFlow in the default browser automatically.
-- **Automatic updates** — Checks GitHub Releases at startup, downloads the single Windows ZIP, backs up the current project, then replaces and restarts the packaged EXE.
+![CanvasFlow 主界面](screenshot.png)
 
 ---
 
-## Quick Start (Read This First)
+## 如何使用
 
-### Runtime Requirements
+### 1. 下载并运行
 
-**Using the Windows Release ZIP:** Windows 10/11 only. No Node.js installation is required. Folder selection and automatic browser launch use the PowerShell 5.1 included with Windows.
+1. 打开 [GitHub Releases](https://github.com/wuxinliuyun-art/canvasflow/releases/latest)。
+2. 下载 `CanvasFlow-Windows-x64.zip`。
+3. 将 ZIP 完整解压到一个固定文件夹。
+4. 双击运行 `CanvasFlow-Windows-x64.exe`。
+5. 程序会自动使用默认浏览器打开 CanvasFlow。
 
-**Running from source:** Install Node.js 18 or later. CanvasFlow uses only Node.js built-in modules, so there are no runtime npm dependencies and no `npm install` step is required.
+> 请不要直接在压缩包中运行 EXE。首次运行时，Windows 或杀毒软件可能要求确认，请确认文件来自本项目官方 Release 后选择允许。
 
-```powershell
-node server.js
-```
+如果没有自动打开页面，请在浏览器中访问 `http://127.0.0.1:5173/`。
 
-Then open `http://127.0.0.1:5173/`. On Windows, you can also double-click `start.bat`.
+### 2. 填写 API Key
 
-**Building the Windows EXE:** Install or temporarily run `pkg` 5.8.1, then execute:
+1. 点击右上角的齿轮按钮。
+2. 进入“AI 绘图”设置。
+3. 填写 API Key 并保存。
 
-```powershell
-npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
-```
+[注册获取 API](https://apimart.ai/register?aff=W5d401)
 
-The source code does not bundle Node.js. The Release EXE does. Antivirus software may ask for permission when the EXE starts PowerShell to open the default browser or choose a folder.
+> API Key 保存在当前电脑中，不会写入项目自动备份。
 
-### 1. Start the Server
+### 3. 创建节点
 
-Double-click `CanvasFlow-Windows-x64.exe`. The application starts the local server and opens your browser automatically.
+在画布空白位置点击鼠标右键，可以创建文字、图片、AI 绘图、角度变化、编组和输出节点，也可以插入已经保存的自定义文字和图片。
 
-> Node.js and other dependencies are not required.
+图片还可以直接从电脑拖入画布，或复制后粘贴。
 
-After startup, visit **http://127.0.0.1:5173** in your browser.
-
-### 2. Choose the Interface Language
-
-1. Click the **gear-shaped Settings** button in the upper-right corner.
-2. Choose **General** from the left navigation.
-3. Choose **Simplified Chinese** or **English** under **Interface Language**.
-
-The application follows your system language on first launch and remembers your selection afterward.
-
-### 3. Configure the API Key (Required on First Use)
-
-1. Click the **gear-shaped Settings** button in the upper-right corner.
-2. Open the **AI Image** section and enter your API Key.
-3. Click **Verify** to confirm that the key is valid.
-4. Click **Save**. The key will be loaded automatically the next time you start the application.
-
-Need a key? [Register through the API page](https://apimart.ai/register?aff=W5d401).
-
-> The API Key is stored in the browser's localStorage and is not uploaded to any other server. Before sharing the application, click **Clear** to remove saved keys.
-
-### 4. Start Using the Canvas
-
-- **Create a text node:** Enter text in the field at the bottom, then press Enter or click **Create**.
-- **Create an image node:** Drag in an image, paste one from the clipboard, or use the right-click menu.
-- **Connect nodes:** Drag from a node's output port (the dot on the right) to another node's input port (the dot on the left).
-- **Generate an AI image:** Right-click a node and choose **AI Image**, or select nodes and click **Batch Run** in the top toolbar.
-
----
-
-## Basic Controls
-
-| Action | How to Use It |
-|------|------|
-| Pan the canvas | Hold Space and drag, or drag with the middle mouse button |
-| Zoom the canvas | Use the mouse wheel |
-| Move a node | Drag the node |
-| Box-select nodes | Drag over an empty area |
-| Add to selection | Shift + click a node |
-| Undo / redo | Ctrl+Z / Ctrl+Y |
-| Copy / paste | Ctrl+C / Ctrl+V |
-| Group / ungroup | Right-click selected nodes |
-| Delete nodes | Press Delete or use the right-click menu |
-| Arrange nodes | Right-click an empty area and choose **Arrange Nodes** |
-| Enable / disable | Right-click a node and choose **Toggle Enabled/Disabled**. Disabled nodes are excluded from AI generation and export. |
-
-Click the semi-transparent keyboard button in the lower-left corner to open the shortcut reference. Click outside it or press Esc to close it.
-
----
-
-## Node Types
-
-| Node | Description |
-|------|------|
-| **Text Node** | Enter a prompt and resize the node from its lower-right corner. |
-| **Image Node** | Upload or paste an image to use as a reference. |
-| **AI Image Node** | Connect text and image nodes, then generate an image with AI. |
-| **Angle Change Node (Beta)** | Adjust camera pitch, yaw, roll, and zoom from a connected reference image, then generate the selected viewpoint. |
-| **Group Node** | Package multiple nodes together with expanded and thumbnail preview modes. |
-| **Output Node** | Mark an export target by connecting it to the node you want to export. |
-
----
-
-## Custom Image Nodes
-
-In addition to basic image nodes, CanvasFlow includes a custom asset system for quickly reusing frequently needed images.
-
-### Five Ways to Create Image Nodes
-
-| Method | Instructions |
-|------|------|
-| **Drag a file** | Drag an image file directly onto the canvas. |
-| **Paste with Ctrl+V** | Copy an image, then press Ctrl+V on the canvas. |
-| **Upload button** | Click **Upload** inside an image node and choose a file. |
-| **Right-click menu** | Right-click an empty area and choose **Add Image Node** to create an empty node for later upload. |
-| **Custom asset** | Right-click an empty area and select a saved custom asset to insert it immediately. |
-
-### Custom Asset System
-
-Save frequently used reference images—such as model photos, logos, or watermark templates—as custom assets. They can then be inserted from the right-click menu without uploading them each time.
-
-**Location:** Settings → Asset Library
-
-| Feature | Description |
-|------|------|
-| Add an asset | Enter a name and choose an image. The image is saved by the local server. |
-| Rename | Click the button beside the asset name to change its display name. |
-| Delete | Remove the asset from the list and right-click menu, and delete its server-side file. |
-| Insert from right-click | Right-click an empty area, hover over **Custom Nodes**, then choose a saved text or image asset. |
-
-### Custom Text and Image Templates
-
-CanvasFlow can save complete multi-line text blocks and images as reusable custom nodes.
-
-On a fresh installation with an entirely empty asset library, CanvasFlow adds two starter text assets: **Image to Line Art** and **Multi-view Reference**. Existing libraries are never overwritten or appended to automatically.
-
-- Manage custom text and images under **Settings → Asset Library**. The library is stored locally beside the app and shared by every project. Text rows show a shortened preview, while the editor always shows the complete content. Custom assets do not require color settings.
-- Right-click an existing text or image node to save it as a custom template. AI image results are supported as well.
-- Text or image nodes created from the library are regular independent copies. Editing or deleting an asset never changes nodes that were already created.
-- Import selected assets from a project JSON file. Duplicate names receive a numbered suffix automatically. Project JSON files back up the shared library, including complete custom image data.
-
-### Other Image Node Features
-
-| Feature | Instructions |
-|------|------|
-| **Double-click preview** | Double-click an image node to open the full-screen lightbox. |
-| **Lightbox annotation** | Paint color blocks in the lightbox, then confirm to create a new edited image node. |
-| **Folder import** | Choose an image folder to create a group node containing all images in that folder. |
-| **Batch import** | Select multiple image files to create nodes in a four-column grid. |
-| **Use as a reference** | Connect an image node to an AI Image node as an upstream reference image. |
-
----
-
-## AI Image Workflow
+### 4. 连接并生成图片
 
 ```text
-Text Node + Image Node ──connect──▶ AI Image Node ──connect──▶ Output Node
+文字节点 ─┐
+          ├─→ AI 绘图节点 ─→ 生成的图片节点
+图片节点 ─┘
 ```
 
-1. Create a Text Node for the prompt and/or an Image Node for a reference image.
-2. Connect them to an AI Image Node.
-3. Set the model, resolution, quality, and aspect ratio in that AI Image Node, then click **Generate**.
-4. The generated image appears automatically in a new Image Node on the right.
-5. Connect the generated Image Node to an Output Node, then export it.
+1. 在文字节点中输入想生成的画面。
+2. 在图片节点中上传参考图片。
+3. 将文字和图片连接到 AI 绘图节点。
+4. 在 AI 绘图节点中选择模型、分辨率、画质和比例。
+5. 点击“生成”。
 
-**Batch generation:** Select multiple nodes and click **Batch Run** in the toolbar to generate AI images for them in sequence.
-
-During single or batch generation, every AI Image node shows its own colored border, current stage, and progress bar. The toolbar progress indicator remains available for the overall batch.
+只连接文字节点时可以进行文字生图；同时连接图片节点时，AI 会参考输入图片生成。完成后，结果会自动创建为普通图片节点。
 
 ---
 
-## Export
+## 核心功能
 
-### Export Button
+### 可视化节点画布
 
-Select an Output Node and click **Export** in the top toolbar:
+- 通过节点和连线组织图片生成流程
+- 支持拖动、框选、复制、粘贴、删除、撤销和重做
+- 支持网格吸附、画布缩放、小地图和编组
+- 点击左下角键盘图标可查看快捷键
 
-- Enable **Export as ZIP** (recommended for best compatibility) to download a ZIP archive.
-- Disable it to write files directly to a local folder.
-- By default, only final AI-generated images are exported under `生成结果/`. Regular text, reference images, and project JSON are excluded.
-- Enable **Also export inputs** to add separate `参考图/` and `关键词.xlsx` outputs. Each prompt starts with the exact exported reference-image filenames.
+### AI 图片生成
 
-### Export Folder Settings
+- 支持文字生图、文字加参考图和多张参考图
+- 每个 AI 绘图节点单独设置模型、分辨率、画质和比例
+- 多个节点可以分别执行任务并独立显示进度
+- 生成结果自动创建为图片节点，可继续连接和处理
 
-⚠ Due to browser security restrictions, the application cannot write directly to the system drive (C:). Set the export path to D: or another non-system drive.
+### 批量生成
 
-### Automatic Project Backup
+多个 AI 绘图节点可以同时运行。使用多张参考图片或编组图片时，每张结果都会单独显示，方便继续选择、连接和处理。
 
-CanvasFlow automatically backs up the current project to `download/自动备份/` while you work and makes a final save attempt when the page closes. The backup uses the current project name, and later saves overwrite the same file so only the latest copy of each named project is retained. API keys are excluded from backups.
+### 自定义素材
 
-### Software Updates
+- 保存经常使用的整段文字和参考图片
+- 从画布右键菜单快速创建
+- 所有项目共用本机素材库
+- 从素材库创建的节点是普通独立副本
+- 修改或删除素材不会影响已经创建的节点
+- 自定义图片支持双击放大预览
 
-The packaged Windows EXE checks the latest [GitHub Release](https://github.com/wuxinliuyun-art/canvasflow/releases) at startup. You can also use **Settings → General → Check for Updates**. When an update is accepted, CanvasFlow downloads `CanvasFlow-Windows-x64.zip`, saves the current project first, closes the local server, replaces the EXE, and restarts. If downloading, backup, or updater startup fails, the running application remains open.
+首次使用且素材库为空时，CanvasFlow 会提供“图片转线稿”和“多视角参考”两条示例文字素材。
+
+### 角度变化（测试功能）
+
+- 连接一张参考图片并重新生成不同观察角度
+- 水平、俯仰和滚转均支持 `-180°～180°`
+- 支持缩放和反转自动关键词中的左右方向
+- 关键词以原图当前视角为基准
+- 生成结果自动创建并连接为普通图片节点
+
+> 该功能由 AI 根据参考图重新生成，并不是严格的三维模型旋转。复杂物体、遮挡区域和大角度变化可能产生偏差。
+
+### 图片操作与界面
+
+- 支持上传、拖入、粘贴、替换和清除图片
+- 支持双击放大预览和保存为自定义素材
+- 支持简体中文与 English，语言选择会自动保留
+- 支持项目自动保存和 GitHub Release 更新
 
 ---
 
-## API Architecture
+## 保存位置与常见问题
+
+### 生成的图片在哪里？
+
+AI 生成成功后，图片会显示在画布中，同时自动保存到：
 
 ```text
-Browser app.js ──fetch──▶ localhost:5173 /api/* ──proxy──▶ api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai
-                                                               ↑ automatic failover ↑
+CanvasFlow 所在文件夹\export\ai_generated\
 ```
 
-- All AI API requests are forwarded through the `server.js` backend proxy to avoid browser cross-origin and network issues.
-- Multiple API domains are built in. If one is unavailable, the server automatically tries the next one.
+例如程序位于 `D:\CanvasFlow\CanvasFlow-Windows-x64.exe`，生成图片默认保存在 `D:\CanvasFlow\export\ai_generated\`。
 
----
+如需整理指定结果，也可以连接输出节点并使用顶部的“导出”功能。
 
-## Project Structure
+### 项目保存在哪里？
+
+项目自动备份保存在：
 
 ```text
-├── app.js              # Main frontend logic (ES6+)
-├── index.html          # Page structure
-├── styles.css          # Styles
-├── server.js           # Node.js HTTP server
-├── CanvasFlow-Windows-x64.exe # Standalone executable compiled with pkg (Node.js not required)
-├── package.json        # pkg build configuration
-├── start.bat           # Development startup script
-└── download/images/    # Runtime-only custom image assets (created locally, ignored by Git)
+CanvasFlow 所在文件夹\download\自动备份\
 ```
 
----
+自动备份使用当前项目名称，同名项目后续保存会覆盖旧文件，每个项目名称只保留最新版本。也可以使用顶部保存按钮手动保存项目 JSON。
 
-## Build and Distribution
+### 自定义素材保存在哪里？
 
-```bash
-npm install -g pkg
-pkg server.js --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
-```
+自定义文字和图片保存在 CanvasFlow 本地数据目录中，只供当前电脑使用，不会上传到 GitHub，也不会包含在发布 ZIP 中。
 
-After compilation, `CanvasFlow-Windows-x64.exe` runs independently and can be distributed without Node.js or other dependencies.
+`data/custom-library.json` 是程序运行后自动生成的本地素材配置，不是发布包自带文件。
 
----
+### EXE 无法运行怎么办？
 
-## License
+- 确认 ZIP 已经完整解压，不要直接在压缩包中运行。
+- 检查 Windows 或杀毒软件是否阻止程序运行。
+- 确认文件来自本项目官方 Release。
 
-MIT
+### 为什么没有自动打开页面？
 
----
+请在浏览器中手动访问 `http://127.0.0.1:5173/`。如果仍然无法打开，请关闭其他正在运行的 CanvasFlow 窗口后重试。
 
-<a id="简体中文"></a>
+### AI 图片生成失败怎么办？
 
-# CanvasFlow（简体中文）
+请检查 API Key、网络连接、API 账户余额，以及当前模型是否支持所选分辨率和比例。
 
-> Visual AI Image Workflow
+### 为什么不能直接打开图片文件夹？
 
-[English](#canvasflow) | **简体中文**
+部分杀毒软件会阻止程序启动 Windows 文件资源管理器。可以复制设置中显示的完整路径，再粘贴到资源管理器地址栏打开。
 
-一个可视化的节点式画布工具，通过拖拽、连线的方式组合文字和图片，一键调用 AI 生成图片，支持批量导出。
+### 如何更新 CanvasFlow？
 
-![CanvasFlow 界面截图](screenshot.png)
-
----
-
-## 特色功能
-
-- **可视化节点画布** — 拖拽连线组合文字和图片，零代码操作，普通人也能上手
-- **一键 AI 生图** — 文字+参考图混合输入，支持以下模型：
-
-| 模型 | 消耗 | 速度 |
-|------|------|------|
-| GPT Image 2 | 0.085 积分/张 | ~60s |
-| Gemini 3.1 Flash | 0.3 积分/张 | ~45s |
-
-- **批量生成** — 导入一组参考图后自动逐张生成，支持并发控制和进度显示
-- **编组与解组** — 选中多个节点一键打包成编组节点，支持展开和缩略图预览
-- **多页面管理** — 支持创建多个项目标签页，数据自动保存在浏览器本地
-- **撤回 / 重做** — 完整的历史记录，支持 20 步撤回和重做
-- **灯箱预览** — 双击图片以灯箱模式查看，支持键盘/滚轮翻页
-- **剪贴板直创建** — 复制图片或文字后，在画布上 Ctrl+V 直接创建节点
-- **自定义素材快捷插入** — 右键画布空白处，从紧凑的三级菜单中选择已保存的文字或图片素材
-- **拖拽图片创建节点** — 可将本地图片或支持的网页图片拖入画布；拖到已有图片节点上可直接替换
-- **AI 节点独立进度** — 单张与批量任务都在对应 AI 绘图节点上显示阶段和进度
-- **角度变化节点（测试功能）** — 连接一张参考图后，可在 ±180° 范围内调整俯仰、水平、滚转和缩放，也可反转关键词中的左右方向；关键词以原图视角为基准，不预设俯拍或平视，生成结果会自动创建并连接图片节点
-- **Windows 便捷启动** — 发布版 EXE启动本地服务后自动使用默认浏览器打开 CanvasFlow
-- **自动更新** — 启动时检查 GitHub Releases，下载唯一的 Windows ZIP，备份当前项目后覆盖并重启 EXE
-- **端口自动清理** — 启动时自动检测并释放被占用的端口，避免闪退
-- **中英双语界面** — 可在设置中切换简体中文和 English，并自动记住选择
+CanvasFlow 会自动检查 GitHub Releases。更新前会先保存当前项目；已经是最新版时不会重复更新，更新失败时也不会关闭当前程序。
 
 ---
 
-## 快速开始（第一次使用必读）
+## 下载与反馈
 
-### 运行环境
+### 下载最新版
 
-**使用 Windows Release ZIP：** 仅支持 Windows 10/11，不需要安装 Node.js。选择文件夹和自动打开默认浏览器依赖 Windows自带的 PowerShell 5.1。
+[下载 CanvasFlow Windows 版](https://github.com/wuxinliuyun-art/canvasflow/releases/latest)
 
-**从源码运行：** 需要 Node.js 18 或更高版本。CanvasFlow 运行时只使用 Node.js内置模块，没有 npm运行依赖，不需要执行 `npm install`。
+请选择 `CanvasFlow-Windows-x64.zip`。GitHub 自动显示的 Source code 文件是项目源码，普通用户不需要下载。
 
-```powershell
-node server.js
-```
+### 问题反馈
 
-然后访问 `http://127.0.0.1:5173/`。Windows也可以双击 `start.bat`。
+如遇到问题，请前往 [GitHub Issues](https://github.com/wuxinliuyun-art/canvasflow/issues)，并尽量提供问题截图、操作步骤、CanvasFlow 版本、浏览器控制台错误，以及是否安装了杀毒软件。
 
-**构建 Windows EXE：** 使用 `pkg` 5.8.1，执行：
+### 数据与隐私
 
-```powershell
-npx --yes pkg@5.8.1 . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
-```
-
-源码不包含 Node.js环境，Release EXE已包含。EXE调用 PowerShell自动打开浏览器或选择文件夹时，杀毒软件可能首次询问授权。
-
-### 1. 启动服务
-
-直接双击 `CanvasFlow-Windows-x64.exe`，程序会自动启动并打开浏览器。
-
-> 无需安装 Node.js，无需安装任何依赖。
-
-启动后在浏览器访问：**http://127.0.0.1:5173**
-
-### 2. 选择界面语言
-
-1. 点击界面右上角的 **齿轮形设置** 按钮
-2. 在左侧导航中选择 **常规**
-3. 在 **界面语言** 中选择 **简体中文** 或 **English**
-
-首次启动会跟随系统语言，之后自动记住你的选择。
-
-### 3. 配置 API Key（首次使用必做）
-
-1. 点击界面右上角的 **齿轮形设置** 按钮
-2. 在"AI绘图"区域，输入你的 API Key
-3. 点击 **验证** 确认 Key 有效
-4. 点击 **保存** 保存 Key（下次启动自动读取）
-
-还没有 Key？可前往 [API 注册页面](https://apimart.ai/register?aff=W5d401) 获取。
-
-> API Key 保存在浏览器 localStorage 中，不会上传到任何服务器。分享给他人使用前记得点击 **清除**。
-
-### 4. 开始使用
-
-- **创建文字节点**：底部输入框输入文字，回车或点"创建"
-- **创建图片节点**：拖入图片、粘贴剪贴板图片，或通过右键菜单
-- **连接节点**：从一个节点的输出端口（右侧圆点）拖到另一个节点的输入端口（左侧圆点）
-- **AI 生成图片**：右键节点 → AI绘图，或选中后点顶部"批量执行"
+- CanvasFlow 在本地运行，项目和自定义素材保存在当前电脑。
+- API Key 不会写入项目自动备份。
+- 使用 AI 生成功能时，输入文字和参考图片会发送给用户配置的 API 服务。
+- 请勿上传包含隐私、机密或无权使用的图片。
 
 ---
 
-## 基本操作
+## 许可证
 
-| 操作 | 方式 |
-|------|------|
-| 移动画布 | 按住空格键 + 拖拽，或鼠标中键拖拽 |
-| 缩放画布 | 鼠标滚轮 |
-| 移动节点 | 直接拖拽 |
-| 框选多个节点 | 空白处拖拽 |
-| 多选追加 | Shift + 点击节点 |
-| 撤回 / 重做 | Ctrl+Z / Ctrl+Y |
-| 复制 / 粘贴 | Ctrl+C / Ctrl+V |
-| 编组 / 取消编组 | 右键选中的节点 |
-| 删除节点 | Delete 键或右键菜单 |
-| 节点对齐整理 | 右键空白处 → "节点对齐" |
-| 切换启用/停用 | 右键节点 → 切换启用/停用（停用的节点不参与 AI 生成和导出） |
+CanvasFlow 使用 [MIT License](LICENSE) 开源。
 
-点击屏幕左下角的半透明键盘按钮可查看快捷键；点击空白区域或按 Esc 即可关闭。
+你可以自由使用、修改和分发本项目，包括用于商业用途，但需要保留原作者的版权和许可证声明。本软件按“原样”提供，作者不对使用过程中产生的损失承担担保责任。
+
+CanvasFlow 调用的第三方 AI API、模型及生成内容，仍需遵守相应服务商的使用条款。
 
 ---
 
-## 节点类型
-
-| 节点 | 说明 |
-|------|------|
-| **文字节点** | 输入提示词，可拖拽右下角缩放 |
-| **图片节点** | 上传或粘贴图片作为参考图 |
-| **AI绘图节点** | 连接文字/图片节点后，一键调用 AI 生成图片 |
-| **角度变化节点（测试功能）** | 连接参考图，在编辑器中调整俯仰、水平、滚转和缩放后生成新视角 |
-| **编组节点** | 将多个节点打包成一个，支持展开/缩略图预览 |
-| **输出节点** | 标记导出目标，连接到需要导出的节点 |
-
----
-
-## 自定义图片节点
-
-除了基本的图片节点，项目还支持自定义素材系统，方便快速复用常用图片：
-
-### 创建图片节点的 5 种方式
-
-| 方式 | 操作 |
-|------|------|
-| **拖入文件** | 将图片文件直接拖入画布 |
-| **Ctrl+V 粘贴** | 复制图片后，在画布上 Ctrl+V 直接创建节点 |
-| **上传按钮** | 点击图片节点内的"上传"按钮选择文件 |
-| **右键菜单** | 右键空白处 → "添加图片节点"（空白节点，后续上传） |
-| **自定义素材** | 右键空白处 → 选择已添加的自定义素材，一键插入（见下文） |
-
-### 自定义素材系统
-
-可以把常用的参考图（如模特图、Logo、水印模板等）预设为"自定义素材"，之后在右键菜单中一键插入，无需每次手动上传。
-
-**配置路径**：设置面板 → 素材库
-
-| 功能 | 说明 |
-|------|------|
-| 添加素材 | 输入名称 + 选择图片，图片会保存到服务端 |
-| 重命名 | 点击素材名称旁的按钮修改显示名 |
-| 删除 | 从列表和右键菜单中移除（同时删除服务端文件） |
-| 右键插入 | 右键画布空白处，直接选择已有素材创建节点 |
-
-### 自定义图文模板
-
-CanvasFlow 支持把完整的多行文字和图片保存为可复用的自定义节点。
-
-全新安装且素材库完全为空时，会自动加入 **图片转线稿** 和 **多视角参考** 两条默认文字素材；已有素材库不会被覆盖，也不会自动追加。
-
-- 在 **设置 → 素材库** 中管理自定义文字和图片。素材库自动保存在程序所在目录并由所有项目共用，文字列表会显示截断的内容摘要，编辑时显示完整内容；图文素材都不需要设置颜色。
-- 可在现有文字、图片或已有结果的 AI 图片节点上右键，直接保存为自定义模板。
-- 通过素材创建的文字或图片是普通的独立节点；以后编辑或删除素材不会改变已经创建的节点。
-- 支持从项目 JSON 中勾选导入；同名素材会自动添加数字后缀。项目 JSON 会备份全局素材库，换电脑后也能恢复。
-
-### 图片节点的其他能力
-
-| 功能 | 操作 |
-|------|------|
-| **双击预览** | 双击图片节点打开灯箱全屏预览 |
-| **灯箱标注** | 在灯箱中使用画笔绘制色块，确认后自动生成"局部修改"图片节点 |
-| **文件夹导入** | 选择图片文件夹后，自动创建编组节点，将文件夹内所有图片打包 |
-| **批量导入** | 多选图片文件，以网格布局批量创建图片节点（每行4个） |
-| **作为参考图** | 将图片节点连接到 AI绘图节点，作为 AI 生成的上游参考图 |
-
----
-
-## AI 绘图工作流
-
-```
-文字节点 + 图片节点 ──连线──▶ AI绘图节点 ──连线──▶ 输出节点
-```
-
-1. 创建文字节点（写提示词）和/或图片节点（参考图）
-2. 将它们连接到 AI绘图节点
-3. 在该 AI绘图节点中设置模型、分辨率、画质和比例，然后点击 **生成**
-4. 单张生成结果保留在 AI 绘图节点中，可直接连接到其他 AI 节点或输出节点
-5. 批量生成仍会为每张结果创建独立图片节点，方便分别处理
-
-**批量生成**：选中多个节点，点击工具栏的 **批量执行**，会依次为每个节点生成 AI 图片。
-
-单张或批量生成时，每个 AI 绘图节点都会显示独立的彩色边框、当前阶段和进度条；顶部进度仍用于查看整体批次。
-
----
-
-## 导出
-
-### 按钮导出
-
-选中输出节点，点击顶部 **导出** 按钮：
-- 勾选 **ZIP 压缩包导出**（推荐，兼容性最好）：导出为 zip 文件
-- 不勾选：直接写入本地文件夹
-- 默认只导出 AI 生成结果，并统一放入 `生成结果/`；普通文字、参考图和项目 JSON 不会进入成果导出
-- 勾选 **同时导出输入素材** 后，额外生成独立的 `参考图/` 和 `关键词.xlsx`；每条关键词开头使用与参考图文件完全一致的文件名
-
-### 导出文件夹设置
-
-点击 **设置导出文件夹** 选择本地目录，程序会保存并显示完整路径。可以点击 **复制路径**，再粘贴到资源管理器地址栏；也可以直接手动输入完整路径。
-
-### 项目自动备份
-
-CanvasFlow 会在操作过程中自动把当前项目备份到 `download/自动备份/`，关闭页面时还会再尝试保存一次。文件名使用当前项目名称，同名项目后续保存会覆盖同一文件，因此每个项目名称只保留最新版本；备份不会包含 API Key。
-
-### 软件更新
-
-打包后的 Windows EXE 会在启动时检查最新的 [GitHub Release](https://github.com/wuxinliuyun-art/canvasflow/releases)，也可以通过 **设置 → 常规 → 检查更新** 手动检查。确认更新后，CanvasFlow 会下载 `CanvasFlow-Windows-x64.zip`，先保存当前项目，再关闭本地服务、覆盖 EXE 并重新启动。下载、备份或更新器启动失败时，程序会保持运行。
-
----
-
-## API 架构说明
-
-```
-浏览器 app.js ──fetch──▶ localhost:5173 /api/* ──代理──▶ api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai
-                                                              ↑ 自动故障转移 ↑
-```
-
-- 所有 AI API 请求通过 `server.js` 后端代理转发，避免浏览器跨域和网络问题
-- 内置多域名故障转移，一个不可达自动切换下一个
-
----
-
-## 项目结构
-
-```
-├── app.js              # 前端主逻辑（ES6+）
-├── index.html          # 页面骨架
-├── styles.css          # 样式
-├── server.js           # Node.js HTTP 服务器
-├── CanvasFlow-Windows-x64.exe # pkg 编译的独立可执行文件（免装 Node.js）
-├── package.json        # pkg 打包配置
-├── start.bat           # 开发启动脚本
-└── download/images/    # 运行时自定义图片（本地创建，Git忽略）
-```
-
----
-
-## 打包分发
-
-```bash
-npm install -g pkg
-pkg server.js --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe
-```
-
-编译后 `CanvasFlow-Windows-x64.exe` 可独立运行，发给他人无需 Node.js 或其他依赖。
-
----
-
-## License
-
-MIT
+[最新版本](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [问题反馈](https://github.com/wuxinliuyun-art/canvasflow/issues) · [English](README_EN.md)

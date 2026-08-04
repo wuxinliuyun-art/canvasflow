@@ -1,7 +1,5 @@
-# CanvasFlow 中文文档已合并到首页
+# CanvasFlow 简体中文文档
 
-为了让语言切换后仍停留在 GitHub 项目首页，中英文文档现在统一放在 `README.md` 中。
+中文文档现已作为 GitHub 项目首页的默认说明。
 
-[在首页查看简体中文文档](README.md#简体中文)
-
-[View the English documentation](README.md#canvasflow)
+[查看简体中文文档](README.md) · [View the English documentation](README_EN.md)
