@@ -3,13 +3,11 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const zlib = require("zlib");
-const { execSync } = require("child_process");
 const packageInfo = require("./package.json");
 
 const root = __dirname;
-const dataRoot = typeof process.pkg !== "undefined" ? path.dirname(process.execPath) : path.resolve(__dirname);
-const port = Number(process.env.PORT || 5173);
+let dataRoot = root;
+let secretProvider = () => "";
 const APP_VERSION = packageInfo.version;
 const RELEASES_API = "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest";
 const RELEASES_LATEST = "https://github.com/wuxinliuyun-art/canvasflow/releases/latest";
@@ -24,26 +22,6 @@ const mime = {
 };
 
 const exportBrowseRoots = new Map();
-function openDefaultBrowser(url) {
-  if (process.env.CANVASFLOW_NO_BROWSER === "1") {
-    console.info("[启动] 已跳过自动打开浏览器（测试模式）");
-    return;
-  }
-  if (process.platform !== "win32") {
-    console.info(`[启动] 请在浏览器中打开: ${url}`);
-    return;
-  }
-  const { execFile } = require("child_process");
-  const encodedUrl = Buffer.from(url, "utf16le").toString("base64");
-  const script = `$ErrorActionPreference='Stop'; $u=[System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encodedUrl}')); Start-Process -FilePath $u`;
-  const encodedScript = Buffer.from(script, "utf16le").toString("base64");
-  const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-  execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 15000 }, err => {
-    if (err) console.error("[启动] 自动打开默认浏览器失败", { code: err.code, killed: err.killed, message: err.message });
-    else console.info("[启动] 已请求默认浏览器打开", { url });
-  });
-}
-
 function configuredExportRoot(folderPath) {
   return folderPath && folderPath !== "export"
     ? (path.isAbsolute(folderPath) ? path.normalize(folderPath) : path.resolve(dataRoot, folderPath))
@@ -51,6 +29,37 @@ function configuredExportRoot(folderPath) {
 }
 function htmlEscape(value) {
   return String(value || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+var configPath = path.join(dataRoot, "data", "config.json");
+function configureRuntime(options = {}) {
+  dataRoot = path.resolve(options.dataRoot || root);
+  configPath = path.join(dataRoot, "data", "config.json");
+  secretProvider = typeof options.getApiKey === "function" ? options.getApiKey : () => "";
+  for (const folder of ["data", "download", "export"]) fs.mkdirSync(path.join(dataRoot, folder), { recursive: true });
+}
+
+function atomicWriteFile(filePath, content) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempPath, content, "utf-8");
+  try { fs.renameSync(tempPath, filePath); }
+  catch (error) {
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
+    fs.renameSync(tempPath, filePath);
+  }
+}
+
+function readJsonFile(filePath, fallback = {}) {
+  try { return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : fallback; }
+  catch (error) { console.warn(`[Data] cannot read ${filePath}: ${error.message}`); return fallback; }
+}
+function loadConfig() {
+  try { return fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf-8")) : {}; } catch (e) { return {}; }
+}
+function saveConfig(config) {
+  atomicWriteFile(configPath, JSON.stringify(config, null, 2));
 }
 function exportBrowseTarget(token, relativePath = "") {
   const session = exportBrowseRoots.get(token);
@@ -70,17 +79,17 @@ function exportBrowseTarget(token, relativePath = "") {
 
 var staticCache = {};
 (function() {
-  var files = ["index.html", "app.js", "styles.css"];
+  var files = ["index.html", "app.js", "styles.css", "screenshot-panel.html", "screenshot-panel.js", "screenshot-panel.css"];
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     try {
       var filePath = __dirname + "/" + f;
       staticCache["/" + f] = fs.readFileSync(filePath, "utf-8");
     } catch(e) {
-      console.log("[静态文件] 无法加载 " + f + ": " + e.message + ", path=" + __dirname);
+      console.log("[Static] cannot load " + f + ": " + e.message + ", path=" + __dirname);
     }
   }
-  console.log("[静态文件] 预加载 " + Object.keys(staticCache).length + "/" + files.length + " 个文件");
+  console.log("[Static] preloaded " + Object.keys(staticCache).length + "/" + files.length + " files");
 })();
 
 const API_BASE_URLS = [
@@ -91,28 +100,6 @@ const API_BASE_URLS = [
 ];
 
 // --- 自动清理旧进程（解决启动闪退 / 端口占用） ---
-function cleanupPort(p) {
-  try {
-    if (process.platform === "win32") {
-      const out = execSync(
-        `netstat -ano | findstr ":${p}" | findstr "LISTENING"`,
-        { encoding: "utf-8", timeout: 3000, windowsHide: true }
-      );
-      const lines = out.trim().split(/\r?\n/);
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parts[parts.length - 1];
-        if (pid && /^\d+$/.test(pid)) {
-          try {
-            execSync(`taskkill /f /pid ${pid}`, { timeout: 3000, windowsHide: true });
-            console.log(`[清理] 已终止旧进程 PID:${pid}，释放端口 ${p}`);
-          } catch (_) {}
-        }
-      }
-    }
-  } catch (_) {}
-}
-
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -172,18 +159,18 @@ async function latestReleaseInfo() {
   let info;
   try {
     const release = await githubJson(RELEASES_API);
-    const zipAssets = (release.assets || []).filter(asset => /^CanvasFlow-Windows-x64.*\.zip$/i.test(asset.name));
-    if (zipAssets.length !== 1) throw new Error(`最新 Release 应包含且只包含一个 Windows ZIP，当前检测到 ${zipAssets.length} 个`);
-    const asset = zipAssets[0];
+    const setupAssets = (release.assets || []).filter(asset => /^CanvasFlow-Setup\.exe$/i.test(asset.name));
+    if (setupAssets.length !== 1) throw new Error(`最新 Release 应包含且只包含一个 CanvasFlow-Setup.exe，当前检测到 ${setupAssets.length} 个`);
+    const asset = setupAssets[0];
     info = {
       latestVersion: String(release.tag_name || release.name || "").replace(/^v/i, ""),
       releaseName: release.name || release.tag_name,
       notes: release.body || "",
       pageUrl: release.html_url,
-      asset: { name: asset.name, size: asset.size, url: asset.browser_download_url },
+      asset: { name: asset.name, size: asset.size, url: asset.browser_download_url, digest: asset.digest || "" },
     };
   } catch (apiError) {
-    console.warn("[自动更新] GitHub API 不可用，改用公开 Release 地址", { message: apiError.message });
+    console.warn("[Update] GitHub API unavailable, using public release page", { message: apiError.message });
     const response = await new Promise((resolve, reject) => {
       const request = https.get(RELEASES_LATEST, { headers: { "User-Agent": `CanvasFlow/${APP_VERSION}` }, timeout: 20000 }, resolve);
       request.on("timeout", () => request.destroy(new Error("连接 GitHub 超时")));
@@ -196,105 +183,18 @@ async function latestReleaseInfo() {
     const tag = decodeURIComponent(match[1]);
     info = {
       latestVersion: tag.replace(/^v/i, ""), releaseName: tag, notes: "", pageUrl: new URL(location, RELEASES_LATEST).toString(),
-      asset: { name: "CanvasFlow-Windows-x64.zip", size: 0, url: `https://github.com/wuxinliuyun-art/canvasflow/releases/download/${encodeURIComponent(tag)}/CanvasFlow-Windows-x64.zip` },
+      asset: { name: "CanvasFlow-Setup.exe", size: 0, digest: "", url: `https://github.com/wuxinliuyun-art/canvasflow/releases/download/${encodeURIComponent(tag)}/CanvasFlow-Setup.exe` },
     };
   }
   releaseCache = {
     currentVersion: APP_VERSION,
     ...info,
     hasUpdate: isNewerVersion(info.latestVersion, APP_VERSION),
-    canAutoInstall: process.platform === "win32" && typeof process.pkg !== "undefined",
+    canAutoInstall: !!(info.asset && info.asset.digest),
   };
   releaseCacheAt = Date.now();
   return releaseCache;
 }
-
-async function downloadUpdateZip(asset) {
-  const updateDir = path.join(dataRoot, "download", "updates");
-  fs.mkdirSync(updateDir, { recursive: true });
-  const safeName = path.basename(asset.name);
-  if (!/^CanvasFlow-Windows-x64.*\.zip$/i.test(safeName)) throw new Error("更新包文件名不正确");
-  const target = path.join(updateDir, safeName);
-  const temp = `${target}.${process.pid}.tmp`;
-  const response = await githubRequest(asset.url);
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    response.resume();
-    throw new Error(`更新包下载失败：HTTP ${response.statusCode}`);
-  }
-  await new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(temp);
-    response.pipe(output);
-    output.on("finish", () => output.close(resolve));
-    output.on("error", reject);
-    response.on("error", reject);
-  });
-  const size = fs.statSync(temp).size;
-  if (!size || (asset.size && size !== asset.size)) {
-    fs.unlinkSync(temp);
-    throw new Error(`更新包大小校验失败：期望 ${asset.size || "未知"}，实际 ${size}`);
-  }
-  fs.copyFileSync(temp, target);
-  fs.unlinkSync(temp);
-  return target;
-}
-
-function extractCanvasFlowExe(zipPath, outputPath) {
-  const data = fs.readFileSync(zipPath);
-  let eocd = -1;
-  for (let i = data.length - 22; i >= Math.max(0, data.length - 65557); i--) {
-    if (data.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
-  }
-  if (eocd < 0) throw new Error("更新 ZIP 的目录结构无效");
-  const count = data.readUInt16LE(eocd + 10);
-  let offset = data.readUInt32LE(eocd + 16);
-  for (let i = 0; i < count; i++) {
-    if (data.readUInt32LE(offset) !== 0x02014b50) throw new Error("更新 ZIP 的文件目录损坏");
-    const method = data.readUInt16LE(offset + 10);
-    const compressedSize = data.readUInt32LE(offset + 20);
-    const expectedSize = data.readUInt32LE(offset + 24);
-    const nameLength = data.readUInt16LE(offset + 28);
-    const extraLength = data.readUInt16LE(offset + 30);
-    const commentLength = data.readUInt16LE(offset + 32);
-    const localOffset = data.readUInt32LE(offset + 42);
-    const name = data.subarray(offset + 46, offset + 46 + nameLength).toString("utf-8").replace(/\\/g, "/");
-    if (/^(?:.*\/)?CanvasFlow-Windows-x64(?:-[^/]*)?\.exe$/i.test(name)) {
-      if (data.readUInt32LE(localOffset) !== 0x04034b50) throw new Error("更新 ZIP 的 EXE 数据损坏");
-      const localNameLength = data.readUInt16LE(localOffset + 26);
-      const localExtraLength = data.readUInt16LE(localOffset + 28);
-      const start = localOffset + 30 + localNameLength + localExtraLength;
-      const compressed = data.subarray(start, start + compressedSize);
-      const executable = method === 0 ? compressed : method === 8 ? zlib.inflateRawSync(compressed) : null;
-      if (!executable) throw new Error(`更新 ZIP 使用了不支持的压缩方式：${method}`);
-      if (expectedSize && executable.length !== expectedSize) throw new Error("更新 EXE 大小校验失败");
-      fs.writeFileSync(outputPath, executable);
-      return;
-    }
-    offset += 46 + nameLength + extraLength + commentLength;
-  }
-  throw new Error("更新 ZIP 中没有 CanvasFlow Windows EXE");
-}
-
-function processExists(pid) {
-  try { process.kill(pid, 0); return true; } catch (_) { return false; }
-}
-
-async function runPackagedUpdater(payload) {
-  const log = message => console.info(`[CanvasFlow Updater] ${message}`);
-  const zipPath = path.resolve(payload.zipPath);
-  const exePath = path.resolve(payload.exePath);
-  const temporaryExe = `${exePath}.update-new`;
-  log(`正在解压 ${zipPath}`);
-  extractCanvasFlowExe(zipPath, temporaryExe);
-  const deadline = Date.now() + 30000;
-  while (processExists(payload.pid) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 200));
-  if (processExists(payload.pid)) throw new Error("CanvasFlow 未能在 30 秒内关闭");
-  fs.copyFileSync(temporaryExe, exePath);
-  fs.unlinkSync(temporaryExe);
-  log(`已覆盖 ${exePath}，正在重新启动`);
-  const restarted = require("child_process").spawn(exePath, [], { detached: true, stdio: ["ignore", "inherit", "inherit"], windowsHide: false, cwd: path.dirname(exePath) });
-  restarted.unref();
-}
-
 
 function proxyRequest(method, targetUrl, headers, body) {
   return new Promise((resolve, reject) => {
@@ -332,11 +232,11 @@ async function tryProxyRequest(method, pathStr, headers, body) {
   for (const baseUrl of API_BASE_URLS) {
     try {
       const result = await proxyRequest(method, baseUrl + pathStr, headers, body);
-      console.log(`[代理] ${baseUrl}${pathStr} -> ${result.status}`);
+      console.log(`[Proxy] ${baseUrl}${pathStr} -> ${result.status}`);
       return result;
     } catch (err) {
       lastError = err;
-      console.log(`[代理] ${baseUrl}${pathStr} 失败: ${err.message}, 尝试下一个...`);
+      console.log(`[Proxy] ${baseUrl}${pathStr} failed: ${err.message}, trying next...`);
     }
   }
   throw lastError || new Error("所有 API 地址均不可达");
@@ -352,61 +252,86 @@ async function requestHandler(req, res) {
     return;
   }
 
+  if (pathname === "/api/app-state" && req.method === "GET") {
+    const state = readJsonFile(path.join(dataRoot, "data", "app-state.json"), null);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ state }));
+    return;
+  }
+
+  if (pathname === "/api/app-state" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
+      if (!body || !Array.isArray(body.pages)) throw new Error("项目状态格式无效");
+      for (const page of body.pages) if (page && page.data && page.data.settings) page.data.settings.apiKey = "";
+      atomicWriteFile(path.join(dataRoot, "data", "app-state.json"), JSON.stringify(body, null, 2));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+    } catch (error) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/screenshot-settings" && req.method === "GET") {
+    const settings = readJsonFile(path.join(dataRoot, "data", "screenshot-settings.json"), {});
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ settings }));
+    return;
+  }
+
+  if (pathname === "/api/screenshot-settings" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
+      const filePath = path.join(dataRoot, "data", "screenshot-settings.json");
+      const merged = { ...readJsonFile(filePath, {}), ...body };
+      atomicWriteFile(filePath, JSON.stringify(merged, null, 2));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, settings: merged }));
+    } catch (error) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/config" && req.method === "GET") {
+    try {
+      var config = loadConfig();
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(config));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json;charset=utf-8" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/config" && req.method === "POST") {
+    try {
+      var body = JSON.parse((await readBody(req)).toString("utf-8"));
+      var config = loadConfig();
+      if (typeof body.autoOpenBrowser === "boolean") config.autoOpenBrowser = body.autoOpenBrowser;
+      saveConfig(config);
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json;charset=utf-8" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   if (pathname === "/api/update/check" && req.method === "GET") {
     try {
       const info = await latestReleaseInfo();
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(JSON.stringify(info));
     } catch (err) {
-      console.error("[自动更新] 检查失败", { message: err.message });
+      console.error("[Update] check failed", { message: err.message });
       res.writeHead(502, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(JSON.stringify({ error: `无法检查更新：${err.message}` }));
-    }
-    return;
-  }
-
-  if (pathname === "/api/update/download" && req.method === "POST") {
-    try {
-      const info = await latestReleaseInfo();
-      if (!info.hasUpdate) throw new Error("当前已经是最新版本");
-      const filePath = await downloadUpdateZip(info.asset);
-      console.info("[自动更新] 下载完成", { version: info.latestVersion, file: filePath, bytes: info.asset.size });
-      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
-      res.end(JSON.stringify({ success: true, version: info.latestVersion, file: filePath }));
-    } catch (err) {
-      console.error("[自动更新] 下载失败", { message: err.message });
-      res.writeHead(502, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
-      res.end(JSON.stringify({ error: `更新包下载失败：${err.message}` }));
-    }
-    return;
-  }
-
-  if (pathname === "/api/update/apply" && req.method === "POST") {
-    try {
-      if (process.platform !== "win32" || typeof process.pkg === "undefined") throw new Error("自动覆盖更新仅支持打包后的 Windows EXE");
-      const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
-      const zipPath = path.resolve(String(body.file || ""));
-      const allowedDir = path.resolve(dataRoot, "download", "updates");
-      if (!zipPath.startsWith(allowedDir + path.sep) || !fs.existsSync(zipPath) || !zipPath.toLowerCase().endsWith(".zip")) throw new Error("找不到已下载的更新包");
-      const exePath = process.execPath;
-      const updateLogPath = path.join(allowedDir, "update.log");
-      const updaterPath = path.join(allowedDir, "CanvasFlow-Updater.exe");
-      fs.copyFileSync(exePath, updaterPath);
-      const encoded = Buffer.from(JSON.stringify({ pid: process.pid, zipPath, exePath }), "utf-8").toString("base64");
-      const updateLog = fs.openSync(updateLogPath, "a");
-      const child = require("child_process").spawn(updaterPath, ["--apply-update", encoded], {
-        detached: true, stdio: ["ignore", updateLog, updateLog], windowsHide: true,
-      });
-      fs.closeSync(updateLog);
-      child.unref();
-      console.info("[自动更新] 已启动 CanvasFlow 更新器，准备关闭", { zip: zipPath, executable: exePath, updater: updaterPath, log: updateLogPath });
-      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
-      res.end(JSON.stringify({ success: true }));
-      setTimeout(() => server.close(() => process.exit(0)), 600);
-    } catch (err) {
-      console.error("[自动更新] 启动失败", { message: err.message });
-      res.writeHead(400, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
-      res.end(JSON.stringify({ error: `无法安装更新：${err.message}` }));
     }
     return;
   }
@@ -421,11 +346,11 @@ async function requestHandler(req, res) {
       const now = Date.now();
       for (const [key, value] of exportBrowseRoots) if (value.expires < now) exportBrowseRoots.delete(key);
       exportBrowseRoots.set(token, { root: realRoot, label: exportRoot, expires: now + 15 * 60 * 1000 });
-      console.log(`[导出查看] 已授权目录: ${realRoot}`);
+      console.log(`[Export] authorized: ${realRoot}`);
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(JSON.stringify({ success: true, url: `/export-browser?token=${token}` }));
     } catch (err) {
-      console.error("[导出查看] 创建访问令牌失败", err);
+      console.error("[Export] create token failed", err);
       res.writeHead(500, { "Content-Type": "application/json;charset=utf-8" });
       res.end(JSON.stringify({ error: `无法查看导出目录：${err.message}` }));
     }
@@ -475,7 +400,7 @@ async function requestHandler(req, res) {
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
       res.end(content);
     } catch (err) {
-      console.error("[加载] 本地素材库读取失败", err);
+      console.error("[Library] read failed", err);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -494,11 +419,11 @@ async function requestHandler(req, res) {
       fs.writeFileSync(tempPath, JSON.stringify(library, null, 2), "utf-8");
       fs.copyFileSync(tempPath, libraryPath);
       fs.unlinkSync(tempPath);
-      console.log(`[保存] 本地素材库：文字=${library.textTemplates.length}，图片=${library.imageMaterials.length}`);
+      console.log(`[Library] saved: texts=${library.textTemplates.length} images=${library.imageMaterials.length}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true }));
     } catch (err) {
-      console.error("[保存] 本地素材库写入失败", err);
+      console.error("[Library] write failed", err);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -543,11 +468,11 @@ async function requestHandler(req, res) {
       } finally {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       }
-      console.info("[自动备份] 已写入", { file: filePath, bytes: Buffer.byteLength(content, "utf-8") });
+      console.info("[AutoBackup] written", { file: filePath, bytes: Buffer.byteLength(content, "utf-8") });
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(JSON.stringify({ success: true, path: filePath }));
     } catch (err) {
-      console.error("[自动备份] 写入失败", { message: err.message });
+      console.error("[AutoBackup] write failed", { message: err.message });
       res.writeHead(400, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(JSON.stringify({ error: `自动备份失败：${err.message}` }));
     }
@@ -581,66 +506,6 @@ async function requestHandler(req, res) {
     return;
   }
 
-  if (pathname === "/api/choose-folder" && req.method === "POST") {
-    if (process.platform !== "win32") {
-      res.writeHead(501, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "当前系统暂不支持文件夹选择器，请手动输入完整路径" }));
-      return;
-    }
-    const { execFile } = require("child_process");
-    const pickerScript = "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Windows.Forms; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $owner=New-Object System.Windows.Forms.Form; $owner.TopMost=$true; $owner.ShowInTaskbar=$false; $owner.Opacity=0; $owner.StartPosition='CenterScreen'; $owner.Show(); $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择 CanvasFlow 导出文件夹'; $d.ShowNewFolderButton=$true; try { if($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK){ Write-Output $d.SelectedPath } } finally { $d.Dispose(); $owner.Close(); $owner.Dispose() }";
-    const encodedScript = Buffer.from(pickerScript, "utf16le").toString("base64");
-    const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-    console.info("[导出] 打开文件夹选择窗口");
-    execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 300000 }, (err, stdout) => {
-      if (err) {
-        console.error("[导出] 文件夹选择窗口失败", { code: err.code, killed: err.killed, message: err.message });
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "无法打开文件夹选择窗口，可能被安全软件拦截；请直接粘贴完整路径" }));
-        return;
-      }
-      const folderPath = String(stdout || "").trim();
-      console.info("[导出] 文件夹选择完成", { selected: Boolean(folderPath) });
-      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
-      res.end(JSON.stringify(folderPath ? { success: true, folderPath } : { success: false, cancelled: true }));
-    });
-    return;
-  }
-
-  if (pathname === "/api/open-folder" && req.method === "POST") {
-    try {
-      const body = await readBody(req);
-      const { folderPath } = JSON.parse(body.toString());
-      const absPath = path.isAbsolute(folderPath) ? path.normalize(folderPath) : path.resolve(dataRoot, folderPath);
-      if (!fs.existsSync(absPath)) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "文件夹不存在" }));
-        return;
-      }
-      const { execFile } = require("child_process");
-      const encodedPath = Buffer.from(absPath, "utf16le").toString("base64");
-      const openScript = `$ErrorActionPreference='Stop'; $p=[System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encodedPath}')); $explorer=Join-Path $env:WINDIR 'explorer.exe'; $quotedPath='"' + $p + '"'; $process=Start-Process -FilePath $explorer -ArgumentList @($quotedPath) -PassThru; if($null -eq $process){ throw '资源管理器进程未创建' }`;
-      const encodedScript = Buffer.from(openScript, "utf16le").toString("base64");
-      const powershellPath = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-      console.info("[导出] 请求打开导出文件夹", { path: absPath });
-      execFile(powershellPath, ["-NoProfile", "-STA", "-EncodedCommand", encodedScript], { encoding: "utf8", windowsHide: true, timeout: 15000 }, (err) => {
-        if (err) {
-          console.error("[导出] 打开导出文件夹失败", { code: err.code, killed: err.killed, message: err.message });
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Windows Shell 未能打开文件夹，可能被安全软件拦截" }));
-        } else {
-          console.info("[导出] 已提交文件夹打开请求", { path: absPath });
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: true }));
-        }
-      });
-    } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
   if (pathname === "/api/download-image" && req.method === "POST") {
     try {
       const body = await readBody(req);
@@ -661,7 +526,7 @@ async function requestHandler(req, res) {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
-      const apiKey = payload._apiKey;
+      const apiKey = payload._apiKey || secretProvider() || "";
       delete payload._apiKey;
 
       const { status, body: resBody } = await tryProxyRequest(
@@ -682,7 +547,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/verify" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || "";
+      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
       const { status } = await tryProxyRequest(
         "GET",
         "/v1/tasks/verify_test_nonexistent",
@@ -705,7 +570,7 @@ async function requestHandler(req, res) {
   if (pathname.startsWith("/api/task/") && req.method === "GET") {
     try {
       const taskId = pathname.replace("/api/task/", "");
-      const apiKey = parsedUrl.searchParams.get("apiKey") || "";
+      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
 
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
@@ -724,7 +589,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/models" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || "";
+      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
         "/v1/models",
@@ -741,7 +606,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/balance" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || "";
+      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
         "/v1/user/balance",
@@ -816,7 +681,7 @@ async function requestHandler(req, res) {
 
   // Static file serving (优先内存缓存)
   if (pathname === "/") pathname = "/index.html";
-  console.log(`[静态文件] root=${root}, pathname=${pathname}`);
+  console.log(`[Static] root=${root}, pathname=${pathname}`);
   if (staticCache[pathname]) {
     var ext = path.extname(pathname);
     res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
@@ -831,80 +696,78 @@ async function requestHandler(req, res) {
     res.end("Forbidden");
     return;
   }
-  console.log(`[静态文件] 尝试 root: ${file}`);
+  console.log(`[Static] try root: ${file}`);
   fs.readFile(file, (err, data) => {
     if (err) {
-      console.log(`[静态文件] root 未命中, 尝试 dataRoot`);
+      console.log(`[Static] root miss, trying dataRoot`);
       // 如果在 root 下没找到，尝试 dataRoot（自定义素材等文件保存在 exe 所在目录）
       var altFile = path.join(dataRoot, relPath);
       if (altFile !== dataRoot && altFile !== file && altFile.startsWith(dataRoot + path.sep)) {
         fs.readFile(altFile, (err2, data2) => {
           if (err2) {
-            console.log(`[静态文件] dataRoot 读取失败: ${err2.code} ${err2.message}, altFile=${altFile}`);
+            console.log(`[Static] dataRoot read error: ${err2.code} ${err2.message}, altFile=${altFile}`);
             res.writeHead(404);
             res.end("Not found");
             return;
           }
-          console.log(`[静态文件] dataRoot 命中: ${altFile}`);
+          console.log(`[Static] dataRoot hit: ${altFile}`);
           const ext2 = path.extname(altFile);
           res.writeHead(200, { "Content-Type": mime[ext2] || "application/octet-stream" });
           res.end(data2);
         });
         return;
       }
-      console.log(`[静态文件] dataRoot 前缀检查失败, altFile=${altFile}, dataRoot=${dataRoot}`);
+      console.log(`[Static] dataRoot prefix failed, altFile=${altFile}, dataRoot=${dataRoot}`);
       res.writeHead(404);
       res.end("Not found");
       return;
     }
-    console.log(`[静态文件] root 命中: ${file}`);
+    console.log(`[Static] root hit: ${file}`);
     const ext = path.extname(file);
     res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
     res.end(data);
   });
 }
 
-// --- 启动服务器或独立更新器 ---
-if (process.argv[2] === "--apply-update") {
-  try {
-    const payload = JSON.parse(Buffer.from(process.argv[3] || "", "base64").toString("utf-8"));
-    runPackagedUpdater(payload).then(() => process.exit(0)).catch(err => {
-      console.error("[CanvasFlow Updater] 更新失败", { message: err.message, stack: err.stack });
-      process.exit(1);
-    });
-  } catch (err) {
-    console.error("[CanvasFlow Updater] 参数无效", { message: err.message });
-    process.exit(1);
-  }
-} else {
-cleanupPort(port);
+function startCanvasFlowServer(options = {}) {
+  configureRuntime(options);
+  const server = http.createServer(requestHandler);
+  const requestedPort = Number(options.port || process.env.PORT || 5173);
+  return new Promise((resolve, reject) => {
+    const tryListen = (candidate, attempts = 0) => {
+      const onError = error => {
+        server.removeListener("listening", onListening);
+        if (error.code === "EADDRINUSE" && attempts < 20) {
+          console.warn(`[Start] port ${candidate} in use, switching to ${candidate + 1}`);
+          setTimeout(() => tryListen(candidate + 1, attempts + 1), 100);
+          return;
+        }
+        reject(error);
+      };
+      const onListening = () => {
+        server.removeListener("error", onError);
+        const address = server.address();
+        const activePort = address && typeof address === "object" ? address.port : candidate;
+        const url = `http://127.0.0.1:${activePort}/`;
+        console.log(`[Start] CanvasFlow server: ${url}`);
+        resolve({ server, port: activePort, url, dataRoot, close: () => new Promise(done => server.close(done)) });
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(candidate, "127.0.0.1");
+    };
+    tryListen(requestedPort);
+  });
+}
 
-const server = http.createServer(requestHandler);
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.error(`\n[错误] 端口 ${port} 被占用，尝试再次清理...`);
-    cleanupPort(port);
-    setTimeout(() => {
-      server.listen(port, "127.0.0.1");
-    }, 500);
-    return;
-  }
-  console.error("服务器错误:", err.message);
-});
+module.exports = { startCanvasFlowServer, latestReleaseInfo, APP_VERSION };
 
-server.listen(port, "127.0.0.1", () => {
-  const appUrl = `http://127.0.0.1:${port}/`;
-  console.log("=".repeat(44));
-  console.log("  CanvasFlow 服务器已启动");
-  console.log(`  访问地址: ${appUrl}`);
-  console.log("  关闭本窗口即可停止服务器");
-  console.log("=".repeat(44));
-  openDefaultBrowser(appUrl);
-});
-
-// 关闭窗口时自动结束进程
-process.on("SIGINT", () => {
-  console.log("\n正在关闭...");
-  server.close(() => process.exit(0));
-});
+if (require.main === module) {
+  startCanvasFlowServer({ dataRoot: root }).then(instance => {
+    console.log(`CanvasFlow source mode: ${instance.url}`);
+    process.on("SIGINT", () => instance.close().then(() => process.exit(0)));
+  }).catch(error => {
+    console.error("Server start failed:", error.message);
+    process.exitCode = 1;
+  });
 }

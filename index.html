@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260803-angle-copy">
+  <link rel="stylesheet" href="styles.css?v=20260805-generate-button">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -58,7 +58,7 @@
     <section class="composer">
       <input id="composerText" type="text" placeholder="输入文字后回车创建文字节点；上传图片可创建图片节点">
       <button id="composerUploadBtn" class="icon-btn" title="上传图片">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v7A2.5 2.5 0 0 1 18.5 18h-13A2.5 2.5 0 0 1 3 15.5v-9zm2.5-.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5h-7.33l-2-2H5.5z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5v9A2.5 2.5 0 0 0 6 19h12a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 18 7h-6l-2-2H6a2.5 2.5 0 0 0-2.5 2.5Z"/></svg>
       </button>
       <button id="composerSubmitBtn" class="primary" title="创建节点">创建</button>
       <input id="composerFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
@@ -68,15 +68,20 @@
 
     <aside id="settingsPanel" class="settings hidden">
       <div class="panel-head">
-        <strong>设置</strong>
+        <div class="settings-title-block">
+          <span class="settings-brand-kicker">CANVASFLOW</span>
+          <strong>设置</strong>
+          <p>调整界面语言、画布与工作流体验</p>
+        </div>
         <button id="closeSettingsBtn" class="icon-btn" title="关闭">×</button>
       </div>
       <div class="settings-layout">
         <nav class="settings-side-nav" aria-label="设置分类">
-          <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon">⌁</span><span>常规</span></button>
-          <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon">◇</span><span>素材库</span></button>
-          <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon">✦</span><span>AI绘图</span></button>
-          <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon">⇩</span><span>导出</span></button>
+          <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
+          <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
+          <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
+          <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9.5" cy="9.5" r="1.5"/><path d="m21 15-5-5L5 21h16v-6z"/></svg></span><span>截图插件</span></button>
+          <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h16v10.5H4zM4 8.5 7 5h5l2 3.5M12 12v5M9.5 14.5 12 17l2.5-2.5"/></svg></span><span>导出</span></button>
         </nav>
         <div class="settings-content">
       <div class="tab-page" data-tab="general">
@@ -88,11 +93,12 @@
             <label>网格对齐距离<input id="gridSizeInput" type="number" min="1" max="200" value="20"></label>
           </div>
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
+          <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
         </section>
         <section class="settings-card update-settings-card">
-          <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；安装前会先备份当前项目。</p></div><button id="checkUpdateBtn">检查更新</button></div>
+          <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
-          <div id="updateActions" class="update-actions hidden"><button id="installUpdateBtn" class="primary">下载并安装更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">查看 Release</a></div>
+          <div id="updateActions" class="update-actions hidden"><a id="releasePageLink" class="primary" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载 Windows 新版本</a></div>
         </section>
       </div>
 
@@ -143,7 +149,37 @@
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>导出</h2><p>管理导出方式和本地文件夹。</p></div>
-        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="copyExportPathBtn">复制路径</button><button id="chooseFolderBtn" class="primary">设置导出文件夹</button></div><p class="setting-desc">完整路径可直接选择或复制；如果杀毒软件误判，请复制路径打开。</p></section>
+        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="copyExportPathBtn">复制路径</button></div><p class="setting-desc">默认显示程序所在目录的完整路径；如需更改，请直接粘贴新的完整路径。</p></section>
+      </div>
+
+      <div class="tab-page hidden" data-tab="screenshot">
+        <div class="settings-page-head"><h2>截图插件</h2><p>截图建模软件窗口，配合 AI 生成效果图。</p></div>
+        <section class="settings-card">
+          <h3>操作</h3>
+          <p class="setting-desc">点击下方按钮打开独立的置顶悬浮面板，用于截图和 AI 生成。悬浮面板可拖拽、收纳，方便在建模软件旁使用。</p>
+          <button id="openScreenshotPanelBtn" class="primary" style="margin-top:8px">打开截图悬浮面板</button>
+        </section>
+        <section class="settings-card">
+          <h3>默认提示词</h3>
+          <p class="setting-desc">在悬浮面板中编辑提示词，或从素材库中选择。此处也可直接输入固定的默认提示词。</p>
+          <textarea id="screenshotPromptInput" rows="4" style="width:100%;resize:vertical;padding:8px;border:1px solid var(--border);border-radius:6px;font:13px system-ui,sans-serif;color:var(--text);background:var(--panel-bg);margin-top:6px" placeholder="输入默认提示词..."></textarea>
+          <p class="setting-desc" style="margin-top:6px">提示词文本将自动同步到悬浮面板。在悬浮面板中也可临时修改，不会覆盖此处保存的内容。</p>
+        </section>
+        <section class="settings-card">
+          <h3>AI 参数</h3>
+          <div class="settings-field-grid">
+            <label>模型<select id="screenshotModel"><option value="gpt-image-2">GPT Image 2</option><option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option></select></label>
+            <label>分辨率<select id="screenshotResolution"><option value="1k">1K</option><option value="2k">2K</option><option value="4k">4K</option></select></label>
+          </div>
+          <div class="settings-field-grid" style="margin-top:8px">
+            <label>画质<select id="screenshotQuality"><option value="auto">auto</option><option value="low" selected>low</option><option value="medium">medium</option><option value="high">high</option></select></label>
+            <label>比例<select id="screenshotSize"><option value="1:1">1:1</option><option value="auto">auto</option><option value="3:2">3:2</option><option value="2:3">2:3</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="16:9">16:9</option><option value="9:16">9:16</option></select></label>
+          </div>
+          <div class="settings-field-grid" style="margin-top:8px">
+            <label>每次数量<select id="screenshotNum"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label>
+          </div>
+          <p class="setting-desc" style="margin-top:8px">默认使用低画质模式以提高响应速度。API Key 与现有设置中的 Key 共用。</p>
+        </section>
       </div>
         </div>
       </div>
@@ -200,6 +236,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260803-angle-copy"></script>
+  <script src="app.js?v=20260805-node-polish"></script>
 </body>
 </html>

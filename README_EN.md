@@ -15,14 +15,11 @@ CanvasFlow lets you connect text, reference images, and AI Image nodes to genera
 ### 1. Download and Run
 
 1. Open [GitHub Releases](https://github.com/wuxinliuyun-art/canvasflow/releases/latest).
-2. Download `CanvasFlow-Windows-x64.zip`.
-3. Extract the complete ZIP into a permanent folder.
-4. Double-click `CanvasFlow-Windows-x64.exe`.
-5. CanvasFlow will open in your default browser.
+2. Download and run `CanvasFlow-Setup.exe`.
+3. Complete the per-user installation, then launch CanvasFlow from the desktop or Start menu.
+4. Click **Open Main Canvas** in the Control Center.
 
-> Do not run the EXE from inside the ZIP. Windows or antivirus software may request confirmation on first launch. Only allow the file after confirming that it came from this project's official Release.
-
-If the page does not open automatically, visit `http://127.0.0.1:5173/` in your browser.
+> The installer is not commercially code-signed yet. Windows or antivirus software may request confirmation on first launch. Confirm that the file came from this project's official Release before allowing it.
 
 ### 2. Enter Your API Key
 
@@ -33,6 +30,8 @@ If the page does not open automatically, visit `http://127.0.0.1:5173/` in your 
 [Register for API access](https://apimart.ai/register?aff=W5d401)
 
 > Your API Key is stored on this computer and is not included in automatic project backups.
+
+The desktop app encrypts the API Key through Windows secure storage. If secure storage is unavailable, CanvasFlow warns you and keeps the key only for the current session.
 
 ### 3. Create Nodes
 
@@ -106,6 +105,14 @@ On a fresh installation with an empty library, CanvasFlow provides two sample te
 - Simplified Chinese and English interfaces with remembered language choice
 - Automatic project backup and GitHub Release update checks
 
+### Screen Capture Generation
+
+- Open a separate capture panel from the Control Center or canvas settings
+- Keep the panel above other apps or collapse it into a narrow bar
+- Manual mode freezes the display under the mouse and lets you select a local region
+- Automatic mode reuses a saved display and region; display, resolution, or scaling changes require a new selection
+- Reuse custom text assets and choose independent model, quality, ratio, and result count settings
+
 ---
 
 ## Saved Files and Common Questions
@@ -118,7 +125,7 @@ Generated images appear on the canvas and are also saved automatically to:
 CanvasFlow folder\export\ai_generated\
 ```
 
-For example, if the program is at `D:\CanvasFlow\CanvasFlow-Windows-x64.exe`, generated images are saved in `D:\CanvasFlow\export\ai_generated\`.
+For example, if the program is at `D:\CanvasFlow\CanvasFlow.exe`, generated images are saved in `D:\CanvasFlow\export\ai_generated\`.
 
 To organize selected results, connect them to an Output node and use the **Export** button in the top toolbar.
 
@@ -134,20 +141,18 @@ The current project name is used as the filename. Later saves overwrite the same
 
 ### Where are custom assets saved?
 
-Custom text and images are stored in CanvasFlow's local data folder. They remain on this computer, are not uploaded to GitHub, and are not included in the Release ZIP.
+Custom text and images are stored in CanvasFlow's local data folder. They remain on this computer, are not uploaded to GitHub, and are not preloaded in the installer.
 
 `data/custom-library.json` is generated locally after the application runs; it is not bundled with the download.
 
-### The EXE will not run
+### The installer will not run
 
-- Make sure the ZIP was fully extracted.
-- Do not run the EXE from inside the ZIP.
 - Check whether Windows or antivirus software blocked it.
 - Confirm that the file came from the official Release.
 
-### The page did not open automatically
+### Why is CanvasFlow still running after I close a window?
 
-Open `http://127.0.0.1:5173/` manually. If it still does not load, close other CanvasFlow windows and try again.
+Closing the main canvas returns to the Control Center, and closing the Control Center minimizes it to the taskbar. Use **Exit Application** in the Control Center to wait for project saving and then close CanvasFlow completely.
 
 ### AI image generation failed
 
@@ -159,7 +164,7 @@ Some antivirus tools block applications from launching Windows File Explorer. Co
 
 ### How do updates work?
 
-CanvasFlow checks GitHub Releases automatically. It saves the current project before updating, does not repeatedly offer the installed version, and stays open if an update fails.
+The Control Center checks GitHub Releases. When a new version is available, it downloads and verifies `CanvasFlow-Setup.exe`; installation starts only after the user clicks **Install and Restart**. CanvasFlow waits for the current project to save and never silently overwrites the running EXE.
 
 ---
 
@@ -169,7 +174,7 @@ CanvasFlow checks GitHub Releases automatically. It saves the current project be
 
 [Download CanvasFlow for Windows](https://github.com/wuxinliuyun-art/canvasflow/releases/latest)
 
-Choose `CanvasFlow-Windows-x64.zip`. The Source code downloads shown automatically by GitHub are for developers and are not needed by regular users.
+Choose `CanvasFlow-Setup.exe`. The Source code downloads shown automatically by GitHub are for developers and are not needed by regular users.
 
 ### Report a Problem
 
@@ -178,7 +183,7 @@ Open a [GitHub Issue](https://github.com/wuxinliuyun-art/canvasflow/issues) and,
 ### Data and Privacy
 
 - CanvasFlow runs locally; projects and custom assets remain on this computer.
-- API Keys are excluded from automatic project backups.
+- API Keys are encrypted with Windows secure storage and excluded from projects and automatic backups.
 - AI generation sends prompts and reference images to the API service configured by the user.
 - Do not upload private, confidential, or unauthorized images.
 
@@ -195,3 +200,5 @@ Third-party AI APIs, models, and generated content remain subject to their respe
 ---
 
 [Latest Release](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [Report an Issue](https://github.com/wuxinliuyun-art/canvasflow/issues) · [简体中文](README.md)
+
+Developer setup and build instructions are available in [SOURCE_SETUP.md](SOURCE_SETUP.md) (Chinese).

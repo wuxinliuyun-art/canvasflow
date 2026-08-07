@@ -1,18 +1,47 @@
 {
   "name": "canvasflow",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "CanvasFlow visual AI image workflow",
-  "main": "server.js",
-  "bin": "server.js",
+  "author": "wuxinliuyun-art",
+  "license": "MIT",
+  "repository": "https://github.com/wuxinliuyun-art/canvasflow",
+  "main": "electron/main.js",
   "scripts": {
-    "build:windows": "pkg . --targets node18-win-x64 --output CanvasFlow-Windows-x64.exe"
+    "start": "electron .",
+    "start:server": "node server.js",
+    "build:windows": "electron-builder --win nsis --x64"
   },
-  "pkg": {
-    "assets": [
+  "devDependencies": {
+    "electron": "^37.2.4",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "art.wuxinliuyun.canvasflow",
+    "productName": "CanvasFlow",
+    "artifactName": "CanvasFlow-Setup.exe",
+    "files": [
+      "electron/**/*",
       "index.html",
       "app.js",
-      "styles.css"
+      "styles.css",
+      "screenshot-panel.html",
+      "screenshot-panel.js",
+      "screenshot-panel.css",
+      "server.js",
+      "package.json",
+      "LICENSE"
     ],
-    "outputPath": "."
+    "directories": { "output": "dist" },
+    "asar": true,
+    "win": { "target": ["nsis"] },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

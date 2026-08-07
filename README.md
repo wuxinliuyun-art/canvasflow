@@ -15,14 +15,11 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 ### 1. 下载并运行
 
 1. 打开 [GitHub Releases](https://github.com/wuxinliuyun-art/canvasflow/releases/latest)。
-2. 下载 `CanvasFlow-Windows-x64.zip`。
-3. 将 ZIP 完整解压到一个固定文件夹。
-4. 双击运行 `CanvasFlow-Windows-x64.exe`。
-5. 程序会自动使用默认浏览器打开 CanvasFlow。
+2. 下载并运行 `CanvasFlow-Setup.exe`。
+3. 按提示完成当前用户安装，然后从桌面或开始菜单启动 CanvasFlow。
+4. 在控制中心点击“打开主画板”。
 
-> 请不要直接在压缩包中运行 EXE。首次运行时，Windows 或杀毒软件可能要求确认，请确认文件来自本项目官方 Release 后选择允许。
-
-如果没有自动打开页面，请在浏览器中访问 `http://127.0.0.1:5173/`。
+> 当前安装包尚未使用商业代码签名。首次运行时 Windows 或杀毒软件仍可能要求确认，请先确认文件来自本项目官方 Release。
 
 ### 2. 填写 API Key
 
@@ -33,6 +30,8 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 [注册获取 API](https://apimart.ai/register?aff=W5d401)
 
 > API Key 保存在当前电脑中，不会写入项目自动备份。
+
+桌面版会使用 Windows 安全存储加密 API Key；如果系统安全存储不可用，程序会提示并只在本次运行中保留。
 
 ### 3. 创建节点
 
@@ -104,7 +103,15 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 - 支持上传、拖入、粘贴、替换和清除图片
 - 支持双击放大预览和保存为自定义素材
 - 支持简体中文与 English，语言选择会自动保留
-- 支持项目自动保存和 GitHub Release 更新
+- 支持项目自动保存和 GitHub Release 更新检查
+
+### 屏幕截图生成
+
+- 从控制中心或画板设置打开独立截图面板
+- 面板可置于其他软件上方，也可收纳为窄条
+- 手动模式截取鼠标所在显示器，并在冻结画面上框选局部区域
+- 自动模式复用上次保存的显示器和区域；显示器、分辨率或缩放变化后会要求重新框选
+- 可复用自定义文字素材，并独立设置模型、画质、比例和生成数量
 
 ---
 
@@ -118,7 +125,7 @@ AI 生成成功后，图片会显示在画布中，同时自动保存到：
 CanvasFlow 所在文件夹\export\ai_generated\
 ```
 
-例如程序位于 `D:\CanvasFlow\CanvasFlow-Windows-x64.exe`，生成图片默认保存在 `D:\CanvasFlow\export\ai_generated\`。
+例如程序位于 `D:\CanvasFlow\CanvasFlow.exe`，生成图片默认保存在 `D:\CanvasFlow\export\ai_generated\`。
 
 如需整理指定结果，也可以连接输出节点并使用顶部的“导出”功能。
 
@@ -134,19 +141,18 @@ CanvasFlow 所在文件夹\download\自动备份\
 
 ### 自定义素材保存在哪里？
 
-自定义文字和图片保存在 CanvasFlow 本地数据目录中，只供当前电脑使用，不会上传到 GitHub，也不会包含在发布 ZIP 中。
+自定义文字和图片保存在 CanvasFlow 本地数据目录中，只供当前电脑使用，不会上传到 GitHub，也不会预置在安装包中。
 
 `data/custom-library.json` 是程序运行后自动生成的本地素材配置，不是发布包自带文件。
 
-### EXE 无法运行怎么办？
+### 安装包无法运行怎么办？
 
-- 确认 ZIP 已经完整解压，不要直接在压缩包中运行。
 - 检查 Windows 或杀毒软件是否阻止程序运行。
 - 确认文件来自本项目官方 Release。
 
-### 为什么没有自动打开页面？
+### 关闭窗口后程序为什么还在？
 
-请在浏览器中手动访问 `http://127.0.0.1:5173/`。如果仍然无法打开，请关闭其他正在运行的 CanvasFlow 窗口后重试。
+关闭主画板会返回控制中心；关闭控制中心会最小化到任务栏。只有点击控制中心中的“退出程序”，CanvasFlow 才会等待项目保存完成并退出。
 
 ### AI 图片生成失败怎么办？
 
@@ -158,7 +164,7 @@ CanvasFlow 所在文件夹\download\自动备份\
 
 ### 如何更新 CanvasFlow？
 
-CanvasFlow 会自动检查 GitHub Releases。更新前会先保存当前项目；已经是最新版时不会重复更新，更新失败时也不会关闭当前程序。
+控制中心会检查 GitHub Releases。发现新版后可下载 `CanvasFlow-Setup.exe`，校验完成后再由用户点击“安装并重启”。更新前会等待当前项目保存，安装程序不会静默覆盖正在运行的 EXE。
 
 ---
 
@@ -168,7 +174,7 @@ CanvasFlow 会自动检查 GitHub Releases。更新前会先保存当前项目�
 
 [下载 CanvasFlow Windows 版](https://github.com/wuxinliuyun-art/canvasflow/releases/latest)
 
-请选择 `CanvasFlow-Windows-x64.zip`。GitHub 自动显示的 Source code 文件是项目源码，普通用户不需要下载。
+请选择 `CanvasFlow-Setup.exe`。GitHub 自动显示的 Source code 文件是项目源码，普通用户不需要下载。
 
 ### 问题反馈
 
@@ -177,7 +183,7 @@ CanvasFlow 会自动检查 GitHub Releases。更新前会先保存当前项目�
 ### 数据与隐私
 
 - CanvasFlow 在本地运行，项目和自定义素材保存在当前电脑。
-- API Key 不会写入项目自动备份。
+- API Key 使用 Windows 安全存储加密，不会写入项目或自动备份。
 - 使用 AI 生成功能时，输入文字和参考图片会发送给用户配置的 API 服务。
 - 请勿上传包含隐私、机密或无权使用的图片。
 
@@ -194,3 +200,5 @@ CanvasFlow 调用的第三方 AI API、模型及生成内容，仍需遵守相�
 ---
 
 [最新版本](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [问题反馈](https://github.com/wuxinliuyun-art/canvasflow/issues) · [English](README_EN.md)
+
+开发者可查看 [源码运行与构建说明](SOURCE_SETUP.md)。

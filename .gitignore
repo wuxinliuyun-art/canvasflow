@@ -1,4 +1,9 @@
 node_modules/
+.cache/
+dist/
+release-build/
+final-build/
+artifact-build/
 .DS_Store
 *.log
 *.exe

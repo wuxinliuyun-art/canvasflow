@@ -2,12 +2,19 @@
 
 ## 已知问题 / 踩坑记录
 
-### Windows EXE 缺少静态文件
+### SVG 图标在按钮内视觉不居中
+
+- 现象：快捷键、上传等 SVG 图标看起来偏向按钮一侧，不同按钮重复出现类似问题。
+- 原因：只依赖按钮的默认行高或局部 `grid` 布局，没有统一校验按钮中心、SVG `viewBox` 和图形视觉重心。
+- 解决：图标按钮统一使用无内边距的居中容器；SVG 以按钮 50%/50% 几何中心定位，并保持明确的宽高和 `display: block`。
+- 避免：新增或修改图标按钮时，必须在真实浏览器中测量按钮与 SVG 的中心坐标，并同时检查明暗主题和常用缩放比例。
+
+### 旧版单文件 EXE 缺少静态文件
 
 - 现象：启动 EXE 后提示 `index.html`、`app.js`、`styles.css` 未包含在可执行文件中，页面只能依赖源码目录回退加载。
 - 原因：使用 `pkg` 打包时没有读取 `package.json` 的 `pkg.assets`，或打包后未进行独立启动验证。
 - 解决：从项目根目录执行 `pkg . --targets node18-win-x64`，确保 `pkg.assets` 包含上述三个文件。
-- 避免：发布前用非 5173 的隔离端口启动 EXE，并确认三个静态文件均返回 HTTP 200；ZIP 内 EXE 条目大小必须与源 EXE 一致。
+- 避免：Electron 发布前检查 `app.asar` 必须包含主画板、截图面板、控制中心与框选层资源，并验证安装版独立启动。
 
 ### 360 重复拦截“打开导出文件夹”
 
@@ -16,12 +23,19 @@
 - 解决：设置中不提供“打开导出文件夹”按钮，改为始终显示完整路径，并提供“复制路径”和“设置导出文件夹”。
 - 避免：不要再次加入直接启动资源管理器的入口；如将来恢复，必须做成可关闭选项，并在360环境中完成重复启动验证。
 
+### 未签名 EXE 被杀毒软件误报
+
+- 现象：Windows 或第三方杀毒软件将分发版 EXE 标记为可疑程序或木马。
+- 原因：未签名单文件 EXE 曾同时包含 PowerShell `EncodedCommand`、强制结束端口进程、复制并覆盖自身更新、启动资源管理器等高敏感行为。
+- 解决：移除 PowerShell、资源管理器调用、强制结束进程和自动覆盖更新；端口冲突时安全换端口；更新只保留检查和手动下载。
+- 避免：新增功能不得通过编码脚本、Shell COM、`taskkill`、复制自身或覆盖当前 EXE 实现；确需系统集成时先评估签名和杀毒软件影响。
+
 ### GitHub Release API 检查更新被限流
 
 - 现象：连续检查更新后 `/api/update/check` 返回 HTTP 502，服务端记录 GitHub HTTP 403。
 - 原因：GitHub 未登录 REST API 有请求频率限制，同一公网出口下多台电脑会共用额度。
-- 解决：成功结果缓存 10 分钟；API 不可用时通过公开的 `/releases/latest` 跳转获取最新版本，并按固定文件名下载 ZIP。
-- 避免：不要把自动更新只绑定到 GitHub REST API；Release 的 Windows 资产固定命名为 `CanvasFlow-Windows-x64.zip`。
+- 解决：成功结果缓存 10 分钟；API 不可用时只能通过公开的 `/releases/latest` 判断版本，未取得 SHA-256 digest 时不得自动安装。
+- 避免：Release 的唯一手工 Windows 资产固定命名为 `CanvasFlow-Setup.exe`；下载后同时校验文件大小和 GitHub API digest。
 
 ### 拖动节点图片时意外复制图片节点
 
@@ -32,8 +46,20 @@
 
 ## 架构决策
 
-- EXE 由 `.gitignore` 排除，Windows 分发文件统一放入 `CanvasFlow-Windows-x64.zip`。
-- GitHub Release 仅上传一个手工资产 `CanvasFlow-Windows-x64.zip`；GitHub 自动生成的 Source code 条目无法关闭。
-- Windows EXE 自动更新前必须先成功写入项目备份；备份失败时不得关闭程序或启动覆盖流程。
+- EXE 由 `.gitignore` 排除，Windows 分发文件统一由 electron-builder 生成 `CanvasFlow-Setup.exe`。
+- GitHub Release 仅上传一个手工资产 `CanvasFlow-Setup.exe`；GitHub 自动生成的 Source code 条目无法关闭。
+- 更新只下载并校验安装程序；用户确认后保存项目、启动安装程序并退出，不静默复制或覆盖正在运行的 EXE。
+- 端口冲突时自动尝试后续端口，不得结束占用端口的其他进程。
 - 新安装且图文素材库完全为空时初始化“图片转线稿”和“多视角参考”两条默认文字；已有素材库不得覆盖或追加。
-- `download/`、`data/`、`export/` 属于本地运行数据，不纳入源码提交。
+- 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。
+- `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
+- 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
+- 浏览器源码兼容模式下，截图入口仍可用 `window.open()` 降级展示；Electron 桌面版通过 IPC 打开原生无边框窗口，并用 `data/screenshot-settings.json` 共享设置。
+- 截图模组使用浏览器 `getDisplayMedia()` API 捕获窗口，不依赖 Native 模块或系统命令，避免杀毒软件误报。窗口捕获对话框默认由浏览器控制，目前无法通过 Web API 强制默认打开"窗口"标签页；面板内已添加提示引导用户手动选择。
+- 截图模组设置页通过 `saveScreenshotSettings()` 合并写入（先读取已有数据再覆盖特定字段），确保悬浮面板的独立设置（如裁剪区域、模式切换）不被设置页覆盖。
+- 浏览器源码兼容模式无法保证 OS 级置顶；Electron 桌面版使用原生 `BrowserWindow.setAlwaysOnTop()`，图钉状态和窗口位置写入截图设置文件。
+- 2.5.0 起桌面发行版改用 Electron：控制中心、画板、截图面板由同一主进程管理，不再运行 CMD，也不再通过 PowerShell、`taskkill` 或额外服务进程启动。
+- Electron 正式版的数据根目录固定为 `path.dirname(process.execPath)`，源码模式使用项目根目录；`data/`、`download/`、`export/` 由 NSIS 更新和卸载流程临时移出后恢复，默认不删除用户数据。
+- 截图模组不再选择或记忆目标软件窗口，改用 `screen` 与 `desktopCapturer` 捕获鼠标所在显示器，再由原生全屏框选层选择区域；自动模式保存显示器指纹和百分比区域，显示器边界或缩放改变时必须重新框选。
+- API Key 不再写入项目状态或浏览器持久化数据；桌面版使用 Electron `safeStorage` 加密到 `data/secrets.json`，安全存储不可用时只保留在当前进程内。
+- AI 绘图请求通过以下 4 个代理地址依次尝试，第一个可用即停止，全不可用时报错：`api.apib.ai` → `api.aiuxu.com` → `api.aishuch.com` → `api.apimart.ai`。定义在 `server.js:95-100` 的 `API_BASE_URLS`。
