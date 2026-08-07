@@ -79,7 +79,7 @@ function exportBrowseTarget(token, relativePath = "") {
 
 var staticCache = {};
 (function() {
-  var files = ["index.html", "app.js", "styles.css", "screenshot-panel.html", "screenshot-panel.js", "screenshot-panel.css"];
+  var files = ["index.html", "app.js", "styles.css"];
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     try {
@@ -274,27 +274,7 @@ async function requestHandler(req, res) {
     return;
   }
 
-  if (pathname === "/api/screenshot-settings" && req.method === "GET") {
-    const settings = readJsonFile(path.join(dataRoot, "data", "screenshot-settings.json"), {});
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ settings }));
-    return;
-  }
-
-  if (pathname === "/api/screenshot-settings" && req.method === "POST") {
-    try {
-      const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
-      const filePath = path.join(dataRoot, "data", "screenshot-settings.json");
-      const merged = { ...readJsonFile(filePath, {}), ...body };
-      atomicWriteFile(filePath, JSON.stringify(merged, null, 2));
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, settings: merged }));
-    } catch (error) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: error.message }));
-    }
-    return;
-  }
+  // screenshot settings API removed
 
   if (pathname === "/api/config" && req.method === "GET") {
     try {

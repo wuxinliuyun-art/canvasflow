@@ -14,7 +14,7 @@ const downloadDirectory = path.join(applicationRoot, "download");
 const exportDirectory = path.join(applicationRoot, "export");
 const preloadPath = path.join(__dirname, "preload.js");
 const statePath = path.join(dataDirectory, "app-state.json");
-const screenshotSettingsPath = path.join(dataDirectory, "screenshot-settings.json");
+// screenshot settings file removed
 const secretsPath = path.join(dataDirectory, "secrets.json");
 
 let panelWindow = null;
@@ -186,42 +186,9 @@ function openCanvas() {
   return { ok: false };
 }
 
-function savedPanelSettings() { return readJson(screenshotSettingsPath, {}); }
+// panel state persistence removed
 
-function persistPanelWindowState() {
-  if (!panelWindow || panelWindow.isDestroyed()) return;
-  const settings = savedPanelSettings();
-  const bounds = panelWindow.getBounds();
-  const previous = settings.windowBounds || {};
-  settings.windowBounds = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height > 100 ? bounds.height : (previous.height || 720) };
-  settings.compact = bounds.height <= 100;
-  settings.alwaysOnTop = panelWindow.isAlwaysOnTop();
-  atomicWriteJson(screenshotSettingsPath, settings);
-}
-
-function openPanel() {
-  if (panelWindow && !panelWindow.isDestroyed()) { panelWindow.show(); panelWindow.focus(); sendStatus(); return; }
-  const settings = savedPanelSettings();
-  const fallback = { width: 390, height: 720 };
-  const bounds = settings.windowBounds && Number.isFinite(settings.windowBounds.x) ? settings.windowBounds : fallback;
-  const initialHeight = settings.compact ? 60 : Math.max(680, bounds.height || fallback.height);
-  panelWindow = new BrowserWindow({
-    ...bounds, width: Math.max(320, bounds.width || fallback.width), height: initialHeight,
-    minWidth: 320, minHeight: 60, frame: false, transparent: false, resizable: true, show: false,
-    skipTaskbar: false, alwaysOnTop: settings.alwaysOnTop !== false, title: "CanvasFlow", autoHideMenuBar: true,
-    webPreferences: secureWebPreferences(),
-  });
-  restrictNavigation(panelWindow);
-  panelWindow.loadURL(`${serverInstance.url}screenshot-panel.html`);
-  panelWindow.once("ready-to-show", () => { panelWindow.show(); sendStatus(); });
-  panelWindow.on("move", persistPanelWindowState);
-  panelWindow.on("resize", persistPanelWindowState);
-  panelWindow.on("close", event => {
-    if (isQuitting) return;
-    event.preventDefault(); persistPanelWindowState(); panelWindow.hide(); sendStatus();
-  });
-  panelWindow.on("closed", () => { panelWindow = null; sendStatus(); });
-}
+// screenshot panel removed: openPanel() is intentionally not implemented
 
 function displayDescriptor(display) {
   return {
@@ -363,7 +330,6 @@ async function installUpdate() {
 function registerIpc() {
   ipcMain.handle("desktop:get-status", () => sendStatus());
   ipcMain.handle("desktop:open-canvas", () => { openCanvas(); return { ok: true }; });
-  ipcMain.handle("desktop:open-screenshot", () => { openPanel(); return { ok: true }; });
   ipcMain.handle("desktop:open-export", async () => {
     fs.mkdirSync(exportDirectory, { recursive: true });
     const error = await shell.openPath(exportDirectory);
@@ -379,17 +345,7 @@ function registerIpc() {
   ipcMain.handle("desktop:get-api-key", () => ({ apiKey: readApiKey() }));
   ipcMain.handle("desktop:save-api-key", (_event, value) => saveApiKey(value));
   ipcMain.handle("desktop:capture-region", (_event, options) => captureRegion(options));
-  ipcMain.handle("desktop:set-panel-pinned", (_event, pinned) => { if (!panelWindow || panelWindow.isDestroyed()) return { ok: false }; panelWindow.setAlwaysOnTop(pinned, pinned ? "floating" : "normal"); persistPanelWindowState(); return { ok: true, pinned }; });
-  ipcMain.handle("desktop:set-panel-compact", (_event, compact) => {
-    if (!panelWindow || panelWindow.isDestroyed()) return { ok: false };
-    const bounds = panelWindow.getBounds();
-    const settings = savedPanelSettings();
-    const expandedHeight = Math.max(680, settings.windowBounds?.height || 720);
-    panelWindow.setBounds({ ...bounds, height: compact ? 60 : expandedHeight }, true);
-    persistPanelWindowState();
-    return { ok: true };
-  });
-  ipcMain.handle("desktop:close-panel", () => { panelWindow?.hide(); sendStatus(); return { ok: true }; });
+  // panel control IPC handlers removed
   ipcMain.on("desktop:generation-active", (_event, active) => { generationActive = active; });
   ipcMain.on("capture:selection", (_event, selection) => { if (pendingSelection) pendingSelection.finish(selection); });
   ipcMain.on("capture:cancel", () => { if (pendingSelection) pendingSelection.finish(null); });
@@ -402,7 +358,6 @@ async function start() {
   registerIpc();
   serverInstance = await startCanvasFlowServer({ dataRoot: applicationRoot, getApiKey: readApiKey });
   shell.openExternal(serverInstance.url);
-  openPanel();
   log("info", `[Desktop] CanvasFlow ${APP_VERSION} started, dataDir: ${applicationRoot}`);
 }
 

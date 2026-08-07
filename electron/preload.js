@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld("canvasflowDesktop", {
   isDesktop: true,
   getStatus: () => ipcRenderer.invoke("desktop:get-status"),
   openCanvas: () => ipcRenderer.invoke("desktop:open-canvas"),
-  openScreenshotPanel: () => ipcRenderer.invoke("desktop:open-screenshot"),
   openExportFolder: () => ipcRenderer.invoke("desktop:open-export"),
   checkUpdate: () => ipcRenderer.invoke("desktop:check-update"),
   downloadUpdate: () => ipcRenderer.invoke("desktop:download-update"),
@@ -17,9 +16,7 @@ contextBridge.exposeInMainWorld("canvasflowDesktop", {
   saveApiKey: key => ipcRenderer.invoke("desktop:save-api-key", String(key || "")),
   getApiKey: () => ipcRenderer.invoke("desktop:get-api-key"),
   captureRegion: options => ipcRenderer.invoke("desktop:capture-region", options || {}),
-  setPanelPinned: pinned => ipcRenderer.invoke("desktop:set-panel-pinned", !!pinned),
-  setPanelCompact: compact => ipcRenderer.invoke("desktop:set-panel-compact", !!compact),
-  closePanel: () => ipcRenderer.invoke("desktop:close-panel"),
+  // panel control APIs removed
   setGenerationActive: active => ipcRenderer.send("desktop:generation-active", !!active),
   completeSave: result => ipcRenderer.send("desktop:save-complete", result || {}),
   submitSelection: selection => ipcRenderer.send("capture:selection", selection || null),

@@ -24,9 +24,7 @@
       "index.html",
       "app.js",
       "styles.css",
-      "screenshot-panel.html",
-      "screenshot-panel.js",
-      "screenshot-panel.css",
+      
       "server.js",
       "package.json",
       "LICENSE"

@@ -54,12 +54,8 @@
 - 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。
 - `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
 - 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
-- 浏览器源码兼容模式下，截图入口仍可用 `window.open()` 降级展示；Electron 桌面版通过 IPC 打开原生无边框窗口，并用 `data/screenshot-settings.json` 共享设置。
-- 截图模组使用浏览器 `getDisplayMedia()` API 捕获窗口，不依赖 Native 模块或系统命令，避免杀毒软件误报。窗口捕获对话框默认由浏览器控制，目前无法通过 Web API 强制默认打开"窗口"标签页；面板内已添加提示引导用户手动选择。
-- 截图模组设置页通过 `saveScreenshotSettings()` 合并写入（先读取已有数据再覆盖特定字段），确保悬浮面板的独立设置（如裁剪区域、模式切换）不被设置页覆盖。
-- 浏览器源码兼容模式无法保证 OS 级置顶；Electron 桌面版使用原生 `BrowserWindow.setAlwaysOnTop()`，图钉状态和窗口位置写入截图设置文件。
 - 2.5.0 起桌面发行版改用 Electron：控制中心、画板、截图面板由同一主进程管理，不再运行 CMD，也不再通过 PowerShell、`taskkill` 或额外服务进程启动。
 - Electron 正式版的数据根目录固定为 `path.dirname(process.execPath)`，源码模式使用项目根目录；`data/`、`download/`、`export/` 由 NSIS 更新和卸载流程临时移出后恢复，默认不删除用户数据。
-- 截图模组不再选择或记忆目标软件窗口，改用 `screen` 与 `desktopCapturer` 捕获鼠标所在显示器，再由原生全屏框选层选择区域；自动模式保存显示器指纹和百分比区域，显示器边界或缩放改变时必须重新框选。
+ 
 - API Key 不再写入项目状态或浏览器持久化数据；桌面版使用 Electron `safeStorage` 加密到 `data/secrets.json`，安全存储不可用时只保留在当前进程内。
 - AI 绘图请求通过以下 4 个代理地址依次尝试，第一个可用即停止，全不可用时报错：`api.apib.ai` → `api.aiuxu.com` → `api.aishuch.com` → `api.apimart.ai`。定义在 `server.js:95-100` 的 `API_BASE_URLS`。

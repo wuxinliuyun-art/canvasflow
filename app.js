@@ -357,13 +357,7 @@ const els = {
   smoothEdges: $("smoothEdgesToggle"),
   exportFolder: $("exportFolderInput"),
   copyExportPathBtn: $("copyExportPathBtn"),
-  openScreenshotPanelBtn: $("openScreenshotPanelBtn"),
-  screenshotPromptInput: $("screenshotPromptInput"),
-  screenshotModel: $("screenshotModel"),
-  screenshotResolution: $("screenshotResolution"),
-  screenshotQuality: $("screenshotQuality"),
-  screenshotSize: $("screenshotSize"),
-  screenshotNum: $("screenshotNum"),
+
   loadJson: $("loadJsonInput"),
   projectNameBtn: $("projectNameBtn"),
   projectMenu: $("projectMenu"),
@@ -592,43 +586,7 @@ function applySettings() {
     : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 }
 
-async function syncScreenshotSettings() {
-  var s = {};
-  try {
-    if (desktop) {
-      var response = await fetch("/api/screenshot-settings", { cache: "no-store" });
-      if (response.ok) s = (await response.json()).settings || {};
-    } else {
-      var raw = localStorage.getItem("screenshot_settings");
-      if (raw) s = JSON.parse(raw);
-    }
-  } catch (e) { /* ignore */ }
-  if (els.screenshotPromptInput) els.screenshotPromptInput.value = s.promptCustom || "";
-  if (els.screenshotModel) els.screenshotModel.value = s.model || "gpt-image-2";
-  if (els.screenshotResolution) els.screenshotResolution.value = s.resolution || "1k";
-  if (els.screenshotQuality) els.screenshotQuality.value = s.quality || "low";
-  if (els.screenshotSize) els.screenshotSize.value = s.size || "1:1";
-  if (els.screenshotNum) els.screenshotNum.value = String(s.n || 1);
-}
-
-async function saveScreenshotSettings() {
-  var s = {};
-  try {
-    var raw = localStorage.getItem("screenshot_settings");
-    if (raw) s = JSON.parse(raw);
-  } catch (e) { /* ignore */ }
-  if (els.screenshotPromptInput) s.promptCustom = els.screenshotPromptInput.value;
-  if (els.screenshotModel) s.model = els.screenshotModel.value;
-  if (els.screenshotResolution) s.resolution = els.screenshotResolution.value;
-  if (els.screenshotQuality) s.quality = els.screenshotQuality.value;
-  if (els.screenshotSize) s.size = els.screenshotSize.value;
-  if (els.screenshotNum) s.n = Number(els.screenshotNum.value) || 1;
-  try { localStorage.setItem("screenshot_settings", JSON.stringify(s)); } catch (e) { /* ignore */ }
-  if (desktop) {
-    try { await fetch("/api/screenshot-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) }); }
-    catch (e) { console.error("[截图设置] 无法写入本地文件", e); }
-  }
-}
+// screenshot settings UI removed
 
 function syncSettingsPanel() {
   els.gridSize.value = state.settings.gridSize;
@@ -640,7 +598,6 @@ function syncSettingsPanel() {
   els.zipExportToggle.checked = state.settings.zipExport !== false;
   els.exportInputsToggle.checked = state.settings.exportInputs === true;
   syncCustomMaterialsList();
-  syncScreenshotSettings();
 }
 
 function syncCustomMaterialsList() {
@@ -3709,21 +3666,9 @@ els.smoothEdges.onchange = () => {
   render();
 };
 
-if (els.openScreenshotPanelBtn) els.openScreenshotPanelBtn.onclick = () => {
-  saveScreenshotSettings();
-  if (desktop) { desktop.openScreenshotPanel(); return; }
-  var w = 500, h = 750;
-  var left = Math.max(0, (screen.width - w) / 2);
-  var top = Math.max(0, (screen.height - h) / 2);
-  window.open("/screenshot-panel.html", "screenshotPanel", "width=" + w + ",height=" + h + ",left=" + left + ",top=" + top + ",resizable=yes,scrollbars=no,location=no,toolbar=no,menubar=no,status=no");
-};
+// screenshot panel trigger removed
 
-if (els.screenshotPromptInput) els.screenshotPromptInput.onchange = saveScreenshotSettings;
-if (els.screenshotModel) els.screenshotModel.onchange = saveScreenshotSettings;
-if (els.screenshotResolution) els.screenshotResolution.onchange = saveScreenshotSettings;
-if (els.screenshotQuality) els.screenshotQuality.onchange = saveScreenshotSettings;
-if (els.screenshotSize) els.screenshotSize.onchange = saveScreenshotSettings;
-if (els.screenshotNum) els.screenshotNum.onchange = saveScreenshotSettings;
+// screenshot settings bindings removed
 
 els.gridSize.onchange = () => {
   state.settings.gridSize = Math.max(1, Number(els.gridSize.value) || 20);
