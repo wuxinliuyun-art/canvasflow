@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private static readonly Regex ServerUrlPattern = new(@"\[Start\] CanvasFlow server: (?<url>http://127\.0\.0\.1:\d+/)", RegexOptions.Compiled);
     private readonly CancellationTokenSource _shutdown = new();
     private Process? _node;
+    private DesktopApi? _desktopApi;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _serverUrl;
     private string? _root;
@@ -79,6 +80,11 @@ public partial class MainWindow : Window
           saveApiKey: apiKey => invoke("desktop:save-api-key", { apiKey: String(apiKey || "") }),
           storeImage: (dataUrl, fileName, mime) => invoke("desktop:store-image", { dataUrl, fileName, mime }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
+          apiRequest: (path, options = {}) => invoke("desktop:api", {
+            path: String(path || ""),
+            method: String(options.method || "GET"),
+            body: typeof options.body === "string" ? options.body : ""
+          }, 120000),
           onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
           completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
         };
@@ -120,6 +126,7 @@ public partial class MainWindow : Window
         {
             _root = FindProjectRoot();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
+            _desktopApi = new DesktopApi(_root, Log);
             LoadAssets();
             Log("[启动] 已找到项目目录。", false);
             var nodeTask = StartNodeAsync(_root, _shutdown.Token);
@@ -246,6 +253,19 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, await ReadAssetAsync(root)); }
                         catch (Exception readError) { PostRpcResult(root, error: readError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:api")
+                    {
+                        try
+                        {
+                            if (_desktopApi is null) throw new InvalidOperationException("桌面接口尚未初始化");
+                            var method = root.TryGetProperty("method", out var methodElement) ? methodElement.GetString() ?? "GET" : "GET";
+                            var path = root.TryGetProperty("path", out var pathElement) ? pathElement.GetString() ?? "" : "";
+                            var body = root.TryGetProperty("body", out var bodyElement) ? bodyElement.GetString() ?? "" : "";
+                            var response = await _desktopApi.HandleLocalAsync(method, path, body, _shutdown.Token);
+                            PostRpcResult(root, new { status = response.Status, body = response.Body, contentType = response.ContentType });
+                        }
+                        catch (Exception apiError) { PostRpcResult(root, error: apiError.Message); }
                     }
                     else if (type.GetString() == "desktop:get-api-key")
                     {

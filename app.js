@@ -10,6 +10,27 @@ const GROUP_NODE_HEIGHT = 244;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
 const desktop = window.canvasflowDesktop || null;
+const DESKTOP_LOCAL_API_PATHS = new Set([
+  "/api/runtime-paths", "/api/app-state", "/api/custom-library", "/api/auto-backup",
+  "/api/save-json", "/api/save-images", "/api/custom-material", "/api/save-export-files",
+]);
+
+async function apiFetch(input, options = {}) {
+  const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
+  const url = new URL(rawUrl, location.href);
+  if (desktop?.apiRequest && DESKTOP_LOCAL_API_PATHS.has(url.pathname)) {
+    const result = await desktop.apiRequest(url.pathname + url.search, {
+      method: options.method || "GET",
+      body: typeof options.body === "string" ? options.body : "",
+    });
+    return new Response(result.body || "", {
+      status: Number(result.status) || 500,
+      headers: { "Content-Type": result.contentType || "application/json;charset=utf-8" },
+    });
+  }
+  return fetch(input, options);
+}
+
 let runtimeExportFolder = "export";
 let autoBackupReady = false;
 let autoBackupTimer = null;
@@ -293,7 +314,7 @@ function loadGlobalLibrary() {
 async function loadGlobalLibraryFromDisk() {
   const browserLibrary = normalizeLibrary(globalLibrary);
   try {
-    const resp = await fetch("/api/custom-library");
+    const resp = await apiFetch("/api/custom-library");
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     globalLibrary = normalizeLibrary(await resp.json());
     let migrated = 0;
@@ -322,7 +343,7 @@ function saveGlobalLibrary() {
   catch (e) { console.error("[保存] 全局素材库写入失败", e); toast("全局素材保存失败，可能是浏览器存储空间不足"); }
   const snapshot = JSON.stringify(globalLibrary);
   librarySaveQueue = librarySaveQueue.catch(() => {}).then(async () => {
-    const resp = await fetch("/api/custom-library", { method: "POST", headers: { "Content-Type": "application/json" }, body: snapshot });
+    const resp = await apiFetch("/api/custom-library", { method: "POST", headers: { "Content-Type": "application/json" }, body: snapshot });
     if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).error || `HTTP ${resp.status}`);
   }).catch(e => { console.error("[保存] 本地素材库文件写入失败", e); toast("素材未能保存到本地：请检查程序目录写入权限后重试"); });
 }
@@ -709,7 +730,7 @@ async function deleteTemplate(kind, id) {
   const item = loc.library[loc.key][loc.index];
   if (!confirm(`删除“${item.name}”？已创建的节点不会受影响。`)) return;
   loc.library[loc.key].splice(loc.index, 1);
-  if (kind === "image" && item.fileName) try { await fetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) }); } catch (e) { console.error("[自定义图片] 删除文件失败", e); }
+  if (kind === "image" && item.fileName) try { await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) }); } catch (e) { console.error("[自定义图片] 删除文件失败", e); }
   persistLibraries(); syncCustomMaterialsList(); toast("素材已删除");
 }
 
@@ -735,7 +756,7 @@ async function addCustomMaterial(source) {
   if (!base64) base64 = await fileToBase64(file);
   try {
     const originalName = source?.fileName || file?.name || "custom.png";
-    var resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: stripDataUrl(base64) }) });
+    var resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: stripDataUrl(base64) }) });
     var result = await resp.json();
     if (!result.success) { toast("保存失败: " + (result.error || "")); return; }
     console.log("[自定义素材] 服务端保存成功: fileName=" + result.fileName);
@@ -748,7 +769,7 @@ async function addCustomMaterial(source) {
       item.revision = (item.revision || 1) + 1;
       if (oldFileName && oldFileName !== result.fileName) {
         try {
-          await fetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: oldFileName }) });
+          await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: oldFileName }) });
         } catch (cleanupError) { console.error("[自定义图片] 旧图片清理失败", cleanupError); }
       }
     } else {
@@ -1087,7 +1108,7 @@ async function saveNodeAsTemplate(node) {
     const raw = stripDataUrl(content);
     const originalName = node.fileName || "custom.png";
     try {
-      const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: raw }) });
+      const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: raw }) });
       const result = await resp.json(); if (!result.success) throw new Error(result.error || "保存失败");
       const template = normalizeTemplate({ name: finalName, fileName: result.fileName, mime: node.mime || "image/png", revision: 1 });
       target.imageMaterials.push(template);
@@ -1541,7 +1562,7 @@ async function generateAngleImage(nodeId) {
     node.generating = false;
     node._aiProgress = { status: "done", label: "生成完成", percent: 100, error: "" };
     console.log("[角度变化] 已创建结果图片节点", { nodeId, resultNodeId: resultNode.id, fileName });
-    fetch("/api/save-export-files", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folderName: "ai_generated", files: [{ name: fileName, data: generatedImage }] }) }).catch(err => {
+    apiFetch("/api/save-export-files", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folderName: "ai_generated", files: [{ name: fileName, data: generatedImage }] }) }).catch(err => {
       console.warn("[角度变化] 结果图片保存到本地失败", err);
     });
     pushHistory(); render();
@@ -1723,7 +1744,7 @@ async function submitGeneration(prompt, imageUrls, node) {
   // Keep the key out of URLs and persisted project data; the backend receives it only in this request body.
   payload._apiKey = state.settings.apiKey;
 
-  const resp = await fetch("/api/generate", {
+  const resp = await apiFetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -1741,7 +1762,7 @@ async function pollTask(taskId, onProgress = null) {
     await new Promise(r => setTimeout(r, 3000));
     let data;
     try {
-      const resp = await fetch(`/api/task/${encodeURIComponent(taskId)}`, {
+      const resp = await apiFetch(`/api/task/${encodeURIComponent(taskId)}`, {
         headers: { "X-CanvasFlow-Api-Key": state.settings.apiKey || "" },
       });
       data = await resp.json();
@@ -1774,7 +1795,7 @@ async function pollTask(taskId, onProgress = null) {
 }
 
 async function fetchImageAsBase64(url) {
-  const resp = await fetch("/api/download-image", {
+  const resp = await apiFetch("/api/download-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageUrl: url }),
@@ -1846,7 +1867,7 @@ async function generateSingle(node, upstream) {
     node.fileName = `ai_generated_${Date.now()}.png`;
     node.mime = "image/png";
     await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName);
-    fetch("/api/save-export-files", {
+    apiFetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName: "ai_generated", files: [{ name: node.fileName, data: base64 }] }),
@@ -3389,7 +3410,7 @@ async function droppedImageSources(dataTransfer) {
       results.push({ image: url, fileName: `drop_${timestamp()}.${extensionFor("", mime)}`, mime });
       continue;
     }
-    const resp = await fetch("/api/download-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: url }) });
+    const resp = await apiFetch("/api/download-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: url }) });
     const data = await resp.json();
     if (!resp.ok || !data.base64) throw new Error(data.error || `HTTP ${resp.status}`);
     const urlName = decodeURIComponent(new URL(url).pathname.split("/").pop() || "").split("?")[0];
@@ -3574,7 +3595,7 @@ function persistPages() {
 async function persistDesktopStateNow() {
   saveCurrentPage();
   const snapshot = desktopStateSnapshot();
-  const response = await fetch("/api/app-state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) });
+  const response = await apiFetch("/api/app-state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
   return true;
@@ -3601,7 +3622,7 @@ async function writeAutoBackup(reason = "change") {
   const fileName = autoBackupFileName();
   try {
     const content = autoBackupContent();
-    const resp = await fetch("/api/auto-backup", {
+    const resp = await apiFetch("/api/auto-backup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: fileName, content }),
@@ -3642,7 +3663,7 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
   els.checkUpdateBtn.disabled = true;
   els.updateStatus.textContent = updateText("正在连接 GitHub 检查更新…", "Checking GitHub for updates…");
   try {
-    const resp = await fetch("/api/update/check", { cache: "no-store" });
+    const resp = await apiFetch("/api/update/check", { cache: "no-store" });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
     lastUpdateCheckResult = data;
@@ -3709,7 +3730,7 @@ function loadPagesFromStorage(savedState = null) {
 async function loadDesktopState() {
   if (!desktop) return null;
   try {
-    const response = await fetch("/api/app-state", { cache: "no-store" });
+    const response = await apiFetch("/api/app-state", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const saved = (await response.json()).state || null;
     if (!saved || !Number.isFinite(Number(saved.updatedAt))) {
@@ -4153,7 +4174,7 @@ els.verifyKeyBtn.onclick = async () => {
   els.verifyKeyBtn.textContent = "...";
   els.verifyKeyBtn.style.color = "";
   try {
-    const resp = await fetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
+    const resp = await apiFetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
     if (resp.status === 200) {
       els.verifyKeyBtn.textContent = "✓";
       els.verifyKeyBtn.style.color = "#34c759";
@@ -4181,7 +4202,7 @@ async function fetchBalance() {
   if (!key) { els.balanceDisplay.textContent = "积分：请先填入 API Key"; return; }
   els.balanceDisplay.textContent = "积分：查询中...";
   try {
-    const resp = await fetch("/api/balance", { headers: { "X-CanvasFlow-Api-Key": key } });
+    const resp = await apiFetch("/api/balance", { headers: { "X-CanvasFlow-Api-Key": key } });
     const data = await resp.json();
     if (data.success) {
       els.balanceDisplay.textContent = `积分：${Number(data.remain_credits).toFixed(2)}（已用 ${Number(data.used_credits).toFixed(2)}）`;
@@ -4393,7 +4414,7 @@ async function saveJson() {
 
   if (imageFiles.length > 0) {
     try {
-      const resp = await fetch("/api/save-images", {
+      const resp = await apiFetch("/api/save-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files: imageFiles.map(f => ({ name: f.name, data: f.data })) }),
@@ -4428,7 +4449,7 @@ async function saveJson() {
     toast("JSON已保存到输出文件夹");
   } else {
     try {
-      const resp = await fetch("/api/save-json", {
+      const resp = await apiFetch("/api/save-json", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, content }),
@@ -4468,7 +4489,7 @@ async function restoreLibrariesFromJson(data) {
     for (const item of library.imageMaterials) {
       if (!item.data) continue;
       try {
-        const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: item.fileName || "custom.png", data: stripDataUrl(item.data) }) });
+        const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: item.fileName || "custom.png", data: stripDataUrl(item.data) }) });
         const result = await resp.json(); if (!result.success) throw new Error(result.error || "恢复失败");
         item.fileName = result.fileName; delete item.data;
       } catch (e) { console.error("[加载] 项目自定义图片恢复失败", item.name, e); }
@@ -4490,7 +4511,7 @@ async function restoreLibrariesFromJson(data) {
       const existing = globalLibrary.imageMaterials.find(x => x.id === item.id);
       if (existing) continue;
       if (item.data) {
-        const resp = await fetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: item.fileName || "custom.png", data: stripDataUrl(item.data) }) });
+        const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: item.fileName || "custom.png", data: stripDataUrl(item.data) }) });
         const result = await resp.json(); if (!result.success) throw new Error(result.error || "恢复失败"); item.fileName = result.fileName;
       }
       item.name = uniqueTemplateName("image", item.name, globalLibrary); delete item.data; globalLibrary.imageMaterials.push(item);
@@ -4727,7 +4748,7 @@ async function saveFiles(files, folderName, onProgress = () => {}) {
       onProgress(i + 1, files.length);
       if (i % 4 === 0 || i === files.length - 1) await nextPaint();
     }
-    const resp = await fetch("/api/save-export-files", {
+    const resp = await apiFetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName, baseFolder: state.settings.exportFolderLabel || "export", files: fileData }),
@@ -5139,7 +5160,7 @@ document.addEventListener("keydown", ev => {
 async function init() {
   await loadGlobalLibraryFromDisk();
   try {
-    const resp = await fetch("/api/runtime-paths", { cache: "no-store" });
+    const resp = await apiFetch("/api/runtime-paths", { cache: "no-store" });
     const data = await resp.json();
     if (!resp.ok || !data.exportFolder) throw new Error(data.error || `HTTP ${resp.status}`);
     runtimeExportFolder = data.exportFolder;
