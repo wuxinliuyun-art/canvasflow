@@ -2,56 +2,45 @@
 
 本页面向需要修改或自行构建 CanvasFlow 的开发者；普通用户只需下载 GitHub Release 中的 `CanvasFlow-Setup.exe`。
 
-## 环境
+## .NET桌面版环境
 
 - Windows 10/11 x64
-- Node.js 22 LTS（推荐）
-- npm（随 Node.js 安装）
-- 首次安装依赖和检查更新时需要联网
+- .NET 8 SDK（仅源码运行和构建需要）
+- Microsoft Edge WebView2 Runtime
+- Inno Setup 6（仅生成`CanvasFlow-Setup.exe`时需要）
+- 首次还原NuGet依赖和检查更新时需要联网
 
-项目不依赖 Python、PowerShell 脚本或全局安装的 Electron。
+正式安装包为自包含.NET x64版本，普通用户无需安装.NET SDK、Node.js或Electron。
 
 ## 桌面版源码运行
-
-```powershell
-npm install
-npm start
-```
-
-启动后会显示 CanvasFlow 控制中心。源码模式下，`data`、`download` 和 `export` 位于项目根目录，并已被 Git 忽略。
-
-## .NET 8 桌面面板（迁移版本）
-
-普通启动：双击项目根目录的`启动CanvasFlow-NET.bat`。首次运行会自动构建，之后直接打开桌面面板。
 
 ```powershell
 dotnet run --project .\desktop-dotnet\CanvasFlow.Desktop.csproj
 ```
 
-.NET版本使用WPF和WebView2在单个窗口内承载现有画布，Node后台进程不会显示CMD窗口。第一阶段仍需要Node.js；运行日志写入`data/desktop.log`。关闭窗口时会同步清理由该窗口启动的后台进程。
+也可以双击项目根目录的`启动CanvasFlow-NET.bat`。源码模式下，`data`、`download`和`export`位于项目根目录并已被Git忽略。
 
 ## 浏览器兼容模式
 
 ```powershell
-npm install
-npm run start:server
+node server.js
 ```
 
-然后打开终端中显示的本地地址。浏览器模式保留主画板功能。
+浏览器兼容模式需要Node.js 22 LTS，然后打开终端中显示的本地地址。它仅用于开发兼容，不是正式桌面发行方式。
 
 ## 构建 Windows 安装包
 
 ```powershell
-npm run build:windows
+.\build-dotnet.cmd
 ```
 
-默认输出为 `dist/CanvasFlow-Setup.exe`。安装包为 Windows x64 当前用户安装，不需要管理员权限；当前没有商业代码签名。
+自包含发布目录位于`desktop-dotnet\bin\Release\net8.0-windows\win-x64\publish`。随后用Inno Setup 6编译`installer\CanvasFlow.iss`，输出`dist-dotnet\CanvasFlow-Setup.exe`。
 
-构建前请确认没有正在运行 `dist/win-unpacked/CanvasFlow.exe`，否则 Windows 可能锁定旧的 `app.asar`。
+安装包为Windows x64当前用户安装，不需要管理员权限；当前没有商业代码签名。
 
 ## 数据与发布
 
-- 不要提交 `data/`、`download/`、`export/`、`dist/` 或任何 EXE。
+- 不要提交`data/`、`download/`、`export/`、`dist-dotnet/`或任何EXE。
 - GitHub Release 只手工上传 `CanvasFlow-Setup.exe`。
-- 发布前检查 `app.asar` 包含画板和控制中心资源。
+- 发布前检查publish目录包含`CanvasFlow.exe`、`index.html`、`app.js`和`styles.css`。
 - 安装和更新测试必须确认 `data`、`download`、`export` 不被覆盖或删除。

@@ -1,6 +1,7 @@
 node_modules/
 .cache/
 dist/
+dist-dotnet/
 release-build/
 final-build/
 artifact-build/

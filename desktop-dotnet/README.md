@@ -1,11 +1,11 @@
-# CanvasFlow .NET 8 桌面面板
+# CanvasFlow .NET 8 桌面版
 
-这是第一阶段迁移版本：WPF提供单窗口外壳，WebView2在窗口内加载现有画布，`server.js`作为隐藏后台进程运行。
+WPF提供单窗口外壳，WebView2在窗口内加载现有画布。本地文件与联网接口直接由.NET处理，不启动Node服务、不监听本地端口。
 
 ```powershell
 dotnet run --project .\desktop-dotnet\CanvasFlow.Desktop.csproj
 ```
 
-需要.NET 8 Desktop Runtime、Microsoft Edge WebView2 Runtime和Node.js（第一阶段过渡依赖）。窗口关闭时会停止由它启动的Node子进程，数据继续使用项目根目录的`data`、`download`和`export`。
+源码运行需要.NET 8 SDK和Microsoft Edge WebView2 Runtime，不需要Node.js。正式安装包使用自包含.NET发布，用户无需另装.NET；Windows 10/11通常已包含WebView2 Runtime。
 
-当前已实现单窗口、隐藏Node服务、内嵌画布、轻量启动提示、文件日志、单实例和退出清理。Node和WebView2会并行预热以缩短启动等待，运行日志写入`data/desktop.log`，不占用画布空间。Node API迁移、API Key安全存储、自动更新和安装程序留待后续阶段；Electron版本暂时作为回退。
+用户数据位于程序旁的`data`、`download`和`export`，运行日志写入`data/desktop.log`。API Key通过Windows DPAPI按当前用户加密；退出前会等待项目状态与自动备份写入成功。

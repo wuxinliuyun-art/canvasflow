@@ -13,9 +13,6 @@ if not exist "%DESKTOP_PROJECT%" (
   exit /b 1
 )
 
-tasklist /FI "IMAGENAME eq CanvasFlow.Desktop.exe" 2>nul | find /I "CanvasFlow.Desktop.exe" >nul
-if not errorlevel 1 exit /b 0
-
 dotnet build "%DESKTOP_PROJECT%" --configuration Debug --no-restore --nologo --verbosity quiet
 if errorlevel 1 (
   echo.

@@ -9,12 +9,12 @@
 - 解决：图标按钮统一使用无内边距的居中容器；SVG 以按钮 50%/50% 几何中心定位，并保持明确的宽高和 `display: block`。
 - 避免：新增或修改图标按钮时，必须在真实浏览器中测量按钮与 SVG 的中心坐标，并同时检查明暗主题和常用缩放比例。
 
-### 旧版单文件 EXE 缺少静态文件
+### 桌面发布缺少静态界面文件
 
 - 现象：启动 EXE 后提示 `index.html`、`app.js`、`styles.css` 未包含在可执行文件中，页面只能依赖源码目录回退加载。
-- 原因：使用 `pkg` 打包时没有读取 `package.json` 的 `pkg.assets`，或打包后未进行独立启动验证。
-- 解决：从项目根目录执行 `pkg . --targets node18-win-x64`，确保 `pkg.assets` 包含上述三个文件。
-- 避免：Electron 发布前检查 `app.asar` 必须包含主画板与控制中心资源，并验证安装版独立启动。
+- 原因：只复制了桌面EXE，没有把`index.html`、`app.js`和`styles.css`放入发布目录。
+- 解决：由`CanvasFlow.Desktop.csproj`将界面资源复制到publish目录，再由Inno Setup整体打包。
+- 避免：发布前必须在隔离目录验证安装版，确认程序不依赖源码目录、Node或本地端口。
 
 ### 360 重复拦截“打开导出文件夹”
 
@@ -57,9 +57,9 @@
 - .NET迁移期间前端统一通过`apiFetch`访问应用接口；桌面模式下项目状态、自动备份、素材库、JSON、图片和导出文件写入由白名单桌面桥接处理，浏览器源码模式继续回退到`server.js`。不得把任意文件路径或任意HTTP地址透传给本地文件接口。
 - .NET窗口保留Windows原生标题栏和最小化、最大化、关闭行为；通过DWM按主题设置标题栏颜色，并与画布背景保持一档明度差，避免窗口边界融在画布中。系统不支持相关属性时允许自然降级。
 - .NET窗口关闭时先等待页面状态和自动备份确认成功，再隐藏窗口并结束当前宿主；桌面版不创建Node子进程，也不得恢复端口扫描、结束其他进程或Shell脚本启动逻辑。
-- .NET桌面版继续使用项目根目录的`data/`、`download/`、`export/`，迁移阶段保留Electron作为回退，不得擅自改变已有数据格式。
+- .NET桌面版正式发布时使用EXE所在目录的`data/`、`download/`、`export/`；源码运行时使用项目根目录。Electron仅在`legacy/`保留为回退，不得擅自改变已有数据格式。
 
-- EXE 由 `.gitignore` 排除，Windows 分发文件统一由 electron-builder 生成 `CanvasFlow-Setup.exe`。
+- EXE由`.gitignore`排除；Windows分发文件由自包含.NET publish目录和`installer/CanvasFlow.iss`生成`CanvasFlow-Setup.exe`。
 - GitHub Release 仅上传一个手工资产 `CanvasFlow-Setup.exe`；GitHub 自动生成的 Source code 条目无法关闭。
 - 更新只下载并校验安装程序；用户确认后保存项目、启动安装程序并退出，不静默复制或覆盖正在运行的 EXE。
 - 端口冲突时自动尝试后续端口，不得结束占用端口的其他进程。
@@ -68,9 +68,9 @@
 - `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
 - 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
 - Electron实现仅作为迁移回退保留；当前桌面发行目标为.NET WPF，不再运行CMD，也不再通过PowerShell、`taskkill`、Node服务或额外进程启动。
-- Electron 正式版的数据根目录固定为 `path.dirname(process.execPath)`，源码模式使用项目根目录；`data/`、`download/`、`export/` 由 NSIS 更新和卸载流程临时移出后恢复，默认不删除用户数据。
+- Inno Setup采用当前用户安装；升级不得覆盖`data/`、`download/`、`export/`，卸载默认保留这三个目录，只清理可重新生成的`data/webview2`缓存。
  
-- API Key 不再写入项目状态或浏览器持久化数据；桌面版使用 Electron `safeStorage` 加密到 `data/secrets.json`，安全存储不可用时只保留在当前进程内。
+- API Key不写入项目状态、浏览器持久化数据、自动备份或请求URL；.NET桌面版使用Windows DPAPI按当前用户加密到`data/secrets.json`。
 - AI 绘图请求通过以下 4 个代理地址依次尝试，第一个可用即停止，全不可用时报错：`api.apib.ai` → `api.aiuxu.com` → `api.aishuch.com` → `api.apimart.ai`。定义在 `server.js:95-100` 的 `API_BASE_URLS`。
 - 图片节点默认根据图片原始宽高比自动调整节点高度；可在常规设置中关闭，关闭后保留当前尺寸并允许手动调整。旧项目缺少该设置时按开启处理。
 - 节点名称支持在常规设置中统一隐藏；默认关闭，不删除节点类型、名称或项目数据。隐藏时文字节点保留正文，带预览的功能节点默认只显示预览；鼠标悬浮后必须在原节点内部向下展开完整操作区，不得使用脱离节点的浮动面板。后续功能节点的可折叠操作区统一使用 `.node-hover-controls`。
