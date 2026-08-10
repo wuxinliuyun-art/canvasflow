@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private string? _serverUrl;
     private string? _root;
     private bool _closing;
+    private bool _shutdownComplete;
     private readonly object _logLock = new();
 
     public MainWindow()
@@ -159,17 +160,52 @@ public partial class MainWindow : Window
         }
     }
 
-    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    private async void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (_shutdownComplete) return;
+        e.Cancel = true;
         _closing = true;
+        Hide();
         _shutdown.Cancel();
-        CanvasView.Dispose();
-        if (_node is null) return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            Environment.Exit(0);
+        });
         try
         {
-            if (!_node.HasExited) { _node.Kill(true); _node.WaitForExit(3000); }
+            await Task.Run(StopNode);
         }
-        catch (Exception ex) { Debug.WriteLine($"[关闭] 停止Node服务失败：{ex.Message}"); }
-        finally { _node.Dispose(); _node = null; }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[关闭] 清理桌面资源失败：{ex.Message}");
+        }
+        finally
+        {
+            _shutdownComplete = true;
+            Environment.Exit(0);
+        }
+    }
+
+    private void StopNode()
+    {
+        var process = _node;
+        _node = null;
+        if (process is null) return;
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[关闭] 停止Node服务失败：{ex.Message}");
+        }
+        finally
+        {
+            process.Dispose();
+        }
     }
 }

@@ -13,17 +13,14 @@ if not exist "%DESKTOP_PROJECT%" (
   exit /b 1
 )
 
-if not exist "%DESKTOP_EXE%" (
-  echo [BUILD] First launch. Building the .NET 8 desktop app...
-  dotnet build "%DESKTOP_PROJECT%" --configuration Debug
-  if errorlevel 1 (
-    echo.
-    echo [ERROR] The .NET desktop build failed.
-    echo Cause: .NET 8 SDK is missing or package restore failed.
-    echo Fix: Check dotnet --list-sdks and try again.
-    pause
-    exit /b 1
-  )
+dotnet build "%DESKTOP_PROJECT%" --configuration Debug --no-restore --nologo --verbosity quiet
+if errorlevel 1 (
+  echo.
+  echo [ERROR] The .NET desktop build failed.
+  echo Cause: .NET 8 SDK is missing or packages were not restored.
+  echo Fix: Run dotnet restore for the desktop project and try again.
+  pause
+  exit /b 1
 )
 
 start "" /D "%PROJECT_ROOT%" "%DESKTOP_EXE%"
