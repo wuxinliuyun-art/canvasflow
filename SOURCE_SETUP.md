@@ -27,7 +27,7 @@ npm install
 npm run start:server
 ```
 
-然后打开终端中显示的本地地址。浏览器模式保留主画板功能，但真正置顶的截图面板和原生屏幕区域框选只在 Electron 桌面版中可用。
+然后打开终端中显示的本地地址。浏览器模式保留主画板功能。
 
 ## 构建 Windows 安装包
 
@@ -43,5 +43,5 @@ npm run build:windows
 
 - 不要提交 `data/`、`download/`、`export/`、`dist/` 或任何 EXE。
 - GitHub Release 只手工上传 `CanvasFlow-Setup.exe`。
-- 发布前检查 `app.asar` 包含画板、控制中心、截图面板和框选层资源。
+- 发布前检查 `app.asar` 包含画板和控制中心资源。
 - 安装和更新测试必须确认 `data`、`download`、`export` 不被覆盖或删除。

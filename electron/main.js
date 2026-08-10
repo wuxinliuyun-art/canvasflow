@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, net, safeStorage, screen, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, net, safeStorage, shell } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -18,13 +18,11 @@ const statePath = path.join(dataDirectory, "app-state.json");
 const secretsPath = path.join(dataDirectory, "secrets.json");
 
 let panelWindow = null;
-let captureOverlay = null;
 let serverInstance = null;
 let downloadedInstaller = "";
 let sessionApiKey = "";
 let isQuitting = false;
 let generationActive = false;
-let pendingSelection = null;
 const logs = [];
 
 function atomicWriteJson(filePath, value) {
@@ -190,90 +188,9 @@ function openCanvas() {
 
 // screenshot panel removed: openPanel() is intentionally not implemented
 
-function displayDescriptor(display) {
-  return {
-    id: String(display.id), bounds: display.bounds, workArea: display.workArea, scaleFactor: display.scaleFactor,
-    fingerprint: `${display.bounds.x},${display.bounds.y},${display.bounds.width},${display.bounds.height}@${display.scaleFactor}`,
-  };
-}
-
-function findSavedDisplay(saved) {
-  if (!saved) return null;
-  return screen.getAllDisplays().find(display => String(display.id) === String(saved.id) && displayDescriptor(display).fingerprint === saved.fingerprint) || null;
-}
-
-async function captureDisplay(display) {
-  const physicalSize = { width: Math.max(1, Math.round(display.bounds.width * display.scaleFactor)), height: Math.max(1, Math.round(display.bounds.height * display.scaleFactor)) };
-  const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: physicalSize, fetchWindowIcons: false });
-  let source = sources.find(item => String(item.display_id) === String(display.id));
-  if (!source && sources.length === 1) source = sources[0];
-  if (!source) throw new Error("无法匹配要截取的显示器，请重新框选区域");
-  const image = source.thumbnail;
-  const size = image.getSize();
-  if (!size.width || !size.height) throw new Error("系统没有返回屏幕图像");
-  return { dataUrl: image.toDataURL(), width: size.width, height: size.height, display: displayDescriptor(display) };
-}
-
-function hideAuxiliaryWindows() {
-  if (panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible()) { panelWindow.hide(); return true; }
-  return false;
-}
-
-function restoreWindows() {
-  if (panelWindow && !panelWindow.isDestroyed()) { panelWindow.showInactive(); panelWindow.focus(); }
-}
-
-function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
-
-function selectRegion(capture, display) {
-  return new Promise((resolve, reject) => {
-    captureOverlay = new BrowserWindow({
-      x: display.bounds.x, y: display.bounds.y, width: display.bounds.width, height: display.bounds.height,
-      frame: false, resizable: false, movable: false, fullscreenable: false, alwaysOnTop: true, skipTaskbar: true,
-      title: "CanvasFlow 截图框选", backgroundColor: "#000000", webPreferences: secureWebPreferences(),
-    });
-    captureOverlay.setAlwaysOnTop(true, "screen-saver");
-    restrictNavigation(captureOverlay);
-    captureOverlay.loadFile(path.join(__dirname, "capture-overlay.html"));
-    const finish = value => {
-      const overlay = captureOverlay;
-      captureOverlay = null; pendingSelection = null;
-      if (overlay && !overlay.isDestroyed()) overlay.destroy();
-      resolve(value);
-    };
-    pendingSelection = { finish, reject };
-    captureOverlay.webContents.once("did-finish-load", () => captureOverlay.webContents.send("capture:init", capture));
-    captureOverlay.on("closed", () => { if (pendingSelection) finish(null); });
-    captureOverlay.show(); captureOverlay.focus();
-  });
-}
-
-async function captureRegion(options = {}) {
-  const automatic = options.mode === "auto";
-  const display = automatic ? findSavedDisplay(options.display) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  if (!display) throw new Error("保存的显示器或缩放设置已变化，请重新设置截取区域");
-  const hidden = hideAuxiliaryWindows();
-  try {
-    await wait(220);
-    const capture = await captureDisplay(display);
-    if (automatic) {
-      const crop = options.cropPercent;
-      if (!crop || crop.w <= 0 || crop.h <= 0 || crop.x < 0 || crop.y < 0 || crop.x + crop.w > 100.001 || crop.y + crop.h > 100.001) {
-        throw new Error("保存的截取区域无效，请重新设置");
-      }
-      return { ...capture, cropPercent: crop };
-    }
-    const selection = await selectRegion(capture, display);
-    if (!selection) return { cancelled: true };
-    return { ...capture, cropPercent: selection };
-  } finally {
-    restoreWindows();
-  }
-}
-
 async function quitApplication(reason = "exit") {
   if (generationActive) {
-    const choice = await dialog.showMessageBox(panelWindow || undefined, { type: "warning", buttons: ["继续等待", "停止任务并退出"], defaultId: 0, cancelId: 0, title: "图片仍在生成", message: "截图面板还有生成任务，确定要退出吗？" });
+    const choice = await dialog.showMessageBox(panelWindow || undefined, { type: "warning", buttons: ["继续等待", "停止任务并退出"], defaultId: 0, cancelId: 0, title: "图片仍在生成", message: "当前仍有图片生成任务，确定要退出吗？" });
     if (choice.response === 0) return { ok: false, cancelled: true };
   }
   isQuitting = true;
@@ -344,11 +261,8 @@ function registerIpc() {
   ipcMain.handle("desktop:copy-text", (_event, value) => { clipboard.writeText(value); return { ok: true }; });
   ipcMain.handle("desktop:get-api-key", () => ({ apiKey: readApiKey() }));
   ipcMain.handle("desktop:save-api-key", (_event, value) => saveApiKey(value));
-  ipcMain.handle("desktop:capture-region", (_event, options) => captureRegion(options));
   // panel control IPC handlers removed
   ipcMain.on("desktop:generation-active", (_event, active) => { generationActive = active; });
-  ipcMain.on("capture:selection", (_event, selection) => { if (pendingSelection) pendingSelection.finish(selection); });
-  ipcMain.on("capture:cancel", () => { if (pendingSelection) pendingSelection.finish(null); });
 }
 
 async function start() {

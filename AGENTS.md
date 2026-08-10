@@ -14,7 +14,7 @@
 - 现象：启动 EXE 后提示 `index.html`、`app.js`、`styles.css` 未包含在可执行文件中，页面只能依赖源码目录回退加载。
 - 原因：使用 `pkg` 打包时没有读取 `package.json` 的 `pkg.assets`，或打包后未进行独立启动验证。
 - 解决：从项目根目录执行 `pkg . --targets node18-win-x64`，确保 `pkg.assets` 包含上述三个文件。
-- 避免：Electron 发布前检查 `app.asar` 必须包含主画板、截图面板、控制中心与框选层资源，并验证安装版独立启动。
+- 避免：Electron 发布前检查 `app.asar` 必须包含主画板与控制中心资源，并验证安装版独立启动。
 
 ### 360 重复拦截“打开导出文件夹”
 
@@ -54,7 +54,7 @@
 - 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。
 - `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
 - 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
-- 2.5.0 起桌面发行版改用 Electron：控制中心、画板、截图面板由同一主进程管理，不再运行 CMD，也不再通过 PowerShell、`taskkill` 或额外服务进程启动。
+- 2.5.0 起桌面发行版改用 Electron：控制中心和画板由同一主进程管理，不再运行 CMD，也不再通过 PowerShell、`taskkill` 或额外服务进程启动。
 - Electron 正式版的数据根目录固定为 `path.dirname(process.execPath)`，源码模式使用项目根目录；`data/`、`download/`、`export/` 由 NSIS 更新和卸载流程临时移出后恢复，默认不删除用户数据。
  
 - API Key 不再写入项目状态或浏览器持久化数据；桌面版使用 Electron `safeStorage` 加密到 `data/secrets.json`，安全存储不可用时只保留在当前进程内。

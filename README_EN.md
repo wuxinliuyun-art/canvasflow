@@ -105,14 +105,6 @@ On a fresh installation with an empty library, CanvasFlow provides two sample te
 - Simplified Chinese and English interfaces with remembered language choice
 - Automatic project backup and GitHub Release update checks
 
-### Screen Capture Generation
-
-- Open a separate capture panel from the Control Center or canvas settings
-- Keep the panel above other apps or collapse it into a narrow bar
-- Manual mode freezes the display under the mouse and lets you select a local region
-- Automatic mode reuses a saved display and region; display, resolution, or scaling changes require a new selection
-- Reuse custom text assets and choose independent model, quality, ratio, and result count settings
-
 ---
 
 ## Saved Files and Common Questions
