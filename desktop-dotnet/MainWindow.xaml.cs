@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Interop;
@@ -27,7 +29,49 @@ public partial class MainWindow : Window
     private string? _root;
     private bool _closing;
     private bool _shutdownComplete;
+    private bool _saveRequestStarted;
+    private bool _canvasReady;
+    private TaskCompletionSource<(bool Ok, string Error)>? _pageSaveCompletion;
     private readonly object _logLock = new();
+    private readonly Dictionary<string, string> _folderSources = new(StringComparer.OrdinalIgnoreCase);
+
+    private const string DesktopBridgeScript = """
+      (() => {
+        if (window.canvasflowDesktop || !window.chrome?.webview) return;
+        let sequence = 0;
+        const pending = new Map();
+        const saveHandlers = [];
+        const invoke = (type, payload = {}) => new Promise((resolve, reject) => {
+          const requestId = `wpf_${Date.now()}_${++sequence}`;
+          const timer = setTimeout(() => {
+            pending.delete(requestId);
+            reject(new Error("CanvasFlow desktop request timed out"));
+          }, 15000);
+          pending.set(requestId, { resolve, reject, timer });
+          window.chrome.webview.postMessage({ type, requestId, ...payload });
+        });
+        window.chrome.webview.addEventListener("message", event => {
+          const message = event.data || {};
+          if (message.type === "desktop-rpc-result") {
+            const request = pending.get(message.requestId);
+            if (!request) return;
+            clearTimeout(request.timer);
+            pending.delete(message.requestId);
+            if (message.ok === false) request.reject(new Error(message.error || "Desktop request failed"));
+            else request.resolve(message.result || {});
+          } else if (message.type === "desktop-save-request") {
+            for (const callback of saveHandlers) callback(message);
+          }
+        });
+        window.canvasflowDesktop = {
+          isDesktop: true,
+          getApiKey: () => invoke("desktop:get-api-key"),
+          saveApiKey: apiKey => invoke("desktop:save-api-key", { apiKey: String(apiKey || "") }),
+          onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
+          completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
+        };
+      })();
+      """;
 
     public MainWindow()
     {
@@ -64,6 +108,7 @@ public partial class MainWindow : Window
         {
             _root = FindProjectRoot();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
+            LoadFolderSources();
             Log("[启动] 已找到项目目录。", false);
             var nodeTask = StartNodeAsync(_root, _shutdown.Token);
             var webViewTask = InitializeWebViewAsync(_shutdown.Token);
@@ -148,6 +193,21 @@ public partial class MainWindow : Window
         {
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
+            CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
+            CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
+            CanvasView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            CanvasView.CoreWebView2.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                OpenExternalUrl(args.Uri);
+            };
+            CanvasView.CoreWebView2.NavigationStarting += (_, args) =>
+            {
+                if (IsCanvasUrl(args.Uri)) return;
+                args.Cancel = true;
+                OpenExternalUrl(args.Uri);
+            };
+            await CanvasView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(DesktopBridgeScript);
             CanvasView.CoreWebView2.WebMessageReceived += async (_, e) =>
             {
                 try
@@ -169,6 +229,29 @@ public partial class MainWindow : Window
                     {
                         await ReadLocalImageAsync(root);
                     }
+                    else if (type.GetString() == "desktop:get-api-key")
+                    {
+                        PostRpcResult(root, new { apiKey = ReadApiKey() });
+                    }
+                    else if (type.GetString() == "desktop:save-api-key")
+                    {
+                        var apiKey = root.TryGetProperty("apiKey", out var keyElement) ? keyElement.GetString() ?? "" : "";
+                        try
+                        {
+                            SaveApiKey(apiKey);
+                            PostRpcResult(root, new { saved = true, persistent = true });
+                        }
+                        catch (Exception saveError)
+                        {
+                            PostRpcResult(root, error: saveError.Message);
+                        }
+                    }
+                    else if (type.GetString() == "desktop:save-complete")
+                    {
+                        var ok = root.TryGetProperty("ok", out var okElement) && okElement.GetBoolean();
+                        var error = root.TryGetProperty("error", out var errorElement) ? errorElement.GetString() ?? "" : "";
+                        _pageSaveCompletion?.TrySetResult((ok, error));
+                    }
                 }
                 catch (Exception messageError)
                 {
@@ -181,6 +264,101 @@ public partial class MainWindow : Window
             throw new InvalidOperationException($"WebView2初始化失败。可能原因：WebView2 Runtime缺失或data目录无权限。建议办法：安装WebView2 Runtime并确认目录可写。详细信息：{ex.Message}", ex);
         }
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private bool IsCanvasUrl(string value)
+    {
+        if (_serverUrl is null || !Uri.TryCreate(value, UriKind.Absolute, out var candidate) || !Uri.TryCreate(_serverUrl, UriKind.Absolute, out var canvas)) return false;
+        return candidate.Scheme == canvas.Scheme && candidate.Host == canvas.Host && candidate.Port == canvas.Port;
+    }
+
+    private void OpenExternalUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception error)
+        {
+            Log($"[外部链接] 无法打开默认浏览器。可能原因：系统未设置默认浏览器。建议办法：复制链接后手动打开。详细信息：{error.Message}", true);
+        }
+    }
+
+    private void PostRpcResult(JsonElement request, object? result = null, string? error = null)
+    {
+        var requestId = request.TryGetProperty("requestId", out var idElement) ? idElement.GetString() ?? "" : "";
+        var payload = JsonSerializer.Serialize(new
+        {
+            type = "desktop-rpc-result",
+            requestId,
+            ok = string.IsNullOrEmpty(error),
+            result,
+            error = error ?? ""
+        });
+        CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
+    }
+
+    private string SecretsPath => Path.Combine(_root!, "data", "secrets.json");
+    private string FolderSourcesPath => Path.Combine(_root!, "data", "folder-sources.json");
+
+    private void LoadFolderSources()
+    {
+        try
+        {
+            if (!File.Exists(FolderSourcesPath)) return;
+            var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(FolderSourcesPath, Encoding.UTF8));
+            if (saved is null) return;
+            foreach (var item in saved)
+                if (Guid.TryParse(item.Key, out _) && Directory.Exists(item.Value)) _folderSources[item.Key] = Path.GetFullPath(item.Value);
+        }
+        catch (Exception error)
+        {
+            Log($"[文件夹来源] 读取登记信息失败。可能原因：配置文件损坏。建议办法：重新上传图片文件夹。详细信息：{error.Message}", true);
+        }
+    }
+
+    private void SaveFolderSources()
+    {
+        var content = JsonSerializer.Serialize(_folderSources, new JsonSerializerOptions { WriteIndented = true });
+        var temporary = FolderSourcesPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
+        File.WriteAllText(temporary, content, Encoding.UTF8);
+        File.Move(temporary, FolderSourcesPath, true);
+    }
+
+    private string ReadApiKey()
+    {
+        try
+        {
+            if (!File.Exists(SecretsPath)) return "";
+            using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
+            var encrypted = document.RootElement.TryGetProperty("apiKey", out var keyElement) ? keyElement.GetString() : null;
+            if (string.IsNullOrWhiteSpace(encrypted)) return "";
+            var protectedBytes = Convert.FromBase64String(encrypted);
+            var bytes = ProtectedData.Unprotect(protectedBytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch (Exception error)
+        {
+            Log($"[安全存储] API Key读取失败。可能原因：密钥属于其他Windows用户或文件损坏。建议办法：重新输入API Key。详细信息：{error.Message}", true);
+            return "";
+        }
+    }
+
+    private void SaveApiKey(string value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SecretsPath)!);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (File.Exists(SecretsPath)) File.Delete(SecretsPath);
+            return;
+        }
+        var bytes = Encoding.UTF8.GetBytes(value.Trim());
+        var protectedBytes = ProtectedData.Protect(bytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
+        var content = JsonSerializer.Serialize(new { version = 1, apiKey = Convert.ToBase64String(protectedBytes) }, new JsonSerializerOptions { WriteIndented = true });
+        var temporary = SecretsPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
+        File.WriteAllText(temporary, content, Encoding.UTF8);
+        File.Move(temporary, SecretsPath, true);
     }
 
     private Task PickImageFolderAsync()
@@ -198,7 +376,10 @@ public partial class MainWindow : Window
                 picker.FolderName,
                 CoreWebView2FileSystemHandlePermission.ReadOnly);
             var folderName = Path.GetFileName(picker.FolderName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "image-folder-selected", folderName, folderPath = picker.FolderName });
+            var folderSourceId = Guid.NewGuid().ToString("N");
+            _folderSources[folderSourceId] = Path.GetFullPath(picker.FolderName);
+            SaveFolderSources();
+            var payload = JsonSerializer.Serialize(new { type = "image-folder-selected", folderName, folderSourceId });
             CanvasView.CoreWebView2.PostWebMessageAsJson(payload, new List<object> { directoryHandle });
         }
         catch (Exception error)
@@ -215,9 +396,11 @@ public partial class MainWindow : Window
         var requestId = message.TryGetProperty("requestId", out var requestElement) ? requestElement.GetString() ?? "" : "";
         try
         {
-            var folderPath = message.GetProperty("folderPath").GetString() ?? "";
+            var sourceId = message.GetProperty("sourceId").GetString() ?? "";
             var relativePath = message.GetProperty("relativePath").GetString() ?? "";
-            var folderRoot = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!_folderSources.TryGetValue(sourceId, out var registeredFolder))
+                throw new UnauthorizedAccessException("图片来源没有经过CanvasFlow登记，请重新上传文件夹");
+            var folderRoot = Path.GetFullPath(registeredFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var filePath = Path.GetFullPath(Path.Combine(folderRoot, relativePath));
             if (!filePath.StartsWith(folderRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 throw new UnauthorizedAccessException("图片路径超出了已选择的文件夹");
@@ -258,6 +441,7 @@ public partial class MainWindow : Window
         {
             if (e.IsSuccess)
             {
+                _canvasReady = true;
                 StartupOverlay.Visibility = Visibility.Collapsed;
                 Log($"[画布] 加载完成：{_serverUrl}", false);
             }
@@ -292,6 +476,23 @@ public partial class MainWindow : Window
     {
         if (_shutdownComplete) return;
         e.Cancel = true;
+        if (_saveRequestStarted) return;
+        _saveRequestStarted = true;
+
+        var saveResult = await RequestPageSaveAsync();
+        if (!saveResult.Ok)
+        {
+            _saveRequestStarted = false;
+            Show();
+            Activate();
+            MessageBox.Show(
+                $"项目没有成功保存，因此CanvasFlow没有退出。\n\n可能原因：数据目录无写入权限或页面暂时无响应。\n建议办法：确认磁盘和目录权限后再次关闭。\n\n详细信息：{saveResult.Error}",
+                "CanvasFlow 保存失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         _closing = true;
         Hide();
         _shutdown.Cancel();
@@ -313,6 +514,28 @@ public partial class MainWindow : Window
             _shutdownComplete = true;
             Environment.Exit(0);
         }
+    }
+
+    private async Task<(bool Ok, string Error)> RequestPageSaveAsync()
+    {
+        if (!_canvasReady || CanvasView.CoreWebView2 is null) return (true, "");
+        _pageSaveCompletion = new TaskCompletionSource<(bool Ok, string Error)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestId = $"close_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            type = "desktop-save-request",
+            requestId,
+            reason = "window-close"
+        }));
+        var completed = await Task.WhenAny(_pageSaveCompletion.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+        if (completed != _pageSaveCompletion.Task)
+        {
+            _pageSaveCompletion = null;
+            return (false, "等待页面保存确认超过15秒");
+        }
+        var result = await _pageSaveCompletion.Task;
+        _pageSaveCompletion = null;
+        return result;
     }
 
     private void StopNode()

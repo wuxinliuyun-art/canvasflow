@@ -48,6 +48,10 @@
 
 - .NET迁移采用`.NET 8 WPF + WebView2`，保留现有HTML/CSS/JS画布；第一阶段由WPF隐藏启动现有Node服务，后续再将接口逐项迁移到C#。
 - .NET窗口不重复设置画布已有的顶部工具栏，也不常驻显示运行日志；启动状态使用临时覆盖层，详细日志写入`data/desktop.log`。
+- .NET页面必须在`app.js`执行前注入`window.canvasflowDesktop`桥接对象；不得依赖Electron preload判断WPF桌面模式。桌面项目状态写入`data/app-state.json`并带`updatedAt`，缺少时间戳的旧状态首次启动时由WebView2本地状态重建。
+- .NET桌面版API Key使用Windows DPAPI按当前用户加密到`data/secrets.json`；项目、历史记录、localStorage、自动备份和URL均不得保存API Key。
+- .NET窗口退出前必须通过桌面桥接等待页面状态与自动备份保存成功；保存失败时恢复窗口并阻止退出。
+- 页面不得向.NET提交任意绝对路径读取文件；本地文件夹必须先由.NET登记为不可猜的来源ID，读取时只接受来源ID和经过范围校验的相对路径。后续素材仓库迁移完成后由`assetId`取代临时来源ID。
 - .NET桌面版的图片文件夹上传不使用WebView2原生`webkitdirectory`确认框；由WPF选择目录并以只读`FileSystemDirectoryHandle`传给页面，再使用应用内、主题化、居中的确认弹窗。画布只保存约420px的WebP缩略图和本地相对路径，AI提交时才由WPF按任务读取对应原图，避免多图Base64导致WebView2内存耗尽。浏览器源码模式保留`webkitdirectory`和完整图片数据作为兼容降级。
 - .NET窗口保留Windows原生标题栏和最小化、最大化、关闭行为；通过DWM按主题设置标题栏颜色，并与画布背景保持一档明度差，避免窗口边界融在画布中。系统不支持相关属性时允许自然降级。
 - .NET窗口关闭时先立即隐藏，再异步停止自身启动的Node子进程；清理完成后直接结束当前.NET宿主，不等待WebView2异常缓慢的窗口销毁路径。不得在UI线程同步释放WebView2或等待子进程退出；退出流程另设3秒进程级兜底，防止空白窗口长期残留。

@@ -16,6 +16,7 @@ let autoBackupTimer = null;
 let lastUpdateCheckResult = null;
 let updateCheckStarted = false;
 let desktopStateTimer = null;
+let lastDesktopTheme = "";
 
 function autoBackupFileName() {
   const projectName = safeName(currentPage()?.name || "未命名项目").slice(0, 80) || "未命名项目";
@@ -488,10 +489,11 @@ function blankPage(name = "未命名") {
 }
 
 function cloneData() {
+  const settings = { ...state.settings, apiKey: "" };
   return JSON.parse(JSON.stringify({
     nodes: state.nodes,
     edges: state.edges,
-    settings: state.settings,
+    settings,
     customLibrary: state.customLibrary,
     view: state.view,
     nextNode: state.nextNode,
@@ -509,6 +511,7 @@ function saveCurrentPage() {
 }
 
 function restoreData(data) {
+  const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
   state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
@@ -518,6 +521,7 @@ function restoreData(data) {
   delete state.settings.resolution;
   delete state.settings.quality;
   delete state.settings.defaultRatio;
+  if (desktop) state.settings.apiKey = runtimeApiKey;
   migrateLegacyMaterials(data);
   state.customLibrary = emptyLibrary();
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
@@ -595,9 +599,10 @@ function updateUndoRedo() {
 function applySettings() {
   els.app.className = `app theme-${state.settings.theme}${state.settings.hideNodeTitles ? " hide-node-titles" : ""}`;
   document.documentElement.style.colorScheme = state.settings.theme;
-  if (window.chrome?.webview) {
+  if (window.chrome?.webview && lastDesktopTheme !== state.settings.theme) {
     try {
       window.chrome.webview.postMessage({ type: "theme-change", theme: state.settings.theme });
+      lastDesktopTheme = state.settings.theme;
       console.log(`[主题] 已同步桌面标题栏：${state.settings.theme}`);
     } catch (error) {
       console.error("[主题] 同步桌面标题栏失败", error);
@@ -1656,7 +1661,7 @@ function collectUpstreamForAI(nodeId, incoming) {
             image: gImg.image,
             fileName: gImg.fileName,
             mime: gImg.mime,
-            sourceFolder: gImg.sourceFolder || n.sourceFolder || "",
+            localSourceId: gImg.localSourceId || n.localSourceId || "",
             relativePath: gImg.relativePath || "",
             _x: n.x,
           };
@@ -1683,7 +1688,7 @@ function refreshAiPrompt(nodeId) {
   render();
 }
 
-function readDesktopLocalImage(folderPath, relativePath) {
+function readDesktopLocalImage(sourceId, relativePath) {
   if (!window.chrome?.webview) return Promise.reject(new Error("桌面文件读取能力不可用"));
   const requestId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   return new Promise((resolve, reject) => {
@@ -1692,14 +1697,14 @@ function readDesktopLocalImage(folderPath, relativePath) {
       reject(new Error("读取本地原图超时"));
     }, 30000);
     localImageRequests.set(requestId, { resolve, reject, timer });
-    window.chrome.webview.postMessage({ type: "read-local-image", requestId, folderPath, relativePath });
+    window.chrome.webview.postMessage({ type: "read-local-image", requestId, sourceId, relativePath });
   });
 }
 
 async function materializeReferenceImage(reference) {
   if (typeof reference === "string") return reference;
-  if (reference?.sourceFolder && reference?.relativePath) {
-    return readDesktopLocalImage(reference.sourceFolder, reference.relativePath);
+  if (reference?.localSourceId && reference?.relativePath) {
+    return readDesktopLocalImage(reference.localSourceId, reference.relativePath);
   }
   return reference?.image || "";
 }
@@ -1719,7 +1724,9 @@ async function submitGeneration(prompt, imageUrls, node) {
   }
   if (imageUrls.length) payload.image_urls = await Promise.all(imageUrls.map(materializeReferenceImage));
 
-  payload._apiKey = desktop ? "" : state.settings.apiKey;
+  // Node is still a temporary local backend during the first .NET migration stage.
+  // Keep the key out of URLs and persisted project data; the backend receives it only in this request body.
+  payload._apiKey = state.settings.apiKey;
 
   const resp = await fetch("/api/generate", {
     method: "POST",
@@ -1739,7 +1746,9 @@ async function pollTask(taskId, onProgress = null) {
     await new Promise(r => setTimeout(r, 3000));
     let data;
     try {
-      const resp = await fetch(`/api/task/${encodeURIComponent(taskId)}?apiKey=${encodeURIComponent(desktop ? "" : state.settings.apiKey)}`);
+      const resp = await fetch(`/api/task/${encodeURIComponent(taskId)}`, {
+        headers: { "X-CanvasFlow-Api-Key": state.settings.apiKey || "" },
+      });
       data = await resp.json();
     } catch (e) {
       lastErr = e;
@@ -3532,7 +3541,8 @@ function renamePage() {
 }
 
 function persistPages() {
-  const snapshot = { pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage };
+  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage }));
+  for (const page of snapshot.pages || []) if (page.data?.settings) page.data.settings.apiKey = "";
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
@@ -3555,7 +3565,7 @@ async function persistDesktopStateNow() {
 }
 
 function desktopStateSnapshot() {
-  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage }));
+  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, updatedAt: Date.now() }));
   for (const page of snapshot.pages || []) if (page.data?.settings) page.data.settings.apiKey = "";
   return snapshot;
 }
@@ -3685,7 +3695,12 @@ async function loadDesktopState() {
   try {
     const response = await fetch("/api/app-state", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return (await response.json()).state || null;
+    const saved = (await response.json()).state || null;
+    if (!saved || !Number.isFinite(Number(saved.updatedAt))) {
+      console.info("[项目状态] 旧版状态缺少更新时间，优先使用WebView2中的较新项目并重新建立桌面状态");
+      return null;
+    }
+    return saved;
   } catch (error) {
     console.error("[项目状态] 无法读取本地文件", error);
     toast("本地项目状态读取失败：将尝试浏览器备份；请检查程序目录写入权限");
@@ -3820,13 +3835,13 @@ function closeFolderImportDialog(force = false) {
   pendingFolderImport = null;
 }
 
-function openFolderImportDialog(entries, folderName = "", folderPath = "") {
+function openFolderImportDialog(entries, folderName = "", localSourceId = "") {
   const imageEntries = Array.from(entries || []).filter(entry => (entry.file || entry).type.startsWith("image/"));
   if (!imageEntries.length) {
     toast("文件夹中没有图片文件");
     return;
   }
-  pendingFolderImport = { entries: imageEntries, folderName, folderPath };
+  pendingFolderImport = { entries: imageEntries, folderName, localSourceId };
   els.folderImportSummary.textContent = uiLanguage === "en"
     ? `${folderName || "Selected folder"} · ${imageEntries.length} images`
     : `${folderName || "所选文件夹"} · ${imageEntries.length} 张图片`;
@@ -3856,7 +3871,7 @@ async function fileToThumbnailDataUrl(file, maxSize = 420) {
   }
 }
 
-async function createGroupFromFolderFiles(imageEntries, sourceFolder = "") {
+async function createGroupFromFolderFiles(imageEntries, localSourceId = "") {
   const preparedImages = [];
   for (let index = 0; index < imageEntries.length; index++) {
     const entry = imageEntries[index];
@@ -3864,20 +3879,20 @@ async function createGroupFromFolderFiles(imageEntries, sourceFolder = "") {
     els.folderImportSummary.textContent = uiLanguage === "en"
       ? `Creating thumbnails ${index + 1}/${imageEntries.length}`
       : `正在生成缩略图 ${index + 1}/${imageEntries.length}`;
-    const image = sourceFolder ? await fileToThumbnailDataUrl(file) : await fileToDataUrl(file);
+    const image = localSourceId ? await fileToThumbnailDataUrl(file) : await fileToDataUrl(file);
     preparedImages.push({
       image,
       fileName: file.name,
       mime: file.type || "image/png",
       name: file.name.replace(/\.[^.]+$/, ""),
-      relativePath: sourceFolder ? String(entry.relativePath || file.name).replace(/\\/g, "/") : "",
+      relativePath: localSourceId ? String(entry.relativePath || file.name).replace(/\\/g, "/") : "",
     });
     if (index % 2 === 0) await nextPaint();
   }
   const center = visibleWorldCenter();
   const node = addNode("group", center.x - NODE_WIDTH / 2, center.y - NODE_HEIGHT / 2, false);
   node.images = preparedImages;
-  if (sourceFolder) node.sourceFolder = sourceFolder;
+  if (localSourceId) node.localSourceId = localSourceId;
   pushHistory();
   render();
   toast(`已创建多任务节点，包含 ${node.images.length} 张图片`);
@@ -3885,12 +3900,12 @@ async function createGroupFromFolderFiles(imageEntries, sourceFolder = "") {
 
 async function confirmFolderImport() {
   if (!pendingFolderImport) return;
-  const { entries, folderPath } = pendingFolderImport;
+  const { entries, localSourceId } = pendingFolderImport;
   els.folderImportConfirmBtn.disabled = true;
   els.folderImportCancelBtn.disabled = true;
   els.folderImportCloseBtn.disabled = true;
   try {
-    await createGroupFromFolderFiles(entries, folderPath);
+    await createGroupFromFolderFiles(entries, localSourceId);
     closeFolderImportDialog(true);
   } catch (error) {
     console.error("[文件夹上传] 图片读取失败", error);
@@ -3926,7 +3941,7 @@ if (window.chrome?.webview) {
         const directoryHandle = event.additionalObjects?.[0];
         if (!directoryHandle) throw new Error("没有取得文件夹读取权限");
         const imageFiles = await collectFolderImageFiles(directoryHandle);
-        openFolderImportDialog(imageFiles, message.folderName || directoryHandle.name || "", message.folderPath || "");
+        openFolderImportDialog(imageFiles, message.folderName || directoryHandle.name || "", message.folderSourceId || "");
       } catch (error) {
         console.error("[文件夹上传] 无法读取所选文件夹", error);
         toast(`无法读取所选文件夹：可能是权限已失效；请重新选择。${error.message || ""}`);
@@ -4021,7 +4036,7 @@ els.verifyKeyBtn.onclick = async () => {
   els.verifyKeyBtn.textContent = "...";
   els.verifyKeyBtn.style.color = "";
   try {
-    const resp = await fetch(`/api/models?apiKey=${encodeURIComponent(desktop ? "" : key)}`);
+    const resp = await fetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
     if (resp.status === 200) {
       els.verifyKeyBtn.textContent = "✓";
       els.verifyKeyBtn.style.color = "#34c759";
@@ -4049,7 +4064,7 @@ async function fetchBalance() {
   if (!key) { els.balanceDisplay.textContent = "积分：请先填入 API Key"; return; }
   els.balanceDisplay.textContent = "积分：查询中...";
   try {
-    const resp = await fetch(`/api/balance?apiKey=${encodeURIComponent(desktop ? "" : key)}`);
+    const resp = await fetch("/api/balance", { headers: { "X-CanvasFlow-Api-Key": key } });
     const data = await resp.json();
     if (data.success) {
       els.balanceDisplay.textContent = `积分：${Number(data.remain_credits).toFixed(2)}（已用 ${Number(data.used_credits).toFixed(2)}）`;

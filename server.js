@@ -100,11 +100,23 @@ const API_BASE_URLS = [
 ];
 
 // --- 自动清理旧进程（解决启动闪退 / 端口占用） ---
-function readBody(req) {
+function readBody(req, maxBytes = 128 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", chunk => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    let total = 0;
+    let rejected = false;
+    req.on("data", chunk => {
+      if (rejected) return;
+      total += chunk.length;
+      if (total > maxBytes) {
+        rejected = true;
+        chunks.length = 0;
+        reject(new Error(`请求内容超过限制（最大 ${Math.round(maxBytes / 1024 / 1024)}MB）`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => { if (!rejected) resolve(Buffer.concat(chunks)); });
     req.on("error", reject);
   });
 }
@@ -243,8 +255,26 @@ async function tryProxyRequest(method, pathStr, headers, body) {
 }
 
 async function requestHandler(req, res) {
+  const host = String(req.headers.host || "");
+  if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) {
+    res.writeHead(403, { "Content-Type": "text/plain;charset=utf-8" });
+    res.end("Forbidden host");
+    return;
+  }
+  const origin = String(req.headers.origin || "");
+  if (origin) {
+    try {
+      const parsedOrigin = new URL(origin);
+      if (!/^(127\.0\.0\.1|localhost)$/i.test(parsedOrigin.hostname) || parsedOrigin.host !== host) throw new Error("cross origin");
+    } catch {
+      res.writeHead(403, { "Content-Type": "text/plain;charset=utf-8" });
+      res.end("Cross-origin request denied");
+      return;
+    }
+  }
   const parsedUrl = new URL(req.url, "http://localhost");
   let pathname = decodeURIComponent(parsedUrl.pathname);
+  const requestApiKey = () => String(req.headers["x-canvasflow-api-key"] || parsedUrl.searchParams.get("apiKey") || secretProvider() || "");
 
   if (pathname === "/api/runtime-paths" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
@@ -415,9 +445,11 @@ async function requestHandler(req, res) {
     try {
       const body = await readBody(req);
       const { name, content } = JSON.parse(body.toString());
+      const fileName = path.basename(String(name || ""));
+      if (!fileName || !fileName.toLowerCase().endsWith(".json") || fileName !== String(name || "")) throw new Error("JSON文件名不安全");
       const downloadDir = path.join(dataRoot, "download");
       if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true });
-      const filePath = path.join(downloadDir, name);
+      const filePath = path.join(downloadDir, fileName);
       fs.writeFileSync(filePath, content, "utf-8");
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, path: filePath }));
@@ -527,7 +559,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/verify" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
+      const apiKey = requestApiKey();
       const { status } = await tryProxyRequest(
         "GET",
         "/v1/tasks/verify_test_nonexistent",
@@ -550,7 +582,7 @@ async function requestHandler(req, res) {
   if (pathname.startsWith("/api/task/") && req.method === "GET") {
     try {
       const taskId = pathname.replace("/api/task/", "");
-      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
+      const apiKey = requestApiKey();
 
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
@@ -569,7 +601,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/models" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
+      const apiKey = requestApiKey();
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
         "/v1/models",
@@ -586,7 +618,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/balance" && req.method === "GET") {
     try {
-      const apiKey = parsedUrl.searchParams.get("apiKey") || secretProvider() || "";
+      const apiKey = requestApiKey();
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
         "/v1/user/balance",
