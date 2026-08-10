@@ -22,6 +22,8 @@ npm start
 
 ## .NET 8 桌面面板（迁移版本）
 
+普通启动：双击项目根目录的`启动CanvasFlow-NET.bat`。首次运行会自动构建，之后直接打开桌面面板。
+
 ```powershell
 dotnet run --project .\desktop-dotnet\CanvasFlow.Desktop.csproj
 ```
