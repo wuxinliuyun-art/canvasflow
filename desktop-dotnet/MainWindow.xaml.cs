@@ -14,11 +14,15 @@ public partial class MainWindow : Window
     private const int DwmUseImmersiveDarkMode = 20;
     private const int DwmCaptionColor = 35;
     private const int DwmTextColor = 36;
-    private const int DarkCaptionColor = 0x00271811;
+    // COLORREF is stored as 0x00BBGGRR. Keep the native title bar distinct from the canvas.
+    private const int DarkCaptionColor = 0x00151312;  // RGB #121315
+    private const int LightCaptionColor = 0x00EEEBE9; // RGB #E9EBEE
     private const int LightTextColor = 0x00FFFFFF;
+    private const int DarkTextColor = 0x00262220;
     private static readonly Regex ServerUrlPattern = new(@"\[Start\] CanvasFlow server: (?<url>http://127\.0\.0\.1:\d+/)", RegexOptions.Compiled);
     private readonly CancellationTokenSource _shutdown = new();
     private Process? _node;
+    private CoreWebView2Environment? _webViewEnvironment;
     private string? _serverUrl;
     private string? _root;
     private bool _closing;
@@ -36,16 +40,16 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        ApplyTitleBarColors();
+        ApplyTitleBarColors(true);
     }
 
-    private void ApplyTitleBarColors()
+    private void ApplyTitleBarColors(bool dark)
     {
         var handle = new WindowInteropHelper(this).Handle;
         if (handle == IntPtr.Zero) return;
-        var darkMode = 1;
-        var captionColor = DarkCaptionColor;
-        var textColor = LightTextColor;
+        var darkMode = dark ? 1 : 0;
+        var captionColor = dark ? DarkCaptionColor : LightCaptionColor;
+        var textColor = dark ? LightTextColor : DarkTextColor;
         DwmSetWindowAttribute(handle, DwmUseImmersiveDarkMode, ref darkMode, sizeof(int));
         DwmSetWindowAttribute(handle, DwmCaptionColor, ref captionColor, sizeof(int));
         DwmSetWindowAttribute(handle, DwmTextColor, ref textColor, sizeof(int));
@@ -142,14 +146,110 @@ public partial class MainWindow : Window
         StatusText.Text = "正在加载画布…";
         try
         {
-            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
-            await CanvasView.EnsureCoreWebView2Async(environment);
+            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
+            await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
+            CanvasView.CoreWebView2.WebMessageReceived += async (_, e) =>
+            {
+                try
+                {
+                    using var message = System.Text.Json.JsonDocument.Parse(e.WebMessageAsJson);
+                    var root = message.RootElement;
+                    if (!root.TryGetProperty("type", out var type)) return;
+                    if (type.GetString() == "theme-change" && root.TryGetProperty("theme", out var theme))
+                    {
+                        var dark = theme.GetString() == "dark";
+                        Dispatcher.Invoke(() => ApplyTitleBarColors(dark));
+                        Log($"[主题] 标题栏已切换为{(dark ? "深色" : "浅色")}模式。", false);
+                    }
+                    else if (type.GetString() == "pick-image-folder")
+                    {
+                        await PickImageFolderAsync();
+                    }
+                    else if (type.GetString() == "read-local-image")
+                    {
+                        await ReadLocalImageAsync(root);
+                    }
+                }
+                catch (Exception messageError)
+                {
+                    Log($"[页面通信] 无法处理网页消息。可能原因：消息格式发生变化。建议办法：重新打开应用；详细信息：{messageError.Message}", true);
+                }
+            };
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"WebView2初始化失败。可能原因：WebView2 Runtime缺失或data目录无权限。建议办法：安装WebView2 Runtime并确认目录可写。详细信息：{ex.Message}", ex);
         }
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private Task PickImageFolderAsync()
+    {
+        try
+        {
+            var picker = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "选择图片文件夹",
+                Multiselect = false
+            };
+            if (picker.ShowDialog(this) != true) return Task.CompletedTask;
+            if (_webViewEnvironment is null) throw new InvalidOperationException("WebView2 环境尚未准备完成");
+            var directoryHandle = _webViewEnvironment.CreateWebFileSystemDirectoryHandle(
+                picker.FolderName,
+                CoreWebView2FileSystemHandlePermission.ReadOnly);
+            var folderName = Path.GetFileName(picker.FolderName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "image-folder-selected", folderName, folderPath = picker.FolderName });
+            CanvasView.CoreWebView2.PostWebMessageAsJson(payload, new List<object> { directoryHandle });
+        }
+        catch (Exception error)
+        {
+            Log($"[文件夹上传] 无法打开或读取文件夹。可能原因：目录权限不足或选择器异常。建议办法：换一个普通图片目录后重试。详细信息：{error.Message}", true);
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "image-folder-error", error = error.Message });
+            CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task ReadLocalImageAsync(System.Text.Json.JsonElement message)
+    {
+        var requestId = message.TryGetProperty("requestId", out var requestElement) ? requestElement.GetString() ?? "" : "";
+        try
+        {
+            var folderPath = message.GetProperty("folderPath").GetString() ?? "";
+            var relativePath = message.GetProperty("relativePath").GetString() ?? "";
+            var folderRoot = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var filePath = Path.GetFullPath(Path.Combine(folderRoot, relativePath));
+            if (!filePath.StartsWith(folderRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("图片路径超出了已选择的文件夹");
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            var mime = extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                _ => throw new InvalidDataException("文件不是支持的图片格式")
+            };
+            var bytes = await File.ReadAllBytesAsync(filePath, _shutdown.Token);
+            var payload = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                type = "local-image-result",
+                requestId,
+                dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}"
+            });
+            CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
+        }
+        catch (Exception error)
+        {
+            Log($"[本地图片] 无法读取原图。可能原因：文件夹被移动、图片被删除或权限不足。建议办法：恢复原文件位置或重新上传文件夹。详细信息：{error.Message}", true);
+            var payload = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                type = "local-image-result",
+                requestId,
+                error = error.Message
+            });
+            CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
+        }
     }
 
     private void NavigateCanvas()

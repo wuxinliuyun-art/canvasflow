@@ -4,32 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260805-generate-button">
+  <link rel="stylesheet" href="styles.css?v=20260810-solid-dark-surfaces">
 </head>
 <body>
   <div id="app" class="app theme-light">
     <header class="topbar">
       <div class="project-shell">
-        <div class="brand">CanvasFlow</div>
         <button id="projectNameBtn" class="project-name-btn" title="单击切换项目，双击重命名">未命名项目</button>
         <div id="projectMenu" class="project-menu hidden"></div>
-        <button id="newCanvasBtn" class="icon-btn subtle" title="新建项目">＋</button>
-      </div>
-
-      <div class="tool-shell">
-        <button id="saveJsonBtn" class="icon-btn" title="保存JSON" aria-label="保存JSON">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        </button>
-        <button id="loadJsonBtn" class="icon-btn" title="加载JSON" aria-label="加载JSON">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        </button>
-        <button id="autoOutputBtn" title="一键生成AI绘图节点">一键生成AI绘图节点</button>
-        <button id="aiGenerateBtn" title="批量执行">批量执行</button>
-        <button id="runBtn" class="primary" title="导出">导出</button>
-        <button id="themeBtn" class="icon-btn" title="皮肤切换">☾</button>
-        <button id="settingsBtn" class="icon-btn" title="设置" aria-label="设置">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15z"/></svg>
-        </button>
+        <button id="newCanvasBtn" class="icon-btn subtle" title="新建项目" aria-label="新建项目"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
     </header>
 
@@ -50,26 +33,30 @@
         <div id="selectionBox" class="selection-box hidden"></div>
       </div>
       <div class="minimap-panel">
-        <canvas id="minimap" class="minimap" width="180" height="120"></canvas>
-        <button id="centerViewBtn" class="center-view-btn" title="居中显示所有节点">居中显示</button>
+        <canvas id="minimap" class="minimap" width="150" height="96" aria-label="画布缩略图"></canvas>
       </div>
     </main>
 
-    <section class="composer">
-      <input id="composerText" type="text" placeholder="输入文字后回车创建文字节点；上传图片可创建图片节点">
-      <button id="composerUploadBtn" class="icon-btn" title="上传图片">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5v9A2.5 2.5 0 0 0 6 19h12a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 18 7h-6l-2-2H6a2.5 2.5 0 0 0-2.5 2.5Z"/></svg>
-      </button>
-      <button id="composerSubmitBtn" class="primary" title="创建节点">创建</button>
-      <input id="composerFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
-      <input id="composerFolderInput" type="file" webkitdirectory directory hidden>
-      <div id="composerImageName" class="composer-image-name"></div>
-    </section>
+    <div class="composer-dock">
+      <section class="composer">
+        <input id="composerText" type="text" placeholder="输入文字后回车创建文字节点；上传图片可创建图片节点">
+        <button id="composerUploadBtn" class="icon-btn" title="上传图片">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5v9A2.5 2.5 0 0 0 6 19h12a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 18 7h-6l-2-2H6a2.5 2.5 0 0 0-2.5 2.5Z"/></svg>
+        </button>
+        <button id="composerSubmitBtn" class="primary" title="创建节点">创建</button>
+        <input id="composerFileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+        <input id="composerFolderInput" type="file" webkitdirectory directory hidden>
+        <div id="composerImageName" class="composer-image-name"></div>
+      </section>
+      <div class="workflow-action-group" aria-label="工作流操作">
+        <button id="autoOutputBtn" class="workflow-action-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
+        <button id="aiGenerateBtn" class="workflow-action-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
+      </div>
+    </div>
 
     <aside id="settingsPanel" class="settings hidden">
       <div class="panel-head">
         <div class="settings-title-block">
-          <span class="settings-brand-kicker">CANVASFLOW</span>
           <strong>设置</strong>
           <p>调整界面语言、画布与工作流体验</p>
         </div>
@@ -93,6 +80,8 @@
           </div>
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
+          <label class="check-row"><input id="autoFitImageNodesToggle" type="checkbox" checked><span>图片节点按上传图片比例自动调整</span></label>
+          <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
         </section>
         <section class="settings-card update-settings-card">
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。</p></div><button id="checkUpdateBtn">检查更新</button></div>
@@ -155,10 +144,23 @@
       </div>
     </aside>
 
-    <button id="shortcutHelpBtn" class="shortcut-help-btn" title="快捷键说明" aria-label="快捷键说明"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h.01M11 9h.01M15 9h.01M18 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg></button>
+    <div class="canvas-utility-rail" aria-label="画布工具">
+      <button id="settingsBtn" class="canvas-utility-btn" title="设置" aria-label="设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6a1.7 1.7 0 0 0 1.03-1.52V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15z"/></svg>
+      </button>
+      <button id="saveJsonBtn" class="canvas-utility-btn" title="保存JSON" aria-label="保存JSON">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </button>
+      <button id="loadJsonBtn" class="canvas-utility-btn" title="加载JSON" aria-label="加载JSON">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </button>
+      <button id="themeBtn" class="canvas-utility-btn" title="皮肤切换" aria-label="皮肤切换">☾</button>
+      <button id="shortcutHelpBtn" class="canvas-utility-btn shortcut-help-btn" title="快捷键说明" aria-label="快捷键说明"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h.01M11 9h.01M15 9h.01M18 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg></button>
+      <button id="runBtn" class="canvas-utility-btn hidden" title="导出" aria-label="导出">导出</button>
+    </div>
     <div id="shortcutPopover" class="shortcut-popover hidden">
       <div class="shortcut-popover-head"><div><span>Keyboard</span><strong>快捷键说明</strong></div><button id="shortcutPopoverClose" title="关闭">×</button></div>
-      <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点编组</span></div><div class="shortcut-row"><b>右键编组节点</b><span>取消编组，还原内部节点和连线</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
+      <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点设为多任务</span></div><div class="shortcut-row"><b>右键多任务节点</b><span>取消多任务，还原内部节点和连线</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
     </div>
 
     <div id="contextMenu" class="context-menu hidden"></div>
@@ -169,6 +171,23 @@
         <label>来源项目<select id="libraryImportSource"></select></label>
         <div id="libraryImportItems" class="library-import-items"></div>
         <div class="library-import-actions"><button id="libraryImportCancelBtn">取消</button><button id="libraryImportConfirmBtn" class="primary">导入所选内容</button></div>
+      </div>
+    </div>
+    <div id="folderImportDialog" class="folder-import-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="folderImportTitle">
+      <div class="folder-import-panel">
+        <div class="folder-import-head">
+          <div>
+            <span>文件夹上传</span>
+            <strong id="folderImportTitle">确认导入图片</strong>
+          </div>
+          <button id="folderImportCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p id="folderImportSummary" class="folder-import-summary"></p>
+        <p class="folder-import-hint">画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。</p>
+        <div class="folder-import-actions">
+          <button id="folderImportCancelBtn" type="button">取消</button>
+          <button id="folderImportConfirmBtn" type="button" class="primary">确认上传</button>
+        </div>
       </div>
     </div>
   </div>
@@ -206,6 +225,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260805-node-polish"></script>
+  <script src="app.js?v=20260810-folder-thumbnails"></script>
 </body>
 </html>
