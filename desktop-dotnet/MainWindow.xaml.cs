@@ -1,14 +1,21 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 
 namespace CanvasFlow.Desktop;
 
 public partial class MainWindow : Window
 {
+    private const int DwmUseImmersiveDarkMode = 20;
+    private const int DwmCaptionColor = 35;
+    private const int DwmTextColor = 36;
+    private const int DarkCaptionColor = 0x00271811;
+    private const int LightTextColor = 0x00FFFFFF;
     private static readonly Regex ServerUrlPattern = new(@"\[Start\] CanvasFlow server: (?<url>http://127\.0\.0\.1:\d+/)", RegexOptions.Compiled);
     private readonly CancellationTokenSource _shutdown = new();
     private Process? _node;
@@ -25,6 +32,27 @@ public partial class MainWindow : Window
         Closing += MainWindow_Closing;
         Closed += (_, _) => Application.Current.Shutdown();
     }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplyTitleBarColors();
+    }
+
+    private void ApplyTitleBarColors()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+        var darkMode = 1;
+        var captionColor = DarkCaptionColor;
+        var textColor = LightTextColor;
+        DwmSetWindowAttribute(handle, DwmUseImmersiveDarkMode, ref darkMode, sizeof(int));
+        DwmSetWindowAttribute(handle, DwmCaptionColor, ref captionColor, sizeof(int));
+        DwmSetWindowAttribute(handle, DwmTextColor, ref textColor, sizeof(int));
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr windowHandle, int attribute, ref int value, int valueSize);
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
