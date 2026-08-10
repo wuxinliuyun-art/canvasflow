@@ -1,4 +1,7 @@
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -11,19 +14,230 @@ internal sealed record DesktopApiResponse(int Status, string Body, string Conten
 internal sealed class DesktopApi
 {
     private const int MaxBodyCharacters = 180 * 1024 * 1024;
+    private static readonly string[] ApiBaseUrls = [
+        "https://api.apib.ai", "https://api.aiuxu.com", "https://api.aishuch.com", "https://api.apimart.ai"
+    ];
     private readonly string _root;
     private readonly Action<string, bool> _log;
+    private readonly Func<string> _getApiKey;
+    private readonly HttpClient _http;
+    private readonly string _version;
+    private JsonObject? _releaseCache;
+    private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey)
     {
         _root = Path.GetFullPath(root);
         _log = log;
+        _getApiKey = getApiKey;
+        _http = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.All
+        }) { Timeout = TimeSpan.FromSeconds(120) };
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.5.0");
+        _version = ReadVersion();
     }
 
-    public Task<DesktopApiResponse> HandleLocalAsync(string method, string pathAndQuery, string body, CancellationToken cancellationToken)
+    public Task<DesktopApiResponse> HandleAsync(string method, string pathAndQuery, string body, CancellationToken cancellationToken)
     {
         if (body.Length > MaxBodyCharacters) return Task.FromResult(Json(413, new { error = "请求内容超过128MB限制" }));
+        var uri = new Uri("https://canvasflow.local" + (pathAndQuery.StartsWith('/') ? pathAndQuery : "/" + pathAndQuery));
+        if (IsNetworkRoute(uri.AbsolutePath)) return HandleNetworkAsync(method.ToUpperInvariant(), uri, body, cancellationToken);
         return Task.Run(() => HandleLocal(method.ToUpperInvariant(), pathAndQuery, body), cancellationToken);
+    }
+
+    private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
+        || path.StartsWith("/api/task/", StringComparison.Ordinal);
+
+    private async Task<DesktopApiResponse> HandleNetworkAsync(string method, Uri requestUri, string body, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var path = requestUri.AbsolutePath;
+            if (method == "GET" && path == "/api/update/check") return await CheckForUpdatesAsync(cancellationToken);
+            if (method == "POST" && path == "/api/download-image") return await DownloadImageAsync(body, cancellationToken);
+            if (method == "POST" && path == "/api/generate")
+            {
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("生成参数为空");
+                payload.Remove("_apiKey");
+                return await ProxyApiAsync(HttpMethod.Post, "/v1/images/generations", payload.ToJsonString(), cancellationToken);
+            }
+            if (method == "GET" && path.StartsWith("/api/task/", StringComparison.Ordinal))
+            {
+                var taskId = Uri.UnescapeDataString(path["/api/task/".Length..]);
+                if (!Regex.IsMatch(taskId, @"^[A-Za-z0-9._:-]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
+                return await ProxyApiAsync(HttpMethod.Get, "/v1/tasks/" + Uri.EscapeDataString(taskId), null, cancellationToken);
+            }
+            if (method == "GET" && path == "/api/models") return await ProxyApiAsync(HttpMethod.Get, "/v1/models", null, cancellationToken);
+            if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/user/balance", null, cancellationToken);
+            return Json(405, new { error = "请求方法不受支持" });
+        }
+        catch (Exception error)
+        {
+            _log($"[联网接口] 请求失败：{method} {requestUri.AbsolutePath}。详细信息：{error.Message}", true);
+            return Json(502, new { error = new { code = 502, message = "联网请求失败: " + error.Message } });
+        }
+    }
+
+    private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken)
+    {
+        Exception? lastError = null;
+        foreach (var baseUrl in ApiBaseUrls)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(method, baseUrl + apiPath);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _getApiKey());
+                if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _log($"[AI代理] {baseUrl}{apiPath} -> {(int)response.StatusCode}", false);
+                return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            {
+                lastError = error;
+                _log($"[AI代理] {baseUrl}{apiPath} 连接失败，尝试备用地址：{error.Message}", true);
+            }
+        }
+        throw lastError ?? new HttpRequestException("所有API地址均不可达");
+    }
+
+    private async Task<DesktopApiResponse> DownloadImageAsync(string body, CancellationToken cancellationToken)
+    {
+        using var document = JsonDocument.Parse(body);
+        var value = document.RootElement.GetProperty("imageUrl").GetString() ?? "";
+        var current = new Uri(value, UriKind.Absolute);
+        for (var redirect = 0; redirect <= 5; redirect++)
+        {
+            await ValidatePublicHttpsUriAsync(current, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, current);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is not null)
+            {
+                current = response.Headers.Location.IsAbsoluteUri ? response.Headers.Location : new Uri(current, response.Headers.Location);
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "image/png";
+            if (!contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("远程地址返回的不是图片");
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            if (bytes.Length > 64 * 1024 * 1024) throw new InvalidDataException("远程图片超过64MB限制");
+            return Json(200, new { base64 = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}" });
+        }
+        throw new HttpRequestException("图片下载重定向次数过多");
+    }
+
+    private static async Task ValidatePublicHttpsUriAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttps || uri.IsDefaultPort is false && uri.Port != 443) throw new InvalidDataException("只允许下载HTTPS图片");
+        var addresses = await Dns.GetHostAddressesAsync(uri.DnsSafeHost, cancellationToken);
+        if (addresses.Length == 0 || addresses.Any(IsPrivateAddress)) throw new InvalidDataException("图片地址指向本机或内网，已拒绝访问");
+    }
+
+    private static bool IsPrivateAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address)) return true;
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var bytes = address.GetAddressBytes();
+            return bytes[0] == 10 || bytes[0] == 127 || bytes[0] == 0 ||
+                   bytes[0] == 169 && bytes[1] == 254 ||
+                   bytes[0] == 172 && bytes[1] is >= 16 and <= 31 ||
+                   bytes[0] == 192 && bytes[1] == 168;
+        }
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            return address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.Equals(IPAddress.IPv6Loopback) || (address.GetAddressBytes()[0] & 0xFE) == 0xFC;
+        return true;
+    }
+
+    private async Task<DesktopApiResponse> CheckForUpdatesAsync(CancellationToken cancellationToken)
+    {
+        if (_releaseCache is not null && DateTimeOffset.UtcNow - _releaseCacheAt < TimeSpan.FromMinutes(10)) return Json(200, _releaseCache);
+        try
+        {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest");
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) throw new HttpRequestException($"GitHub返回HTTP {(int)response.StatusCode}");
+        var release = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken))?.AsObject() ?? throw new InvalidDataException("GitHub Release响应为空");
+        var setupAssets = (release["assets"] as JsonArray)?.OfType<JsonObject>().Where(asset => string.Equals(asset["name"]?.GetValue<string>(), "CanvasFlow-Setup.exe", StringComparison.OrdinalIgnoreCase)).ToList() ?? [];
+        if (setupAssets.Count != 1) throw new InvalidDataException($"最新Release应包含且只包含一个CanvasFlow-Setup.exe，当前检测到{setupAssets.Count}个");
+        var asset = setupAssets[0];
+        var latestVersion = (release["tag_name"]?.GetValue<string>() ?? release["name"]?.GetValue<string>() ?? "").TrimStart('v', 'V');
+        _releaseCache = new JsonObject
+        {
+            ["currentVersion"] = _version,
+            ["latestVersion"] = latestVersion,
+            ["releaseName"] = release["name"]?.GetValue<string>() ?? release["tag_name"]?.GetValue<string>() ?? latestVersion,
+            ["notes"] = release["body"]?.GetValue<string>() ?? "",
+            ["pageUrl"] = release["html_url"]?.GetValue<string>() ?? "https://github.com/wuxinliuyun-art/canvasflow/releases/latest",
+            ["hasUpdate"] = IsNewerVersion(latestVersion, _version),
+            ["canAutoInstall"] = !string.IsNullOrWhiteSpace(asset["digest"]?.GetValue<string>()),
+            ["asset"] = new JsonObject
+            {
+                ["name"] = asset["name"]?.GetValue<string>() ?? "CanvasFlow-Setup.exe",
+                ["size"] = asset["size"]?.GetValue<long>() ?? 0,
+                ["url"] = asset["browser_download_url"]?.GetValue<string>() ?? "",
+                ["digest"] = asset["digest"]?.GetValue<string>() ?? ""
+            }
+        };
+        _releaseCacheAt = DateTimeOffset.UtcNow;
+        return Json(200, _releaseCache);
+        }
+        catch (Exception apiError)
+        {
+            _log($"[更新检查] GitHub API不可用，改用公开Release地址：{apiError.Message}", true);
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://github.com/wuxinliuyun-art/canvasflow/releases/latest");
+            using var response = await _http.SendAsync(request, cancellationToken);
+            var location = response.Headers.Location;
+            if (location is null) throw;
+            var absolute = location.IsAbsoluteUri ? location : new Uri(request.RequestUri!, location);
+            var match = Regex.Match(absolute.AbsolutePath, @"/releases/tag/([^/?#]+)", RegexOptions.IgnoreCase);
+            if (!match.Success) throw;
+            var tag = Uri.UnescapeDataString(match.Groups[1].Value);
+            var latestVersion = tag.TrimStart('v', 'V');
+            _releaseCache = new JsonObject
+            {
+                ["currentVersion"] = _version,
+                ["latestVersion"] = latestVersion,
+                ["releaseName"] = tag,
+                ["notes"] = "",
+                ["pageUrl"] = absolute.ToString(),
+                ["hasUpdate"] = IsNewerVersion(latestVersion, _version),
+                ["canAutoInstall"] = false,
+                ["asset"] = new JsonObject
+                {
+                    ["name"] = "CanvasFlow-Setup.exe",
+                    ["size"] = 0,
+                    ["url"] = $"https://github.com/wuxinliuyun-art/canvasflow/releases/download/{Uri.EscapeDataString(tag)}/CanvasFlow-Setup.exe",
+                    ["digest"] = ""
+                }
+            };
+            _releaseCacheAt = DateTimeOffset.UtcNow;
+            return Json(200, _releaseCache);
+        }
+    }
+
+    private string ReadVersion()
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(_root, "package.json"), Encoding.UTF8));
+            return document.RootElement.GetProperty("version").GetString() ?? "0.0.0";
+        }
+        catch { return "0.0.0"; }
+    }
+
+    private static bool IsNewerVersion(string candidate, string current)
+    {
+        static int[] Parts(string value) => value.TrimStart('v', 'V').Split('.', '-', StringSplitOptions.RemoveEmptyEntries).Take(3).Select(part => int.TryParse(part, out var number) ? number : 0).Concat([0, 0, 0]).Take(3).ToArray();
+        var next = Parts(candidate);
+        var now = Parts(current);
+        for (var index = 0; index < 3; index++) if (next[index] != now[index]) return next[index] > now[index];
+        return false;
     }
 
     private DesktopApiResponse HandleLocal(string method, string pathAndQuery, string body)

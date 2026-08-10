@@ -46,7 +46,7 @@
 
 ## 架构决策
 
-- .NET迁移采用`.NET 8 WPF + WebView2`，保留现有HTML/CSS/JS画布；第一阶段由WPF隐藏启动现有Node服务，后续再将接口逐项迁移到C#。
+- 桌面架构采用`.NET 8 WPF + WebView2`，保留现有HTML/CSS/JS画布；WPF通过`https://canvasflow.local/`虚拟主机加载本地界面，文件与联网接口由白名单桌面桥接处理，不启动Node、不监听本地端口。
 - .NET窗口不重复设置画布已有的顶部工具栏，也不常驻显示运行日志；启动状态使用临时覆盖层，详细日志写入`data/desktop.log`。
 - .NET页面必须在`app.js`执行前注入`window.canvasflowDesktop`桥接对象；不得依赖Electron preload判断WPF桌面模式。桌面项目状态写入`data/app-state.json`并带`updatedAt`，缺少时间戳的旧状态首次启动时由WebView2本地状态重建。
 - .NET桌面版API Key使用Windows DPAPI按当前用户加密到`data/secrets.json`；项目、历史记录、localStorage、自动备份和URL均不得保存API Key。
@@ -56,7 +56,7 @@
 - 旧项目中的Base64原图在.NET桌面版启动后逐张迁移到素材仓库；迁移前原状态保留备份，迁移完成后清空旧撤销快照以释放内存。新导入与新生成图片应在写入历史记录前完成外置，避免日常操作反复清空撤销历史。
 - .NET迁移期间前端统一通过`apiFetch`访问应用接口；桌面模式下项目状态、自动备份、素材库、JSON、图片和导出文件写入由白名单桌面桥接处理，浏览器源码模式继续回退到`server.js`。不得把任意文件路径或任意HTTP地址透传给本地文件接口。
 - .NET窗口保留Windows原生标题栏和最小化、最大化、关闭行为；通过DWM按主题设置标题栏颜色，并与画布背景保持一档明度差，避免窗口边界融在画布中。系统不支持相关属性时允许自然降级。
-- .NET窗口关闭时先立即隐藏，再异步停止自身启动的Node子进程；清理完成后直接结束当前.NET宿主，不等待WebView2异常缓慢的窗口销毁路径。不得在UI线程同步释放WebView2或等待子进程退出；退出流程另设3秒进程级兜底，防止空白窗口长期残留。
+- .NET窗口关闭时先等待页面状态和自动备份确认成功，再隐藏窗口并结束当前宿主；桌面版不创建Node子进程，也不得恢复端口扫描、结束其他进程或Shell脚本启动逻辑。
 - .NET桌面版继续使用项目根目录的`data/`、`download/`、`export/`，迁移阶段保留Electron作为回退，不得擅自改变已有数据格式。
 
 - EXE 由 `.gitignore` 排除，Windows 分发文件统一由 electron-builder 生成 `CanvasFlow-Setup.exe`。
@@ -67,7 +67,7 @@
 - 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。
 - `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
 - 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
-- 2.5.0 起桌面发行版改用 Electron：控制中心和画板由同一主进程管理，不再运行 CMD，也不再通过 PowerShell、`taskkill` 或额外服务进程启动。
+- Electron实现仅作为迁移回退保留；当前桌面发行目标为.NET WPF，不再运行CMD，也不再通过PowerShell、`taskkill`、Node服务或额外进程启动。
 - Electron 正式版的数据根目录固定为 `path.dirname(process.execPath)`，源码模式使用项目根目录；`data/`、`download/`、`export/` 由 NSIS 更新和卸载流程临时移出后恢复，默认不删除用户数据。
  
 - API Key 不再写入项目状态或浏览器持久化数据；桌面版使用 Electron `safeStorage` 加密到 `data/secrets.json`，安全存储不可用时只保留在当前进程内。

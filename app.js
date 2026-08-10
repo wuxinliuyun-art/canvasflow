@@ -13,12 +13,13 @@ const desktop = window.canvasflowDesktop || null;
 const DESKTOP_LOCAL_API_PATHS = new Set([
   "/api/runtime-paths", "/api/app-state", "/api/custom-library", "/api/auto-backup",
   "/api/save-json", "/api/save-images", "/api/custom-material", "/api/save-export-files",
+  "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
 ]);
 
 async function apiFetch(input, options = {}) {
   const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
   const url = new URL(rawUrl, location.href);
-  if (desktop?.apiRequest && DESKTOP_LOCAL_API_PATHS.has(url.pathname)) {
+  if (desktop?.apiRequest && (DESKTOP_LOCAL_API_PATHS.has(url.pathname) || url.pathname.startsWith("/api/task/"))) {
     const result = await desktop.apiRequest(url.pathname + url.search, {
       method: options.method || "GET",
       body: typeof options.body === "string" ? options.body : "",
@@ -1742,7 +1743,7 @@ async function submitGeneration(prompt, imageUrls, node) {
 
   // Node is still a temporary local backend during the first .NET migration stage.
   // Keep the key out of URLs and persisted project data; the backend receives it only in this request body.
-  payload._apiKey = state.settings.apiKey;
+  if (!desktop) payload._apiKey = state.settings.apiKey;
 
   const resp = await apiFetch("/api/generate", {
     method: "POST",
@@ -3687,6 +3688,7 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
 }
 
 window.addEventListener("pagehide", () => {
+  if (desktop) return; // Desktop exit uses the acknowledged save handshake instead of an HTTP beacon.
   if (!autoBackupReady || !navigator.sendBeacon) return;
   if (autoBackupTimer) clearTimeout(autoBackupTimer);
   autoBackupTimer = null;
@@ -3698,13 +3700,6 @@ window.addEventListener("pagehide", () => {
     console.info("[自动备份] 页面关闭补发", { file: fileName, bytes: content.length, queued });
   } catch (err) {
     console.error("[自动备份] 页面关闭补发失败", { file: autoBackupFileName(), message: err.message });
-  }
-  if (desktop && navigator.sendBeacon) {
-    try {
-      saveCurrentPage();
-      const statePayload = new Blob([JSON.stringify(desktopStateSnapshot())], { type: "application/json" });
-      navigator.sendBeacon("/api/app-state", statePayload);
-    } catch (error) { console.error("[项目状态] 页面关闭补发失败", error); }
   }
 });
 

@@ -21,14 +21,11 @@ public partial class MainWindow : Window
     private const int LightCaptionColor = 0x00EEEBE9; // RGB #E9EBEE
     private const int LightTextColor = 0x00FFFFFF;
     private const int DarkTextColor = 0x00262220;
-    private static readonly Regex ServerUrlPattern = new(@"\[Start\] CanvasFlow server: (?<url>http://127\.0\.0\.1:\d+/)", RegexOptions.Compiled);
+    private const string CanvasUrl = "https://canvasflow.local/index.html";
     private readonly CancellationTokenSource _shutdown = new();
-    private Process? _node;
     private DesktopApi? _desktopApi;
     private CoreWebView2Environment? _webViewEnvironment;
-    private string? _serverUrl;
     private string? _root;
-    private bool _closing;
     private bool _shutdownComplete;
     private bool _saveRequestStarted;
     private bool _canvasReady;
@@ -126,12 +123,10 @@ public partial class MainWindow : Window
         {
             _root = FindProjectRoot();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
-            _desktopApi = new DesktopApi(_root, Log);
+            _desktopApi = new DesktopApi(_root, Log, ReadApiKey);
             LoadAssets();
             Log("[启动] 已找到项目目录。", false);
-            var nodeTask = StartNodeAsync(_root, _shutdown.Token);
-            var webViewTask = InitializeWebViewAsync(_shutdown.Token);
-            await Task.WhenAll(nodeTask, webViewTask);
+            await InitializeWebViewAsync(_shutdown.Token);
             NavigateCanvas();
         }
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
@@ -147,62 +142,8 @@ public partial class MainWindow : Window
             Environment.CurrentDirectory
         };
         foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-            if (File.Exists(Path.Combine(candidate, "server.js")) && File.Exists(Path.Combine(candidate, "index.html"))) return candidate;
-        throw new DirectoryNotFoundException("没有找到server.js和index.html。可能原因：程序被单独复制到项目之外。建议办法：从项目根目录构建或启动.NET桌面版。");
-    }
-
-    private async Task StartNodeAsync(string root, CancellationToken cancellationToken)
-    {
-        StatusText.Text = "正在启动后台服务…";
-        var info = new ProcessStartInfo
-        {
-            FileName = "node.exe", Arguments = "server.js", WorkingDirectory = root,
-            UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
-            RedirectStandardOutput = true, RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
-        };
-        _node = new Process { StartInfo = info, EnableRaisingEvents = true };
-        _node.OutputDataReceived += (_, e) => HandleLine(e.Data, false);
-        _node.ErrorDataReceived += (_, e) => HandleLine(e.Data, true);
-        _node.Exited += (_, _) => Dispatcher.Invoke(() =>
-        {
-            if (_closing) return;
-            StatusText.Text = "后台服务已停止";
-            Log("[错误] Node后台服务意外停止。可能原因：端口、文件或Node环境异常。建议办法：查看日志后重启程序。", true);
-        });
-        try
-        {
-            if (!_node.Start()) throw new InvalidOperationException("Node进程未能启动。");
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"无法启动隐藏的Node后台服务。可能原因：Node.js未安装或未加入PATH。建议办法：确认node --version可以运行。详细信息：{ex.Message}", ex);
-        }
-        _node.BeginOutputReadLine();
-        _node.BeginErrorReadLine();
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(15));
-        try
-        {
-            while (_serverUrl is null)
-            {
-                if (_node.HasExited) throw new InvalidOperationException("Node后台服务在返回地址前退出。可能原因：启动脚本异常。建议办法：查看运行日志。");
-                await Task.Delay(100, timeout.Token);
-            }
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException("后台服务启动超过15秒。可能原因：端口或Node异常。建议办法：查看日志并检查5173附近端口。");
-        }
-    }
-
-    private void HandleLine(string? line, bool error)
-    {
-        if (string.IsNullOrWhiteSpace(line)) return;
-        var match = ServerUrlPattern.Match(line);
-        if (match.Success) _serverUrl = match.Groups["url"].Value;
-        Dispatcher.Invoke(() => Log(line, error));
+            if (File.Exists(Path.Combine(candidate, "index.html")) && File.Exists(Path.Combine(candidate, "app.js")) && File.Exists(Path.Combine(candidate, "styles.css"))) return candidate;
+        throw new DirectoryNotFoundException("没有找到CanvasFlow界面文件。可能原因：程序文件不完整。建议办法：重新解压或安装完整版本。");
     }
 
     private async Task InitializeWebViewAsync(CancellationToken cancellationToken)
@@ -212,6 +153,7 @@ public partial class MainWindow : Window
         {
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
+            CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _root!, CoreWebView2HostResourceAccessKind.DenyCors);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
             CanvasView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -262,7 +204,7 @@ public partial class MainWindow : Window
                             var method = root.TryGetProperty("method", out var methodElement) ? methodElement.GetString() ?? "GET" : "GET";
                             var path = root.TryGetProperty("path", out var pathElement) ? pathElement.GetString() ?? "" : "";
                             var body = root.TryGetProperty("body", out var bodyElement) ? bodyElement.GetString() ?? "" : "";
-                            var response = await _desktopApi.HandleLocalAsync(method, path, body, _shutdown.Token);
+                            var response = await _desktopApi.HandleAsync(method, path, body, _shutdown.Token);
                             PostRpcResult(root, new { status = response.Status, body = response.Body, contentType = response.ContentType });
                         }
                         catch (Exception apiError) { PostRpcResult(root, error: apiError.Message); }
@@ -306,8 +248,9 @@ public partial class MainWindow : Window
 
     private bool IsCanvasUrl(string value)
     {
-        if (_serverUrl is null || !Uri.TryCreate(value, UriKind.Absolute, out var candidate) || !Uri.TryCreate(_serverUrl, UriKind.Absolute, out var canvas)) return false;
-        return candidate.Scheme == canvas.Scheme && candidate.Host == canvas.Host && candidate.Port == canvas.Port;
+        return Uri.TryCreate(value, UriKind.Absolute, out var candidate)
+            && candidate.Scheme == Uri.UriSchemeHttps
+            && candidate.Host.Equals("canvasflow.local", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OpenExternalUrl(string value)
@@ -547,7 +490,7 @@ public partial class MainWindow : Window
             {
                 _canvasReady = true;
                 StartupOverlay.Visibility = Visibility.Collapsed;
-                Log($"[画布] 加载完成：{_serverUrl}", false);
+                Log($"[画布] 加载完成：{CanvasUrl}", false);
             }
             else
             {
@@ -555,7 +498,7 @@ public partial class MainWindow : Window
                 Log($"[错误] 画布加载失败：{e.WebErrorStatus}", true);
             }
         };
-        CanvasView.Source = new Uri(_serverUrl!);
+        CanvasView.Source = new Uri(CanvasUrl);
     }
 
     private void ShowFailure(Exception ex)
@@ -597,27 +540,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        _closing = true;
         Hide();
         _shutdown.Cancel();
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(TimeSpan.FromSeconds(3));
-            Environment.Exit(0);
-        });
-        try
-        {
-            await Task.Run(StopNode);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[关闭] 清理桌面资源失败：{ex.Message}");
-        }
-        finally
-        {
-            _shutdownComplete = true;
-            Environment.Exit(0);
-        }
+        _shutdownComplete = true;
+        Environment.Exit(0);
     }
 
     private async Task<(bool Ok, string Error)> RequestPageSaveAsync()
@@ -642,25 +568,4 @@ public partial class MainWindow : Window
         return result;
     }
 
-    private void StopNode()
-    {
-        var process = _node;
-        _node = null;
-        if (process is null) return;
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[关闭] 停止Node服务失败：{ex.Message}");
-        }
-        finally
-        {
-            process.Dispose();
-        }
-    }
 }
