@@ -266,7 +266,9 @@ let editingTextTemplate = null;
 let editingImageTemplate = null;
 let librarySaveQueue = Promise.resolve();
 let pendingFolderImport = null;
-const localImageRequests = new Map();
+let desktopAssetMigrationTimer = null;
+let desktopAssetMigrationPromise = null;
+let desktopAssetMigrationQueued = false;
 
 function emptyLibrary() { return { textTemplates: [], imageMaterials: [] }; }
 function normalizeLibrary(lib) {
@@ -542,7 +544,8 @@ function inferNext(prefix, ids) {
 function markDirty() {
   state.dirty = true;
   saveCurrentPage();
-  persistPages();
+  if (desktop) scheduleDesktopAssetMigration();
+  else persistPages();
   renderPageTabs();
 }
 
@@ -1063,6 +1066,7 @@ async function createNodeFromTemplate(kind, template, x, y) {
       const resp = await fetch("/download/images/" + encodeURIComponent(template.fileName));
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       node.image = await blobToBase64(await resp.blob()); node.fileName = template.fileName; node.mime = template.mime || "image/png";
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName);
     } catch (e) { state.nodes = state.nodes.filter(x => x.id !== node.id); console.error("[自定义图片] 创建失败", e); return toast("创建失败：素材图片无法读取"); }
   }
   pushHistory(); render(); toast(kind === "text" ? "已创建自定义文字节点" : "已创建自定义图片节点");
@@ -1160,6 +1164,7 @@ function ungroupNode(groupId) {
       const gImg = group.images[i];
       const imgNode = addNode("image", group.x + i * 260, group.y + 60, false, { ignoredIds: new Set([groupId]) });
       imgNode.image = gImg.image || null;
+      imgNode.imageAssetId = gImg.assetId || "";
       imgNode.fileName = gImg.fileName || "";
       imgNode.mime = gImg.mime || "";
       restoredIds.add(imgNode.id);
@@ -1199,6 +1204,7 @@ function splitMultiInputAiNode(nodeId) {
     newAi.seq = state.nextNode++;
     newAi.generating = false;
     newAi.generatedImage = null;
+    delete newAi.generatedAssetId;
     newAi.taskId = null;
     newAi.batchTasks = null;
     state.nodes.push(newAi);
@@ -1241,6 +1247,7 @@ function stripCopiedImage(n) {
   const copy = JSON.parse(JSON.stringify(n));
   if (copy.type === "ai-image" || copy.type === "angle-image") {
     copy.generatedImage = null;
+    delete copy.generatedAssetId;
     copy.taskId = null;
     copy.generating = false;
   }
@@ -1527,6 +1534,7 @@ async function generateAngleImage(nodeId) {
     resultNode.image = generatedImage;
     resultNode.fileName = fileName;
     resultNode.mime = "image/png";
+    await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
     resultNode.aiSourceNodeId = node.id;
     resultNode.angleSourceNodeId = node.id;
     state.edges.push({ id: uid("e"), from: { node: node.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
@@ -1624,7 +1632,7 @@ function collectUpstreamForAI(nodeId, incoming) {
     // AI 节点截断：收集已生成图片后不再向上追溯（包括停用的 AI 节点）
     if (n.type === "ai-image" || n.type === "angle-image") {
       if (n.generatedImage) {
-        const ref = { image: n.generatedImage, fileName: n.fileName, mime: n.mime, _x: n.x };
+        const ref = { image: n.generatedImage, assetId: n.generatedAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x };
         result.images.push(ref);
         result.orderedRefs.push(ref);
       }
@@ -1633,7 +1641,7 @@ function collectUpstreamForAI(nodeId, incoming) {
     if (n.disabled) return;
     if (n.type === "text" && n.text && n.text.trim()) result.texts.push(n.text.trim());
     if (n.type === "image" && n.image) {
-      const ref = { image: n.image, fileName: n.fileName, mime: n.mime, _x: n.x };
+      const ref = { image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x };
       result.images.push(ref);
       result.orderedRefs.push(ref);
     }
@@ -1643,12 +1651,12 @@ function collectUpstreamForAI(nodeId, incoming) {
         for (const item of n.items) {
           if (item.type === "text" && item.text && item.text.trim()) result.texts.push(item.text.trim());
           if (item.type === "image" && item.image) {
-            const ref = { image: item.image, fileName: item.fileName, mime: item.mime, _x: n.x };
+            const ref = { image: item.image, assetId: item.imageAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x };
             result.groupImages.push(ref);
             result.orderedRefs.push(ref);
           }
           if (item.type === "ai-image" && item.generatedImage) {
-            const ref = { image: item.generatedImage, fileName: item.fileName, mime: item.mime, _x: n.x };
+            const ref = { image: item.generatedImage, assetId: item.generatedAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x };
             result.groupImages.push(ref);
             result.orderedRefs.push(ref);
           }
@@ -1659,10 +1667,9 @@ function collectUpstreamForAI(nodeId, incoming) {
         for (const gImg of n.images) {
           const ref = {
             image: gImg.image,
+            assetId: gImg.assetId || "",
             fileName: gImg.fileName,
             mime: gImg.mime,
-            localSourceId: gImg.localSourceId || n.localSourceId || "",
-            relativePath: gImg.relativePath || "",
             _x: n.x,
           };
           result.groupImages.push(ref);
@@ -1688,23 +1695,11 @@ function refreshAiPrompt(nodeId) {
   render();
 }
 
-function readDesktopLocalImage(sourceId, relativePath) {
-  if (!window.chrome?.webview) return Promise.reject(new Error("桌面文件读取能力不可用"));
-  const requestId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      localImageRequests.delete(requestId);
-      reject(new Error("读取本地原图超时"));
-    }, 30000);
-    localImageRequests.set(requestId, { resolve, reject, timer });
-    window.chrome.webview.postMessage({ type: "read-local-image", requestId, sourceId, relativePath });
-  });
-}
-
 async function materializeReferenceImage(reference) {
   if (typeof reference === "string") return reference;
-  if (reference?.localSourceId && reference?.relativePath) {
-    return readDesktopLocalImage(reference.localSourceId, reference.relativePath);
+  if (desktop && reference?.assetId) {
+    const result = await desktop.readAsset(reference.assetId);
+    return result.dataUrl || "";
   }
   return reference?.image || "";
 }
@@ -1827,6 +1822,7 @@ async function generateSingle(node, upstream) {
   node.batchTasks = null;
   node.generating = true;
   node.generatedImage = null;
+  delete node.generatedAssetId;
   node.taskId = null;
   setAiNodeProgress(node, "submitting", "正在提交任务");
   render();
@@ -1845,9 +1841,11 @@ async function generateSingle(node, upstream) {
     await nextPaint();
     const base64 = await fetchImageAsBase64(imageUrl);
     node.generatedImage = base64;
+    delete node.generatedAssetId;
     node.generating = false;
     node.fileName = `ai_generated_${Date.now()}.png`;
     node.mime = "image/png";
+    await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName);
     fetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1880,6 +1878,7 @@ async function generateBatchFromGroup(node, upstream) {
   const MAX_CONCURRENT = 5;
 
   node.generatedImage = null;
+  delete node.generatedAssetId;
   node.generating = true;
   node.batchTasks = groupImages.map((gImg, i) => ({
     index: i,
@@ -1928,6 +1927,7 @@ async function generateBatchFromGroup(node, upstream) {
         t.progress = 96;
         syncAiNodeTaskProgress(node, node.batchTasks);
         t.result = await fetchImageAsBase64(imageUrl);
+        await externalizeImageField(t, "result", "resultAssetId", t.fileName || "ai_batch.png");
         t.status = "done";
         t.progress = 100;
       } catch (err) {
@@ -1985,6 +1985,7 @@ async function generateBatchFromGroup(node, upstream) {
       seqNum++;
       const imgNode = addNode("image", aiX + NODE_WIDTH + 40, aiY + (seqNum - 1) * IMAGE_NODE_VERTICAL_STEP, false);
       imgNode.image = t.result;
+      imgNode.imageAssetId = t.resultAssetId || "";
       imgNode.fileName = t.fileName || `ai_batch_${seqNum}.png`;
       imgNode.mime = "image/png";
       imgNode.aiSourceNodeId = node.id;
@@ -2742,9 +2743,11 @@ els.nodes.addEventListener("click", ev => {
   if (ev.target.dataset.role === "clear-image") {
     if (node.type === "ai-image" || node.type === "angle-image") {
       node.generatedImage = null;
+      delete node.generatedAssetId;
       node.taskId = null;
     } else {
       node.image = null;
+      delete node.imageAssetId;
       node.fileName = "";
       node.mime = "";
     }
@@ -2845,8 +2848,10 @@ async function uploadImage(node) {
     const file = input.files?.[0];
     if (!file) return;
     node.image = await fileToDataUrl(file);
+    delete node.imageAssetId;
     node.fileName = file.name;
     node.mime = file.type || "image/png";
+    await externalizeImageField(node, "image", "imageAssetId", node.fileName);
     pushHistory();
     render();
   };
@@ -2864,12 +2869,14 @@ async function uploadGroupImages(node) {
     if (!files.length) return;
     if (!node.images) node.images = [];
     for (const file of files) {
-      node.images.push({
+      const image = {
         image: await fileToDataUrl(file),
         fileName: file.name,
         mime: file.type || "image/png",
         name: file.name.replace(/\.[^.]+$/, ""),
-      });
+      };
+      await externalizeImageField(image, "image", "assetId", image.fileName);
+      node.images.push(image);
     }
     pushHistory();
     render();
@@ -3019,7 +3026,7 @@ els.lightboxPaintCanvas.addEventListener("pointerup", () => { lightboxDrawing = 
 els.lightboxPaintCanvas.addEventListener("pointercancel", () => { lightboxDrawing = false; });
 els.lightboxPaintBtn.onclick = startLightboxPaint;
 els.lightboxPaintCancel.onclick = cancelLightboxPaint;
-els.lightboxPaintConfirm.onclick = () => {
+els.lightboxPaintConfirm.onclick = async () => {
   if (!lightboxPainting) return;
   const source = findNode(lightboxSourceNodeId);
   const image = els.lightboxPaintCanvas.toDataURL("image/png");
@@ -3029,6 +3036,7 @@ els.lightboxPaintConfirm.onclick = () => {
   node.image = image;
   node.fileName = `局部修改_${Date.now()}.png`;
   node.mime = "image/png";
+  await externalizeImageField(node, "image", "imageAssetId", node.fileName);
   pushHistory();
   render();
   hideLightbox();
@@ -3067,6 +3075,7 @@ async function setComposerImage(file) {
     fileName: file.name || `upload_${timestamp()}.png`,
     mime: file.type || "image/png",
   };
+  await externalizeImageField(composerImage, "image", "assetId", composerImage.fileName);
   els.composerImageName.textContent = `已选择图片：${composerImage.fileName}`;
 }
 
@@ -3087,6 +3096,7 @@ function createNodesFromComposer() {
     textNode.text = text;
     const imageNode = addNode("image", center.x + 30, center.y - NODE_HEIGHT / 2, false);
     imageNode.image = image.image;
+    imageNode.imageAssetId = image.assetId || "";
     imageNode.fileName = image.fileName;
     imageNode.mime = image.mime;
     state.edges.push({ id: uid("e"), from: { node: textNode.id, port: "out" }, to: { node: imageNode.id, port: "in" } });
@@ -3097,6 +3107,7 @@ function createNodesFromComposer() {
   } else if (image) {
     const node = addNode("image", center.x - NODE_WIDTH / 2, center.y - NODE_HEIGHT / 2, false);
     node.image = image.image;
+    node.imageAssetId = image.assetId || "";
     node.fileName = image.fileName;
     node.mime = image.mime;
   }
@@ -3123,6 +3134,7 @@ async function createNodeFromClipboard(ev) {
     node.image = await fileToDataUrl(file);
     node.fileName = file.name || `clipboard_${timestamp()}.png`;
     node.mime = file.type || "image/png";
+    await externalizeImageField(node, "image", "imageAssetId", node.fileName);
     pushHistory();
     render();
     toast("已从剪贴板创建图片节点");
@@ -3353,7 +3365,7 @@ window.addEventListener("paste", async ev => {
 });
 
 function isSupportedImageFile(file) {
-  return !!file && (String(file.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name || ""));
+  return !!file && (/^image\/(?:jpeg|png|webp|gif)$/i.test(String(file.type || "")) || /\.(png|jpe?g|webp|gif)$/i.test(file.name || ""));
 }
 
 async function droppedImageSources(dataTransfer) {
@@ -3438,8 +3450,10 @@ els.viewport.addEventListener("drop", async ev => {
       const node = findNode(targetNodeEl.dataset.id);
       if (!node) return;
       node.image = sources[0].image;
+      delete node.imageAssetId;
       node.fileName = sources[0].fileName;
       node.mime = sources[0].mime;
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName);
       state.selected = new Set([node.id]);
       pushHistory();
       render();
@@ -3449,13 +3463,15 @@ els.viewport.addEventListener("drop", async ev => {
     const p = screenToWorld(ev.clientX, ev.clientY);
     const cols = Math.min(sources.length, 4);
     const createdIds = [];
-    sources.forEach((source, i) => {
+    for (let i = 0; i < sources.length; i++) {
+      const source = sources[i];
       const node = addNode("image", p.x + (i % cols) * 280, p.y + Math.floor(i / cols) * IMAGE_NODE_VERTICAL_STEP, false);
       node.image = source.image;
       node.fileName = source.fileName;
       node.mime = source.mime;
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName);
       createdIds.push(node.id);
-    });
+    }
     state.selected = new Set(createdIds);
     pushHistory();
     render();
@@ -3821,6 +3837,7 @@ els.composerFileInput.onchange = async () => {
       node.image = await fileToDataUrl(files[i]);
       node.fileName = files[i].name;
       node.mime = files[i].type || "image/png";
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName);
     }
     pushHistory();
     render();
@@ -3835,13 +3852,13 @@ function closeFolderImportDialog(force = false) {
   pendingFolderImport = null;
 }
 
-function openFolderImportDialog(entries, folderName = "", localSourceId = "") {
-  const imageEntries = Array.from(entries || []).filter(entry => (entry.file || entry).type.startsWith("image/"));
+function openFolderImportDialog(entries, folderName = "") {
+  const imageEntries = Array.from(entries || []).filter(entry => isSupportedImageFile(entry.file || entry));
   if (!imageEntries.length) {
     toast("文件夹中没有图片文件");
     return;
   }
-  pendingFolderImport = { entries: imageEntries, folderName, localSourceId };
+  pendingFolderImport = { entries: imageEntries, folderName };
   els.folderImportSummary.textContent = uiLanguage === "en"
     ? `${folderName || "Selected folder"} · ${imageEntries.length} images`
     : `${folderName || "所选文件夹"} · ${imageEntries.length} 张图片`;
@@ -3871,7 +3888,110 @@ async function fileToThumbnailDataUrl(file, maxSize = 420) {
   }
 }
 
-async function createGroupFromFolderFiles(imageEntries, localSourceId = "") {
+async function dataUrlToThumbnailDataUrl(dataUrl, maxSize = 420) {
+  const response = await fetch(dataUrl);
+  if (!response.ok) throw new Error(`缩略图读取失败：HTTP ${response.status}`);
+  return fileToThumbnailDataUrl(await response.blob(), maxSize);
+}
+
+async function externalizeImageField(holder, field, assetField, fallbackName) {
+  const dataUrl = holder?.[field];
+  if (!desktop || holder?.[assetField] || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return false;
+  const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || holder.mime || "image/png";
+  const stored = await desktop.storeImage(dataUrl, holder.fileName || fallbackName, mime);
+  const assetId = stored.id || stored.Id || "";
+  if (!assetId) throw new Error("桌面素材仓库没有返回素材编号");
+  holder[assetField] = assetId;
+  holder[field] = await dataUrlToThumbnailDataUrl(dataUrl);
+  return true;
+}
+
+async function migrateNodeAssets(nodes) {
+  let changed = false;
+  const failures = [];
+  for (const node of nodes || []) {
+    try {
+      if (await externalizeImageField(node, "image", "imageAssetId", node.fileName || `${node.id || "image"}.png`)) changed = true;
+      if (await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName || `${node.id || "generated"}.png`)) changed = true;
+    } catch (error) {
+      failures.push({ nodeId: node.id || "unknown", field: "image", message: error.message || String(error) });
+    }
+    for (const image of node.images || []) {
+      try {
+        if (await externalizeImageField(image, "image", "assetId", image.fileName || "group-image.png")) changed = true;
+      } catch (error) {
+        failures.push({ nodeId: node.id || "unknown", field: "groupImage", message: error.message || String(error) });
+      }
+    }
+    for (const task of node.batchTasks || []) {
+      try {
+        if (await externalizeImageField(task, "result", "resultAssetId", task.fileName || "batch-result.png")) changed = true;
+      } catch (error) {
+        failures.push({ nodeId: node.id || "unknown", field: "batchResult", message: error.message || String(error) });
+      }
+    }
+    if (Array.isArray(node.items)) {
+      const nested = await migrateNodeAssets(node.items);
+      changed = nested.changed || changed;
+      failures.push(...nested.failures);
+    }
+    await nextPaint();
+  }
+  return { changed, failures };
+}
+
+function scheduleDesktopAssetMigration(delay = 80) {
+  if (!desktop) return;
+  desktopAssetMigrationQueued = true;
+  if (desktopAssetMigrationTimer) clearTimeout(desktopAssetMigrationTimer);
+  desktopAssetMigrationTimer = window.setTimeout(() => {
+    desktopAssetMigrationTimer = null;
+    flushDesktopAssetMigration().catch(error => console.error("[素材迁移] 保存失败", error));
+  }, delay);
+}
+
+async function flushDesktopAssetMigration() {
+  if (!desktop) return { changed: false, failures: [] };
+  if (desktopAssetMigrationTimer) {
+    clearTimeout(desktopAssetMigrationTimer);
+    desktopAssetMigrationTimer = null;
+  }
+  desktopAssetMigrationQueued = true;
+  if (desktopAssetMigrationPromise) return desktopAssetMigrationPromise;
+  desktopAssetMigrationPromise = (async () => {
+    let changed = false;
+    const failures = [];
+    do {
+      desktopAssetMigrationQueued = false;
+      const active = await migrateNodeAssets(state.nodes);
+      changed = active.changed || changed;
+      failures.push(...active.failures);
+      saveCurrentPage();
+      for (const page of state.pages) {
+        if (page.id === state.activePageId) continue;
+        const result = await migrateNodeAssets(page.data?.nodes || []);
+        changed = result.changed || changed;
+        failures.push(...result.failures);
+      }
+    } while (desktopAssetMigrationQueued);
+    if (changed) {
+      state.history = [cloneData()];
+      state.future = [];
+      updateUndoRedo();
+      render();
+      console.info("[素材迁移] 原图已写入桌面素材仓库，项目状态仅保留缩略图与素材编号");
+    }
+    persistPages();
+    if (failures.length) {
+      console.error("[素材迁移] 部分图片保存失败", failures);
+      toast(`有 ${failures.length} 张图片未能写入本地素材仓库：可能是图片格式、大小或目录权限问题；请检查图片后重试。`);
+    }
+    return { changed, failures };
+  })().finally(() => { desktopAssetMigrationPromise = null; });
+  return desktopAssetMigrationPromise;
+}
+
+async function createGroupFromFolderFiles(imageEntries) {
   const preparedImages = [];
   for (let index = 0; index < imageEntries.length; index++) {
     const entry = imageEntries[index];
@@ -3879,20 +3999,19 @@ async function createGroupFromFolderFiles(imageEntries, localSourceId = "") {
     els.folderImportSummary.textContent = uiLanguage === "en"
       ? `Creating thumbnails ${index + 1}/${imageEntries.length}`
       : `正在生成缩略图 ${index + 1}/${imageEntries.length}`;
-    const image = localSourceId ? await fileToThumbnailDataUrl(file) : await fileToDataUrl(file);
+    const image = desktop ? await fileToThumbnailDataUrl(file) : await fileToDataUrl(file);
     preparedImages.push({
       image,
+      assetId: entry.assetId || "",
       fileName: file.name,
       mime: file.type || "image/png",
       name: file.name.replace(/\.[^.]+$/, ""),
-      relativePath: localSourceId ? String(entry.relativePath || file.name).replace(/\\/g, "/") : "",
     });
     if (index % 2 === 0) await nextPaint();
   }
   const center = visibleWorldCenter();
   const node = addNode("group", center.x - NODE_WIDTH / 2, center.y - NODE_HEIGHT / 2, false);
   node.images = preparedImages;
-  if (localSourceId) node.localSourceId = localSourceId;
   pushHistory();
   render();
   toast(`已创建多任务节点，包含 ${node.images.length} 张图片`);
@@ -3900,12 +4019,12 @@ async function createGroupFromFolderFiles(imageEntries, localSourceId = "") {
 
 async function confirmFolderImport() {
   if (!pendingFolderImport) return;
-  const { entries, localSourceId } = pendingFolderImport;
+  const { entries } = pendingFolderImport;
   els.folderImportConfirmBtn.disabled = true;
   els.folderImportCancelBtn.disabled = true;
   els.folderImportCloseBtn.disabled = true;
   try {
-    await createGroupFromFolderFiles(entries, localSourceId);
+    await createGroupFromFolderFiles(entries);
     closeFolderImportDialog(true);
   } catch (error) {
     console.error("[文件夹上传] 图片读取失败", error);
@@ -3925,7 +4044,7 @@ async function collectFolderImageFiles(directoryHandle) {
       if (entry.kind === "directory") await visit(entry, relativePath);
       else {
         const file = await entry.getFile();
-        if (file.type.startsWith("image/")) files.push({ file, relativePath });
+        if (isSupportedImageFile(file)) files.push({ file, relativePath });
       }
     }
   }
@@ -3941,20 +4060,18 @@ if (window.chrome?.webview) {
         const directoryHandle = event.additionalObjects?.[0];
         if (!directoryHandle) throw new Error("没有取得文件夹读取权限");
         const imageFiles = await collectFolderImageFiles(directoryHandle);
-        openFolderImportDialog(imageFiles, message.folderName || directoryHandle.name || "", message.folderSourceId || "");
+        const assetsByPath = new Map((message.assets || []).map(asset => [String(asset.relativePath || "").replace(/\\/g, "/").toLowerCase(), asset]));
+        for (const entry of imageFiles) {
+          const asset = assetsByPath.get(String(entry.relativePath || "").replace(/\\/g, "/").toLowerCase());
+          if (asset) entry.assetId = asset.assetId || "";
+        }
+        openFolderImportDialog(imageFiles, message.folderName || directoryHandle.name || "");
       } catch (error) {
         console.error("[文件夹上传] 无法读取所选文件夹", error);
         toast(`无法读取所选文件夹：可能是权限已失效；请重新选择。${error.message || ""}`);
       }
     } else if (message.type === "image-folder-error") {
       toast(`无法选择文件夹：${message.error || "系统文件夹选择器发生错误"}；请重新尝试。`);
-    } else if (message.type === "local-image-result") {
-      const request = localImageRequests.get(message.requestId);
-      if (!request) return;
-      window.clearTimeout(request.timer);
-      localImageRequests.delete(message.requestId);
-      if (message.error) request.reject(new Error(`原图无法读取：${message.error}。请确认原文件夹仍在原位置。`));
-      else request.resolve(message.dataUrl);
     }
   });
 }
@@ -4189,6 +4306,10 @@ els.loadJson.onchange = async () => {
     restoreData(page.data);
   }
   await resolveImageRefs(state.nodes);
+  saveCurrentPage();
+  for (const page of state.pages) {
+    if (page.id !== state.activePageId) await resolveImageRefs(page.data?.nodes || []);
+  }
   state.history = [cloneData()];
   state.future = [];
   updateUndoRedo();
@@ -4197,9 +4318,38 @@ els.loadJson.onchange = async () => {
   els.loadJson.value = "";
 };
 
+async function materializeNodeAssetsForPortableSave(nodes) {
+  for (const node of nodes || []) {
+    if (node.imageAssetId) {
+      node.image = await materializeReferenceImage({ assetId: node.imageAssetId, image: node.image });
+      delete node.imageAssetId;
+    }
+    if (node.generatedAssetId) {
+      node.generatedImage = await materializeReferenceImage({ assetId: node.generatedAssetId, image: node.generatedImage });
+      delete node.generatedAssetId;
+    }
+    for (const image of node.images || []) {
+      if (image.assetId) {
+        image.image = await materializeReferenceImage(image);
+        delete image.assetId;
+      }
+    }
+    for (const task of node.batchTasks || []) {
+      if (task.resultAssetId) {
+        task.result = await materializeReferenceImage({ assetId: task.resultAssetId, image: task.result });
+        delete task.resultAssetId;
+      }
+    }
+    if (Array.isArray(node.items)) await materializeNodeAssetsForPortableSave(node.items);
+  }
+}
+
 async function saveJson() {
   saveCurrentPage();
   const data = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, globalLibrary }));
+  if (desktop) {
+    for (const page of data.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
+  }
 
   // 收集所有需要提取的图片（data URL → 保存为独立文件）
   const imageFiles = [];
@@ -4411,7 +4561,8 @@ async function runExport() {
       for (const img of collected.images) {
         resultNumber++;
         const ext = extensionFor(img.fileName, img.mime);
-        files.push({ name: `生成结果/图片${resultNumber}.${ext}`, blob: dataUrlToBlob(img.image) });
+        const resultData = await materializeReferenceImage(img);
+        files.push({ name: `生成结果/图片${resultNumber}.${ext}`, blob: dataUrlToBlob(resultData) });
 
         if (state.settings.exportInputs && img.aiSourceNodeId) {
           const upstream = collectUpstreamForAI(img.aiSourceNodeId, incoming);
@@ -4421,12 +4572,13 @@ async function runExport() {
 
           const refFileNames = [];
           for (const ref of refs) {
-            if (!ref.image) continue;
-            let path = referenceNames.get(ref.image);
+            if (!ref.image && !ref.assetId) continue;
+            const referenceKey = ref.assetId || ref.image;
+            let path = referenceNames.get(referenceKey);
             if (!path) {
               path = uniqueExportPath("参考图", ref.fileName || "参考图.png", `参考图${referenceNames.size + 1}`, ref.mime);
-              referenceNames.set(ref.image, path);
-              files.push({ name: path, blob: dataUrlToBlob(ref.image) });
+              referenceNames.set(referenceKey, path);
+              files.push({ name: path, blob: dataUrlToBlob(await materializeReferenceImage(ref)) });
             }
             refFileNames.push(path.slice(path.lastIndexOf("/") + 1));
           }
@@ -4480,9 +4632,9 @@ function collectForOutput(outputId, incoming = buildIncomingIndex()) {
   function appendAiResults(n) {
     const completedBatch = n.batchTasks?.filter(t => t.status === "done" && t.result) || [];
     if (completedBatch.length) {
-      completedBatch.forEach(t => result.images.push({ image: t.result, fileName: t.fileName || "ai_generated.png", mime: "image/png", aiSourceNodeId: n.id, aiBatchIndex: t.index }));
+      completedBatch.forEach(t => result.images.push({ image: t.result, assetId: t.resultAssetId || "", fileName: t.fileName || "ai_generated.png", mime: "image/png", aiSourceNodeId: n.id, aiBatchIndex: t.index }));
     } else if (n.generatedImage) {
-      result.images.push({ image: n.generatedImage, fileName: n.fileName || "ai_generated.png", mime: n.mime || "image/png", aiSourceNodeId: n.id });
+      result.images.push({ image: n.generatedImage, assetId: n.generatedAssetId || "", fileName: n.fileName || "ai_generated.png", mime: n.mime || "image/png", aiSourceNodeId: n.id });
     }
   }
   function visit(nodeId) {
@@ -4496,7 +4648,7 @@ function collectForOutput(outputId, incoming = buildIncomingIndex()) {
       return;
     }
     if (n.type === "image" && n.aiSourceNodeId && n.image) {
-      result.images.push({ image: n.image, fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex });
+      result.images.push({ image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex });
       return;
     }
     (incoming.get(nodeId) || []).forEach(e => visit(e.from.node));
@@ -4509,7 +4661,7 @@ function collectForTerminal(nodeId, incoming = buildIncomingIndex()) {
   const n = findNode(nodeId);
   if (!n || n.disabled) return { texts: [], images: [] };
   if (n.type === "image" && n.aiSourceNodeId && n.image) {
-    return { texts: [], images: [{ image: n.image, fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex }] };
+    return { texts: [], images: [{ image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, aiSourceNodeId: n.aiSourceNodeId, aiBatchIndex: n.aiBatchIndex }] };
   }
   return collectForOutput(nodeId, incoming);
 }
@@ -4625,6 +4777,7 @@ async function resolveImageRefs(nodes) {
         }
       }
     }
+    if (Array.isArray(node.items)) await resolveImageRefs(node.items);
   }
 }
 
@@ -4889,6 +5042,7 @@ async function executeAllAiNodes() {
       t.progress = 96;
       syncAiNodeTaskProgress(node, nodeTasks);
       t.result = await fetchImageAsBase64(imageUrl);
+      await externalizeImageField(t, "result", "resultAssetId", t.fileName || "ai_batch.png");
       t.status = "done";
       t.progress = 100;
     } catch (err) {
@@ -4947,6 +5101,7 @@ async function executeAllAiNodes() {
     tasks.forEach((t, i) => {
       const imgNode = addNode("image", aiX + NODE_WIDTH + 40, aiY + i * IMAGE_NODE_VERTICAL_STEP, false);
       imgNode.image = t.result;
+      imgNode.imageAssetId = t.resultAssetId || "";
       imgNode.fileName = t.fileName || `ai_batch_${i + 1}.png`;
       imgNode.mime = "image/png";
       imgNode.aiSourceNodeId = node.id;
@@ -5006,6 +5161,7 @@ async function init() {
       const secret = await desktop.getApiKey();
       state.settings.apiKey = secret.apiKey || "";
     } catch (error) { console.error("[安全存储] API Key 读取失败", error); }
+    await flushDesktopAssetMigration();
   }
   state.history = [cloneData()];
   state.future = [];
@@ -5032,6 +5188,7 @@ async function init() {
   if (desktop) desktop.onSaveRequest(async request => {
     try {
       if (desktopStateTimer) { clearTimeout(desktopStateTimer); desktopStateTimer = null; }
+      await flushDesktopAssetMigration();
       await persistDesktopStateNow();
       const backupSaved = await writeAutoBackup(request.reason || "desktop-exit");
       if (!backupSaved) throw new Error("项目状态已保存，但自动备份文件写入失败");

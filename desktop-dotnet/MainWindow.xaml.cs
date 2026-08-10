@@ -33,7 +33,17 @@ public partial class MainWindow : Window
     private bool _canvasReady;
     private TaskCompletionSource<(bool Ok, string Error)>? _pageSaveCompletion;
     private readonly object _logLock = new();
-    private readonly Dictionary<string, string> _folderSources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _assetLock = new();
+    private readonly Dictionary<string, AssetRecord> _assets = new(StringComparer.OrdinalIgnoreCase);
+
+    private sealed class AssetRecord
+    {
+        public string Id { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string Mime { get; set; } = "image/png";
+        public string RelativePath { get; set; } = "";
+        public long Size { get; set; }
+    }
 
     private const string DesktopBridgeScript = """
       (() => {
@@ -41,12 +51,12 @@ public partial class MainWindow : Window
         let sequence = 0;
         const pending = new Map();
         const saveHandlers = [];
-        const invoke = (type, payload = {}) => new Promise((resolve, reject) => {
+        const invoke = (type, payload = {}, timeoutMs = 15000) => new Promise((resolve, reject) => {
           const requestId = `wpf_${Date.now()}_${++sequence}`;
           const timer = setTimeout(() => {
             pending.delete(requestId);
             reject(new Error("CanvasFlow desktop request timed out"));
-          }, 15000);
+          }, timeoutMs);
           pending.set(requestId, { resolve, reject, timer });
           window.chrome.webview.postMessage({ type, requestId, ...payload });
         });
@@ -67,6 +77,8 @@ public partial class MainWindow : Window
           isDesktop: true,
           getApiKey: () => invoke("desktop:get-api-key"),
           saveApiKey: apiKey => invoke("desktop:save-api-key", { apiKey: String(apiKey || "") }),
+          storeImage: (dataUrl, fileName, mime) => invoke("desktop:store-image", { dataUrl, fileName, mime }, 60000),
+          readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
           completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
         };
@@ -108,7 +120,7 @@ public partial class MainWindow : Window
         {
             _root = FindProjectRoot();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
-            LoadFolderSources();
+            LoadAssets();
             Log("[启动] 已找到项目目录。", false);
             var nodeTask = StartNodeAsync(_root, _shutdown.Token);
             var webViewTask = InitializeWebViewAsync(_shutdown.Token);
@@ -225,9 +237,15 @@ public partial class MainWindow : Window
                     {
                         await PickImageFolderAsync();
                     }
-                    else if (type.GetString() == "read-local-image")
+                    else if (type.GetString() == "desktop:store-image")
                     {
-                        await ReadLocalImageAsync(root);
+                        try { PostRpcResult(root, await StoreImageAsync(root)); }
+                        catch (Exception storeError) { PostRpcResult(root, error: storeError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:read-asset")
+                    {
+                        try { PostRpcResult(root, await ReadAssetAsync(root)); }
+                        catch (Exception readError) { PostRpcResult(root, error: readError.Message); }
                     }
                     else if (type.GetString() == "desktop:get-api-key")
                     {
@@ -300,30 +318,38 @@ public partial class MainWindow : Window
     }
 
     private string SecretsPath => Path.Combine(_root!, "data", "secrets.json");
-    private string FolderSourcesPath => Path.Combine(_root!, "data", "folder-sources.json");
+    private string AssetsDirectory => Path.Combine(_root!, "data", "assets");
+    private string AssetsIndexPath => Path.Combine(AssetsDirectory, "index.json");
 
-    private void LoadFolderSources()
+    private void LoadAssets()
     {
         try
         {
-            if (!File.Exists(FolderSourcesPath)) return;
-            var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(FolderSourcesPath, Encoding.UTF8));
+            Directory.CreateDirectory(AssetsDirectory);
+            if (!File.Exists(AssetsIndexPath)) return;
+            var saved = JsonSerializer.Deserialize<Dictionary<string, AssetRecord>>(File.ReadAllText(AssetsIndexPath, Encoding.UTF8));
             if (saved is null) return;
             foreach (var item in saved)
-                if (Guid.TryParse(item.Key, out _) && Directory.Exists(item.Value)) _folderSources[item.Key] = Path.GetFullPath(item.Value);
+            {
+                var fullPath = SafeAssetPath(item.Value.RelativePath);
+                if (Regex.IsMatch(item.Key, "^[a-f0-9]{64}$", RegexOptions.IgnoreCase) && File.Exists(fullPath)) _assets[item.Key] = item.Value;
+            }
         }
         catch (Exception error)
         {
-            Log($"[文件夹来源] 读取登记信息失败。可能原因：配置文件损坏。建议办法：重新上传图片文件夹。详细信息：{error.Message}", true);
+            Log($"[素材仓库] 读取索引失败。可能原因：索引文件损坏。建议办法：从备份恢复data目录。详细信息：{error.Message}", true);
         }
     }
 
-    private void SaveFolderSources()
+    private void SaveAssets()
     {
-        var content = JsonSerializer.Serialize(_folderSources, new JsonSerializerOptions { WriteIndented = true });
-        var temporary = FolderSourcesPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
+        Directory.CreateDirectory(AssetsDirectory);
+        Dictionary<string, AssetRecord> snapshot;
+        lock (_assetLock) snapshot = new Dictionary<string, AssetRecord>(_assets, StringComparer.OrdinalIgnoreCase);
+        var content = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+        var temporary = AssetsIndexPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
         File.WriteAllText(temporary, content, Encoding.UTF8);
-        File.Move(temporary, FolderSourcesPath, true);
+        File.Move(temporary, AssetsIndexPath, true);
     }
 
     private string ReadApiKey()
@@ -361,7 +387,88 @@ public partial class MainWindow : Window
         File.Move(temporary, SecretsPath, true);
     }
 
-    private Task PickImageFolderAsync()
+    private static string MimeFromExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        _ => throw new InvalidDataException("文件不是支持的图片格式")
+    };
+
+    private static string ExtensionFromMime(string mime) => mime.ToLowerInvariant() switch
+    {
+        "image/jpeg" => ".jpg",
+        "image/png" => ".png",
+        "image/webp" => ".webp",
+        "image/gif" => ".gif",
+        _ => throw new InvalidDataException("图片格式不受支持")
+    };
+
+    private Task<AssetRecord> StoreImageAsync(JsonElement request)
+    {
+        var dataUrl = request.GetProperty("dataUrl").GetString() ?? "";
+        var fileName = request.TryGetProperty("fileName", out var nameElement) ? Path.GetFileName(nameElement.GetString() ?? "image") : "image";
+        return Task.Run(() => StoreImageData(dataUrl, fileName), _shutdown.Token);
+    }
+
+    private AssetRecord StoreImageData(string dataUrl, string fileName)
+    {
+        var match = Regex.Match(dataUrl, "^data:(image/(?:jpeg|png|webp|gif));base64,(.+)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (!match.Success) throw new InvalidDataException("图片数据格式无效");
+        var mime = match.Groups[1].Value.ToLowerInvariant();
+        var bytes = Convert.FromBase64String(match.Groups[2].Value);
+        if (bytes.Length > 64 * 1024 * 1024) throw new InvalidDataException("单张图片超过64MB限制");
+        return StoreAssetBytes(bytes, fileName, mime, true);
+    }
+
+    private AssetRecord StoreAssetFile(string sourcePath, bool saveIndex)
+    {
+        var bytes = File.ReadAllBytes(sourcePath);
+        if (bytes.Length > 64 * 1024 * 1024) throw new InvalidDataException($"图片超过64MB限制：{Path.GetFileName(sourcePath)}");
+        return StoreAssetBytes(bytes, Path.GetFileName(sourcePath), MimeFromExtension(Path.GetExtension(sourcePath)), saveIndex);
+    }
+
+    private AssetRecord StoreAssetBytes(byte[] bytes, string fileName, string mime, bool saveIndex)
+    {
+        var id = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        AssetRecord record;
+        lock (_assetLock)
+        {
+            if (_assets.TryGetValue(id, out var existing)) return existing;
+            var relativePath = Path.Combine("originals", id + ExtensionFromMime(mime));
+            var destination = Path.Combine(AssetsDirectory, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllBytes(destination, bytes);
+            record = new AssetRecord { Id = id, FileName = Path.GetFileName(fileName), Mime = mime, RelativePath = relativePath, Size = bytes.LongLength };
+            _assets[id] = record;
+        }
+        if (saveIndex) SaveAssets();
+        return record;
+    }
+
+    private async Task<object> ReadAssetAsync(JsonElement request)
+    {
+        var assetId = request.GetProperty("assetId").GetString() ?? "";
+        AssetRecord asset;
+        lock (_assetLock)
+        {
+            if (!_assets.TryGetValue(assetId, out asset!)) throw new FileNotFoundException("素材不存在，可能已被移动或删除");
+        }
+        var filePath = SafeAssetPath(asset.RelativePath);
+        var bytes = await File.ReadAllBytesAsync(filePath, _shutdown.Token);
+        return new { dataUrl = $"data:{asset.Mime};base64,{Convert.ToBase64String(bytes)}", asset.FileName, asset.Mime };
+    }
+
+    private string SafeAssetPath(string relativePath)
+    {
+        var root = Path.GetFullPath(AssetsDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(Path.Combine(AssetsDirectory, relativePath));
+        if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("素材索引包含无效路径");
+        return candidate;
+    }
+
+    private async Task PickImageFolderAsync()
     {
         try
         {
@@ -370,16 +477,37 @@ public partial class MainWindow : Window
                 Title = "选择图片文件夹",
                 Multiselect = false
             };
-            if (picker.ShowDialog(this) != true) return Task.CompletedTask;
+            if (picker.ShowDialog(this) != true) return;
             if (_webViewEnvironment is null) throw new InvalidOperationException("WebView2 环境尚未准备完成");
             var directoryHandle = _webViewEnvironment.CreateWebFileSystemDirectoryHandle(
                 picker.FolderName,
                 CoreWebView2FileSystemHandlePermission.ReadOnly);
             var folderName = Path.GetFileName(picker.FolderName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var folderSourceId = Guid.NewGuid().ToString("N");
-            _folderSources[folderSourceId] = Path.GetFullPath(picker.FolderName);
-            SaveFolderSources();
-            var payload = JsonSerializer.Serialize(new { type = "image-folder-selected", folderName, folderSourceId });
+            var selectedFolder = picker.FolderName;
+            var importedAssets = await Task.Run(() =>
+            {
+                var assets = new List<object>();
+                foreach (var sourcePath in Directory.EnumerateFiles(selectedFolder, "*", SearchOption.AllDirectories))
+                {
+                    _shutdown.Token.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var mime = MimeFromExtension(Path.GetExtension(sourcePath));
+                        var asset = StoreAssetFile(sourcePath, false);
+                        assets.Add(new
+                        {
+                            relativePath = Path.GetRelativePath(selectedFolder, sourcePath).Replace('\\', '/'),
+                            assetId = asset.Id,
+                            asset.FileName,
+                            mime
+                        });
+                    }
+                    catch (InvalidDataException) { }
+                }
+                SaveAssets();
+                return assets;
+            }, _shutdown.Token);
+            var payload = JsonSerializer.Serialize(new { type = "image-folder-selected", folderName, assets = importedAssets });
             CanvasView.CoreWebView2.PostWebMessageAsJson(payload, new List<object> { directoryHandle });
         }
         catch (Exception error)
@@ -388,52 +516,8 @@ public partial class MainWindow : Window
             var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "image-folder-error", error = error.Message });
             CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
         }
-        return Task.CompletedTask;
     }
 
-    private async Task ReadLocalImageAsync(System.Text.Json.JsonElement message)
-    {
-        var requestId = message.TryGetProperty("requestId", out var requestElement) ? requestElement.GetString() ?? "" : "";
-        try
-        {
-            var sourceId = message.GetProperty("sourceId").GetString() ?? "";
-            var relativePath = message.GetProperty("relativePath").GetString() ?? "";
-            if (!_folderSources.TryGetValue(sourceId, out var registeredFolder))
-                throw new UnauthorizedAccessException("图片来源没有经过CanvasFlow登记，请重新上传文件夹");
-            var folderRoot = Path.GetFullPath(registeredFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var filePath = Path.GetFullPath(Path.Combine(folderRoot, relativePath));
-            if (!filePath.StartsWith(folderRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("图片路径超出了已选择的文件夹");
-            var extension = Path.GetExtension(filePath).ToLowerInvariant();
-            var mime = extension switch
-            {
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".webp" => "image/webp",
-                ".gif" => "image/gif",
-                _ => throw new InvalidDataException("文件不是支持的图片格式")
-            };
-            var bytes = await File.ReadAllBytesAsync(filePath, _shutdown.Token);
-            var payload = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                type = "local-image-result",
-                requestId,
-                dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}"
-            });
-            CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
-        }
-        catch (Exception error)
-        {
-            Log($"[本地图片] 无法读取原图。可能原因：文件夹被移动、图片被删除或权限不足。建议办法：恢复原文件位置或重新上传文件夹。详细信息：{error.Message}", true);
-            var payload = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                type = "local-image-result",
-                requestId,
-                error = error.Message
-            });
-            CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
-        }
-    }
 
     private void NavigateCanvas()
     {
