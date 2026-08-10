@@ -46,6 +46,10 @@
 
 ## 架构决策
 
+- .NET迁移采用`.NET 8 WPF + WebView2`，保留现有HTML/CSS/JS画布；第一阶段由WPF隐藏启动现有Node服务，后续再将接口逐项迁移到C#。
+- .NET窗口不重复设置画布已有的顶部工具栏，也不常驻显示运行日志；启动状态使用临时覆盖层，详细日志写入`data/desktop.log`。
+- .NET桌面版继续使用项目根目录的`data/`、`download/`、`export/`，迁移阶段保留Electron作为回退，不得擅自改变已有数据格式。
+
 - EXE 由 `.gitignore` 排除，Windows 分发文件统一由 electron-builder 生成 `CanvasFlow-Setup.exe`。
 - GitHub Release 仅上传一个手工资产 `CanvasFlow-Setup.exe`；GitHub 自动生成的 Source code 条目无法关闭。
 - 更新只下载并校验安装程序；用户确认后保存项目、启动安装程序并退出，不静默复制或覆盖正在运行的 EXE。

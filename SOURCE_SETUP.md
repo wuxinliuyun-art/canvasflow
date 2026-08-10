@@ -20,6 +20,14 @@ npm start
 
 启动后会显示 CanvasFlow 控制中心。源码模式下，`data`、`download` 和 `export` 位于项目根目录，并已被 Git 忽略。
 
+## .NET 8 桌面面板（迁移版本）
+
+```powershell
+dotnet run --project .\desktop-dotnet\CanvasFlow.Desktop.csproj
+```
+
+.NET版本使用WPF和WebView2在单个窗口内承载现有画布，Node后台进程不会显示CMD窗口。第一阶段仍需要Node.js；运行日志写入`data/desktop.log`。关闭窗口时会同步清理由该窗口启动的后台进程。
+
 ## 浏览器兼容模式
 
 ```powershell

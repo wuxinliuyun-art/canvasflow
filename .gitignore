@@ -11,3 +11,5 @@ export/
 download/
 data/
 .opencode/
+desktop-dotnet/bin/
+desktop-dotnet/obj/

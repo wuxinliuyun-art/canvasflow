@@ -1,0 +1,175 @@
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Windows;
+using Microsoft.Web.WebView2.Core;
+
+namespace CanvasFlow.Desktop;
+
+public partial class MainWindow : Window
+{
+    private static readonly Regex ServerUrlPattern = new(@"\[Start\] CanvasFlow server: (?<url>http://127\.0\.0\.1:\d+/)", RegexOptions.Compiled);
+    private readonly CancellationTokenSource _shutdown = new();
+    private Process? _node;
+    private string? _serverUrl;
+    private string? _root;
+    private bool _closing;
+    private readonly object _logLock = new();
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        Loaded += MainWindow_Loaded;
+        Closing += MainWindow_Closing;
+        Closed += (_, _) => Application.Current.Shutdown();
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _root = FindProjectRoot();
+            foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
+            Log("[启动] 已找到项目目录。", false);
+            var nodeTask = StartNodeAsync(_root, _shutdown.Token);
+            var webViewTask = InitializeWebViewAsync(_shutdown.Token);
+            await Task.WhenAll(nodeTask, webViewTask);
+            NavigateCanvas();
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
+        catch (Exception ex) { ShowFailure(ex); }
+    }
+
+    private static string FindProjectRoot()
+    {
+        var candidates = new[]
+        {
+            AppContext.BaseDirectory,
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..")),
+            Environment.CurrentDirectory
+        };
+        foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+            if (File.Exists(Path.Combine(candidate, "server.js")) && File.Exists(Path.Combine(candidate, "index.html"))) return candidate;
+        throw new DirectoryNotFoundException("没有找到server.js和index.html。可能原因：程序被单独复制到项目之外。建议办法：从项目根目录构建或启动.NET桌面版。");
+    }
+
+    private async Task StartNodeAsync(string root, CancellationToken cancellationToken)
+    {
+        StatusText.Text = "正在启动后台服务…";
+        var info = new ProcessStartInfo
+        {
+            FileName = "node.exe", Arguments = "server.js", WorkingDirectory = root,
+            UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+            RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
+        };
+        _node = new Process { StartInfo = info, EnableRaisingEvents = true };
+        _node.OutputDataReceived += (_, e) => HandleLine(e.Data, false);
+        _node.ErrorDataReceived += (_, e) => HandleLine(e.Data, true);
+        _node.Exited += (_, _) => Dispatcher.Invoke(() =>
+        {
+            if (_closing) return;
+            StatusText.Text = "后台服务已停止";
+            Log("[错误] Node后台服务意外停止。可能原因：端口、文件或Node环境异常。建议办法：查看日志后重启程序。", true);
+        });
+        try
+        {
+            if (!_node.Start()) throw new InvalidOperationException("Node进程未能启动。");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"无法启动隐藏的Node后台服务。可能原因：Node.js未安装或未加入PATH。建议办法：确认node --version可以运行。详细信息：{ex.Message}", ex);
+        }
+        _node.BeginOutputReadLine();
+        _node.BeginErrorReadLine();
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        try
+        {
+            while (_serverUrl is null)
+            {
+                if (_node.HasExited) throw new InvalidOperationException("Node后台服务在返回地址前退出。可能原因：启动脚本异常。建议办法：查看运行日志。");
+                await Task.Delay(100, timeout.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("后台服务启动超过15秒。可能原因：端口或Node异常。建议办法：查看日志并检查5173附近端口。");
+        }
+    }
+
+    private void HandleLine(string? line, bool error)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        var match = ServerUrlPattern.Match(line);
+        if (match.Success) _serverUrl = match.Groups["url"].Value;
+        Dispatcher.Invoke(() => Log(line, error));
+    }
+
+    private async Task InitializeWebViewAsync(CancellationToken cancellationToken)
+    {
+        StatusText.Text = "正在加载画布…";
+        try
+        {
+            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
+            await CanvasView.EnsureCoreWebView2Async(environment);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"WebView2初始化失败。可能原因：WebView2 Runtime缺失或data目录无权限。建议办法：安装WebView2 Runtime并确认目录可写。详细信息：{ex.Message}", ex);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private void NavigateCanvas()
+    {
+        CanvasView.CoreWebView2.NavigationCompleted += (_, e) =>
+        {
+            if (e.IsSuccess)
+            {
+                StartupOverlay.Visibility = Visibility.Collapsed;
+                Log($"[画布] 加载完成：{_serverUrl}", false);
+            }
+            else
+            {
+                StatusText.Text = "画布加载失败";
+                Log($"[错误] 画布加载失败：{e.WebErrorStatus}", true);
+            }
+        };
+        CanvasView.Source = new Uri(_serverUrl!);
+    }
+
+    private void ShowFailure(Exception ex)
+    {
+        StatusText.Text = "启动失败";
+        Log($"[错误] {ex.Message}", true);
+        MessageBox.Show(ex.Message, "CanvasFlow 启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+
+    private void Log(string message, bool error)
+    {
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {(error ? "[错误] " : "")}{message}";
+        Debug.WriteLine(line);
+        if (_root is null) return;
+        lock (_logLock)
+        {
+            File.AppendAllText(Path.Combine(_root, "data", "desktop.log"), line + Environment.NewLine, Encoding.UTF8);
+        }
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        _closing = true;
+        _shutdown.Cancel();
+        CanvasView.Dispose();
+        if (_node is null) return;
+        try
+        {
+            if (!_node.HasExited) { _node.Kill(true); _node.WaitForExit(3000); }
+        }
+        catch (Exception ex) { Debug.WriteLine($"[关闭] 停止Node服务失败：{ex.Message}"); }
+        finally { _node.Dispose(); _node = null; }
+    }
+}
