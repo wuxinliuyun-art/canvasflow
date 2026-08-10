@@ -79,7 +79,7 @@ function exportBrowseTarget(token, relativePath = "") {
 
 var staticCache = {};
 (function() {
-  var files = ["index.html", "app.js", "styles.css"];
+  var files = ["index.html", "canvas-runtime.js", "app.js", "styles.css"];
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     try {

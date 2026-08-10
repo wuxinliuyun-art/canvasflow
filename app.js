@@ -9,28 +9,7 @@ const ANGLE_NODE_HEIGHT = 430;
 const GROUP_NODE_HEIGHT = 244;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
-const desktop = window.canvasflowDesktop || null;
-const DESKTOP_LOCAL_API_PATHS = new Set([
-  "/api/runtime-paths", "/api/app-state", "/api/custom-library", "/api/auto-backup",
-  "/api/save-json", "/api/save-images", "/api/custom-material", "/api/save-export-files",
-  "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
-]);
-
-async function apiFetch(input, options = {}) {
-  const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
-  const url = new URL(rawUrl, location.href);
-  if (desktop?.apiRequest && (DESKTOP_LOCAL_API_PATHS.has(url.pathname) || url.pathname.startsWith("/api/task/"))) {
-    const result = await desktop.apiRequest(url.pathname + url.search, {
-      method: options.method || "GET",
-      body: typeof options.body === "string" ? options.body : "",
-    });
-    return new Response(result.body || "", {
-      status: Number(result.status) || 500,
-      headers: { "Content-Type": result.contentType || "application/json;charset=utf-8" },
-    });
-  }
-  return fetch(input, options);
-}
+const { desktop, apiFetch } = window.CanvasFlowRuntime;
 
 let runtimeExportFolder = "export";
 let autoBackupReady = false;
@@ -2171,6 +2150,44 @@ function render() {
   renderMinimap();
 }
 
+let interactiveRenderFrame = 0;
+const interactiveRenderFlags = { view: false, nodes: false, edges: false, minimap: false, selection: false };
+function scheduleInteractiveRender(flags = {}) {
+  for (const key of Object.keys(interactiveRenderFlags)) interactiveRenderFlags[key] ||= !!flags[key];
+  if (interactiveRenderFrame) return;
+  interactiveRenderFrame = window.requestAnimationFrame(() => {
+    interactiveRenderFrame = 0;
+    const pending = { ...interactiveRenderFlags };
+    for (const key of Object.keys(interactiveRenderFlags)) interactiveRenderFlags[key] = false;
+    if (pending.view) applyView();
+    if (pending.nodes) syncNodeGeometry();
+    if (pending.selection) syncSelectedNodeClasses();
+    if (pending.edges) renderEdges();
+    if (pending.minimap) renderMinimap();
+  });
+}
+
+function syncNodeGeometry() {
+  for (const node of state.nodes) {
+    const element = els.nodes.querySelector(`.node[data-id="${CSS.escape(node.id)}"]`);
+    if (!element) continue;
+    element.style.left = `${node.x}px`;
+    element.style.top = `${node.y}px`;
+    element.style.width = `${node.w}px`;
+    element.style.height = `${node.h}px`;
+  }
+}
+
+let viewPersistTimer = 0;
+function scheduleViewPersistence() {
+  saveCurrentPage();
+  window.clearTimeout(viewPersistTimer);
+  viewPersistTimer = window.setTimeout(() => {
+    viewPersistTimer = 0;
+    persistPages();
+  }, 220);
+}
+
 function applyView() {
   els.world.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.scale})`;
 }
@@ -2556,9 +2573,8 @@ els.viewport.addEventListener("wheel", ev => {
   const r = els.viewport.getBoundingClientRect();
   state.view.x = ev.clientX - r.left - before.x * state.view.scale;
   state.view.y = ev.clientY - r.top - before.y * state.view.scale;
-  saveCurrentPage();
-  persistPages();
-  render();
+  scheduleViewPersistence();
+  scheduleInteractiveRender({ view: true, minimap: true });
 }, { passive: false });
 
 els.viewport.addEventListener("mousedown", ev => {
@@ -2582,7 +2598,7 @@ els.viewport.addEventListener("mousedown", ev => {
     if (!node) return;
     if (!state.selected.has(id)) state.selected = new Set([id]);
     drag = { type: "resize", nodeId: id, sx: ev.clientX, sy: ev.clientY, sw: node.w, sh: node.h };
-    renderNodes();
+    syncSelectedNodeClasses();
     return;
   }
   if (nodeEl && interactive) {
@@ -2611,7 +2627,7 @@ els.viewport.addEventListener("mousedown", ev => {
     state.selected.clear();
     selectionDraft = { start: p, end: p };
     updateSelectionBox();
-    renderNodes();
+    syncSelectedNodeClasses();
   }
 });
 
@@ -2619,7 +2635,7 @@ window.addEventListener("mousemove", ev => {
   if (ev.target.closest?.("#viewport")) lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
   if (connectDraft) {
     connectDraft.end = screenToWorld(ev.clientX, ev.clientY);
-    renderEdges();
+    scheduleInteractiveRender({ edges: true });
   }
   if (drag?.type === "resize") {
     const node = findNode(drag.nodeId);
@@ -2633,6 +2649,7 @@ window.addEventListener("mousemove", ev => {
         el.style.width = `${node.w}px`;
         el.style.height = `${node.h}px`;
       }
+      scheduleInteractiveRender({ edges: true, minimap: true });
     }
   } else if (drag?.type === "nodes") {
     const p = screenToWorld(ev.clientX, ev.clientY);
@@ -2644,18 +2661,18 @@ window.addEventListener("mousemove", ev => {
       n.x = snap(item.x + dx);
       n.y = snap(item.y + dy);
     }
-    render();
+    scheduleInteractiveRender({ nodes: true, edges: true, minimap: true });
   } else if (drag?.type === "pan") {
     state.view.x = drag.vx + ev.clientX - drag.sx;
     state.view.y = drag.vy + ev.clientY - drag.sy;
-    render();
+    scheduleInteractiveRender({ view: true, minimap: true });
   }
   if (selectionDraft) {
     selectionDraft.end = screenToWorld(ev.clientX, ev.clientY);
     updateSelectionBox();
     const r = normalizedRect(selectionDraft.start, selectionDraft.end);
     state.selected = new Set(state.nodes.filter(n => intersects(r, { x: n.x, y: n.y, w: n.w, h: n.h })).map(n => n.id));
-    renderNodes();
+    scheduleInteractiveRender({ selection: true });
   }
 });
 

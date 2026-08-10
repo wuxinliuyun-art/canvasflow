@@ -17,10 +17,11 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3537.50" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\index.html" Link="index.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\app.js" Link="app.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\styles.css" Link="styles.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\package.json" Link="package.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\index.html" Link="index.html" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\app.js" Link="app.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\canvas-runtime.js" Link="canvas-runtime.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\styles.css" Link="styles.css" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
