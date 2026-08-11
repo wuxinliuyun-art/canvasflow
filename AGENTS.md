@@ -46,7 +46,7 @@
 
 ## 架构决策
 
-- 桌面架构采用`.NET 8 WPF + WebView2`，保留现有HTML/CSS/JS画布；WPF通过`https://canvasflow.local/`虚拟主机加载本地界面，文件与联网接口由白名单桌面桥接处理，不启动Node、不监听本地端口。
+- 桌面架构采用`.NET 10 WPF + WebView2`，保留现有HTML/CSS/JS画布；WPF通过`https://canvasflow.local/`虚拟主机加载本地界面，文件与联网接口由白名单桌面桥接处理，不启动Node、不监听本地端口。
 - .NET窗口不重复设置画布已有的顶部工具栏，也不常驻显示运行日志；启动状态使用临时覆盖层，详细日志写入`data/desktop.log`。
 - .NET页面必须在`app.js`执行前注入`window.canvasflowDesktop`桥接对象；不得依赖Electron preload判断WPF桌面模式。桌面项目状态写入`data/app-state.json`并带`updatedAt`，缺少时间戳的旧状态首次启动时由WebView2本地状态重建。
 - .NET桌面版API Key使用Windows DPAPI按当前用户加密到`data/secrets.json`；项目、历史记录、localStorage、自动备份和URL均不得保存API Key。
@@ -61,7 +61,7 @@
 - .NET窗口关闭时先等待页面状态和自动备份确认成功，再隐藏窗口并结束当前宿主；桌面版不创建Node子进程，也不得恢复端口扫描、结束其他进程或Shell脚本启动逻辑。
 - .NET桌面版正式发布时使用EXE所在目录的`data/`、`download/`、`export/`；源码运行时使用项目根目录。Electron仅在`legacy/`保留为回退，不得擅自改变已有数据格式。
 
-- EXE由`.gitignore`排除；Windows分发文件由自包含.NET publish目录和`installer/CanvasFlow.iss`生成`CanvasFlow-Setup.exe`。
+- EXE由`.gitignore`排除；Windows分发文件使用.NET 10自包含publish目录，并由`installer/CanvasFlow.iss`生成`CanvasFlow-Setup.exe`。正式安装包包含.NET运行库，用户无需另行安装.NET。
 - GitHub Release 仅上传一个手工资产 `CanvasFlow-Setup.exe`；GitHub 自动生成的 Source code 条目无法关闭。
 - 更新只下载并校验安装程序；用户确认后保存项目、启动安装程序并退出，不静默复制或覆盖正在运行的 EXE。
 - 端口冲突时自动尝试后续端口，不得结束占用端口的其他进程。

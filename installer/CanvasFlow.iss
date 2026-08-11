@@ -1,6 +1,6 @@
 #define AppName "CanvasFlow"
 #define AppVersion "2.5.0"
-#define PublishDir "..\desktop-dotnet\bin\Release\net8.0-windows\win-x64\publish"
+#define PublishDir "..\desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish"
 
 [Setup]
 AppId={{B42B4F53-A7D4-4F37-8FB4-25EF8AF0CF31}
@@ -40,4 +40,3 @@ Filename: "{app}\CanvasFlow.exe"; Description: "启动 CanvasFlow"; Flags: nowai
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data\webview2"
-
