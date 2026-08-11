@@ -48,10 +48,6 @@
         <input id="composerFolderInput" type="file" webkitdirectory directory hidden>
         <div id="composerImageName" class="composer-image-name"></div>
       </section>
-      <div class="workflow-action-group" aria-label="工作流操作">
-        <button id="autoOutputBtn" class="workflow-action-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
-        <button id="aiGenerateBtn" class="workflow-action-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
-      </div>
     </div>
 
     <aside id="settingsPanel" class="settings hidden">
@@ -156,6 +152,9 @@
       </button>
       <button id="themeBtn" class="canvas-utility-btn" title="皮肤切换" aria-label="皮肤切换">☾</button>
       <button id="shortcutHelpBtn" class="canvas-utility-btn shortcut-help-btn" title="快捷键说明" aria-label="快捷键说明"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h.01M11 9h.01M15 9h.01M18 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg></button>
+      <span class="canvas-utility-divider" aria-hidden="true"></span>
+      <button id="autoOutputBtn" class="canvas-utility-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
+      <button id="aiGenerateBtn" class="canvas-utility-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
       <button id="runBtn" class="canvas-utility-btn hidden" title="导出" aria-label="导出">导出</button>
     </div>
     <div id="shortcutPopover" class="shortcut-popover hidden">
