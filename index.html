@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260810-solid-dark-surfaces">
+  <link rel="stylesheet" href="styles.css?v=20260812-onboarding-v3">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -14,7 +14,25 @@
         <div id="projectMenu" class="project-menu hidden"></div>
         <button id="newCanvasBtn" class="icon-btn subtle" title="新建项目" aria-label="新建项目"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
+      <div class="utility-track top-utility-track" aria-label="项目工具">
+        <button id="saveJsonBtn" class="track-icon-btn" title="保存项目" aria-label="保存项目">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button id="loadJsonBtn" class="track-icon-btn" title="打开项目" aria-label="打开项目">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5V6A2.5 2.5 0 0 1 6 3.5h4l2 2h6A2.5 2.5 0 0 1 20.5 8v1"/><path d="M4 9.5h16.5l-2.2 8.2a2.5 2.5 0 0 1-2.4 1.8H6.1a2.5 2.5 0 0 1-2.4-3.1L4 9.5Z"/></svg>
+        </button>
+        <button id="themeBtn" class="track-icon-btn" title="皮肤切换" aria-label="皮肤切换">☾</button>
+        <button id="shortcutHelpBtn" class="track-icon-btn shortcut-help-btn" title="快捷键说明" aria-label="快捷键说明"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h.01M11 9h.01M15 9h.01M18 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg></button>
+        <button id="settingsBtn" class="track-icon-btn" title="设置" aria-label="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6a1.7 1.7 0 0 0 1.03-1.52V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15z"/></svg>
+        </button>
+      </div>
     </header>
+
+    <div id="mindmapBreadcrumb" class="mindmap-breadcrumb hidden" aria-label="编组导航">
+      <button id="mindmapBackBtn" type="button" title="返回上一级">←</button>
+      <span id="mindmapBreadcrumbText">编组</span>
+    </div>
 
     <div id="progressPanel" class="progress-panel hidden">
       <div class="progress-row">
@@ -48,7 +66,28 @@
         <input id="composerFolderInput" type="file" webkitdirectory directory hidden>
         <div id="composerImageName" class="composer-image-name"></div>
       </section>
+      <div class="utility-track bottom-utility-track" aria-label="工作流工具">
+        <button id="autoOutputBtn" class="track-icon-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
+        <button id="aiGenerateBtn" class="track-icon-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
+        <button id="taskQueueBtn" class="track-icon-btn task-queue-btn" type="button" title="任务队列" aria-label="任务队列">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11M7 12h11M7 17h11"/><circle cx="4" cy="7" r=".8"/><circle cx="4" cy="12" r=".8"/><circle cx="4" cy="17" r=".8"/></svg>
+          <span id="taskQueueBadge" class="task-queue-badge hidden">0</span>
+        </button>
+      </div>
+      <button id="runBtn" class="hidden" title="导出" aria-label="导出">导出</button>
     </div>
+
+    <aside id="taskQueuePanel" class="task-queue-panel hidden" aria-label="AI 任务队列">
+      <div class="task-queue-head">
+        <div><strong>任务队列</strong><span id="taskQueueSummary">暂无任务</span></div>
+        <button id="taskQueueCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+      <div class="task-queue-toolbar">
+        <span>最多同时处理 5 个任务</span>
+        <button id="taskQueueClearBtn" type="button">清除已完成</button>
+      </div>
+      <div id="taskQueueList" class="task-queue-list"><div class="task-queue-empty">还没有 AI 绘图任务</div></div>
+    </aside>
 
     <aside id="settingsPanel" class="settings hidden">
       <div class="panel-head">
@@ -78,6 +117,9 @@
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
           <label class="check-row"><input id="autoFitImageNodesToggle" type="checkbox" checked><span>图片节点按上传图片比例自动调整</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
+        </section>
+        <section class="settings-card onboarding-settings-card">
+          <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
         </section>
         <section class="settings-card update-settings-card">
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。</p></div><button id="checkUpdateBtn">检查更新</button></div>
@@ -110,7 +152,7 @@
 
       <div class="tab-page hidden" data-tab="ai">
         <div class="settings-page-head"><h2>AI 绘图</h2><p>配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。</p></div>
-        <section class="settings-card">
+        <section id="apiSettingsCard" class="settings-card api-settings-card">
         <div class="ai-section-head">API</div>
 
         <label>API Key
@@ -140,26 +182,9 @@
       </div>
     </aside>
 
-    <div class="canvas-utility-rail" aria-label="画布工具">
-      <button id="settingsBtn" class="canvas-utility-btn" title="设置" aria-label="设置">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6a1.7 1.7 0 0 0 1.03-1.52V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15z"/></svg>
-      </button>
-      <button id="saveJsonBtn" class="canvas-utility-btn" title="保存JSON" aria-label="保存JSON">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      </button>
-      <button id="loadJsonBtn" class="canvas-utility-btn" title="加载JSON" aria-label="加载JSON">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      </button>
-      <button id="themeBtn" class="canvas-utility-btn" title="皮肤切换" aria-label="皮肤切换">☾</button>
-      <button id="shortcutHelpBtn" class="canvas-utility-btn shortcut-help-btn" title="快捷键说明" aria-label="快捷键说明"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h.01M11 9h.01M15 9h.01M18 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg></button>
-      <span class="canvas-utility-divider" aria-hidden="true"></span>
-      <button id="autoOutputBtn" class="canvas-utility-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
-      <button id="aiGenerateBtn" class="canvas-utility-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
-      <button id="runBtn" class="canvas-utility-btn hidden" title="导出" aria-label="导出">导出</button>
-    </div>
     <div id="shortcutPopover" class="shortcut-popover hidden">
       <div class="shortcut-popover-head"><div><span>Keyboard</span><strong>快捷键说明</strong></div><button id="shortcutPopoverClose" title="关闭">×</button></div>
-      <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C</b><span>复制选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点设为多任务</span></div><div class="shortcut-row"><b>右键多任务节点</b><span>取消多任务，还原内部节点和连线</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
+      <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + S</b><span>保存项目 JSON</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C / X</b><span>复制或剪切选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点创建为编组或多任务</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
     </div>
 
     <div id="contextMenu" class="context-menu hidden"></div>
@@ -189,6 +214,44 @@
         </div>
       </div>
     </div>
+    <div id="projectModeDialog" class="project-mode-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="projectModeTitle">
+      <div class="project-mode-panel">
+        <div class="project-mode-head">
+          <div><span>新建项目</span><strong id="projectModeTitle">选择项目模式</strong></div>
+          <button id="projectModeCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p>项目创建后将固定使用所选模式，避免 AI 工作流和关系图数据混在一起。</p>
+        <div class="project-mode-options">
+          <button type="button" data-project-mode="ai"><strong>AI 绘图画板</strong><span>组合文字、参考图和 AI 绘图节点</span></button>
+          <button type="button" data-project-mode="mindmap"><strong>思维导图 / 关系图</strong><span>整理文字、图片、文件夹和编组关系</span></button>
+        </div>
+        <div class="project-mode-actions"><button id="projectModeCancelBtn" type="button">取消</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboardingTour" class="onboarding-tour hidden" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div class="onboarding-mask onboarding-mask-top" aria-hidden="true"></div>
+    <div class="onboarding-mask onboarding-mask-right" aria-hidden="true"></div>
+    <div class="onboarding-mask onboarding-mask-bottom" aria-hidden="true"></div>
+    <div class="onboarding-mask onboarding-mask-left" aria-hidden="true"></div>
+    <div id="onboardingTargetBlocker" class="onboarding-target-blocker" aria-hidden="true"></div>
+    <div id="onboardingSpotlight" class="onboarding-spotlight" aria-hidden="true"></div>
+    <section id="onboardingCard" class="onboarding-card" tabindex="-1">
+      <div class="onboarding-card-head">
+        <span id="onboardingProgress" class="onboarding-progress">1 / 4</span>
+        <button id="onboardingSkipBtn" type="button" class="onboarding-skip">跳过</button>
+      </div>
+      <h2 id="onboardingTitle">项目入口</h2>
+      <p id="onboardingDescription" class="onboarding-description"></p>
+      <div id="onboardingApiStatus" class="onboarding-api-status hidden"></div>
+      <p id="onboardingApiRequirement" class="onboarding-api-requirement hidden">需要设置 API Key 后才能正常使用 AI 绘图功能。</p>
+      <div id="onboardingItems" class="onboarding-items"></div>
+      <div class="onboarding-actions">
+        <button id="onboardingBackBtn" type="button">上一步</button>
+        <button id="onboardingNextBtn" type="button" class="primary">下一步</button>
+      </div>
+    </section>
   </div>
 
   <div id="lightbox" class="lightbox hidden">
@@ -225,6 +288,7 @@
   </div>
 
   <script src="canvas-runtime.js?v=20260811-dotnet-runtime"></script>
-  <script src="app.js?v=20260811-dotnet-runtime"></script>
+  <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
+  <script src="app.js?v=20260812-onboarding-v3"></script>
 </body>
 </html>

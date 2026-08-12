@@ -75,8 +75,9 @@ public partial class MainWindow : Window
           isDesktop: true,
           getApiKey: () => invoke("desktop:get-api-key"),
           saveApiKey: apiKey => invoke("desktop:save-api-key", { apiKey: String(apiKey || "") }),
-          storeImage: (dataUrl, fileName, mime) => invoke("desktop:store-image", { dataUrl, fileName, mime }, 60000),
+          storeImage: (dataUrl, fileName, mime, category = "originals") => invoke("desktop:store-image", { dataUrl, fileName, mime, category }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
+          openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
           apiRequest: (path, options = {}) => invoke("desktop:api", {
             path: String(path || ""),
             method: String(options.method || "GET"),
@@ -195,6 +196,11 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, await ReadAssetAsync(root)); }
                         catch (Exception readError) { PostRpcResult(root, error: readError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:open-file-location")
+                    {
+                        try { PostRpcResult(root, OpenFileLocation(root)); }
+                        catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
                     }
                     else if (type.GetString() == "desktop:api")
                     {
@@ -372,17 +378,18 @@ public partial class MainWindow : Window
     {
         var dataUrl = request.GetProperty("dataUrl").GetString() ?? "";
         var fileName = request.TryGetProperty("fileName", out var nameElement) ? Path.GetFileName(nameElement.GetString() ?? "image") : "image";
-        return Task.Run(() => StoreImageData(dataUrl, fileName), _shutdown.Token);
+        var category = request.TryGetProperty("category", out var categoryElement) && categoryElement.GetString() == "generated" ? "generated" : "originals";
+        return Task.Run(() => StoreImageData(dataUrl, fileName, category), _shutdown.Token);
     }
 
-    private AssetRecord StoreImageData(string dataUrl, string fileName)
+    private AssetRecord StoreImageData(string dataUrl, string fileName, string category)
     {
         var match = Regex.Match(dataUrl, "^data:(image/(?:jpeg|png|webp|gif));base64,(.+)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         if (!match.Success) throw new InvalidDataException("图片数据格式无效");
         var mime = match.Groups[1].Value.ToLowerInvariant();
         var bytes = Convert.FromBase64String(match.Groups[2].Value);
         if (bytes.Length > 64 * 1024 * 1024) throw new InvalidDataException("单张图片超过64MB限制");
-        return StoreAssetBytes(bytes, fileName, mime, true);
+        return StoreAssetBytes(bytes, fileName, mime, true, category);
     }
 
     private AssetRecord StoreAssetFile(string sourcePath, bool saveIndex)
@@ -392,14 +399,14 @@ public partial class MainWindow : Window
         return StoreAssetBytes(bytes, Path.GetFileName(sourcePath), MimeFromExtension(Path.GetExtension(sourcePath)), saveIndex);
     }
 
-    private AssetRecord StoreAssetBytes(byte[] bytes, string fileName, string mime, bool saveIndex)
+    private AssetRecord StoreAssetBytes(byte[] bytes, string fileName, string mime, bool saveIndex, string category = "originals")
     {
         var id = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         AssetRecord record;
         lock (_assetLock)
         {
             if (_assets.TryGetValue(id, out var existing)) return existing;
-            var relativePath = Path.Combine("originals", id + ExtensionFromMime(mime));
+            var relativePath = Path.Combine(category == "generated" ? "generated" : "originals", id + ExtensionFromMime(mime));
             var destination = Path.Combine(AssetsDirectory, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllBytes(destination, bytes);
@@ -421,6 +428,19 @@ public partial class MainWindow : Window
         var filePath = SafeAssetPath(asset.RelativePath);
         var bytes = await File.ReadAllBytesAsync(filePath, _shutdown.Token);
         return new { dataUrl = $"data:{asset.Mime};base64,{Convert.ToBase64String(bytes)}", asset.FileName, asset.Mime };
+    }
+
+    private object OpenFileLocation(JsonElement request)
+    {
+        var requestedPath = request.TryGetProperty("filePath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("图片没有可用的本地文件路径");
+        var fullPath = Path.GetFullPath(requestedPath);
+        if (!File.Exists(fullPath)) throw new FileNotFoundException("生成图片文件不存在，可能已被移动或删除", fullPath);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) throw new DirectoryNotFoundException("生成图片所在文件夹不存在");
+        Process.Start(new ProcessStartInfo { FileName = directory, UseShellExecute = true });
+        Log($"[生成结果] 已请求打开所在文件夹：{directory}", false);
+        return new { opened = true, path = fullPath, directory };
     }
 
     private string SafeAssetPath(string relativePath)

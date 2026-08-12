@@ -371,14 +371,16 @@ internal sealed class DesktopApi
         var exportDirectory = Path.Combine(configuredRoot, folderName);
         Directory.CreateDirectory(exportDirectory);
         var exportPrefix = Path.GetFullPath(exportDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var savedFiles = new List<string>();
         foreach (var file in request.GetProperty("files").EnumerateArray())
         {
             var relative = SafeRelativePath(file.GetProperty("name").GetString());
             var target = Path.GetFullPath(Path.Combine(exportDirectory, relative));
             if (!target.StartsWith(exportPrefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("导出文件超出目标目录");
             WriteBase64File(target, file.GetProperty("data").GetString() ?? "");
+            savedFiles.Add(target);
         }
-        return Json(200, new { success = true, path = exportDirectory });
+        return Json(200, new { success = true, path = exportDirectory, files = savedFiles });
     }
 
     private static void WriteBase64File(string filePath, string value)

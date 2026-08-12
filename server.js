@@ -498,6 +498,7 @@ async function requestHandler(req, res) {
       const configuredRoot = baseFolder && baseFolder !== "export" ? (path.isAbsolute(baseFolder) ? path.normalize(baseFolder) : path.resolve(dataRoot, baseFolder)) : path.join(dataRoot, "export");
       const exportDir = path.join(configuredRoot, path.basename(folderName));
       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+      const savedFiles = [];
       for (const file of files) {
         const parts = String(file.name || "").replace(/\\/g, "/").split("/").filter(part => part && part !== ".");
         if (!parts.length || parts.includes("..")) throw new Error("导出文件路径不安全");
@@ -508,9 +509,10 @@ async function requestHandler(req, res) {
         if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
         const buf = Buffer.from(file.data.split(",")[1] || file.data, "base64");
         fs.writeFileSync(filePath, buf);
+        savedFiles.push(filePath);
       }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, path: exportDir }));
+      res.end(JSON.stringify({ success: true, path: exportDir, files: savedFiles }));
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
