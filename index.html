@@ -102,6 +102,8 @@
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
+          <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
+          <button class="settings-tab-btn" data-tab="plugins"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v4M16 3v4M5 7h14v4a7 7 0 0 1-7 7 7 7 0 0 1-7-7V7zM12 18v3"/></svg></span><span>插件</span></button>
           <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h16v10.5H4zM4 8.5 7 5h5l2 3.5M12 12v5M9.5 14.5 12 17l2.5-2.5"/></svg></span><span>导出</span></button>
         </nav>
         <div class="settings-content">
@@ -173,9 +175,38 @@
         </section>
       </div>
 
+      <div class="tab-page hidden" data-tab="screenshot">
+        <div class="settings-page-head"><h2>截图工具</h2><p>截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。</p></div>
+        <section class="settings-card">
+          <h3>原生截图窗口</h3>
+          <p class="setting-desc">窗口可置顶、折叠和收起预览。关闭窗口只会隐藏，不会退出 CanvasFlow。</p>
+          <button id="openScreenshotToolBtn" class="primary" type="button">打开截图窗口</button>
+          <p class="setting-desc">截图任务会进入现有任务队列，结果保存到 export/ai_generated，不会自动添加到画布。</p>
+        </section>
+      </div>
+
+      <div class="tab-page hidden" data-tab="plugins">
+        <div class="settings-page-head"><h2>插件</h2><p>按需安装拓展功能；未安装的插件不会下载模型或占用运行内存。</p></div>
+        <section class="settings-card plugin-card" data-plugin-id="background-removal">
+          <div class="plugin-card-main">
+            <div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 15l3-3 2 2 2-2 3 3M9 9h.01"/></svg></div>
+            <div><div class="plugin-title-row"><h3>智能抠图</h3><span id="backgroundRemovalPluginStatus" class="plugin-status">未安装</span><button id="installBackgroundRemovalPluginBtn" class="primary plugin-inline-action">安装插件</button><button id="removeBackgroundRemovalPluginBtn" class="plugin-inline-action hidden">卸载</button></div><p class="setting-desc">使用 BiRefNet General Lite 在本机生成透明背景 PNG。模型约 213.6 MB，默认使用 CPU。</p></div>
+          </div>
+          <p id="backgroundRemovalPluginHint" class="setting-desc">模型源自 BiRefNet；本插件使用 rembg Release 提供的第三方 ONNX 转换文件，并非 BiRefNet 官方下载。安装后可从“拓展功能”使用。</p>
+          <div id="backgroundRemovalInstallProgress" class="plugin-install-progress hidden"><div class="plugin-progress-track"><span id="backgroundRemovalProgressBar"></span></div><span id="backgroundRemovalProgressText">准备下载</span></div>
+        </section>
+        <section class="settings-card plugin-card" data-plugin-id="image-upscale">
+          <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4M8 16 16 8"/></svg></div><div><div class="plugin-title-row"><h3>图片放大</h3><span id="imageUpscalePluginStatus" class="plugin-status">检测中</span><button id="installImageUpscalePluginBtn" class="primary plugin-inline-action hidden">安装插件</button><button id="removeImageUpscalePluginBtn" class="plugin-inline-action hidden">卸载</button></div><p class="setting-desc">使用 Real-ESRGAN 在本机放大图片。插件约 63 MB，需要支持 Vulkan 的显卡。</p></div></div>
+          <p id="imageUpscalePluginHint" class="setting-desc">当前默认使用照片模型进行 4× 放大。</p>
+        </section>
+        <section class="settings-card plugin-card is-built-in">
+          <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18 19 6M9 6h10v10"/></svg></div><div><div class="plugin-title-row"><h3>角度变化</h3><span class="plugin-status installed">已启用</span></div><p class="setting-desc">根据图片创建角度变化节点。此功能随 CanvasFlow 提供，无需额外安装。</p></div></div>
+        </section>
+      </div>
+
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>导出</h2><p>管理导出方式和本地文件夹。</p></div>
-        <section class="settings-card"><h3>文件导出</h3><label class="check-row"><input id="zipExportToggle" type="checkbox" checked><span>ZIP 压缩包导出（兼容性最好，推荐）</span></label><label class="check-row"><input id="exportInputsToggle" type="checkbox"><span>同时导出输入素材（关键词和参考图）</span></label><p class="setting-desc">默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。</p><label>导出文件夹<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="copyExportPathBtn">复制路径</button></div><p class="setting-desc">默认显示程序所在目录的完整路径；如需更改，请直接粘贴新的完整路径。</p></section>
+        <section class="settings-card"><h3>生成文件夹</h3><p class="setting-desc">AI 绘图、角度变化和插件生成的文件会保存到这里，并按功能建立子文件夹。修改后只影响新生成的文件。</p><label>保存位置<textarea id="exportFolderInput" rows="2" spellcheck="false" wrap="soft" readonly placeholder="export（项目文件夹）">export（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="chooseExportFolderBtn" class="primary">修改位置</button><button id="openExportFolderBtn">打开文件夹</button><button id="copyExportPathBtn">复制路径</button></div></section>
       </div>
 
         </div>

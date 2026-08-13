@@ -17,7 +17,7 @@ CanvasFlow lets you connect text, reference images, and AI Image nodes to genera
 1. Open [GitHub Releases](https://github.com/wuxinliuyun-art/canvasflow/releases/latest).
 2. Download and run `CanvasFlow-Setup.exe`.
 3. Complete the per-user installation, then launch CanvasFlow from the desktop or Start menu.
-4. Click **Open Main Canvas** in the Control Center.
+4. Launch CanvasFlow to enter the main canvas directly.
 
 > The installer is not commercially code-signed yet. Windows or antivirus software may request confirmation on first launch. Confirm that the file came from this project's official Release before allowing it.
 
@@ -35,7 +35,7 @@ The desktop app encrypts the API Key through Windows secure storage. If secure s
 
 ### 3. Create Nodes
 
-Right-click an empty area of the canvas to create Text, Image, AI Image, Angle Change, Group, and Output nodes, or insert saved custom text and images.
+Right-click an empty area of the canvas to create Text, Image, AI Image, Angle Change, Group, and Screenshot Input nodes, or insert saved custom text and images.
 
 You can also drag images from your computer onto the canvas or paste copied images.
 
@@ -72,6 +72,20 @@ Connect only text for text-to-image generation. Add an Image node when you want 
 - Independent model, resolution, quality, and aspect-ratio settings per AI Image node
 - Multiple tasks can run separately with progress shown on each node
 - Results become regular Image nodes that can be connected and processed further
+- Network failures and HTTP `500 / 502 / 503 / 504` responses automatically try the next backup API endpoint; `401 / 403` stops immediately and asks you to check the API Key
+
+### Task Queue
+
+- AI generation jobs appear in the right-side task queue, with up to five jobs processed at once
+- Each task shows a thumbnail, prompt summary, and status; queued jobs that have not been sent can be paused, resumed, or removed
+- Running jobs continue to completion to avoid duplicate charges or lost results
+
+### Screenshot Tool
+
+- The Windows desktop app provides an independent always-on-top window for capturing a fixed screen region and sending it to AI generation
+- Reuse custom text or take text and reference images from a Screenshot Input node on the canvas
+- The screenshot is always the first reference image, and results are saved to `export\ai_generated\`
+- Collapse the tool, preview results, double-click to enlarge, or right-click a generated result to copy the image
 
 ### Batch Generation
 
@@ -102,6 +116,7 @@ On a fresh installation with an empty library, CanvasFlow provides two sample te
 
 - Upload, drag, paste, replace, and clear images
 - Double-click to preview and save images as custom assets
+- Right-click an AI-generated Image node to copy the image itself and paste it into another application
 - Simplified Chinese and English interfaces with remembered language choice
 - Automatic project backup and GitHub Release update checks
 
@@ -119,7 +134,7 @@ CanvasFlow folder\export\ai_generated\
 
 For example, if the program is at `D:\CanvasFlow\CanvasFlow.exe`, generated images are saved in `D:\CanvasFlow\export\ai_generated\`.
 
-To organize selected results, connect them to an Output node and use the **Export** button in the top toolbar.
+Use the canvas **Export** action when you want to collect and organize generated results.
 
 ### Where are projects saved?
 
@@ -144,11 +159,11 @@ Custom text and images are stored in CanvasFlow's local data folder. They remain
 
 ### Why is CanvasFlow still running after I close a window?
 
-Closing the main canvas returns to the Control Center, and closing the Control Center minimizes it to the taskbar. Use **Exit Application** in the Control Center to wait for project saving and then close CanvasFlow completely.
+Before the main window closes, CanvasFlow saves the current state and automatic project backup. If saving fails, the app blocks exit and shows an error.
 
 ### AI image generation failed
 
-Check the API Key, network connection, account balance, and whether the selected model supports the chosen resolution and aspect ratio.
+Check the API Key, network connection, account balance, and whether the selected model supports the chosen resolution and aspect ratio. CanvasFlow automatically tries backup endpoints after network failures or HTTP `500 / 502 / 503 / 504`; `401 / 403` means the API Key is invalid or lacks permission and must be verified again.
 
 ### Why can't CanvasFlow open the image folder directly?
 
@@ -156,7 +171,7 @@ Some antivirus tools block applications from launching Windows File Explorer. Co
 
 ### How do updates work?
 
-The Control Center checks GitHub Releases. When a new version is available, it downloads and verifies `CanvasFlow-Setup.exe`; installation starts only after the user clicks **Install and Restart**. CanvasFlow waits for the current project to save and never silently overwrites the running EXE.
+CanvasFlow checks GitHub Releases. When a new version is available, download `CanvasFlow-Setup.exe`. Save the current project before updating; the installer never silently overwrites the running EXE.
 
 ---
 

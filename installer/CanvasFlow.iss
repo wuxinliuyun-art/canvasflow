@@ -1,5 +1,5 @@
 #define AppName "CanvasFlow"
-#define AppVersion "2.5.0"
+#define AppVersion "2.6.0"
 #define PublishDir "..\desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish"
 
 [Setup]
@@ -22,6 +22,7 @@ CloseApplications=yes
 RestartApplications=no
 UninstallDisplayIcon={app}\CanvasFlow.exe
 WizardStyle=modern
+SetupIconFile=..\assets\canvasflow.ico
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

@@ -1,0 +1,18 @@
+<Window x:Class="CanvasFlow.Desktop.ImagePreviewWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="图片预览" Width="1100" Height="780" MinWidth="520" MinHeight="360"
+ WindowStartupLocation="CenterScreen" Background="#111214" KeyDown="Window_KeyDown">
+  <Grid>
+    <Border x:Name="Viewport" Margin="14" Background="#0B0C0E" CornerRadius="12" ClipToBounds="True"
+            MouseWheel="Viewport_MouseWheel" MouseLeftButtonDown="Viewport_MouseLeftButtonDown"
+            MouseLeftButtonUp="Viewport_MouseLeftButtonUp" MouseMove="Viewport_MouseMove">
+      <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+        <Image.RenderTransform><TransformGroup><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1"/><TranslateTransform x:Name="ImageTranslate"/></TransformGroup></Image.RenderTransform>
+      </Image>
+    </Border>
+    <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,26" Padding="12,7" CornerRadius="12" Background="#CC202124" IsHitTestVisible="False">
+      <TextBlock Foreground="#F2F2F4" FontFamily="HarmonyOS Sans SC, Microsoft YaHei UI" FontSize="12" Text="滚轮缩放 · 拖动查看 · 双击恢复 · Esc 关闭"/>
+    </Border>
+  </Grid>
+</Window>

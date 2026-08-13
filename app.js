@@ -7,6 +7,7 @@ const IMAGE_NODE_VERTICAL_STEP = IMAGE_NODE_HEIGHT + 40;
 const AI_NODE_HEIGHT = 300;
 const ANGLE_NODE_HEIGHT = 430;
 const GROUP_NODE_HEIGHT = 244;
+const SCREENSHOT_NODE_HEIGHT = 250;
 const CONNECT_SNAP_RADIUS = 38;
 const STORAGE_KEY = "webimage.pages.v2";
 const { desktop, apiFetch } = window.CanvasFlowRuntime;
@@ -17,6 +18,8 @@ function mindmapFeatureEnabled() {
 }
 
 let runtimeExportFolder = "export";
+let imageUpscalePluginInstalled = false;
+let backgroundRemovalPluginInstalled = false;
 let autoBackupReady = false;
 let autoBackupTimer = null;
 let lastUpdateCheckResult = null;
@@ -36,6 +39,7 @@ function resolvedExportFolderLabel(value) {
     : label;
 }
 const LANGUAGE_KEY = "webimage.language";
+const OUTPUT_FOLDER_KEY = "canvasflow.outputFolder.v1";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
 const ONBOARDING_VERSION = 1;
 const DEFAULT_TEXT_TEMPLATES = [
@@ -51,7 +55,8 @@ const UI_EN = {
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
   "启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。": "Automatically check GitHub Releases. Download and replace the app manually when a new version is available.",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
-  "角度变化（测试功能）": "Angle Change (Beta)", "添加角度变化节点（测试功能）": "Add Angle Change Node (Beta)",
+  "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
+  "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
   "反转左右关键词": "Reverse left/right prompt directions", "仅交换自动关键词中的左、右，不镜像图片": "Only swaps left and right in the automatic prompt; the image is not mirrored",
   "单击切换项目，双击重命名": "Click to switch projects; double-click to rename",
   "未命名项目": "Untitled Project", "未命名": "Untitled", "项目1": "Project 1",
@@ -170,7 +175,10 @@ const UI_EN = {
   "清除已完成": "Clear Finished", "还没有 AI 绘图任务": "No AI image tasks yet", "等待发送": "Queued", "已暂停": "Paused",
   "无参考图": "No reference image", "暂停等待任务": "Pause queued task", "继续任务": "Resume task", "向前移动": "Move up", "向后移动": "Move down", "删除等待任务": "Remove queued task",
   "打开生成图片所在文件夹": "Open Generated Image Folder", "复制生成图片路径": "Copy Generated Image Path",
-  "帮助与引导": "Help & Tour", "重新查看项目、底部操作区、右上工具和 API Key 设置说明。": "Review the project area, bottom controls, top-right tools, and API Key setup.", "查看新手引导": "View Getting Started Tour"
+  "帮助与引导": "Help & Tour", "重新查看项目、底部操作区、右上工具和 API Key 设置说明。": "Review the project area, bottom controls, top-right tools, and API Key setup.", "查看新手引导": "View Getting Started Tour",
+  "截图工具": "Capture Tool", "截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。": "Capture a fixed screen region and send it to AI with a saved prompt.",
+  "原生截图窗口": "Native Capture Window", "窗口可置顶、折叠和收起预览。关闭窗口只会隐藏，不会退出 CanvasFlow。": "Keep the window on top, collapse it, or hide previews. Closing it only hides the tool.",
+  "打开截图窗口": "Open Capture Window", "截图任务会进入现有任务队列，结果保存到 export/ai_generated，不会自动添加到画布。": "Capture jobs use the existing task queue. Results are saved to export/ai_generated and are not added to the canvas automatically."
 };
 
 let uiLanguage = (() => {
@@ -393,6 +401,8 @@ const els = {
   autoFitImageNodes: $("autoFitImageNodesToggle"),
   hideNodeTitles: $("hideNodeTitlesToggle"),
   exportFolder: $("exportFolderInput"),
+  chooseExportFolderBtn: $("chooseExportFolderBtn"),
+  openExportFolderBtn: $("openExportFolderBtn"),
   copyExportPathBtn: $("copyExportPathBtn"),
 
   loadJson: $("loadJsonInput"),
@@ -423,8 +433,6 @@ const els = {
   balanceDisplay: $("balanceDisplay"),
   balanceRefreshBtn: $("balanceRefreshBtn"),
   runBtn: $("runBtn"),
-  zipExportToggle: $("zipExportToggle"),
-  exportInputsToggle: $("exportInputsToggle"),
   lightbox: $("lightbox"),
   lightboxImg: $("lightboxImg"),
   lightboxClose: $("lightboxClose"),
@@ -714,8 +722,6 @@ function syncSettingsPanel() {
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
   els.exportFolder.value = state.settings.exportFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
-  els.zipExportToggle.checked = state.settings.zipExport !== false;
-  els.exportInputsToggle.checked = state.settings.exportInputs === true;
   syncCustomMaterialsList();
 }
 
@@ -1041,6 +1047,7 @@ const NODE_PLACEMENT_GAP = 24;
 function nodeHeightForType(type) {
   return type === "ai-image" ? AI_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
+      : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
       : type === "image" ? IMAGE_NODE_HEIGHT
         : type === "folder" ? GROUP_NODE_HEIGHT
           : type === "mind-group" ? NODE_HEIGHT
@@ -1094,6 +1101,10 @@ function findFreeNodePosition(x, y, w = NODE_WIDTH, h = NODE_HEIGHT, options = {
   return fallback;
 }
 
+function nextScreenshotNodeSequence() {
+  return state.nodes.reduce((max, node) => node.type === "screenshot-input" ? Math.max(max, Number(node.screenshotSeq) || 0) : max, 0) + 1;
+}
+
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const width = NODE_WIDTH;
   const height = nodeHeightForType(type);
@@ -1125,12 +1136,14 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : undefined,
     _resolution: type === "angle-image" ? "1k" : undefined,
     _size: type === "angle-image" ? "1:1" : undefined,
+    _count: type === "screenshot-input" ? 1 : undefined,
     images: (type === "group" || type === "folder") ? [] : undefined,
     items: null,
     internalEdges: null,
     subgraph: type === "mind-group" ? { nodes: [], edges: [], settings: { ...state.settings }, customLibrary: emptyLibrary(), view: { x: 120, y: 90, scale: 1 }, nextNode: 1, nextEdge: 1 } : undefined,
     label: type === "mind-group" ? "编组" : "",
     seq: 0,
+    screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
   };
   state.nodes.push(node);
   state.selected = new Set([node.id]);
@@ -1484,9 +1497,10 @@ function pasteNodes(data, anchor = null) {
       x: groupPosition.x + (n.x - minX),
       y: groupPosition.y + (n.y - minY),
       w: NODE_WIDTH,
-      h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "angle-image" ? Math.max(Number(n.h) || 0, ANGLE_NODE_HEIGHT) : n.type === "image" ? Math.max(Number(n.h) || 0, 160) : (n.type === "group" || n.type === "folder") ? Math.max(Number(n.h) || 0, GROUP_NODE_HEIGHT) : NODE_HEIGHT,
+      h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "angle-image" ? Math.max(Number(n.h) || 0, ANGLE_NODE_HEIGHT) : n.type === "screenshot-input" ? Math.max(Number(n.h) || 0, SCREENSHOT_NODE_HEIGHT) : n.type === "image" ? Math.max(Number(n.h) || 0, 160) : (n.type === "group" || n.type === "folder") ? Math.max(Number(n.h) || 0, GROUP_NODE_HEIGHT) : NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
+    if (nn.type === "screenshot-input") nn.screenshotSeq = nextScreenshotNodeSequence() + pasted.filter(item => item.type === "screenshot-input").length;
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
     map.set(n.id, nn.id);
     pasted.push(nn);
@@ -1505,6 +1519,7 @@ function pasteNodes(data, anchor = null) {
 
 function addEdge(fromNode, toNode) {
   if (fromNode === toNode) return toast("不能连接到自己");
+  if (findNode(fromNode)?.type === "screenshot-input") return toast("截图功能节点只接收输入，不能向后连接");
   const target = findNode(toNode);
   if (!target) return;
   if (state.edges.some(e => e.from.node === fromNode && e.to.node === toNode)) return toast("这两个端口已经连接");
@@ -1551,11 +1566,12 @@ function findNode(id) {
 }
 
 function normalizeAiNodeSettings(node, fallback = {}) {
-  if (!node || node.type !== "ai-image") return node;
+  if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
   node._model = node._model || fallback.model || "gpt-image-2";
   node._resolution = node._resolution || fallback.resolution || "1k";
   node._size = node._size || fallback.size || "1:1";
-  node._quality = node._model === "gpt-image-2" ? (node._quality || fallback.quality || "medium") : null;
+  node._quality = node._model === "gpt-image-2" ? (node._quality || fallback.quality || (node.type === "screenshot-input" ? "low" : "medium")) : null;
+  if (node.type === "screenshot-input") node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
   return node;
 }
 
@@ -1929,6 +1945,57 @@ function refreshAiPrompt(nodeId) {
   render();
 }
 
+function directScreenshotNodeInputs(nodeId) {
+  const incoming = buildIncomingIndex();
+  const visited = new Set([nodeId]);
+  const textEntries = [], imageEntries = [], batchEntries = [];
+  function visit(id) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const node = findNode(id);
+    if (!node || node.disabled) return;
+    const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
+    if (node.type === "text" && String(node.text || "").trim()) {
+      textEntries.push({ text: node.text.trim(), ...order });
+    } else if (node.type === "image" && (node.image || node.imageAssetId)) {
+      imageEntries.push({ image: node.image || "", assetId: node.imageAssetId || "", fileName: node.fileName || "参考图.png", mime: node.mime || "image/png", ...order });
+    } else if (node.type === "group" || node.type === "folder") {
+      const groupImages = node.images || (node.items || []).filter(item => item.type === "image").map(item => ({ image: item.image, assetId: item.imageAssetId, fileName: item.fileName, mime: item.mime }));
+      groupImages.forEach((image, index) => {
+        if (image?.image || image?.assetId) batchEntries.push({ image: image.image || "", assetId: image.assetId || "", fileName: image.fileName || "批量图片.png", mime: image.mime || "image/png", ...order, index });
+      });
+    }
+    // 功能节点是语义边界：使用其自身结果，不继续把更早的工作流输入带入截图任务。
+    if (node.type === "ai-image" || node.type === "angle-image" || node.type === "screenshot-input") return;
+    for (const edge of incoming.get(id) || []) visit(edge.from.node);
+  }
+  for (const edge of incoming.get(nodeId) || []) visit(edge.from.node);
+  const byCanvasOrder = (a, b) => a.x - b.x || a.created - b.created || (a.index || 0) - (b.index || 0);
+  textEntries.sort(byCanvasOrder);
+  imageEntries.sort(byCanvasOrder);
+  batchEntries.sort(byCanvasOrder);
+  return {
+    texts: textEntries.map(item => item.text),
+    images: imageEntries.map(({ x, created, ...item }) => item),
+    batchImages: batchEntries.map(({ x, created, index, ...item }) => item),
+  };
+}
+
+function screenshotNodeSummary(node) {
+  const input = directScreenshotNodeInputs(node.id);
+  return `${input.texts.length} 条文字 · ${input.images.length} 张参考图 · ${input.batchImages.length} 张批量图 · 单图生成 ${Math.max(1, Number(node._count) || 1)} 张`;
+}
+
+let screenshotCatalogSignature = "";
+function publishScreenshotNodeCatalog(force = false) {
+  if (!window.chrome?.webview) return;
+  const nodes = state.nodes.filter(node => node.type === "screenshot-input").sort((a, b) => (a.screenshotSeq || 0) - (b.screenshotSeq || 0)).map(node => ({ id: node.id, name: `截图功能节点 #${node.screenshotSeq}`, summary: screenshotNodeSummary(node) }));
+  const signature = JSON.stringify(nodes);
+  if (!force && signature === screenshotCatalogSignature) return;
+  screenshotCatalogSignature = signature;
+  window.chrome.webview.postMessage({ type: "screenshot:node-catalog", nodes });
+}
+
 async function materializeReferenceImage(reference) {
   if (typeof reference === "string") return reference;
   if (desktop && reference?.assetId) {
@@ -2019,6 +2086,11 @@ async function fetchImageAsBase64(url) {
 }
 
 function queueTaskStatusText(task) {
+  if (task.kind === "background-removal" || task.kind === "image-upscale") {
+    if (task.status === "generating") return task.kind === "background-removal" ? "正在抠图" : "正在放大";
+    if (task.status === "submitting") return "正在读取图片";
+    if (task.status === "downloading") return "正在保存结果";
+  }
   const status = task.status === "waiting" ? "等待发送"
     : task.status === "paused" ? "已暂停"
       : task.status === "submitting" ? "正在提交"
@@ -2047,6 +2119,7 @@ function hasUnsettledAiQueueTasks() {
 }
 
 function refreshQueuedNodeProgress(nodeId) {
+  if (!nodeId) return;
   const node = findNode(nodeId);
   if (!node) return;
   const tasks = taskQueueForNode(nodeId).filter(task => !node._queueRunId || task.runId === node._queueRunId);
@@ -2128,7 +2201,7 @@ function generatedResultFileName(task, node, dataUrl) {
   const mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
   const extension = extensionFor("", mime);
   const project = safeName(task.projectName || "项目").slice(0, 36) || "项目";
-  const nodeLabel = node.seq ? `AI${node.seq}` : node.id;
+  const nodeLabel = task.source === "screenshot" ? "截图工具" : (node?.seq ? `AI${node.seq}` : (node?.id || "AI"));
   const reference = safeName((task.referenceName || "生成结果").replace(/\.[^.]+$/, "")).slice(0, 36) || "生成结果";
   return `${project}_${nodeLabel}_${reference}_${timestamp()}_${task.id}.${extension}`;
 }
@@ -2176,31 +2249,142 @@ async function applyQueuedResult(task, node, dataUrl) {
   render();
 }
 
+function notifyScreenshotTask(task, error = "") {
+  if (task.source !== "screenshot" || !window.chrome?.webview) return;
+  window.chrome.webview.postMessage({
+    type: "screenshot:task-update",
+    requestId: task.screenshotRequestId || "",
+    taskId: task.id,
+    status: task.status,
+    progress: Number(task.progress) || 0,
+    outputPath: task.outputPath || "",
+    error: error || task.error || task.warning || "",
+  });
+}
+
+async function applyScreenshotQueuedResult(task, dataUrl) {
+  try {
+    const saved = await saveGeneratedOutput(dataUrl, task, null);
+    task.outputPath = saved.outputPath;
+  } catch (error) {
+    task.warning = `图片已经生成，但保存到输出文件夹失败：${error.message}`;
+    throw error;
+  }
+}
+
 async function runQueuedAiTask(task) {
   const node = findNode(task.nodeId);
-  if (!node) throw new Error("对应的 AI 绘图节点已被删除");
+  if (!node && task.source !== "screenshot") throw new Error("对应的 AI 绘图节点已被删除");
   task.status = "submitting";
   task.progress = 0;
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
+  notifyScreenshotTask(task);
   const taskImages = task.groupImage ? [...task.regularImages, task.groupImage] : task.regularImages;
   task.taskId = await submitGeneration(task.prompt, taskImages, task.generationSettings);
   task.status = "generating";
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
+  notifyScreenshotTask(task);
   const imageUrl = await pollTask(task.taskId, progress => {
     task.progress = progress;
     refreshQueuedNodeProgress(task.nodeId);
     renderTaskQueue();
+    notifyScreenshotTask(task);
   });
   task.status = "downloading";
   task.progress = 96;
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
+  notifyScreenshotTask(task);
   const dataUrl = await fetchImageAsBase64(imageUrl);
-  await applyQueuedResult(task, node, dataUrl);
+  if (task.source === "screenshot") await applyScreenshotQueuedResult(task, dataUrl);
+  else await applyQueuedResult(task, node, dataUrl);
   task.status = "done";
   task.progress = 100;
+  notifyScreenshotTask(task);
+}
+
+function enqueueExtensionTasks(nodes, kind) {
+  const valid = (nodes || []).filter(node => node && (node.type === "image" || node.generatedImage || node.image));
+  if (!valid.length) return toast("请选择至少一个图片节点");
+  valid.forEach((source, index) => {
+    const preview = source.type === "image" ? source.image : source.generatedImage;
+    aiTaskQueue.items.push({
+      id: `q${aiTaskQueue.nextId++}`,
+      kind,
+      nodeId: source.id,
+      status: "waiting",
+      progress: 0,
+      label: kind === "background-removal" ? "智能抠图" : "图片放大 ×4",
+      prompt: source.fileName || `图片 ${index + 1}`,
+      model: kind === "background-removal" ? "BiRefNet · DirectML/CPU" : "Real-ESRGAN · Vulkan",
+      resolution: "本地处理",
+      size: "",
+      thumbnail: preview || "",
+      sourceFileName: source.fileName || "image.png",
+      exportFolder: state.settings.exportFolderLabel || runtimeExportFolder,
+      resultOrder: index,
+    });
+  });
+  renderTaskQueue();
+  setTaskQueueOpen(true);
+  toast(`已加入任务队列：${valid.length} 个任务`);
+  pumpAiTaskQueue();
+}
+
+async function runQueuedExtensionTask(task) {
+  const source = findNode(task.nodeId);
+  if (!source) throw new Error("来源图片节点已被删除");
+  const reference = source.type === "image"
+    ? { image: source.image, assetId: source.imageAssetId }
+    : { image: source.generatedImage, assetId: source.generatedAssetId };
+  task.status = "submitting";
+  task.progress = 8;
+  renderTaskQueue();
+  const dataUrl = await materializeReferenceImage(reference);
+  if (!dataUrl) throw new Error("无法读取原始图片");
+  task.status = "generating";
+  task.progress = 18;
+  renderTaskQueue();
+  const progressTimer = window.setInterval(() => {
+    if (!queueTaskIsRunning(task)) return;
+    task.progress = Math.min(90, (Number(task.progress) || 18) + 2);
+    renderTaskQueue();
+  }, 700);
+  try {
+    const payload = { dataUrl, fileName: task.sourceFileName, outputRoot: task.exportFolder };
+    const result = task.kind === "background-removal"
+      ? await desktop.removeImageBackground(payload)
+      : await desktop.upscaleImage({ ...payload, model: "realesrgan-x4plus", scale: 4 });
+    task.status = "downloading";
+    task.progress = 96;
+    renderTaskQueue();
+    const currentSource = findNode(task.nodeId);
+    if (!currentSource) throw new Error("处理完成，但来源图片节点已被删除");
+    const resultNode = addNode("image", currentSource.x + NODE_WIDTH + 40, currentSource.y + (task.resultOrder || 0) * IMAGE_NODE_VERTICAL_STEP, false);
+    resultNode.image = result.dataUrl;
+    resultNode.fileName = result.fileName || (task.kind === "background-removal" ? "transparent.png" : "upscaled.png");
+    resultNode.mime = "image/png";
+    resultNode.outputPath = result.outputPath || "";
+    if (task.kind === "background-removal") resultNode.backgroundRemovalSourceNodeId = currentSource.id;
+    else resultNode.upscaleSourceNodeId = currentSource.id;
+    await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
+    state.edges.push({ id: uid("e"), from: { node: currentSource.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
+    pushHistory();
+    render();
+    task.status = "done";
+    task.progress = 100;
+    task.outputPath = result.outputPath || "";
+  } finally {
+    window.clearInterval(progressTimer);
+  }
+}
+
+function runQueuedTask(task) {
+  return task.kind === "background-removal" || task.kind === "image-upscale"
+    ? runQueuedExtensionTask(task)
+    : runQueuedAiTask(task);
 }
 
 function pumpAiTaskQueue() {
@@ -2208,9 +2392,10 @@ function pumpAiTaskQueue() {
     const task = aiTaskQueue.items.find(item => item.status === "waiting");
     if (!task) break;
     aiTaskQueue.running++;
-    runQueuedAiTask(task).catch(error => {
+    runQueuedTask(task).catch(error => {
       task.status = "failed";
       task.error = error.message;
+      notifyScreenshotTask(task, error.message);
       console.error("[任务队列] 任务执行失败", { taskId: task.id, nodeId: task.nodeId, message: error.message });
     }).finally(() => {
       aiTaskQueue.running--;
@@ -2221,6 +2406,127 @@ function pumpAiTaskQueue() {
   }
   renderTaskQueue();
 }
+
+async function enqueueScreenshotTasks(message) {
+  if (!state.settings.apiKey) {
+    toast("请先在设置中填写并保存 API Key");
+    if (window.chrome?.webview) window.chrome.webview.postMessage({
+      type: "screenshot:task-update", requestId: message.requestId || "", taskId: "",
+      status: "failed", progress: 0, outputPath: "", error: "尚未设置 API Key",
+    });
+    return 0;
+  }
+  const imageDataUrl = String(message.imageDataUrl || "");
+  let prompt = String(message.prompt || "").trim();
+  let regularImages = [];
+  let batchImages = [];
+  let sourceNode = null;
+  if (message.useCanvasNodeInput) {
+    sourceNode = findNode(String(message.canvasNodeId || ""));
+    if (!sourceNode || sourceNode.type !== "screenshot-input") {
+      notifyScreenshotRequestFailure(message, "请选择有效的截图功能节点");
+      return showAppAlert("所选截图功能节点已不存在，请重新选择后再发送。");
+    }
+    const input = directScreenshotNodeInputs(sourceNode.id);
+    if (!input.texts.length) {
+      notifyScreenshotRequestFailure(message, "截图功能节点没有连接有效文字");
+      return showAppAlert("截图功能节点没有连接有效文字，请连接文字节点后重试。");
+    }
+    prompt = input.texts.join("，");
+    regularImages = input.images;
+    batchImages = input.batchImages;
+  }
+  if (!imageDataUrl.startsWith("data:image/") || !prompt) {
+    toast("截图任务缺少有效截图或提示词");
+    return 0;
+  }
+  const count = Math.max(1, Math.min(4, Number(sourceNode?._count ?? message.count) || 1));
+  const rawBatchCount = batchImages.length;
+  const preparedRegular = await prepareScreenshotReferences(regularImages);
+  const preparedBatch = await prepareScreenshotReferences(batchImages);
+  regularImages = preparedRegular.valid;
+  batchImages = preparedBatch.valid;
+  const skippedImages = preparedRegular.failed + preparedBatch.failed;
+  if (skippedImages && !rawBatchCount) toast(`有 ${skippedImages} 张参考图无法读取，已跳过；其余内容继续发送`);
+  if (rawBatchCount && !batchImages.length) {
+    notifyScreenshotRequestFailure(message, "批量图片均无法读取");
+    return showAppAlert("连接的多任务或图片文件夹中没有可读取的图片，请检查本地原图是否仍然存在。");
+  }
+  const generationSettings = {
+    type: "ai-image",
+    _model: String(sourceNode?._model || message.model || "gpt-image-2"),
+    _resolution: String(sourceNode?._resolution || message.resolution || "1k"),
+    _quality: String(sourceNode?._quality || message.quality || "low"),
+    _size: String(sourceNode?._size || message.ratio || "1:1"),
+  };
+  const batches = batchImages.length ? batchImages : [null];
+  const total = batches.length * count;
+  if (batchImages.length) {
+    window.chrome?.webview?.postMessage({ type: "screenshot:batch-dialog-open" });
+    let confirmed = false;
+    try { confirmed = await confirmScreenshotBatch({ imageDataUrl, batchImages, prompt, regularCount: regularImages.length, count, total, skippedImages }); }
+    finally { window.chrome?.webview?.postMessage({ type: "screenshot:batch-dialog-close" }); }
+    if (!confirmed) {
+      notifyScreenshotRequestStatus(message, "cancelled", "已取消批量任务");
+      return 0;
+    }
+  }
+  let order = 0;
+  for (const batchImage of batches) for (let index = 0; index < count; index++) {
+    aiTaskQueue.items.push({
+      id: `q${aiTaskQueue.nextId++}`,
+      nodeId: "",
+      source: "screenshot",
+      screenshotRequestId: String(message.requestId || ""),
+      pageId: state.activePageId,
+      projectName: currentPage()?.name || "项目",
+      exportFolder: state.settings.exportFolderLabel || "export",
+      label: total > 1 ? `截图工具 · ${order + 1}/${total}` : "截图工具",
+      prompt,
+      regularImages: [{ image: imageDataUrl, fileName: "screenshot.png", mime: "image/png" }, ...regularImages],
+      groupImage: batchImage,
+      groupIndex: -1,
+      referenceName: batchImage?.fileName || "screenshot.png",
+      thumbnail: String(message.thumbnailDataUrl || imageDataUrl),
+      generationSettings: { ...generationSettings },
+      model: generationSettings._model,
+      resolution: generationSettings._resolution,
+      size: generationSettings._size,
+      resultMode: "external-only",
+      resultOrder: order,
+      status: "waiting",
+      progress: 0,
+      created: Date.now() + order,
+    });
+    order++;
+  }
+  renderTaskQueue();
+  pumpAiTaskQueue();
+  toast(`截图任务已加入队列：${total} 个任务`);
+  return total;
+}
+
+async function prepareScreenshotReferences(references) {
+  const valid = [];
+  let failed = 0;
+  for (const reference of references) {
+    try {
+      const image = await materializeReferenceImage(reference);
+      if (!String(image).startsWith("data:image/")) throw new Error("图片内容无效");
+      valid.push({ ...reference, image, assetId: "" });
+    } catch (error) {
+      failed++;
+      console.warn("[截图节点] 参考图读取失败，已跳过", { fileName: reference.fileName, message: error.message });
+    }
+  }
+  return { valid, failed };
+}
+
+function notifyScreenshotRequestStatus(message, status, error) {
+  if (!window.chrome?.webview) return;
+  window.chrome.webview.postMessage({ type: "screenshot:task-update", requestId: message.requestId || "", taskId: "", status, progress: 0, outputPath: "", error });
+}
+function notifyScreenshotRequestFailure(message, error) { notifyScreenshotRequestStatus(message, "failed", error); }
 
 function buildAiQueueTasks(node, upstream, resultMode, runId) {
   const generationSettings = queuedGenerationSettings(node);
@@ -2334,7 +2640,7 @@ async function generateSingle(node, upstream) {
     apiFetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName: "ai_generated", files: [{ name: node.fileName, data: base64 }] }),
+      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: node.fileName, data: base64 }] }),
     }).catch(() => {});
     setAiNodeProgress(node, "done", "生成完成", 100);
     clearAiNodeProgressSoon(node);
@@ -2565,9 +2871,11 @@ function addOutputNode(sourceId) {
 
 
 function normalizeNodeSizes() {
+  const usedScreenshotSequences = new Set();
+  let nextScreenshotSequence = state.nodes.reduce((max, node) => node.type === "screenshot-input" ? Math.max(max, Number(node.screenshotSeq) || 0) : max, 0) + 1;
   state.nodes.forEach(n => {
     if (!n.w) n.w = NODE_WIDTH;
-    if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "angle-image" ? ANGLE_NODE_HEIGHT : n.type === "image" ? IMAGE_NODE_HEIGHT : (n.type === "group" || n.type === "folder") ? GROUP_NODE_HEIGHT : NODE_HEIGHT;
+    if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "angle-image" ? ANGLE_NODE_HEIGHT : n.type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT : n.type === "image" ? IMAGE_NODE_HEIGHT : (n.type === "group" || n.type === "folder") ? GROUP_NODE_HEIGHT : NODE_HEIGHT;
     if (n.type === "text") {
       const titlesHidden = state.settings.hideNodeTitles === true;
       const sizedForHiddenTitles = n._titleHiddenSized === true;
@@ -2576,6 +2884,17 @@ function normalizeNodeSizes() {
     }
     if (n.type === "ai-image" && n.h === 400) n.h = AI_NODE_HEIGHT;
     if (n.type === "angle-image") normalizeAngleNodeSettings(n);
+    if (n.type === "screenshot-input") {
+      const sequence = Math.max(0, Math.trunc(Number(n.screenshotSeq) || 0));
+      if (sequence && !usedScreenshotSequences.has(sequence)) {
+        n.screenshotSeq = sequence;
+        usedScreenshotSequences.add(sequence);
+      } else {
+        while (usedScreenshotSequences.has(nextScreenshotSequence)) nextScreenshotSequence++;
+        n.screenshotSeq = nextScreenshotSequence;
+        usedScreenshotSequences.add(nextScreenshotSequence++);
+      }
+    }
   });
 }
 
@@ -2639,6 +2958,28 @@ function render() {
   renderNodes();
   renderEdges();
   renderMinimap();
+  publishScreenshotNodeCatalog();
+}
+
+function showCanvasDialog({ title, message, content = "", confirmText = "确定", cancelText = "" }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.className = "canvas-confirm-backdrop";
+    overlay.innerHTML = `<section class="canvas-confirm-panel" role="dialog" aria-modal="true"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p>${content}<div class="canvas-confirm-actions">${cancelText ? `<button data-dialog-cancel>${escapeHtml(cancelText)}</button>` : ""}<button class="primary" data-dialog-confirm>${escapeHtml(confirmText)}</button></div></section>`;
+    const finish = value => { overlay.remove(); resolve(value); };
+    overlay.querySelector("[data-dialog-confirm]").onclick = () => finish(true);
+    overlay.querySelector("[data-dialog-cancel]")?.addEventListener("click", () => finish(false));
+    overlay.addEventListener("mousedown", event => { if (event.target === overlay && cancelText) finish(false); });
+    document.body.appendChild(overlay);
+  });
+}
+
+function showAppAlert(message) { return showCanvasDialog({ title: "无法发送任务", message, confirmText: "知道了" }); }
+
+function confirmScreenshotBatch({ imageDataUrl, batchImages, prompt, regularCount, count, total, skippedImages = 0 }) {
+  const thumbs = [imageDataUrl, ...batchImages.map(image => image.image).filter(Boolean)].slice(0, 24).map((src, index) => `<figure><img src="${src}" alt=""><figcaption>${index === 0 ? "截图" : `批量图 ${index}`}</figcaption></figure>`).join("");
+  const content = `<div class="screenshot-batch-summary"><div class="screenshot-batch-thumbs">${thumbs}</div><dl><div><dt>提示词</dt><dd>${escapeHtml(prompt.slice(0, 160))}</dd></div><div><dt>普通参考图</dt><dd>${regularCount} 张</dd></div><div><dt>批量图片</dt><dd>${batchImages.length} 张</dd></div>${skippedImages ? `<div><dt>无法读取</dt><dd>${skippedImages} 张，已跳过</dd></div>` : ""}<div><dt>单图生成</dt><dd>${count} 张</dd></div><div class="is-warning"><dt>最终任务</dt><dd>${total} 个，将消耗多次生成额度</dd></div></dl></div>`;
+  return showCanvasDialog({ title: "确认批量截图任务", message: "每张批量图片都会与当前截图组合生成。", content, confirmText: `发送 ${total} 个任务`, cancelText: "取消" });
 }
 
 let interactiveRenderFrame = 0;
@@ -2832,9 +3173,9 @@ function syncSelectedNodeClasses() {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化（测试功能）" : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
-  const outPort = node.type === "output" ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
+  const outPort = (node.type === "output" || node.type === "screenshot-input") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
     body = `<textarea data-role="text">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
@@ -2901,6 +3242,10 @@ function nodeTemplate(node) {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "angle-image") {
     body = angleImageBody(node);
+  } else if (node.type === "screenshot-input") {
+    normalizeAiNodeSettings(node);
+    node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
+    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label>画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
@@ -3279,6 +3624,7 @@ els.nodes.addEventListener("input", ev => {
   if (ev.target.dataset.role === "text") {
     node.text = ev.target.value;
     markDirty();
+    publishScreenshotNodeCatalog();
   }
 });
 
@@ -3288,6 +3634,16 @@ els.nodes.addEventListener("change", ev => {
   const role = ev.target.dataset.role;
   if (role === "text") pushHistory();
   if (!node) return;
+  if (node.type === "screenshot-input") {
+    if (role === "screenshot-model") node._model = ev.target.value;
+    else if (role === "screenshot-resolution") node._resolution = ev.target.value;
+    else if (role === "screenshot-quality") node._quality = ev.target.value;
+    else if (role === "screenshot-size") node._size = ev.target.value;
+    else if (role === "screenshot-count") node._count = Math.max(1, Math.min(4, Number(ev.target.value) || 1));
+    else return;
+    pushHistory(); render();
+    return;
+  }
   if (node.type === "angle-image") {
     if (role === "angle-resolution") node._resolution = ev.target.value;
     else if (role === "angle-size") node._size = ev.target.value;
@@ -3764,6 +4120,36 @@ async function copyGeneratedFilePath(node) {
   }
 }
 
+async function copyGeneratedImage(node) {
+  const outputPath = String(node?.outputPath || "").trim();
+  try {
+    if (outputPath && window.canvasflowDesktop?.copyImage) {
+      await window.canvasflowDesktop.copyImage(outputPath);
+    } else {
+      const source = node?.generatedImage || node?.image || "";
+      if (!source || !navigator.clipboard?.write || typeof ClipboardItem === "undefined")
+        throw new Error("当前运行方式不支持图片剪贴板");
+      const blob = await (await fetch(source)).blob();
+      const pngBlob = blob.type === "image/png" ? blob : await imageBlobAsPng(blob);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+    }
+    toast("已复制图片，可直接粘贴使用");
+  } catch (error) {
+    console.error("[生成结果] 复制图片失败", error);
+    toast("复制图片失败：图片文件可能已移动，或剪贴板正被其他程序占用；请稍后重试");
+  }
+}
+
+async function imageBlobAsPng(blob) {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+  return await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error("图片转换失败")), "image/png"));
+}
+
 async function openGeneratedFileLocation(node) {
   const outputPath = String(node?.outputPath || "").trim();
   if (!outputPath) return toast("该图片没有可用的本地输出路径");
@@ -3800,21 +4186,39 @@ els.viewport.addEventListener("contextmenu", ev => {
       return;
     }
     const isGroupWithItems = selectedNode?.type === "group" && (selectedNode?.items || (selectedNode?.images && selectedNode?.images.length));
+    const extensionSources = state.nodes.filter(node => state.selected.has(node.id) && (
+      (node.type === "image" && (node.image || node.imageAssetId)) ||
+      ((node.type === "ai-image" || node.type === "angle-image") && (node.generatedImage || node.generatedAssetId))
+    ));
     const items = [
       ["切换启用/停用", () => toggleDisabled(state.selected)],
+      ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)], ["复制生成图片路径", () => copyGeneratedFilePath(selectedNode)]] : []),
       ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
       ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
       ["AI绘图", () => {
-        const sources = state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output");
+        const sources = state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output" && n.type !== "screenshot-input");
         if (sources.length) {
           sources.forEach(source => {
             addAiImageNode(source.x + 290, source.y, [source.id]);
           });
         }
       }],
+      ...(extensionSources.length ? [["拓展功能", [
+        ["角度变化", () => {
+          extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
+        }],
+        [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
+          if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
+          removeBackgroundFromSources(extensionSources);
+        }],
+        [imageUpscalePluginInstalled ? "图片放大" : "图片放大（未安装）", () => {
+          if (!imageUpscalePluginInstalled) return showImageUpscaleInstall();
+          upscaleExtensionSources(extensionSources);
+        }],
+      ]]] : []),
       ["断开连接", () => disconnectEdges(state.selected)],
       ["复制节点", () => copySelection()],
       ["删除节点", () => deleteNodes(state.selected)],
@@ -3835,15 +4239,12 @@ els.viewport.addEventListener("contextmenu", ev => {
       ["多任务", () => groupSelection()],
       ["依次连接", () => connectSelectionInSequence()],
       ["AI绘图", () => {
-        const sources = state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output");
+        const sources = state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output" && n.type !== "screenshot-input");
         if (sources.length) {
           sources.forEach(source => {
             addAiImageNode(source.x + 290, source.y, [source.id]);
           });
         }
-      }],
-      ["添加输出节点", () => {
-        state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output").forEach(n => addOutputNode(n.id));
       }],
       ["批量停用", () => toggleDisabled(state.selected, true)],
       ["批量启用", () => toggleDisabled(state.selected, false)],
@@ -3881,20 +4282,19 @@ els.viewport.addEventListener("contextmenu", ev => {
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
       ]],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
-      ["添加角度变化节点（测试功能）", () => addAngleImageNode(p.x, p.y, [])],
+      ["拓展功能", [
+        ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
+        [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
+          if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
+          toast("请先添加或选择图片节点，再使用自动抠图");
+        }],
+        [imageUpscalePluginInstalled ? "图片放大" : "图片放大（未安装）", () => {
+          if (!imageUpscalePluginInstalled) return showImageUpscaleInstall();
+          toast("请先添加或选择图片节点，再使用图片放大");
+        }],
+      ]],
+      ["添加截图功能节点", () => addNode("screenshot-input", p.x, p.y)],
       ["节点对齐", () => tidyNodes()],
-      ["添加输出节点", () => {
-        const position = findFreeNodePosition(p.x, p.y, NODE_WIDTH, NODE_HEIGHT);
-        const out = {
-          id: uid("n"), type: "output", x: position.x, y: position.y,
-          w: NODE_WIDTH, h: NODE_HEIGHT, disabled: false,
-          created: Date.now() + state.nextNode, text: "", image: null,
-          fileName: "", mime: "", prompt: "", generatedImage: null,
-          taskId: null, generating: false,
-        };
-        state.nodes.push(out);
-        pushHistory(); render();
-      }],
     );
     showMenu(ev.clientX, ev.clientY, items);
   }
@@ -3994,6 +4394,11 @@ window.addEventListener("keydown", ev => {
 window.addEventListener("keyup", ev => {
   if (ev.code === "Space") spaceDown = false;
 });
+
+els.viewport.addEventListener("pointerdown", ev => {
+  if (ev.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
+  els.viewport.focus({ preventScroll: true });
+}, true);
 
 window.addEventListener("copy", ev => {
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
@@ -4539,6 +4944,119 @@ function switchSettingsTab(name) {
   }
 }
 
+function openPluginSettings() {
+  setSettingsSidebarOpen(true);
+  switchSettingsTab("plugins");
+}
+
+function showBackgroundRemovalInstall() {
+  console.info("[插件] 打开智能抠图安装页");
+  openPluginSettings();
+  requestAnimationFrame(() => $("installBackgroundRemovalPluginBtn")?.focus());
+}
+
+async function refreshBackgroundRemovalPluginStatus() {
+  const status = $("backgroundRemovalPluginStatus");
+  const installButton = $("installBackgroundRemovalPluginBtn");
+  const removeButton = $("removeBackgroundRemovalPluginBtn");
+  if (!desktop?.backgroundRemovalStatus) {
+    backgroundRemovalPluginInstalled = false; status.textContent = "仅桌面版";
+    installButton.classList.add("hidden"); removeButton.classList.add("hidden"); return;
+  }
+  try {
+    const result = await desktop.backgroundRemovalStatus();
+    backgroundRemovalPluginInstalled = result?.installed === true;
+    status.textContent = backgroundRemovalPluginInstalled ? "已安装" : "未安装";
+    status.classList.toggle("installed", backgroundRemovalPluginInstalled);
+    installButton.classList.toggle("hidden", backgroundRemovalPluginInstalled);
+    removeButton.classList.toggle("hidden", !backgroundRemovalPluginInstalled);
+    if (backgroundRemovalPluginInstalled && !installButton.disabled) $("backgroundRemovalInstallProgress").classList.add("hidden");
+  } catch (error) { backgroundRemovalPluginInstalled = false; status.textContent = "检测失败"; console.error("[智能抠图插件] 状态检测失败", error); }
+}
+
+async function removeBackgroundFromSources(nodes) {
+  if (desktop?.removeImageBackground) { enqueueExtensionTasks(nodes, "background-removal"); return; }
+  if (!desktop?.removeImageBackground) return toast("智能抠图仅支持 .NET 桌面版");
+  for (const source of nodes) {
+    try {
+      const reference = source.type === "image" ? { image: source.image, assetId: source.imageAssetId } : { image: source.generatedImage, assetId: source.generatedAssetId };
+      const dataUrl = await materializeReferenceImage(reference);
+      if (!dataUrl) throw new Error("无法读取原始图片");
+      toast("正在抠图，首次运行可能需要加载模型");
+      const result = await desktop.removeImageBackground({ dataUrl, fileName: source.fileName || "image.png", outputRoot: state.settings.exportFolderLabel || runtimeExportFolder });
+      const resultNode = addNode("image", source.x + NODE_WIDTH + 40, source.y, false);
+      resultNode.image = result.dataUrl; resultNode.fileName = result.fileName || "transparent.png"; resultNode.mime = "image/png";
+      resultNode.outputPath = result.outputPath || ""; resultNode.backgroundRemovalSourceNodeId = source.id;
+      await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
+      state.edges.push({ id: uid("e"), from: { node: source.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
+      pushHistory(); render(); toast("抠图完成");
+    } catch (error) {
+      console.error("[智能抠图插件] 处理失败", { nodeId: source.id, message: error.message });
+      toast(`智能抠图失败：可能是模型不完整、图片格式不支持或内存不足；建议重新安装插件或换较小图片重试。${error.message || ""}`);
+    }
+  }
+}
+
+function showImageUpscaleInstall() {
+  openPluginSettings();
+  requestAnimationFrame(() => $("installImageUpscalePluginBtn")?.focus());
+}
+
+async function refreshImageUpscalePluginStatus() {
+  const status = $("imageUpscalePluginStatus");
+  const installButton = $("installImageUpscalePluginBtn");
+  const removeButton = $("removeImageUpscalePluginBtn");
+  if (!desktop?.imageUpscaleStatus) {
+    imageUpscalePluginInstalled = false;
+    status.textContent = "仅桌面版";
+    installButton.classList.add("hidden");
+    removeButton.classList.add("hidden");
+    return;
+  }
+  try {
+    const result = await desktop.imageUpscaleStatus();
+    imageUpscalePluginInstalled = result?.installed === true;
+    status.textContent = imageUpscalePluginInstalled ? "已安装" : "未安装";
+    status.classList.toggle("installed", imageUpscalePluginInstalled);
+    installButton.classList.toggle("hidden", imageUpscalePluginInstalled);
+    removeButton.classList.toggle("hidden", !imageUpscalePluginInstalled);
+  } catch (error) {
+    imageUpscalePluginInstalled = false;
+    status.textContent = "检测失败";
+    console.error("[图片放大插件] 状态检测失败", error);
+  }
+}
+
+async function upscaleExtensionSources(nodes) {
+  if (desktop?.upscaleImage) { enqueueExtensionTasks(nodes, "image-upscale"); return; }
+  if (!desktop?.upscaleImage) return toast("图片放大仅支持 .NET 桌面版");
+  for (const source of nodes) {
+    try {
+      const reference = source.type === "image"
+        ? { image: source.image, assetId: source.imageAssetId }
+        : { image: source.generatedImage, assetId: source.generatedAssetId };
+      const dataUrl = await materializeReferenceImage(reference);
+      if (!dataUrl) throw new Error("无法读取原始图片");
+      toast("正在放大图片，请稍候");
+      const result = await desktop.upscaleImage({ dataUrl, fileName: source.fileName || "image.png", outputRoot: state.settings.exportFolderLabel || runtimeExportFolder, model: "realesrgan-x4plus", scale: 4 });
+      const resultNode = addNode("image", source.x + NODE_WIDTH + 40, source.y, false);
+      resultNode.image = result.dataUrl;
+      resultNode.fileName = result.fileName || "upscaled.png";
+      resultNode.mime = "image/png";
+      resultNode.outputPath = result.outputPath || "";
+      resultNode.upscaleSourceNodeId = source.id;
+      await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
+      state.edges.push({ id: uid("e"), from: { node: source.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
+      pushHistory();
+      render();
+      toast("图片放大完成");
+    } catch (error) {
+      console.error("[图片放大插件] 处理失败", { nodeId: source.id, message: error.message });
+      toast(`图片放大失败：可能是显卡不支持 Vulkan、驱动过旧或图片过大；建议更新显卡驱动或换较小图片重试。${error.message || ""}`);
+    }
+  }
+}
+
 const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, layoutFrame: 0 };
 
 function onboardingCopy(zh, en) {
@@ -4862,6 +5380,66 @@ function closeFolderImportDialog(force = false) {
   pendingFolderImport = null;
 }
 
+$("installBackgroundRemovalPluginBtn").onclick = async () => {
+  const button = $("installBackgroundRemovalPluginBtn");
+  const progress = $("backgroundRemovalInstallProgress");
+  button.disabled = true; button.textContent = "安装中…"; progress.classList.remove("hidden");
+  $("backgroundRemovalProgressBar").style.width = "0%"; $("backgroundRemovalProgressText").textContent = "准备下载";
+  try {
+    await desktop.installBackgroundRemoval();
+    toast("智能抠图插件安装完成");
+  } catch (error) {
+    console.error("[智能抠图插件] 安装失败", error);
+    showAppAlert(`智能抠图插件安装失败。可能原因：网络无法访问 GitHub、磁盘空间不足或模型校验失败。建议办法：检查网络、剩余空间和 data 目录权限后重试。\n${error.message || ""}`);
+  } finally {
+    button.disabled = false; button.textContent = "安装插件";
+    await refreshBackgroundRemovalPluginStatus();
+    if (backgroundRemovalPluginInstalled) {
+      $("backgroundRemovalProgressBar").style.width = "100%";
+      $("backgroundRemovalProgressText").textContent = "安装完成";
+      window.setTimeout(() => progress.classList.add("hidden"), 900);
+    } else {
+      progress.classList.add("hidden");
+    }
+  }
+};
+
+$("removeBackgroundRemovalPluginBtn").onclick = async () => {
+  if (!window.confirm("确定卸载智能抠图插件并删除 213.6 MB 模型吗？已生成的图片不会删除。")) return;
+  try { await desktop.uninstallBackgroundRemoval(); toast("智能抠图插件已卸载，生成图片保持不变"); $("backgroundRemovalInstallProgress").classList.add("hidden"); await refreshBackgroundRemovalPluginStatus(); }
+  catch (error) { showAppAlert(`无法卸载智能抠图插件。可能原因：抠图任务正在运行或目录权限不足。建议办法：等待任务结束后重试。\n${error.message || ""}`); }
+};
+
+$("installImageUpscalePluginBtn").onclick = async () => {
+  const button = $("installImageUpscalePluginBtn");
+  button.disabled = true;
+  button.textContent = "安装中…";
+  $("imageUpscalePluginHint").textContent = "正在从 Real-ESRGAN 官方 Release 下载并校验，约 63 MB，请不要关闭软件。";
+  try {
+    await desktop.installImageUpscale();
+    toast("图片放大插件安装完成");
+  } catch (error) {
+    console.error("[图片放大插件] 安装失败", error);
+    showAppAlert(`图片放大插件安装失败。可能原因：网络无法访问 GitHub、磁盘权限不足或文件校验失败。建议办法：检查网络和 data 目录权限后重试。\n${error.message || ""}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "安装插件";
+    $("imageUpscalePluginHint").textContent = "当前默认使用照片模型进行 4× 放大。";
+    await refreshImageUpscalePluginStatus();
+  }
+};
+
+$("removeImageUpscalePluginBtn").onclick = async () => {
+  if (!window.confirm("确定卸载图片放大插件吗？已生成的图片不会删除。")) return;
+  try {
+    await desktop.uninstallImageUpscale();
+    toast("图片放大插件已卸载，生成图片保持不变");
+    await refreshImageUpscalePluginStatus();
+  } catch (error) {
+    showAppAlert(`无法卸载图片放大插件。可能原因：插件正在运行或目录权限不足。建议办法：等待当前放大任务结束后重试。\n${error.message || ""}`);
+  }
+};
+
 function openFolderImportDialog(entries, folderName = "") {
   const imageEntries = Array.from(entries || []).filter(entry => isSupportedImageFile(entry.file || entry));
   if (!imageEntries.length) {
@@ -5077,7 +5655,42 @@ async function collectFolderImageFiles(directoryHandle) {
 if (window.chrome?.webview) {
   window.chrome.webview.addEventListener("message", async event => {
     const message = event.data || {};
-    if (message.type === "image-folder-selected") {
+    if (message.type === "plugin-install-progress" && message.pluginId === "background-removal") {
+      const percent = Math.max(0, Math.min(100, Number(message.percent) || 0));
+      $("backgroundRemovalInstallProgress").classList.remove("hidden");
+      $("backgroundRemovalProgressBar").style.width = `${percent}%`;
+      $("backgroundRemovalProgressText").textContent = message.stage === "verifying" ? "正在校验模型" : message.stage === "complete" ? "安装完成" : `下载 ${percent}%`;
+    } else if (message.type === "desktop:paste") {
+      const active = document.activeElement;
+      const isTextField = active?.matches?.("textarea,input");
+      if (message.kind === "text" && isTextField) {
+        const value = String(message.text || "");
+        const start = active.selectionStart ?? active.value.length;
+        const end = active.selectionEnd ?? start;
+        active.setRangeText(value, start, end, "end");
+        active.dispatchEvent(new Event("input", { bubbles: true }));
+      } else if (message.kind === "image" && String(message.dataUrl || "").startsWith("data:image/")) {
+        const blob = await (await fetch(message.dataUrl)).blob();
+        const file = new File([blob], `clipboard_${timestamp()}.png`, { type: message.mime || "image/png" });
+        if (active === els.composerText) await createFromImageFile(file);
+        else {
+          const node = addNode("image", lastPointerWorld.x, lastPointerWorld.y, false);
+          node.image = await fileToDataUrl(file);
+          node.fileName = file.name;
+          node.mime = file.type;
+          await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+          pushHistory();
+          render();
+          toast("已从剪贴板创建图片节点");
+        }
+      } else if (message.kind === "text" && String(message.text || "").trim()) {
+        const node = addNode("text", lastPointerWorld.x, lastPointerWorld.y, false);
+        node.text = String(message.text);
+        pushHistory();
+        render();
+        toast("已从剪贴板创建文字节点");
+      }
+    } else if (message.type === "image-folder-selected") {
       try {
         const directoryHandle = event.additionalObjects?.[0];
         if (!directoryHandle) throw new Error("没有取得文件夹读取权限");
@@ -5094,6 +5707,14 @@ if (window.chrome?.webview) {
       }
     } else if (message.type === "image-folder-error") {
       toast(`无法选择文件夹：${message.error || "系统文件夹选择器发生错误"}；请重新尝试。`);
+    } else if (message.type === "screenshot:enqueue") {
+      enqueueScreenshotTasks(message);
+    } else if (message.type === "screenshot:prompt-library-changed") {
+      await loadGlobalLibraryFromDisk();
+      syncCustomMaterialsList();
+      toast("截图工具中的提示词已同步到自定义文字");
+    } else if (message.type === "screenshot:request-node-catalog") {
+      publishScreenshotNodeCatalog(true);
     }
   });
 }
@@ -5143,7 +5764,19 @@ els.hideNodeTitles.onchange = () => {
 
 // screenshot panel trigger removed
 
-// screenshot settings bindings removed
+const openScreenshotToolBtn = $("openScreenshotToolBtn");
+if (openScreenshotToolBtn) openScreenshotToolBtn.onclick = async () => {
+  if (!desktop?.openScreenshotWindow) {
+    toast("截图工具仅在 CanvasFlow Windows 桌面版中可用");
+    return;
+  }
+  try {
+    await desktop.openScreenshotWindow();
+  } catch (error) {
+    console.error("[截图工具] 无法打开原生截图窗口", error);
+    toast(`截图窗口无法打开：${error.message || "桌面桥接暂时不可用"}`);
+  }
+};
 
 els.gridSize.onchange = () => {
   state.settings.gridSize = Math.max(1, Number(els.gridSize.value) || 20);
@@ -5249,26 +5882,41 @@ els.clearKeyBtn.onclick = async () => {
   toast("API Key 已从所有页面清除，可安全分享");
 };
 
-els.zipExportToggle.onchange = () => {
-  state.settings.zipExport = els.zipExportToggle.checked;
-  if (!state.settings.zipExport) {
-    state.exportDirHandle = null;
-    toast("已切换为文件夹导出，浏览器可能限制写入系统盘（C 盘），建议选 D 盘目录");
-  }
-  pushHistory();
-};
-
-els.exportInputsToggle.onchange = () => {
-  state.settings.exportInputs = els.exportInputsToggle.checked;
-  pushHistory();
-};
-
 els.copyExportPathBtn.onclick = copyExportPath;
-
-els.exportFolder.onchange = () => {
-  state.settings.exportFolderLabel = els.exportFolder.value.trim();
-  saveCurrentPage();
-  persistPages();
+els.chooseExportFolderBtn.onclick = async () => {
+  if (!desktop?.chooseOutputFolder) return toast("修改生成文件夹仅支持 .NET 桌面版");
+  try {
+    const result = await desktop.chooseOutputFolder(els.exportFolder.value.trim());
+    if (result?.cancelled || !result?.path) return;
+    const selectedPath = String(result.path).trim();
+    runtimeExportFolder = selectedPath;
+    state.settings.exportFolderLabel = selectedPath;
+    els.exportFolder.value = selectedPath;
+    try { localStorage.setItem(OUTPUT_FOLDER_KEY, selectedPath); } catch (_) { /* 桌面状态仍会保存 */ }
+    for (const page of state.pages) {
+      if (page?.data?.settings) page.data.settings.exportFolderLabel = selectedPath;
+    }
+    saveCurrentPage();
+    persistPages();
+    console.info("[生成文件夹] 保存位置已修改", { path: selectedPath });
+    toast("生成文件夹已修改");
+  } catch (error) {
+    console.error("[生成文件夹] 选择失败", error);
+    toast(`无法修改生成文件夹：可能是路径权限不足或选择器异常；请换一个普通文件夹后重试。${error.message || ""}`);
+  }
+};
+els.openExportFolderBtn.onclick = async () => {
+  const folderPath = els.exportFolder.value.trim();
+  if (!folderPath) return toast("生成文件夹路径为空，请先修改位置");
+  if (!desktop?.openOutputFolder) return toast("打开生成文件夹仅支持 .NET 桌面版");
+  try {
+    await desktop.openOutputFolder(folderPath);
+    toast("已打开生成文件夹");
+  } catch (error) {
+    console.error("[生成文件夹] 打开失败", error);
+    try { await copyTextValue(folderPath); } catch (_) { /* 保留原始错误 */ }
+    toast("无法打开生成文件夹：可能被系统或安全软件拦截；路径已复制，可粘贴到资源管理器地址栏");
+  }
 };
 
 els.customMaterialFileBtn.onclick = () => {
@@ -6211,6 +6859,15 @@ async function init() {
     console.error("[初始化] 无法识别默认导出目录", err);
     toast("无法识别程序所在目录：将暂时使用 export；请在设置中确认完整导出路径");
   }
+  try {
+    const savedOutputFolder = localStorage.getItem(OUTPUT_FOLDER_KEY)?.trim();
+    if (savedOutputFolder) {
+      runtimeExportFolder = savedOutputFolder;
+      console.info("[初始化] 使用用户设置的生成目录", { exportFolder: runtimeExportFolder });
+    }
+  } catch (error) {
+    console.warn("[初始化] 无法读取生成目录设置，将使用默认目录", error);
+  }
   const desktopState = await loadDesktopState();
   const restoredExistingState = loadPagesFromStorage(desktopState);
   if (!restoredExistingState) {
@@ -6232,6 +6889,8 @@ async function init() {
   updateUndoRedo();
   applySettings();
   render();
+  await refreshBackgroundRemovalPluginStatus();
+  await refreshImageUpscalePluginStatus();
   setUiLanguage(uiLanguage);
   const uiObserver = new MutationObserver(changes => {
     for (const change of changes) {

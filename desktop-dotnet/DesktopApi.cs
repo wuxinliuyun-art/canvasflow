@@ -35,7 +35,7 @@ internal sealed class DesktopApi
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.5.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.0");
         _version = ReadVersion();
     }
 
@@ -83,6 +83,7 @@ internal sealed class DesktopApi
     private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken)
     {
         Exception? lastError = null;
+        DesktopApiResponse? lastRetryableResponse = null;
         foreach (var baseUrl in ApiBaseUrls)
         {
             try
@@ -92,8 +93,15 @@ internal sealed class DesktopApi
                 if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
                 using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                _log($"[AI代理] {baseUrl}{apiPath} -> {(int)response.StatusCode}", false);
-                return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+                var result = new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+                if (result.Status is 500 or 502 or 503 or 504)
+                {
+                    lastRetryableResponse = result;
+                    _log($"[AI代理] {baseUrl}{apiPath} -> {result.Status}，尝试备用地址", true);
+                    continue;
+                }
+                _log($"[AI代理] {baseUrl}{apiPath} -> {result.Status}", false);
+                return result;
             }
             catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
             {
@@ -101,6 +109,7 @@ internal sealed class DesktopApi
                 _log($"[AI代理] {baseUrl}{apiPath} 连接失败，尝试备用地址：{error.Message}", true);
             }
         }
+        if (lastRetryableResponse is not null) return lastRetryableResponse;
         throw lastError ?? new HttpRequestException("所有API地址均不可达");
     }
 

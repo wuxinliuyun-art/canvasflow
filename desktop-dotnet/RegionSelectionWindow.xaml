@@ -1,0 +1,22 @@
+<Window x:Class="CanvasFlow.Desktop.RegionSelectionWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+ Background="Black" Cursor="Cross" KeyDown="Window_KeyDown">
+  <Grid x:Name="SelectionRoot" Background="Transparent" MouseLeftButtonDown="SelectionRoot_MouseLeftButtonDown"
+        MouseMove="SelectionRoot_MouseMove" MouseLeftButtonUp="SelectionRoot_MouseLeftButtonUp">
+    <Image x:Name="FrozenScreen" Stretch="Fill" IsHitTestVisible="False"/>
+    <Canvas IsHitTestVisible="False">
+      <Path x:Name="Shade" Fill="#99000000"/>
+      <Border x:Name="SelectionBorder" Visibility="Collapsed" BorderBrush="#FFFFFF" BorderThickness="2"
+              Background="#10FFFFFF" CornerRadius="2">
+        <TextBlock x:Name="SizeLabel" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,4"
+                   Padding="6,3" Foreground="White" Background="#B0000000" FontSize="12"/>
+      </Border>
+    </Canvas>
+    <Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,8"
+            CornerRadius="9" Background="#D918191B" IsHitTestVisible="False">
+      <TextBlock Foreground="White" FontSize="14" Text="拖动选择截图区域 · Esc 取消"/>
+    </Border>
+  </Grid>
+</Window>

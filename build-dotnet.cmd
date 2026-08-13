@@ -7,7 +7,10 @@ set "PUBLISH_DIR=%PROJECT_ROOT%desktop-dotnet\bin\Release\net10.0-windows\win-x6
 set "SETUP_FILE=%PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup.exe"
 set "ISCC="
 
-dotnet publish "%DESKTOP_PROJECT%" --configuration Release --runtime win-x64 --self-contained true --nologo
+dotnet restore "%DESKTOP_PROJECT%" --runtime win-x64 --nologo
+if errorlevel 1 exit /b 1
+
+dotnet publish "%DESKTOP_PROJECT%" --configuration Release --runtime win-x64 --self-contained true --no-restore --nologo
 if errorlevel 1 exit /b 1
 
 echo.

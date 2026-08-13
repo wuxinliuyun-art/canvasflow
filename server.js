@@ -241,16 +241,23 @@ function proxyRequest(method, targetUrl, headers, body) {
 
 async function tryProxyRequest(method, pathStr, headers, body) {
   let lastError = null;
+  let lastRetryableResult = null;
   for (const baseUrl of API_BASE_URLS) {
     try {
       const result = await proxyRequest(method, baseUrl + pathStr, headers, body);
       console.log(`[Proxy] ${baseUrl}${pathStr} -> ${result.status}`);
+      if ([500, 502, 503, 504].includes(result.status)) {
+        lastRetryableResult = result;
+        console.log(`[Proxy] ${baseUrl}${pathStr} returned ${result.status}, trying next...`);
+        continue;
+      }
       return result;
     } catch (err) {
       lastError = err;
       console.log(`[Proxy] ${baseUrl}${pathStr} failed: ${err.message}, trying next...`);
     }
   }
+  if (lastRetryableResult) return lastRetryableResult;
   throw lastError || new Error("所有 API 地址均不可达");
 }
 

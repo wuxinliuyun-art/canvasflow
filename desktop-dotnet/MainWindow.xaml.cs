@@ -24,11 +24,15 @@ public partial class MainWindow : Window
     private const string CanvasUrl = "https://canvasflow.local/index.html";
     private readonly CancellationTokenSource _shutdown = new();
     private DesktopApi? _desktopApi;
+    private ImageUpscalePlugin? _imageUpscalePlugin;
+    private BackgroundRemovalPlugin? _backgroundRemovalPlugin;
+    private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _root;
     private bool _shutdownComplete;
     private bool _saveRequestStarted;
     private bool _canvasReady;
+    private bool _darkTheme = true;
     private TaskCompletionSource<(bool Ok, string Error)>? _pageSaveCompletion;
     private readonly object _logLock = new();
     private readonly object _assetLock = new();
@@ -78,6 +82,18 @@ public partial class MainWindow : Window
           storeImage: (dataUrl, fileName, mime, category = "originals") => invoke("desktop:store-image", { dataUrl, fileName, mime, category }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
+          chooseOutputFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || "") }),
+          openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
+          copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
+          openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
+          imageUpscaleStatus: () => invoke("desktop:image-upscale-status", {}, 60000),
+          installImageUpscale: () => invoke("desktop:install-image-upscale", {}, 1200000),
+          uninstallImageUpscale: () => invoke("desktop:uninstall-image-upscale", {}, 60000),
+          upscaleImage: payload => invoke("desktop:upscale-image", payload || {}, 1200000),
+          backgroundRemovalStatus: () => invoke("desktop:background-removal-status", {}, 60000),
+          installBackgroundRemoval: () => invoke("desktop:install-background-removal", {}, 2400000),
+          uninstallBackgroundRemoval: () => invoke("desktop:uninstall-background-removal", {}, 60000),
+          removeImageBackground: payload => invoke("desktop:remove-image-background", payload || {}, 1200000),
           apiRequest: (path, options = {}) => invoke("desktop:api", {
             path: String(path || ""),
             method: String(options.method || "GET"),
@@ -94,7 +110,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
-        Closed += (_, _) => Application.Current.Shutdown();
+        Closed += (_, _) => System.Windows.Application.Current.Shutdown();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -118,16 +134,89 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr windowHandle, int attribute, ref int value, int valueSize);
 
+    private void CanvasView_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.V
+            || (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) == 0) return;
+        if (!TryPostNativeClipboardContent()) return;
+        e.Handled = true;
+    }
+
+    private bool TryPostNativeClipboardContent()
+    {
+        try
+        {
+            object? message = null;
+            if (System.Windows.Clipboard.ContainsImage())
+            {
+                var pngBytes = ReadClipboardPngBytes();
+                if (pngBytes is not null)
+                {
+                    message = new { type = "desktop:paste", kind = "image", dataUrl = $"data:image/png;base64,{Convert.ToBase64String(pngBytes)}", mime = "image/png" };
+                }
+            }
+            else if (System.Windows.Clipboard.ContainsText())
+            {
+                var text = System.Windows.Clipboard.GetText();
+                if (!string.IsNullOrEmpty(text)) message = new { type = "desktop:paste", kind = "text", text };
+            }
+            if (message is null || CanvasView.CoreWebView2 is null) return false;
+            CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message));
+            Log("[剪贴板] 已将 Windows 剪贴板内容交给画板。", false);
+            return true;
+        }
+        catch (Exception error)
+        {
+            Log($"[剪贴板] 读取失败。可能原因：剪贴板正被其他程序占用。建议：重新复制后再粘贴。详细信息：{error.Message}", true);
+            return false;
+        }
+    }
+
+    private static byte[]? ReadClipboardPngBytes()
+    {
+        // Applications such as browsers usually expose a real PNG stream. Keep it unchanged when available.
+        var dataObject = System.Windows.Clipboard.GetDataObject();
+        if (dataObject?.GetDataPresent("PNG", false) == true)
+        {
+            var pngData = dataObject.GetData("PNG", false);
+            if (pngData is MemoryStream memory)
+            {
+                memory.Position = 0;
+                return memory.ToArray();
+            }
+            if (pngData is byte[] bytes && bytes.Length > 0) return bytes;
+        }
+
+        var bitmap = System.Windows.Clipboard.GetImage();
+        if (bitmap is null) return null;
+        // Snipaste commonly supplies DIB/DIBV5. WPF can interpret its alpha channel as fully transparent;
+        // converting to BGR32 preserves the visible RGB pixels and deliberately removes that invalid alpha.
+        var opaque = bitmap.Format == System.Windows.Media.PixelFormats.Bgr32
+            ? bitmap
+            : new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgr32, null, 0);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(opaque));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        var startupTimer = Stopwatch.StartNew();
         try
         {
             _root = FindProjectRoot();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
             _desktopApi = new DesktopApi(_root, Log, ReadApiKey);
-            LoadAssets();
+            _imageUpscalePlugin = new ImageUpscalePlugin(_root, Log);
+            _backgroundRemovalPlugin = new BackgroundRemovalPlugin(_root, Log);
+            var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
             await InitializeWebViewAsync(_shutdown.Token);
+            Log($"[启动性能] WebView2 环境初始化完成：{startupTimer.ElapsedMilliseconds}ms", false);
+            await assetsTask;
+            Log($"[启动性能] 素材索引读取完成：{startupTimer.ElapsedMilliseconds}ms", false);
             NavigateCanvas();
         }
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
@@ -154,6 +243,7 @@ public partial class MainWindow : Window
         {
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
+            CanvasView.PreviewKeyDown += CanvasView_PreviewKeyDown;
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _root!, CoreWebView2HostResourceAccessKind.DenyCors);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
@@ -180,7 +270,12 @@ public partial class MainWindow : Window
                     if (type.GetString() == "theme-change" && root.TryGetProperty("theme", out var theme))
                     {
                         var dark = theme.GetString() == "dark";
-                        Dispatcher.Invoke(() => ApplyTitleBarColors(dark));
+                        _darkTheme = dark;
+                        Dispatcher.Invoke(() =>
+                        {
+                            ApplyTitleBarColors(dark);
+                            _screenshotToolWindow?.ApplyTheme(dark);
+                        });
                         Log($"[主题] 标题栏已切换为{(dark ? "深色" : "浅色")}模式。", false);
                     }
                     else if (type.GetString() == "pick-image-folder")
@@ -201,6 +296,127 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, OpenFileLocation(root)); }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:choose-output-folder")
+                    {
+                        try { PostRpcResult(root, ChooseOutputFolder(root)); }
+                        catch (Exception chooseError) { PostRpcResult(root, error: chooseError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:open-output-folder")
+                    {
+                        try { PostRpcResult(root, OpenOutputFolder(root)); }
+                        catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:copy-image")
+                    {
+                        try { PostRpcResult(root, CopyImageToClipboard(root)); }
+                        catch (Exception copyError) { PostRpcResult(root, error: copyError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:open-screenshot-window")
+                    {
+                        try
+                        {
+                            Dispatcher.Invoke(OpenScreenshotTool);
+                            PostRpcResult(root, new { opened = true });
+                        }
+                        catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:image-upscale-status")
+                    {
+                        try { PostRpcResult(root, await RequireImageUpscalePlugin().StatusAsync()); }
+                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:install-image-upscale")
+                    {
+                        try { PostRpcResult(root, await RequireImageUpscalePlugin().InstallAsync(_shutdown.Token)); }
+                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:uninstall-image-upscale")
+                    {
+                        try { PostRpcResult(root, RequireImageUpscalePlugin().Uninstall()); }
+                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:upscale-image")
+                    {
+                        try
+                        {
+                            var dataUrl = root.TryGetProperty("dataUrl", out var dataValue) ? dataValue.GetString() ?? "" : "";
+                            var fileName = root.TryGetProperty("fileName", out var nameValue) ? nameValue.GetString() ?? "image.png" : "image.png";
+                            var outputRoot = root.TryGetProperty("outputRoot", out var outputValue) ? outputValue.GetString() ?? "" : "";
+                            var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() ?? "realesrgan-x4plus" : "realesrgan-x4plus";
+                            var scale = root.TryGetProperty("scale", out var scaleValue) && scaleValue.TryGetInt32(out var parsedScale) ? parsedScale : 4;
+                            if (string.IsNullOrWhiteSpace(outputRoot)) outputRoot = Path.Combine(_root!, "export");
+                            PostRpcResult(root, await RequireImageUpscalePlugin().UpscaleAsync(dataUrl, fileName, outputRoot, model, scale, _shutdown.Token));
+                        }
+                        catch (Exception upscaleError) { PostRpcResult(root, error: upscaleError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:background-removal-status")
+                    {
+                        try { PostRpcResult(root, await RequireBackgroundRemovalPlugin().StatusAsync()); }
+                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:install-background-removal")
+                    {
+                        try
+                        {
+                            var result = await RequireBackgroundRemovalPlugin().InstallAsync((percent, stage) => Dispatcher.Invoke(() =>
+                                CanvasView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "plugin-install-progress", pluginId = "background-removal", percent, stage }))), _shutdown.Token);
+                            PostRpcResult(root, result);
+                        }
+                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:uninstall-background-removal")
+                    {
+                        try { PostRpcResult(root, RequireBackgroundRemovalPlugin().Uninstall()); }
+                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:remove-image-background")
+                    {
+                        try
+                        {
+                            var dataUrl = root.TryGetProperty("dataUrl", out var dataValue) ? dataValue.GetString() ?? "" : "";
+                            var fileName = root.TryGetProperty("fileName", out var nameValue) ? nameValue.GetString() ?? "image.png" : "image.png";
+                            var outputRoot = root.TryGetProperty("outputRoot", out var outputValue) ? outputValue.GetString() ?? "" : "";
+                            if (string.IsNullOrWhiteSpace(outputRoot)) outputRoot = Path.Combine(_root!, "export");
+                            PostRpcResult(root, await RequireBackgroundRemovalPlugin().RemoveBackgroundAsync(dataUrl, fileName, outputRoot, _shutdown.Token));
+                        }
+                        catch (Exception removalError) { Log($"[智能抠图插件] 任务失败：{removalError}", true); PostRpcResult(root, error: removalError.Message); }
+                    }
+                    else if (type.GetString() == "screenshot:task-update")
+                    {
+                        var update = new ScreenshotTaskUpdate(
+                            root.TryGetProperty("requestId", out var requestValue) ? requestValue.GetString() ?? "" : "",
+                            root.TryGetProperty("taskId", out var taskValue) ? taskValue.GetString() ?? "" : "",
+                            root.TryGetProperty("status", out var statusValue) ? statusValue.GetString() ?? "" : "",
+                            root.TryGetProperty("progress", out var progressValue) && progressValue.TryGetInt32(out var progress) ? progress : 0,
+                            root.TryGetProperty("outputPath", out var outputValue) ? outputValue.GetString() ?? "" : "",
+                            root.TryGetProperty("error", out var errorValue) ? errorValue.GetString() ?? "" : "");
+                        _screenshotToolWindow?.HandleTaskUpdate(update);
+                    }
+                    else if (type.GetString() == "screenshot:node-catalog")
+                    {
+                        var options = new List<ScreenshotCanvasNodeOption>();
+                        if (root.TryGetProperty("nodes", out var nodesValue) && nodesValue.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in nodesValue.EnumerateArray()) options.Add(new ScreenshotCanvasNodeOption(
+                                item.TryGetProperty("id", out var idValue) ? idValue.GetString() ?? "" : "",
+                                item.TryGetProperty("name", out var nameValue) ? nameValue.GetString() ?? "截图功能节点" : "截图功能节点",
+                                item.TryGetProperty("summary", out var summaryValue) ? summaryValue.GetString() ?? "" : ""));
+                        }
+                        _screenshotToolWindow?.UpdateCanvasNodes(options);
+                    }
+                    else if (type.GetString() == "screenshot:batch-dialog-open")
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            _screenshotToolWindow?.SuspendForCanvasDialog();
+                            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                            Activate();
+                        });
+                    }
+                    else if (type.GetString() == "screenshot:batch-dialog-close")
+                    {
+                        Dispatcher.Invoke(() => _screenshotToolWindow?.RestoreAfterCanvasDialog());
                     }
                     else if (type.GetString() == "desktop:api")
                     {
@@ -285,6 +501,11 @@ public partial class MainWindow : Window
         });
         CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
     }
+
+    private ImageUpscalePlugin RequireImageUpscalePlugin() =>
+        _imageUpscalePlugin ?? throw new InvalidOperationException("图片放大插件服务尚未初始化");
+    private BackgroundRemovalPlugin RequireBackgroundRemovalPlugin() =>
+        _backgroundRemovalPlugin ?? throw new InvalidOperationException("智能抠图插件服务尚未初始化");
 
     private string SecretsPath => Path.Combine(_root!, "data", "secrets.json");
     private string AssetsDirectory => Path.Combine(_root!, "data", "assets");
@@ -443,6 +664,64 @@ public partial class MainWindow : Window
         return new { opened = true, path = fullPath, directory };
     }
 
+    private object ChooseOutputFolder(JsonElement request)
+    {
+        var currentPath = request.TryGetProperty("currentPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        var picker = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择生成文件保存位置",
+            Multiselect = false
+        };
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            try
+            {
+                var fullCurrentPath = Path.GetFullPath(currentPath);
+                if (Directory.Exists(fullCurrentPath)) picker.InitialDirectory = fullCurrentPath;
+            }
+            catch (Exception error) { Log($"[生成文件夹] 忽略无效的初始路径：{error.Message}", true); }
+        }
+        if (picker.ShowDialog(this) != true) return new { cancelled = true, path = currentPath };
+        var selectedPath = Path.GetFullPath(picker.FolderName);
+        Log($"[生成文件夹] 用户已选择：{selectedPath}", false);
+        return new { cancelled = false, path = selectedPath };
+    }
+
+    private object OpenOutputFolder(JsonElement request)
+    {
+        var requestedPath = request.TryGetProperty("folderPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("生成文件夹路径为空");
+        var fullPath = Path.GetFullPath(requestedPath);
+        Directory.CreateDirectory(fullPath);
+        Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
+        Log($"[生成文件夹] 已请求打开：{fullPath}", false);
+        return new { opened = true, path = fullPath };
+    }
+
+    private object CopyImageToClipboard(JsonElement request)
+    {
+        var requestedPath = request.TryGetProperty("filePath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("图片没有可用的本地文件路径");
+        var fullPath = Path.GetFullPath(requestedPath);
+        if (!File.Exists(fullPath)) throw new FileNotFoundException("图片文件不存在，可能已被移动或删除", fullPath);
+        var bitmap = LoadClipboardBitmap(fullPath);
+        System.Windows.Clipboard.SetImage(bitmap);
+        Log($"[生成结果] 已复制图片到剪贴板：{fullPath}", false);
+        return new { copied = true, path = fullPath };
+    }
+
+    private static System.Windows.Media.Imaging.BitmapSource LoadClipboardBitmap(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+            stream,
+            System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+            System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+        var bitmap = decoder.Frames[0];
+        bitmap.Freeze();
+        return bitmap;
+    }
+
     private string SafeAssetPath(string relativePath)
     {
         var root = Path.GetFullPath(AssetsDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -504,12 +783,20 @@ public partial class MainWindow : Window
 
     private void NavigateCanvas()
     {
+        var navigationTimer = Stopwatch.StartNew();
+        CanvasView.CoreWebView2.DOMContentLoaded += (_, _) =>
+        {
+            if (StartupOverlay.Visibility != Visibility.Visible) return;
+            StartupOverlay.Visibility = Visibility.Collapsed;
+            Log($"[启动性能] 页面结构已就绪并提前显示画布：{navigationTimer.ElapsedMilliseconds}ms", false);
+        };
         CanvasView.CoreWebView2.NavigationCompleted += (_, e) =>
         {
             if (e.IsSuccess)
             {
                 _canvasReady = true;
                 StartupOverlay.Visibility = Visibility.Collapsed;
+                Log($"[启动性能] 页面导航完成：{navigationTimer.ElapsedMilliseconds}ms", false);
                 Log($"[画布] 加载完成：{CanvasUrl}", false);
             }
             else
@@ -521,11 +808,58 @@ public partial class MainWindow : Window
         CanvasView.Source = new Uri(CanvasUrl);
     }
 
+    private void OpenScreenshotTool()
+    {
+        if (_root is null) throw new InvalidOperationException("CanvasFlow 数据目录尚未准备完成，请稍后重试。");
+        if (_screenshotToolWindow is null)
+        {
+            _screenshotToolWindow = new ScreenshotToolWindow(_root);
+            _screenshotToolWindow.GenerationRequested += EnqueueScreenshotGenerationAsync;
+            _screenshotToolWindow.PromptLibraryChanged += NotifyPromptLibraryChangedAsync;
+            _screenshotToolWindow.ApplyTheme(_darkTheme);
+        }
+        _screenshotToolWindow.ShowAndActivate();
+        if (_canvasReady && CanvasView.CoreWebView2 is not null)
+            CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "screenshot:request-node-catalog" }));
+    }
+
+    private Task NotifyPromptLibraryChangedAsync()
+    {
+        if (!_canvasReady || CanvasView.CoreWebView2 is null) return Task.CompletedTask;
+        CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            type = "screenshot:prompt-library-changed"
+        }));
+        return Task.CompletedTask;
+    }
+
+    private Task EnqueueScreenshotGenerationAsync(ScreenshotGenerationRequest request)
+    {
+        if (!_canvasReady || CanvasView.CoreWebView2 is null)
+            throw new InvalidOperationException("主画板尚未加载完成，请稍后重试。");
+        CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            type = "screenshot:enqueue",
+            requestId = request.RequestId,
+            imageDataUrl = request.ImageDataUrl,
+            prompt = request.Prompt,
+            model = request.Model,
+            resolution = request.Resolution,
+            quality = request.Quality,
+            ratio = request.Ratio,
+            count = request.Count,
+            thumbnailDataUrl = request.ThumbnailDataUrl
+            ,useCanvasNodeInput = request.UseCanvasNodeInput
+            ,canvasNodeId = request.CanvasNodeId
+        }));
+        return Task.CompletedTask;
+    }
+
     private void ShowFailure(Exception ex)
     {
         StatusText.Text = "启动失败";
         Log($"[错误] {ex.Message}", true);
-        MessageBox.Show(ex.Message, "CanvasFlow 启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        System.Windows.MessageBox.Show(ex.Message, "CanvasFlow 启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void Log(string message, bool error)
@@ -552,7 +886,7 @@ public partial class MainWindow : Window
             _saveRequestStarted = false;
             Show();
             Activate();
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 $"项目没有成功保存，因此CanvasFlow没有退出。\n\n可能原因：数据目录无写入权限或页面暂时无响应。\n建议办法：确认磁盘和目录权限后再次关闭。\n\n详细信息：{saveResult.Error}",
                 "CanvasFlow 保存失败",
                 MessageBoxButton.OK,
@@ -561,6 +895,7 @@ public partial class MainWindow : Window
         }
 
         Hide();
+        _screenshotToolWindow?.ShutdownWindow();
         _shutdown.Cancel();
         _shutdownComplete = true;
         Environment.Exit(0);

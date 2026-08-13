@@ -1,0 +1,16 @@
+{
+  "id": "background-removal",
+  "name": "智能抠图",
+  "version": "1.0.0",
+  "type": "onnx-model",
+  "installation": "optional",
+  "model": "BiRefNet General Lite",
+  "originalProject": "https://github.com/ZhengPeng7/BiRefNet",
+  "originalLicense": "MIT",
+  "onnxProvider": "rembg",
+  "onnxProviderProject": "https://github.com/danielgatis/rembg",
+  "download": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+  "downloadIsOfficialBiRefNet": false,
+  "modelBytes": 224005088,
+  "modelMd5": "4fab47adc4ff364be1713e97b7e66334"
+}

@@ -2,6 +2,13 @@
 
 ## 已知问题 / 踩坑记录
 
+### ONNX Runtime 在 WPF 宿主中初始化失败
+
+- 现象：BiRefNet 模型下载和校验均成功，但在 CanvasFlow WPF 进程中加载 `onnxruntime.dll` 报 `0x8007045A（DLL 初始化例程失败）`；同一 DLL 和模型在独立 .NET 控制台程序中运行正常。
+- 原因：ONNX Runtime 原生库在当前 WPF/WebView2 宿主进程内初始化冲突，并非模型损坏、文件缺失或路径错误；显式绝对路径加载不能解决。
+- 解决：智能抠图改为独立插件工作进程执行 ONNX 推理，主程序只通过受限临时输入/输出文件交换结果；工作进程结束后释放全部模型内存。
+- 避免：不得再次把 ONNX Runtime 直接加载进 CanvasFlow 主进程，也不得把该错误笼统提示为模型不完整；工作进程不得使用 CMD 或 PowerShell，且只能访问插件模型、`data/plugin-work/background-removal/` 和用户生成目录下的 `background_removed/`。
+
 ### SVG 图标在按钮内视觉不居中
 
 - 现象：快捷键、上传等 SVG 图标看起来偏向按钮一侧，不同按钮重复出现类似问题。
@@ -44,7 +51,16 @@
 - 解决：画布节点内的图片统一设置 `pointer-events: none`，鼠标操作交给预览容器和节点；同时保留捕获阶段的原生拖动保护。
 - 避免：新增节点预览图片时必须放在可处理双击的容器内，不要给图片元素单独绑定拖放行为。
 
+### 截图窗口预览导致桌面程序闪退
+
+- 现象：点击“打开截图窗口”后界面短暂卡住，随后整个 CanvasFlow 退出；Windows 事件记录为未处理的 `.NET` 异常。
+- 原因：WPF `BitmapImage` 使用文件流加载时同时设置了 `BitmapCreateOptions.IgnoreImageCache`，内部缓存尝试使用空 URI 作为键并抛出 `ArgumentNullException`。
+- 解决：固定名称截图继续使用文件流与 `BitmapCacheOption.OnLoad` 强制读取新内容，但不得同时设置 `IgnoreImageCache`；预览加载必须通过异常隔离方法更新。
+- 避免：所有 WPF 图片预览统一使用“文件流 + OnLoad + Freeze”方式；预览失败只能清空当前图片并提示，不得将异常传播到桌面消息循环。
+
 ## 架构决策
+
+- 图片放大作为用户主动安装的例外插件，允许 .NET 直接启动 Real-ESRGAN 官方 `realesrgan-ncnn-vulkan.exe`；不得经过 BAT、CMD 或 PowerShell。安装包固定来自官方 v0.2.5.0 Release，运行前必须校验 EXE 的 SHA-256，只允许读写 `data/plugin-work/image-upscale/` 临时输入和用户生成目录下的 `upscaled/`。此例外不得扩展为任意外部程序执行能力；卸载只删除 `data/plugins/image-upscale/`，不得删除用户生成结果。
 
 - 项目创建时固定为 `ai` 或 `mindmap` 模式；旧项目和缺少 `mode` 字段的 JSON 默认按 `ai` 载入，避免破坏既有工作流。
 - 思维导图第一版复用现有文字、图片、框选、连线、历史记录与项目持久化能力，新增独立的 `folder` 和 `mind-group` 节点；`mind-group.subgraph` 保存独立子画布，不能与 AI 模式的多任务 `group` 混用。
@@ -75,6 +91,9 @@
 - `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
 - 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
 - Electron实现仅作为迁移回退保留；当前桌面发行目标为.NET WPF，不再运行CMD，也不再通过PowerShell、`taskkill`、Node服务或额外进程启动。
+- 截图生成模组采用 .NET WPF 原生置顶窗口，截取固定屏幕矩形区域，不绑定软件窗口；区域按显示器边界、DPI 与相对比例保存，环境变化时必须重新框选。
+- 截图工具复用全局自定义文字、DPAPI API Key 和现有最多 5 并发的 AI 任务队列；结果只保存到 `export/ai_generated/`，第一版不自动创建画布节点。截图设置写入 `data/screenshot-settings.json`，最近截图写入 `data/screenshots/latest.png`。
+- 截图实现不得调用 PowerShell、CMD、系统截图命令、Electron或额外程序；关闭截图窗口只隐藏，主程序退出时再销毁。
 - Inno Setup采用当前用户安装；升级不得覆盖`data/`、`download/`、`export/`，卸载默认保留这三个目录，只清理可重新生成的`data/webview2`缓存。
  
 - API Key不写入项目状态、浏览器持久化数据、自动备份或请求URL；.NET桌面版使用Windows DPAPI按当前用户加密到`data/secrets.json`。

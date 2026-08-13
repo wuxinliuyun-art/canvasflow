@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CanvasFlow">
+  <g fill="none" stroke="#111111" stroke-linecap="round">
+    <path stroke-width="43.7317" stroke-linejoin="round" d="M108.7,252.7c83.1-105,163.3-153.1,173.5-109.3c10.2,42.3-128.3,169.1-68.5,186.6c49.6,14.6,100.6-102,144.3-90.4c37.9,10.2-21.9,94.8-45.2,113.7"/>
+    <path stroke-width="29.1545" d="M377,442.2H87.3c-34.1,0-62-27.9-62-62V94.7c0-34.1,27.9-62,62-62h304.3c34.1,0,62,27.9,62,62V351"/>
+    <path stroke="#101010" stroke-width="29.1545" d="M453.9 395.5v90.7M417.5 440.1h72.9"/>
+  </g>
+</svg>
