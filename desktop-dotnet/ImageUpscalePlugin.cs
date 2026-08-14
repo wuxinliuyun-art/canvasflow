@@ -41,7 +41,7 @@ internal sealed class ImageUpscalePlugin
         try
         {
             using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = TimeSpan.FromMinutes(20) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.1");
             using var response = await client.GetAsync(PackageUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > 100_000_000) throw new InvalidDataException("插件安装包超过100MB安全限制");

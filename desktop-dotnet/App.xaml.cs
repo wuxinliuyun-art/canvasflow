@@ -14,8 +14,10 @@ public partial class App : System.Windows.Application
         {
             try
             {
-                var root = File.Exists(Path.Combine(Environment.CurrentDirectory, "index.html"))
-                    ? Environment.CurrentDirectory : AppContext.BaseDirectory;
+                var baseDirectory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                var root = string.Equals(Path.GetFileName(baseDirectory), "app", StringComparison.OrdinalIgnoreCase)
+                    ? Directory.GetParent(baseDirectory)?.FullName ?? baseDirectory
+                    : File.Exists(Path.Combine(Environment.CurrentDirectory, "index.html")) ? Environment.CurrentDirectory : baseDirectory;
                 Directory.CreateDirectory(Path.Combine(root, "data"));
                 File.AppendAllText(Path.Combine(root, "data", "desktop.log"),
                     $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [错误] [桌面未处理异常] {args.Exception}\r\n");

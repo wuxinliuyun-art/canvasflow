@@ -6,7 +6,15 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 
 [下载 Windows 版](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [English](README_EN.md)
 
-![CanvasFlow 主界面](screenshot.png)
+## 2.6 系列新增功能
+
+- 原生 `.NET 10 WPF + WebView2` 桌面版，无需 Node、本地服务或端口
+- 可选安装的 **智能抠图**：BiRefNet General Lite，DirectML 显卡优先，失败自动回退 CPU
+- 可选安装的 **图片放大**：Real-ESRGAN NCNN Vulkan，默认 4 倍放大
+- AI 绘图、智能抠图和图片放大统一进入右侧任务队列并显示进度
+- 独立置顶截图工具，可框选固定区域并直接提交 AI 绘图任务
+- 更快的启动加载、图片双击预览、改进的小地图和节点交互
+- 程序文件统一放在 `app\`，用户数据继续保存在 `data\`、`download\` 和 `export\`
 
 ---
 
@@ -76,9 +84,17 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 
 ### 任务队列
 
-- AI 绘图任务统一显示在右侧任务队列中，最多同时处理 5 个任务
+- AI 绘图、智能抠图和图片放大任务统一显示在右侧任务队列中，最多同时处理 5 个任务
 - 可以查看任务缩略图、关键词和状态；尚未发送的等待任务支持暂停、恢复和删除
 - 运行中的任务会继续完成，避免中途终止造成重复扣费或结果丢失
+
+### 可选本地插件
+
+- 在“设置 → 插件”中由用户自主安装或卸载，不随安装包预装大型模型
+- **智能抠图**使用 BiRefNet General Lite 在本机生成透明背景 PNG；优先使用 DirectML 显卡，显卡不可用时自动回退 CPU
+- **图片放大**使用 Real-ESRGAN 官方 NCNN Vulkan 程序进行本地 4 倍放大
+- 插件任务完成后会自动创建结果图片节点并连接原图
+- 卸载插件不会删除已经生成的图片
 
 ### 截图工具
 
@@ -102,7 +118,7 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 
 首次使用且素材库为空时，CanvasFlow 会提供“图片转线稿”和“多视角参考”两条示例文字素材。
 
-### 角度变化（测试功能）
+### 角度变化
 
 - 连接一张参考图片并重新生成不同观察角度
 - 水平、俯仰和滚转均支持 `-180°～180°`
@@ -132,7 +148,7 @@ AI 生成成功后，图片会显示在画布中，同时自动保存到：
 CanvasFlow 所在文件夹\export\ai_generated\
 ```
 
-例如程序位于 `D:\CanvasFlow\CanvasFlow.exe`，生成图片默认保存在 `D:\CanvasFlow\export\ai_generated\`。
+例如 CanvasFlow 安装在 `D:\CanvasFlow\`，主程序位于 `D:\CanvasFlow\app\CanvasFlow.exe`，生成图片默认保存在 `D:\CanvasFlow\export\ai_generated\`。
 
 需要集中整理结果时，可以使用画板的“导出”功能。
 

@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _root;
+    private string? _contentRoot;
     private bool _shutdownComplete;
     private bool _saveRequestStarted;
     private bool _canvasReady;
@@ -206,7 +207,7 @@ public partial class MainWindow : Window
         var startupTimer = Stopwatch.StartNew();
         try
         {
-            _root = FindProjectRoot();
+            (_root, _contentRoot) = FindApplicationPaths();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
             _desktopApi = new DesktopApi(_root, Log, ReadApiKey);
             _imageUpscalePlugin = new ImageUpscalePlugin(_root, Log);
@@ -223,7 +224,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { ShowFailure(ex); }
     }
 
-    private static string FindProjectRoot()
+    private static (string DataRoot, string ContentRoot) FindApplicationPaths()
     {
         var candidates = new[]
         {
@@ -232,7 +233,14 @@ public partial class MainWindow : Window
             Environment.CurrentDirectory
         };
         foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-            if (File.Exists(Path.Combine(candidate, "index.html")) && File.Exists(Path.Combine(candidate, "app.js")) && File.Exists(Path.Combine(candidate, "styles.css"))) return candidate;
+        {
+            if (!File.Exists(Path.Combine(candidate, "index.html")) || !File.Exists(Path.Combine(candidate, "app.js")) || !File.Exists(Path.Combine(candidate, "styles.css"))) continue;
+            var contentRoot = Path.GetFullPath(candidate);
+            var dataRoot = string.Equals(Path.GetFileName(contentRoot.TrimEnd(Path.DirectorySeparatorChar)), "app", StringComparison.OrdinalIgnoreCase)
+                ? Directory.GetParent(contentRoot)?.FullName ?? contentRoot
+                : contentRoot;
+            return (dataRoot, contentRoot);
+        }
         throw new DirectoryNotFoundException("没有找到CanvasFlow界面文件。可能原因：程序文件不完整。建议办法：重新解压或安装完整版本。");
     }
 
@@ -244,7 +252,7 @@ public partial class MainWindow : Window
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(_root!, "data", "webview2"));
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
             CanvasView.PreviewKeyDown += CanvasView_PreviewKeyDown;
-            CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _root!, CoreWebView2HostResourceAccessKind.DenyCors);
+            CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot!, CoreWebView2HostResourceAccessKind.DenyCors);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
             CanvasView.CoreWebView2.Settings.IsStatusBarEnabled = false;

@@ -10,8 +10,11 @@ set "ISCC="
 dotnet restore "%DESKTOP_PROJECT%" --runtime win-x64 --nologo
 if errorlevel 1 exit /b 1
 
+if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 dotnet publish "%DESKTOP_PROJECT%" --configuration Release --runtime win-x64 --self-contained true --no-restore --nologo
 if errorlevel 1 exit /b 1
+
+for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"
 
 echo.
 echo CanvasFlow publish folder:

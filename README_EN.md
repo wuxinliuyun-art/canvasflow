@@ -6,7 +6,15 @@ CanvasFlow lets you connect text, reference images, and AI Image nodes to genera
 
 [Download for Windows](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [简体中文](README.md)
 
-![CanvasFlow interface](screenshot.png)
+## What's New in the 2.6 Series
+
+- Native `.NET 10 WPF + WebView2` desktop app with no Node process, local server, or listening port
+- Optional **Background Removal** plugin powered by BiRefNet General Lite, using DirectML first with automatic CPU fallback
+- Optional **Image Upscaling** plugin powered by Real-ESRGAN NCNN Vulkan with 4× output
+- AI generation, background removal, and upscaling share one right-side task queue with progress
+- Independent always-on-top screenshot tool for fixed-region AI workflows
+- Faster startup, image preview, and refined minimap and node interactions
+- Program files live under `app\`; user data remains in `data\`, `download\`, and `export\`
 
 ---
 
@@ -76,9 +84,17 @@ Connect only text for text-to-image generation. Add an Image node when you want 
 
 ### Task Queue
 
-- AI generation jobs appear in the right-side task queue, with up to five jobs processed at once
+- AI generation, background removal, and image upscaling jobs appear in the right-side task queue, with up to five jobs processed at once
 - Each task shows a thumbnail, prompt summary, and status; queued jobs that have not been sent can be paused, resumed, or removed
 - Running jobs continue to completion to avoid duplicate charges or lost results
+
+### Optional Local Plugins
+
+- Install or uninstall plugins yourself from **Settings → Plugins**; large models are not bundled with the base installer
+- **Background Removal** uses BiRefNet General Lite to create transparent PNGs locally, preferring DirectML and falling back to CPU automatically
+- **Image Upscaling** uses the official Real-ESRGAN NCNN Vulkan executable for local 4× upscaling
+- Completed plugin tasks create result Image nodes connected to their source nodes
+- Uninstalling a plugin never deletes generated images
 
 ### Screenshot Tool
 
@@ -102,7 +118,7 @@ Multiple AI Image nodes can run at the same time. When using multiple references
 
 On a fresh installation with an empty library, CanvasFlow provides two sample text assets: **Image to Line Art** and **Multi-view Reference**.
 
-### Angle Change (Beta)
+### Angle Change
 
 - Connect one reference image and regenerate it from another viewpoint
 - Horizontal, pitch, and roll adjustments from `-180°` to `180°`
@@ -132,7 +148,7 @@ Generated images appear on the canvas and are also saved automatically to:
 CanvasFlow folder\export\ai_generated\
 ```
 
-For example, if the program is at `D:\CanvasFlow\CanvasFlow.exe`, generated images are saved in `D:\CanvasFlow\export\ai_generated\`.
+For example, if CanvasFlow is installed at `D:\CanvasFlow\`, the executable is at `D:\CanvasFlow\app\CanvasFlow.exe`, and generated images are saved in `D:\CanvasFlow\export\ai_generated\`.
 
 Use the canvas **Export** action when you want to collect and organize generated results.
 
