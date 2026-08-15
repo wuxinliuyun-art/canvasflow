@@ -10,8 +10,7 @@ CanvasFlow lets you connect text, reference images, and AI Image nodes to genera
 
 - Native `.NET 10 WPF + WebView2` desktop app with no Node process, local server, or listening port
 - Optional **Background Removal** plugin powered by BiRefNet General Lite, using DirectML first with automatic CPU fallback
-- Optional **Image Upscaling** plugin powered by Real-ESRGAN NCNN Vulkan with 4× output
-- AI generation, background removal, and upscaling share one right-side task queue with progress
+- AI generation and background removal share one right-side task queue with progress
 - Independent always-on-top screenshot tool for fixed-region AI workflows
 - Faster startup, image preview, and refined minimap and node interactions
 - Program files live under `app\`; user data remains in `data\`, `download\`, and `export\`
@@ -84,7 +83,7 @@ Connect only text for text-to-image generation. Add an Image node when you want 
 
 ### Task Queue
 
-- AI generation, background removal, and image upscaling jobs appear in the right-side task queue, with up to five jobs processed at once
+- AI generation and background removal jobs appear in the right-side task queue, with up to five jobs processed at once
 - Each task shows a thumbnail, prompt summary, and status; queued jobs that have not been sent can be paused, resumed, or removed
 - Running jobs continue to completion to avoid duplicate charges or lost results
 
@@ -92,9 +91,8 @@ Connect only text for text-to-image generation. Add an Image node when you want 
 
 - Install or uninstall plugins yourself from **Settings → Plugins**; large models are not bundled with the base installer
 - **Background Removal** uses BiRefNet General Lite to create transparent PNGs locally, preferring DirectML and falling back to CPU automatically
-- **Image Upscaling** uses the official Real-ESRGAN NCNN Vulkan executable for local 4× upscaling
 - Completed plugin tasks create result Image nodes connected to their source nodes
-- Uninstalling a plugin never deletes generated images
+- Uninstalling the background-removal plugin never deletes generated images
 
 ### Screenshot Tool
 
@@ -179,7 +177,7 @@ Before the main window closes, CanvasFlow saves the current state and automatic 
 
 ### AI image generation failed
 
-Check the API Key, network connection, account balance, and whether the selected model supports the chosen resolution and aspect ratio. CanvasFlow automatically tries backup endpoints after network failures or HTTP `500 / 502 / 503 / 504`; `401 / 403` means the API Key is invalid or lacks permission and must be verified again.
+Check the API Key, network connection, token balance, and whether the selected model supports the chosen resolution and aspect ratio. CanvasFlow automatically tries backup endpoints after network failures or HTTP `500 / 502 / 503 / 504`; `401 / 403` means the API Key is invalid or lacks permission and must be verified again.
 
 ### Why can't CanvasFlow open the image folder directly?
 

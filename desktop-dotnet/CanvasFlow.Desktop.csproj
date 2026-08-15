@@ -12,7 +12,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <StartupObject>CanvasFlow.Desktop.Program</StartupObject>
-    <Version>2.6.1</Version>
+    <Version>2.6.2</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
@@ -32,8 +32,6 @@
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\canvasflow-logo.png" Link="assets\canvasflow-logo.png" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\plugins\image-upscale\plugin.json" Link="plugins\image-upscale\plugin.json" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\plugins\image-upscale\THIRD-PARTY-NOTICES.md" Link="plugins\image-upscale\THIRD-PARTY-NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\plugins\background-removal\plugin.json" Link="plugins\background-removal\plugin.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\plugins\background-removal\THIRD-PARTY-NOTICES.md" Link="plugins\background-removal\THIRD-PARTY-NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

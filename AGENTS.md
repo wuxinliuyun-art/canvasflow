@@ -2,6 +2,13 @@
 
 ## 已知问题 / 踩坑记录
 
+### 中文 BAT 使用 UTF-8 时被 CMD 错误解析
+
+- 现象：批处理中的 `@echo off` 失效，括号内命令被逐行显示，中文提示截断并被当成命令执行。
+- 原因：Windows CMD 对 UTF-8 BOM、无 BOM UTF-8 和 LF 换行的解析不稳定；即使脚本内执行 `chcp 65001`，首行和预解析的括号代码块仍可能损坏。
+- 解决：中文 BAT 使用无 BOM 的 GBK（代码页 936）与 CRLF，首行保持纯 ASCII `@echo off`，第二行执行 `chcp 936 >nul`。
+- 避免：发布前必须从 `cmd.exe` 实际调用 BAT，验证中文路径、括号分支、命令回显和退出码；不要只在编辑器中检查文本。
+
 ### ONNX Runtime 在 WPF 宿主中初始化失败
 
 - 现象：BiRefNet 模型下载和校验均成功，但在 CanvasFlow WPF 进程中加载 `onnxruntime.dll` 报 `0x8007045A（DLL 初始化例程失败）`；同一 DLL 和模型在独立 .NET 控制台程序中运行正常。
@@ -60,7 +67,7 @@
 
 ## 架构决策
 
-- 图片放大作为用户主动安装的例外插件，允许 .NET 直接启动 Real-ESRGAN 官方 `realesrgan-ncnn-vulkan.exe`；不得经过 BAT、CMD 或 PowerShell。安装包固定来自官方 v0.2.5.0 Release，运行前必须校验 EXE 的 SHA-256，只允许读写 `data/plugin-work/image-upscale/` 临时输入和用户生成目录下的 `upscaled/`。此例外不得扩展为任意外部程序执行能力；卸载只删除 `data/plugins/image-upscale/`，不得删除用户生成结果。
+- 图片放大插件已从界面、任务队列和桌面桥接中移除；旧项目的放大结果继续作为普通图片载入，历史 `upscaleSourceNodeId` 字段原样保留。升级和卸载均不得自动删除用户已有的 `data/plugins/image-upscale/`、工作目录或 `upscaled/` 结果。
 
 - 项目创建时固定为 `ai` 或 `mindmap` 模式；旧项目和缺少 `mode` 字段的 JSON 默认按 `ai` 载入，避免破坏既有工作流。
 - 思维导图第一版复用现有文字、图片、框选、连线、历史记录与项目持久化能力，新增独立的 `folder` 和 `mind-group` 节点；`mind-group.subgraph` 保存独立子画布，不能与 AI 模式的多任务 `group` 混用。

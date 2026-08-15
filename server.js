@@ -412,7 +412,7 @@ async function requestHandler(req, res) {
   if (pathname === "/api/custom-library" && req.method === "GET") {
     try {
       const libraryPath = path.join(dataRoot, "data", "custom-library.json");
-      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[]}';
+      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"builtinDefaultsInitialized":false}';
       JSON.parse(content);
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
       res.end(content);
@@ -630,7 +630,7 @@ async function requestHandler(req, res) {
       const apiKey = requestApiKey();
       const { status, body: resBody } = await tryProxyRequest(
         "GET",
-        "/v1/user/balance",
+        "/v1/balance",
         { Authorization: `Bearer ${apiKey}` }
       );
       res.writeHead(status, { "Content-Type": "application/json" });

@@ -18,7 +18,6 @@ function mindmapFeatureEnabled() {
 }
 
 let runtimeExportFolder = "export";
-let imageUpscalePluginInstalled = false;
 let backgroundRemovalPluginInstalled = false;
 let autoBackupReady = false;
 let autoBackupTimer = null;
@@ -43,8 +42,12 @@ const OUTPUT_FOLDER_KEY = "canvasflow.outputFolder.v1";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
 const ONBOARDING_VERSION = 1;
 const DEFAULT_TEXT_TEMPLATES = [
-  { id: "default_text_line_art", name: "图片转线稿", content: "照片变成线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
-  { id: "default_text_multi_view", name: "多视角参考", content: "生成参考图的正前侧、左侧、右侧、顶侧，四个视角的视图", revision: 1 },
+  { id: "builtin_text_model_line_art_v1", name: "模特转线稿", content: "将第二张图中的模特照片变成线稿，外轮廓稍微粗一点，白色背景，模特服装和长相参考第一张图，人物动作和第二张图中人物动作保持一致，不要任何颜色填充", revision: 1 },
+  { id: "builtin_text_local_to_panorama_v1", name: "局部转全景", content: "我需要一个模特使用产品的全景效果图\n第二张图提供人物动作。将第二张图中的模特照片变成线稿，外轮廓稍微粗一点，白色背景\n第一张图提供模特服装和长相参考第，人物动作和第二张图中人物动作保持一致，不要任何颜色填充\n第三张图是产品全景图，产品视角要根据第二张模特角度进行调整\n生成图片时要考虑上述三张参考", revision: 1 },
+  { id: "builtin_text_image_line_art_v1", name: "图片转线稿", content: "照片变成线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
+  { id: "builtin_text_multi_view_v1", name: "多视角参考", content: "生成参考图的正前侧、左侧、右侧、顶侧，四个视角的视图", revision: 1 },
+  { id: "builtin_text_cmf_transfer_v1", name: "cmf迁移", content: "将第二张图的材质迁移应用到一张图的产品上", revision: 1 },
+  { id: "builtin_text_hd_restore_v1", name: "高清修复", content: "严格参考输入图片重新绘制，保持原有主体、结构、轮廓、比例、视角、构图、颜色和材质一致，不增加或删除元素。修复模糊、噪点、压缩痕迹和锯齿，重建清晰自然的边缘与细节，真实准确的材质表现，细腻柔和的光影，主体完整居中，背景简洁干净，专业高品质视觉效果，高清，高细节，8K。", revision: 1 },
 ];
 
 // UI language is stored separately from project data so switching projects never
@@ -87,7 +90,7 @@ const UI_EN = {
   "验证": "Verify", "保存 API Key": "Save API Key", "保存": "Save",
   "清除所有已保存的 API Key（分享前使用）": "Clear all saved API keys (before sharing)", "清除": "Clear",
   "API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）": "API proxies: api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai (automatic failover)",
-  "积分：--": "Credits: --", "刷新余额": "Refresh Balance", "刷新": "Refresh",
+  "令牌余额：--": "Token balance: --", "刷新令牌余额": "Refresh token balance", "刷新": "Refresh",
   "模型": "Model", "分辨率": "Resolution", "画质": "Quality", "比例": "Aspect ratio",
   "auto（自动）": "auto", "low（快速）": "low (fast)", "medium（平衡）": "medium (balanced)", "high（最高）": "high (best)",
   "默认图片比例": "Default aspect ratio", "1:1（正方）": "1:1 (square)", "3:2（横图）": "3:2 (landscape)",
@@ -98,6 +101,7 @@ const UI_EN = {
   "9:21（竖图）": "9:21 (portrait)",
   "快捷键说明": "Keyboard Shortcuts", "删除选中节点和相关连线": "Delete selected nodes and connected edges",
   "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
+  "置入": "Insert", "涂改": "Retouch", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
   "将选中节点设为多任务": "Create a multi-task node from selected nodes", "右键多任务节点": "Right-click a multi-task node",
   "取消多任务，还原内部节点和连线": "Dissolve multi-task and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
   "多选节点": "Select multiple nodes", "Space + 拖拽": "Space + Drag", "平移画布": "Pan canvas",
@@ -139,8 +143,8 @@ const UI_EN = {
   "文件夹上传": "Folder Upload", "确认导入图片": "Confirm Image Import", "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。": "Only thumbnails are stored on the canvas. AI tasks read the local originals, so keep the source folder in place while using the project.",
   "确认上传": "Upload", "所选文件夹": "Selected folder",
   "请先输入 API Key": "Enter an API Key first", "API Key 有效": "API Key is valid", "API Key 无效": "API Key is invalid",
-  "验证失败，请检查网络": "Verification failed. Check your network connection", "积分：请先填入 API Key": "Credits: enter an API Key first",
-  "积分：查询中...": "Credits: loading...", "积分：查询失败": "Credits: query failed", "积分：网络错误": "Credits: network error",
+  "验证失败，请检查网络": "Verification failed. Check your network connection", "令牌余额：请先填入 API Key": "Token balance: enter an API Key first",
+  "令牌余额：查询中...": "Token balance: loading...", "令牌余额：查询失败": "Token balance: query failed", "令牌余额：网络错误": "Token balance: network error", "令牌余额：无限额度": "Token balance: unlimited",
   "API Key 已保存": "API Key saved", "API Key 已从所有页面清除，可安全分享": "API Key cleared from all projects; it is now safe to share",
   "JSON已加载": "JSON loaded", "项目已打开": "Project opened", "JSON已保存到输出文件夹": "JSON saved to the output folder", "JSON已保存到 download 文件夹": "JSON saved to the download folder",
   "JSON已下载（浏览器下载）": "JSON downloaded by the browser", "当前浏览器不支持直接选择文件夹，请使用 Chrome 或 Edge": "This browser cannot select folders directly. Use Chrome or Edge",
@@ -212,7 +216,7 @@ function translateEnglishString(source) {
     [/^已完成 (\d+)\/(\d+)$/, "$1/$2 completed"], [/^完成 (\d+)\/(\d+)，失败 (\d+)$/, "$1/$2 completed, $3 failed"], [/^已取消，完成 (\d+)\/(\d+)$/, "Cancelled, $1/$2 completed"],
     [/^收集输出 (\d+)\/(\d+)$/, "Collecting output $1/$2"], [/^写入文件 (\d+)\/(\d+)$/, "Writing files $1/$2"],
     [/^任务(\d+)$/, "Task $1"], [/^共 (\d+) 个任务（(\d+) 个节点）· 双击标题放大$/, "$1 tasks ($2 nodes) · Double-click the title to maximize"],
-    [/^积分：([\d.]+)（已用 ([\d.]+)）$/, "Credits: $1 ($2 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
+    [/^令牌余额：([\d.]+)（积分 ([-\d]+)，已用 ([\d.]+)）$/, "Token balance: $1 ($2 credits, $3 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
     [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
     [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"],
     [/^自定义文字：(.+)$/, "Custom Text: $1"], [/^自定义图片：(.+)$/, "Custom Image: $1"],
@@ -302,12 +306,14 @@ let desktopAssetMigrationQueued = false;
 const AI_QUEUE_MAX_CONCURRENT = 5;
 const aiTaskQueue = { items: [], running: 0, nextId: 1 };
 
-function emptyLibrary() { return { textTemplates: [], imageMaterials: [] }; }
+function emptyLibrary() { return { textTemplates: [], imageMaterials: [], builtinDefaultsInitialized: true }; }
 function normalizeLibrary(lib) {
   const source = lib || {};
   return {
     textTemplates: Array.isArray(source.textTemplates) ? source.textTemplates.map(normalizeTemplate) : [],
     imageMaterials: Array.isArray(source.imageMaterials) ? source.imageMaterials.map(normalizeTemplate) : [],
+    // A missing marker means this is an existing pre-marker library. Never append defaults to it.
+    builtinDefaultsInitialized: source.builtinDefaultsInitialized !== false,
   };
 }
 function normalizeTemplate(item, idx) {
@@ -319,7 +325,12 @@ function normalizeTemplate(item, idx) {
   return value;
 }
 function loadGlobalLibrary() {
-  try { return normalizeLibrary(JSON.parse(localStorage.getItem(GLOBAL_LIBRARY_KEY) || "{}")); }
+  try {
+    const stored = localStorage.getItem(GLOBAL_LIBRARY_KEY);
+    return stored === null
+      ? { textTemplates: [], imageMaterials: [], builtinDefaultsInitialized: false }
+      : normalizeLibrary(JSON.parse(stored));
+  }
   catch (e) { console.error("[加载] 全局素材库读取失败", e); return emptyLibrary(); }
 }
 async function loadGlobalLibraryFromDisk() {
@@ -337,10 +348,16 @@ async function loadGlobalLibraryFromDisk() {
         globalLibrary[key].push(item); migrated++;
       }
     }
-    if (!globalLibrary.textTemplates.length && !globalLibrary.imageMaterials.length) {
+    const shouldInitializeDefaults = globalLibrary.builtinDefaultsInitialized === false
+      && browserLibrary.builtinDefaultsInitialized === false
+      && !globalLibrary.textTemplates.length
+      && !globalLibrary.imageMaterials.length;
+    if (shouldInitializeDefaults) {
       globalLibrary.textTemplates = DEFAULT_TEXT_TEMPLATES.map(item => normalizeTemplate({ ...item }));
       console.log(`[初始化] 已创建 ${globalLibrary.textTemplates.length} 个默认文字素材`);
     }
+    // Persist immediately after the first decision, including an intentionally empty library.
+    globalLibrary.builtinDefaultsInitialized = true;
     console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}`);
     if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
     saveGlobalLibrary();
@@ -443,8 +460,24 @@ const els = {
   lightboxPaintBtn: $("lightboxPaintBtn"),
   lightboxPaintCanvas: $("lightboxPaintCanvas"),
   lightboxPaintToolbar: $("lightboxPaintToolbar"),
+  lightboxMainTools: $("lightboxMainTools"),
+  lightboxRetouchBtn: $("lightboxRetouchBtn"),
+  lightboxRetouchTools: $("lightboxRetouchTools"),
+  lightboxRetouchBack: $("lightboxRetouchBack"),
+  lightboxPaintBrush: $("lightboxPaintBrush"),
+  lightboxPaintEraser: $("lightboxPaintEraser"),
+  lightboxInsertBtn: $("lightboxInsertBtn"),
+  lightboxFlipHorizontal: $("lightboxFlipHorizontal"),
+  lightboxFlipVertical: $("lightboxFlipVertical"),
+  lightboxMirrorTools: $("lightboxMirrorTools"),
+  lightboxCanvasPicker: $("lightboxCanvasPicker"),
+  lightboxCanvasPickerClose: $("lightboxCanvasPickerClose"),
+  lightboxCanvasPickerList: $("lightboxCanvasPickerList"),
+  lightboxPaintOptions: $("lightboxPaintOptions"),
+  lightboxPaintColorField: $("lightboxPaintColorField"),
   lightboxPaintColor: $("lightboxPaintColor"),
   lightboxPaintSize: $("lightboxPaintSize"),
+  lightboxPaintUndo: $("lightboxPaintUndo"),
   lightboxPaintCancel: $("lightboxPaintCancel"),
   lightboxPaintConfirm: $("lightboxPaintConfirm"),
   executeDialog: $("executeDialog"),
@@ -520,6 +553,8 @@ const els = {
 };
 
 let drag = null;
+let compositeHoverTargetId = "";
+let compositeHoverReady = false;
 let connectDraft = null;
 let selectionDraft = null;
 let spaceDown = false;
@@ -1120,7 +1155,7 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     h: height,
     disabled: false,
     created: Date.now() + state.nextNode,
-    text: type === "text" ? "请输入文字内容" : "",
+    text: "",
     image: null,
     fileName: "",
     mime: "",
@@ -2086,8 +2121,8 @@ async function fetchImageAsBase64(url) {
 }
 
 function queueTaskStatusText(task) {
-  if (task.kind === "background-removal" || task.kind === "image-upscale") {
-    if (task.status === "generating") return task.kind === "background-removal" ? "正在抠图" : "正在放大";
+  if (task.kind === "background-removal") {
+    if (task.status === "generating") return "正在抠图";
     if (task.status === "submitting") return "正在读取图片";
     if (task.status === "downloading") return "正在保存结果";
   }
@@ -2305,20 +2340,20 @@ async function runQueuedAiTask(task) {
   notifyScreenshotTask(task);
 }
 
-function enqueueExtensionTasks(nodes, kind) {
+function enqueueExtensionTasks(nodes) {
   const valid = (nodes || []).filter(node => node && (node.type === "image" || node.generatedImage || node.image));
   if (!valid.length) return toast("请选择至少一个图片节点");
   valid.forEach((source, index) => {
     const preview = source.type === "image" ? source.image : source.generatedImage;
     aiTaskQueue.items.push({
       id: `q${aiTaskQueue.nextId++}`,
-      kind,
+      kind: "background-removal",
       nodeId: source.id,
       status: "waiting",
       progress: 0,
-      label: kind === "background-removal" ? "智能抠图" : "图片放大 ×4",
+      label: "智能抠图",
       prompt: source.fileName || `图片 ${index + 1}`,
-      model: kind === "background-removal" ? "BiRefNet · DirectML/CPU" : "Real-ESRGAN · Vulkan",
+      model: "BiRefNet · DirectML/CPU",
       resolution: "本地处理",
       size: "",
       thumbnail: preview || "",
@@ -2354,9 +2389,7 @@ async function runQueuedExtensionTask(task) {
   }, 700);
   try {
     const payload = { dataUrl, fileName: task.sourceFileName, outputRoot: task.exportFolder };
-    const result = task.kind === "background-removal"
-      ? await desktop.removeImageBackground(payload)
-      : await desktop.upscaleImage({ ...payload, model: "realesrgan-x4plus", scale: 4 });
+    const result = await desktop.removeImageBackground(payload);
     task.status = "downloading";
     task.progress = 96;
     renderTaskQueue();
@@ -2364,11 +2397,10 @@ async function runQueuedExtensionTask(task) {
     if (!currentSource) throw new Error("处理完成，但来源图片节点已被删除");
     const resultNode = addNode("image", currentSource.x + NODE_WIDTH + 40, currentSource.y + (task.resultOrder || 0) * IMAGE_NODE_VERTICAL_STEP, false);
     resultNode.image = result.dataUrl;
-    resultNode.fileName = result.fileName || (task.kind === "background-removal" ? "transparent.png" : "upscaled.png");
+    resultNode.fileName = result.fileName || "transparent.png";
     resultNode.mime = "image/png";
     resultNode.outputPath = result.outputPath || "";
-    if (task.kind === "background-removal") resultNode.backgroundRemovalSourceNodeId = currentSource.id;
-    else resultNode.upscaleSourceNodeId = currentSource.id;
+    resultNode.backgroundRemovalSourceNodeId = currentSource.id;
     await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
     state.edges.push({ id: uid("e"), from: { node: currentSource.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
     pushHistory();
@@ -2382,7 +2414,7 @@ async function runQueuedExtensionTask(task) {
 }
 
 function runQueuedTask(task) {
-  return task.kind === "background-removal" || task.kind === "image-upscale"
+  return task.kind === "background-removal"
     ? runQueuedExtensionTask(task)
     : runQueuedAiTask(task);
 }
@@ -3106,12 +3138,24 @@ function beginProjectMenuRename(page, button) {
   input.addEventListener("blur", () => finish(true), { once: true });
 }
 
-function renderNodes() {
+let pendingNodeRenderAfterTextEdit = false;
+
+function activeNodeTextEditor() {
+  const active = document.activeElement;
+  return active?.matches?.('.node textarea[data-role="text"]') && els.nodes.contains(active) ? active : null;
+}
+
+function renderNodes(options = {}) {
+  if (!options.force && activeNodeTextEditor()) {
+    pendingNodeRenderAfterTextEdit = true;
+    return;
+  }
+  pendingNodeRenderAfterTextEdit = false;
   els.nodes.innerHTML = "";
   for (const node of state.nodes) {
     const div = document.createElement("div");
     const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
-    div.className = `node ${node.type} ${progressClass} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""}`;
+    div.className = `node ${node.type} ${progressClass} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""}`;
     div.dataset.id = node.id;
     div.draggable = false;
     div.style.left = `${node.x}px`;
@@ -3178,7 +3222,7 @@ function nodeTemplate(node) {
   const outPort = (node.type === "output" || node.type === "screenshot-input") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
-    body = `<textarea data-role="text">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
+    body = `<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
   } else if (node.type === "mind-group") {
     const count = node.subgraph?.nodes?.length || 0;
     body = `<div class="mind-group-icon" title="双击进入编组"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="9" y="14" width="6" height="6" rx="1.5"/><path d="M7 10v2h10v-2M12 12v2"/></svg></div><div class="mind-group-summary">${count} 个节点 · 双击进入</div>`;
@@ -3388,16 +3432,55 @@ function tidyNodes() {
     return depth;
   };
   state.nodes.forEach(n => visit(n.id));
-  const columnNextY = new Map();
+  const neighbors = new Map(state.nodes.map(node => [node.id, new Set()]));
+  state.edges.forEach(edge => {
+    if (!neighbors.has(edge.from.node) || !neighbors.has(edge.to.node)) return;
+    neighbors.get(edge.from.node).add(edge.to.node);
+    neighbors.get(edge.to.node).add(edge.from.node);
+  });
+  const components = [];
+  const seen = new Set();
   state.nodes
     .slice()
-    .sort((a, b) => (depths.get(a.id) || 0) - (depths.get(b.id) || 0) || a.created - b.created)
-    .forEach(n => {
-      const d = depths.get(n.id) || 0;
-      n.x = snap(80 + d * 330);
-      n.y = snap(columnNextY.get(d) || 80);
-      columnNextY.set(d, n.y + n.h + 40);
+    .sort((a, b) => a.created - b.created)
+    .forEach(start => {
+      if (seen.has(start.id)) return;
+      const component = [];
+      const queue = [start.id];
+      seen.add(start.id);
+      while (queue.length) {
+        const id = queue.shift();
+        const node = findNode(id);
+        if (node) component.push(node);
+        for (const nextId of neighbors.get(id) || []) {
+          if (seen.has(nextId)) continue;
+          seen.add(nextId);
+          queue.push(nextId);
+        }
+      }
+      components.push(component);
     });
+
+  let nextGroupY = 80;
+  components.forEach(component => {
+    const rowsByDepth = new Map();
+    component.forEach(node => {
+      const depth = depths.get(node.id) || 0;
+      if (!rowsByDepth.has(depth)) rowsByDepth.set(depth, []);
+      rowsByDepth.get(depth).push(node);
+    });
+    let groupBottom = nextGroupY;
+    rowsByDepth.forEach((nodes, depth) => {
+      let branchY = nextGroupY;
+      nodes.sort((a, b) => a.created - b.created).forEach(node => {
+        node.x = snap(80 + depth * 330);
+        node.y = snap(branchY);
+        branchY = node.y + node.h + 40;
+        groupBottom = Math.max(groupBottom, node.y + node.h);
+      });
+    });
+    nextGroupY = snap(groupBottom + 80);
+  });
   pushHistory();
   render();
   toast("已整理节点");
@@ -3447,6 +3530,45 @@ function connectSelectionInSequence() {
   render();
   console.log("[依次连接] 已按画布顺序重建单链", { sourceIds: sources.map(n => n.id), replacedEdges: internalEdges.length, addedEdges: sources.length - 1 });
   toast(`已依次连接 ${sources.length} 个节点`);
+}
+
+function nodeImageReference(node) {
+  if (!node) return null;
+  if (node.type === "image" && (node.image || node.imageAssetId)) return { image: node.image || "", assetId: node.imageAssetId || "" };
+  if ((node.type === "ai-image" || node.type === "angle-image") && (node.generatedImage || node.generatedAssetId)) return { image: node.generatedImage || "", assetId: node.generatedAssetId || "" };
+  return null;
+}
+
+function clearCompositeHover() {
+  const hadReadyState = compositeHoverReady;
+  compositeHoverTargetId = "";
+  compositeHoverReady = false;
+  els.nodes.querySelectorAll(".composite-drop-ready").forEach(element => element.classList.remove("composite-drop-ready"));
+  if (hadReadyState) scheduleInteractiveRender({ nodes: true });
+}
+
+function updateCompositeHover(dragState) {
+  if (!dragState?.moved || dragState.original.length !== 1) return clearCompositeHover();
+  const source = findNode(dragState.original[0].id);
+  if (!nodeImageReference(source)) return clearCompositeHover();
+  let bestTarget = null;
+  let bestRatio = 0;
+  for (const target of state.nodes) {
+    if (target.id === source.id || state.selected.has(target.id) || !nodeImageReference(target)) continue;
+    const overlapWidth = Math.max(0, Math.min(source.x + source.w, target.x + target.w) - Math.max(source.x, target.x));
+    const overlapHeight = Math.max(0, Math.min(source.y + source.h, target.y + target.h) - Math.max(source.y, target.y));
+    const ratio = overlapWidth * overlapHeight / Math.max(1, Math.min(source.w * source.h, target.w * target.h));
+    if (ratio > bestRatio) { bestRatio = ratio; bestTarget = target; }
+  }
+  const targetId = bestRatio >= .2 ? bestTarget?.id || "" : "";
+  if (targetId === compositeHoverTargetId) return;
+  clearCompositeHover();
+  if (!targetId) return;
+  compositeHoverTargetId = targetId;
+  compositeHoverReady = true;
+  const targetElement = els.nodes.querySelector(`.node[data-id="${CSS.escape(targetId)}"]`);
+  targetElement?.classList.add("composite-drop-ready");
+  scheduleInteractiveRender({ nodes: true });
 }
 
 els.viewport.addEventListener("wheel", ev => {
@@ -3545,6 +3667,7 @@ window.addEventListener("mousemove", ev => {
       n.x = snap(item.x + dx);
       n.y = snap(item.y + dy);
     }
+    updateCompositeHover(drag);
     scheduleInteractiveRender({ nodes: true, edges: true, minimap: true });
   } else if (drag?.type === "pan") {
     state.view.x = drag.vx + ev.clientX - drag.sx;
@@ -3568,12 +3691,27 @@ window.addEventListener("mouseup", ev => {
     renderEdges();
   }
   if (drag?.type === "resize") { render(); pushHistory(); }
-  if (drag?.type === "nodes") pushHistory();
+  let compositeRequest = null;
+  if (drag?.type === "nodes" && compositeHoverReady && compositeHoverTargetId && drag.original.length === 1) {
+    const source = findNode(drag.original[0].id);
+    const target = findNode(compositeHoverTargetId);
+    if (source && target) {
+      source.x = drag.original[0].x;
+      source.y = drag.original[0].y;
+      compositeRequest = { source, target };
+      render();
+    }
+  } else if (drag?.type === "nodes") pushHistory();
   if (drag?.type === "pan") {
     saveCurrentPage();
     persistPages();
   }
+  clearCompositeHover();
   drag = null;
+  if (compositeRequest) {
+    console.log("[节点叠放合成] 已触发编辑", { baseNodeId: compositeRequest.target.id, placedNodeId: compositeRequest.source.id });
+    void openNodeCompositeEditor(compositeRequest.target, compositeRequest.source);
+  }
   if (selectionDraft) {
     selectionDraft = null;
     els.selectionBox.classList.add("hidden");
@@ -3626,6 +3764,31 @@ els.nodes.addEventListener("input", ev => {
     markDirty();
     publishScreenshotNodeCatalog();
   }
+});
+
+els.nodes.addEventListener("focusin", ev => {
+  if (ev.target.dataset.role !== "text") return;
+  const value = ev.target.value.trim();
+  if (value !== "请输入文字内容" && value !== "Enter text") return;
+  const nodeEl = ev.target.closest(".node");
+  const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
+  ev.target.value = "";
+  if (!node) return;
+  node.text = "";
+  markDirty();
+  pushHistory();
+  publishScreenshotNodeCatalog();
+});
+
+els.nodes.addEventListener("focusout", ev => {
+  if (ev.target.dataset.role !== "text" || !pendingNodeRenderAfterTextEdit) return;
+  window.queueMicrotask(() => {
+    if (!activeNodeTextEditor() && pendingNodeRenderAfterTextEdit) {
+      renderNodes({ force: true });
+      renderEdges();
+      renderMinimap();
+    }
+  });
 });
 
 els.nodes.addEventListener("change", ev => {
@@ -3849,8 +4012,19 @@ let lightboxIdx = 0;
 let lightboxSourceNodeId = "";
 let lightboxPainting = false;
 let lightboxDrawing = false;
+let lightboxPaintMode = "brush";
+let lightboxPaintActions = [];
+let lightboxPaintCurrentAction = null;
+const lightboxPaintOverlay = document.createElement("canvas");
+let lightboxBaseFlipX = false;
+let lightboxBaseFlipY = false;
+let lightboxPlacedImage = null;
+let lightboxPlacedSelected = false;
+let lightboxTransformDrag = null;
+let lightboxEditUndoStack = [];
 
 function showLightbox(src, sourceNodeId = "") {
+  els.lightboxImg.classList.remove("hidden");
   if (Array.isArray(src)) {
     lightboxImages = src;
     lightboxIdx = 0;
@@ -3858,7 +4032,7 @@ function showLightbox(src, sourceNodeId = "") {
     lightboxImages = [src];
     lightboxIdx = 0;
   }
-  lightboxSourceNodeId = Array.isArray(src) ? "" : sourceNodeId;
+  lightboxSourceNodeId = sourceNodeId;
   updateLightboxImage();
   els.lightbox.classList.remove("hidden");
 }
@@ -3911,19 +4085,53 @@ function startLightboxPaint() {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(els.lightboxImg, 0, 0, canvas.width, canvas.height);
+  lightboxPaintOverlay.width = canvas.width;
+  lightboxPaintOverlay.height = canvas.height;
+  lightboxPaintActions = [];
+  lightboxPaintCurrentAction = null;
+  lightboxBaseFlipX = false;
+  lightboxBaseFlipY = false;
+  lightboxPlacedImage = null;
+  lightboxPlacedSelected = false;
+  lightboxTransformDrag = null;
+  lightboxEditUndoStack = [];
+  showLightboxToolbarPanel("main");
+  setLightboxPaintMode("idle");
+  updateLightboxPaintUndo();
   lightboxPainting = true;
+  els.lightbox.classList.add("is-editing");
   els.lightboxImg.classList.add("hidden");
   canvas.classList.remove("hidden");
+  updateLightboxPaintDisplaySize();
   els.lightboxPaintToolbar.classList.remove("hidden");
+  els.lightboxMirrorTools.classList.remove("hidden");
+  positionLightboxMirrorTools();
   els.lightboxPaintBtn.classList.add("hidden");
 }
 
 function cancelLightboxPaint() {
+  clearCompositeHover();
   lightboxPainting = false;
   lightboxDrawing = false;
+  lightboxPaintActions = [];
+  lightboxPaintCurrentAction = null;
+  lightboxPlacedImage = null;
+  lightboxPlacedSelected = false;
+  lightboxTransformDrag = null;
+  lightboxEditUndoStack = [];
+  lightboxBaseFlipX = false;
+  lightboxBaseFlipY = false;
+  lightboxPaintOverlay.width = 0;
+  lightboxPaintOverlay.height = 0;
   els.lightboxPaintCanvas.classList.add("hidden");
+  els.lightboxPaintCanvas.classList.remove("is-rotate-target");
+  els.lightboxPaintCanvas.style.width = "";
+  els.lightboxPaintCanvas.style.height = "";
   els.lightboxPaintToolbar.classList.add("hidden");
+  els.lightboxMirrorTools.classList.add("hidden");
+  els.lightboxCanvasPicker.classList.add("hidden");
   els.lightboxImg.classList.remove("hidden");
+  els.lightbox.classList.remove("is-editing");
   const editable = lightboxImages.length === 1 && !!lightboxSourceNodeId;
   els.lightboxPaintBtn.classList.toggle("hidden", !editable);
 }
@@ -3934,39 +4142,432 @@ function paintCanvasPoint(ev) {
   return { x: (ev.clientX - rect.left) * canvas.width / rect.width, y: (ev.clientY - rect.top) * canvas.height / rect.height, scale: canvas.width / rect.width };
 }
 
+function updateLightboxPaintDisplaySize() {
+  const canvas = els.lightboxPaintCanvas;
+  if (!lightboxPainting || !canvas.width || !canvas.height) return;
+  const maxWidth = Math.max(1, window.innerWidth * .9);
+  const maxHeight = Math.max(1, window.innerHeight * .82);
+  const displayScale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+  canvas.style.width = `${Math.max(1, Math.round(canvas.width * displayScale))}px`;
+  canvas.style.height = `${Math.max(1, Math.round(canvas.height * displayScale))}px`;
+  positionLightboxMirrorTools();
+}
+
+function setLightboxPaintMode(mode) {
+  lightboxPaintMode = ["brush", "eraser", "transform"].includes(mode) ? mode : "idle";
+  els.lightboxPaintBrush.classList.toggle("active", lightboxPaintMode === "brush");
+  els.lightboxPaintEraser.classList.toggle("active", lightboxPaintMode === "eraser");
+  els.lightboxPaintOptions.classList.toggle("hidden", lightboxPaintMode === "transform");
+  els.lightboxPaintColorField.classList.toggle("hidden", lightboxPaintMode !== "brush");
+  els.lightboxPaintColor.disabled = lightboxPaintMode !== "brush";
+  els.lightboxPaintCanvas.classList.toggle("transform-mode", lightboxPaintMode === "transform");
+  els.lightboxPaintCanvas.classList.toggle("brush-mode", lightboxPaintMode === "brush");
+  els.lightboxPaintCanvas.classList.toggle("eraser-mode", lightboxPaintMode === "eraser");
+  if (lightboxPaintMode !== "transform") els.lightboxPaintCanvas.classList.remove("is-rotate-target");
+  if (lightboxPainting) renderLightboxPaintComposite();
+}
+
+function showLightboxToolbarPanel(panel) {
+  const retouching = panel === "retouch";
+  els.lightboxMainTools.classList.toggle("hidden", retouching);
+  els.lightboxRetouchTools.classList.toggle("hidden", !retouching);
+}
+
+function positionLightboxMirrorTools() {
+  if (!lightboxPainting || els.lightboxMirrorTools.classList.contains("hidden")) return;
+  requestAnimationFrame(() => {
+    const rect = els.lightboxPaintCanvas.getBoundingClientRect();
+    els.lightboxMirrorTools.style.left = `${Math.min(window.innerWidth - 50, rect.right + 10)}px`;
+    els.lightboxMirrorTools.style.top = `${rect.top + rect.height / 2}px`;
+  });
+}
+
+function drawLightboxPaintSegment(context, action, from, to) {
+  context.save();
+  context.globalCompositeOperation = action.mode === "eraser" ? "destination-out" : "source-over";
+  context.strokeStyle = action.color;
+  context.lineWidth = action.size;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
+  context.restore();
+}
+
+function renderLightboxPaintComposite() {
+  const canvas = els.lightboxPaintCanvas;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.save();
+  context.translate(lightboxBaseFlipX ? canvas.width : 0, lightboxBaseFlipY ? canvas.height : 0);
+  context.scale(lightboxBaseFlipX ? -1 : 1, lightboxBaseFlipY ? -1 : 1);
+  context.drawImage(els.lightboxImg, 0, 0, canvas.width, canvas.height);
+  context.restore();
+  if (lightboxPlacedImage?.element) {
+    const placed = lightboxPlacedImage;
+    context.save();
+    context.translate(placed.x + placed.w / 2, placed.y + placed.h / 2);
+    context.rotate((Number(placed.rotation) || 0) * Math.PI / 180);
+    context.scale(placed.flipX ? -1 : 1, placed.flipY ? -1 : 1);
+    context.drawImage(placed.element, -placed.w / 2, -placed.h / 2, placed.w, placed.h);
+    context.restore();
+  }
+  context.drawImage(lightboxPaintOverlay, 0, 0);
+  if (lightboxPaintMode === "transform" && lightboxPlacedSelected && lightboxPlacedImage) drawLightboxPlacedSelection(context);
+}
+
+function drawLightboxPlacedSelection(context) {
+  const placed = lightboxPlacedImage;
+  const handle = Math.max(8, els.lightboxPaintCanvas.width / Math.max(300, els.lightboxPaintCanvas.getBoundingClientRect().width) * 6);
+  const rotation = Number(placed.rotation) || 0;
+  const rotationOffset = handle * 5;
+  context.save();
+  context.translate(placed.x + placed.w / 2, placed.y + placed.h / 2);
+  context.rotate(rotation * Math.PI / 180);
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = Math.max(2, handle / 3);
+  context.setLineDash([handle, handle * .7]);
+  context.strokeRect(-placed.w / 2, -placed.h / 2, placed.w, placed.h);
+  context.setLineDash([]);
+  context.fillStyle = "#ffffff";
+  [[-placed.w / 2, -placed.h / 2], [placed.w / 2, -placed.h / 2], [-placed.w / 2, placed.h / 2], [placed.w / 2, placed.h / 2]].forEach(([x, y]) => context.fillRect(x - handle, y - handle, handle * 2, handle * 2));
+  context.beginPath();
+  context.moveTo(0, -placed.h / 2);
+  context.lineTo(0, -placed.h / 2 - rotationOffset);
+  context.stroke();
+  context.beginPath();
+  context.arc(0, -placed.h / 2 - rotationOffset, handle * 1.35, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+
+  const radians = rotation * Math.PI / 180;
+  const labelX = placed.x + placed.w / 2 + Math.sin(radians) * (placed.h / 2 + rotationOffset + handle * 3);
+  const labelY = placed.y + placed.h / 2 - Math.cos(radians) * (placed.h / 2 + rotationOffset + handle * 3);
+  context.save();
+  context.font = `700 ${Math.max(12, handle * 1.8)}px sans-serif`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.lineWidth = Math.max(3, handle / 2);
+  context.strokeStyle = "rgba(0,0,0,.72)";
+  context.fillStyle = "#ffffff";
+  const angleLabel = `${Math.round(rotation)}°`;
+  context.strokeText(angleLabel, labelX, labelY);
+  context.fillText(angleLabel, labelX, labelY);
+  context.restore();
+}
+
+function rebuildLightboxPaintOverlay() {
+  const context = lightboxPaintOverlay.getContext("2d");
+  context.clearRect(0, 0, lightboxPaintOverlay.width, lightboxPaintOverlay.height);
+  lightboxPaintActions.forEach(action => {
+    if (!action.points.length) return;
+    if (action.points.length === 1) drawLightboxPaintSegment(context, action, action.points[0], { x: action.points[0].x + .01, y: action.points[0].y + .01 });
+    for (let index = 1; index < action.points.length; index++) drawLightboxPaintSegment(context, action, action.points[index - 1], action.points[index]);
+  });
+  renderLightboxPaintComposite();
+}
+
+function updateLightboxPaintUndo() {
+  els.lightboxPaintUndo.disabled = lightboxEditUndoStack.length === 0;
+}
+
+function undoLightboxPaint() {
+  if (!lightboxPainting || !lightboxEditUndoStack.length) return;
+  lightboxDrawing = false;
+  lightboxPaintCurrentAction = null;
+  const undoAction = lightboxEditUndoStack.pop();
+  undoAction();
+  syncLightboxPlacedControls();
+  rebuildLightboxPaintOverlay();
+  updateLightboxPaintUndo();
+}
+
+function pushLightboxEditUndo(undoAction) {
+  lightboxEditUndoStack.push(undoAction);
+  if (lightboxEditUndoStack.length > 50) lightboxEditUndoStack.shift();
+  updateLightboxPaintUndo();
+}
+
+function cloneLightboxPlacedImage(placed = lightboxPlacedImage) {
+  return placed ? { ...placed } : null;
+}
+
+function syncLightboxPlacedControls() {
+  const hasPlacedImage = !!lightboxPlacedImage;
+  if (!hasPlacedImage && lightboxPaintMode === "transform") setLightboxPaintMode("brush");
+}
+
+function lightboxPlacedHit(point) {
+  const placed = lightboxPlacedImage;
+  if (!placed) return null;
+  const handle = Math.max(8, point.scale * 6);
+  const threshold = Math.max(handle * 1.6, Math.min(placed.w, placed.h) * .045);
+  const rotationOffset = handle * 5;
+  const rotation = (Number(placed.rotation) || 0) * Math.PI / 180;
+  const centerX = placed.x + placed.w / 2;
+  const centerY = placed.y + placed.h / 2;
+  const dx = point.x - centerX;
+  const dy = point.y - centerY;
+  const local = {
+    x: dx * Math.cos(rotation) + dy * Math.sin(rotation),
+    y: -dx * Math.sin(rotation) + dy * Math.cos(rotation),
+  };
+  const rotationHandle = { x: 0, y: -placed.h / 2 - rotationOffset };
+  if (Math.hypot(local.x - rotationHandle.x, local.y - rotationHandle.y) <= threshold) return { type: "rotate" };
+  const corners = [
+    ["nw", -placed.w / 2, -placed.h / 2], ["ne", placed.w / 2, -placed.h / 2],
+    ["sw", -placed.w / 2, placed.h / 2], ["se", placed.w / 2, placed.h / 2],
+  ];
+  const corner = corners.find(([, x, y]) => Math.hypot(local.x - x, local.y - y) <= threshold);
+  if (corner) return { type: "resize", corner: corner[0] };
+  if (Math.abs(local.x) <= placed.w / 2 && Math.abs(local.y) <= placed.h / 2) return { type: "move" };
+  return null;
+}
+
+function updateLightboxPlacedTransform(point) {
+  if (!lightboxTransformDrag || !lightboxPlacedImage) return;
+  const initial = lightboxTransformDrag.initial;
+  if (lightboxTransformDrag.type === "move") {
+    lightboxPlacedImage.x = initial.x + point.x - lightboxTransformDrag.start.x;
+    lightboxPlacedImage.y = initial.y + point.y - lightboxTransformDrag.start.y;
+  } else if (lightboxTransformDrag.type === "rotate") {
+    const centerX = initial.x + initial.w / 2;
+    const centerY = initial.y + initial.h / 2;
+    const startAngle = Math.atan2(lightboxTransformDrag.start.y - centerY, lightboxTransformDrag.start.x - centerX);
+    const currentAngle = Math.atan2(point.y - centerY, point.x - centerX);
+    let rotation = (Number(initial.rotation) || 0) + (currentAngle - startAngle) * 180 / Math.PI;
+    rotation = ((rotation + 180) % 360 + 360) % 360 - 180;
+    lightboxPlacedImage.rotation = rotation;
+  } else {
+    const corner = lightboxTransformDrag.corner;
+    const rotation = (Number(initial.rotation) || 0) * Math.PI / 180;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const centerX = initial.x + initial.w / 2;
+    const centerY = initial.y + initial.h / 2;
+    const sx = corner.includes("e") ? 1 : -1;
+    const sy = corner.includes("s") ? 1 : -1;
+    const oppositeLocalX = -sx * initial.w / 2;
+    const oppositeLocalY = -sy * initial.h / 2;
+    const anchorX = centerX + oppositeLocalX * cos - oppositeLocalY * sin;
+    const anchorY = centerY + oppositeLocalX * sin + oppositeLocalY * cos;
+    const pointerDx = point.x - anchorX;
+    const pointerDy = point.y - anchorY;
+    const localDx = pointerDx * cos + pointerDy * sin;
+    const localDy = -pointerDx * sin + pointerDy * cos;
+    const aspect = initial.w / initial.h;
+    let width = Math.max(24, Math.abs(localDx));
+    let height = width / aspect;
+    if (Math.abs(localDy) * aspect > width) {
+      height = Math.max(24, Math.abs(localDy));
+      width = height * aspect;
+    }
+    lightboxPlacedImage.w = width;
+    lightboxPlacedImage.h = height;
+    const newCenterOffsetX = sx * width / 2;
+    const newCenterOffsetY = sy * height / 2;
+    const newCenterX = anchorX + newCenterOffsetX * cos - newCenterOffsetY * sin;
+    const newCenterY = anchorY + newCenterOffsetX * sin + newCenterOffsetY * cos;
+    lightboxPlacedImage.x = newCenterX - width / 2;
+    lightboxPlacedImage.y = newCenterY - height / 2;
+  }
+  renderLightboxPaintComposite();
+}
+
 els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   if (!lightboxPainting) return;
+  if (lightboxPaintMode === "idle") return;
+  const p = paintCanvasPoint(ev);
+  if (lightboxPaintMode === "transform") {
+    const hit = lightboxPlacedHit(p);
+    els.lightboxPaintCanvas.classList.toggle("is-rotate-target", hit?.type === "rotate");
+    lightboxPlacedSelected = !!hit;
+    if (!hit) return renderLightboxPaintComposite();
+    lightboxTransformDrag = { ...hit, start: p, initial: cloneLightboxPlacedImage() };
+    els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
+    return renderLightboxPaintComposite();
+  }
   lightboxDrawing = true;
   els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
-  const p = paintCanvasPoint(ev);
-  const ctx = els.lightboxPaintCanvas.getContext("2d");
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y);
-  ctx.lineTo(p.x + 0.01, p.y + 0.01);
-  ctx.strokeStyle = els.lightboxPaintColor.value;
-  ctx.lineWidth = Number(els.lightboxPaintSize.value) * p.scale;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.stroke();
+  lightboxPaintCurrentAction = { mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p] };
+  lightboxPaintActions.push(lightboxPaintCurrentAction);
+  drawLightboxPaintSegment(lightboxPaintOverlay.getContext("2d"), lightboxPaintCurrentAction, p, { x: p.x + .01, y: p.y + .01 });
+  renderLightboxPaintComposite();
+  updateLightboxPaintUndo();
 });
 
 els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
+  if (lightboxTransformDrag) return updateLightboxPlacedTransform(paintCanvasPoint(ev));
+  if (lightboxPaintMode === "transform") {
+    const hit = lightboxPlacedHit(paintCanvasPoint(ev));
+    els.lightboxPaintCanvas.classList.toggle("is-rotate-target", hit?.type === "rotate");
+    return;
+  }
   if (!lightboxDrawing) return;
   const p = paintCanvasPoint(ev);
-  const ctx = els.lightboxPaintCanvas.getContext("2d");
-  ctx.lineTo(p.x, p.y);
-  ctx.strokeStyle = els.lightboxPaintColor.value;
-  ctx.lineWidth = Number(els.lightboxPaintSize.value) * p.scale;
-  ctx.stroke();
+  if (!lightboxPaintCurrentAction) return;
+  const previous = lightboxPaintCurrentAction.points[lightboxPaintCurrentAction.points.length - 1];
+  lightboxPaintCurrentAction.points.push(p);
+  drawLightboxPaintSegment(lightboxPaintOverlay.getContext("2d"), lightboxPaintCurrentAction, previous, p);
+  renderLightboxPaintComposite();
+});
+els.lightboxPaintCanvas.addEventListener("pointerleave", () => {
+  if (!lightboxTransformDrag) els.lightboxPaintCanvas.classList.remove("is-rotate-target");
 });
 
-els.lightboxPaintCanvas.addEventListener("pointerup", () => { lightboxDrawing = false; });
-els.lightboxPaintCanvas.addEventListener("pointercancel", () => { lightboxDrawing = false; });
+function finishLightboxPointerAction() {
+  if (lightboxTransformDrag) {
+    const previous = lightboxTransformDrag.initial;
+    lightboxTransformDrag = null;
+    pushLightboxEditUndo(() => { lightboxPlacedImage = cloneLightboxPlacedImage(previous); lightboxPlacedSelected = true; });
+  } else if (lightboxDrawing && lightboxPaintCurrentAction) {
+    const action = lightboxPaintCurrentAction;
+    pushLightboxEditUndo(() => {
+      const index = lightboxPaintActions.lastIndexOf(action);
+      if (index >= 0) lightboxPaintActions.splice(index, 1);
+    });
+  }
+  lightboxDrawing = false;
+  lightboxPaintCurrentAction = null;
+}
+els.lightboxPaintCanvas.addEventListener("pointerup", finishLightboxPointerAction);
+els.lightboxPaintCanvas.addEventListener("pointercancel", finishLightboxPointerAction);
 els.lightboxPaintBtn.onclick = startLightboxPaint;
+els.lightboxRetouchBtn.onclick = () => { showLightboxToolbarPanel("retouch"); setLightboxPaintMode("brush"); };
+els.lightboxRetouchBack.onclick = () => { showLightboxToolbarPanel("main"); setLightboxPaintMode(lightboxPlacedImage ? "transform" : "idle"); };
+els.lightboxPaintBrush.onclick = () => setLightboxPaintMode("brush");
+els.lightboxPaintEraser.onclick = () => setLightboxPaintMode("eraser");
+els.lightboxPaintUndo.onclick = undoLightboxPaint;
+async function placeImageInLightbox(source) {
+  const element = new Image();
+  await new Promise((resolve, reject) => {
+    element.onload = resolve;
+    element.onerror = () => reject(new Error("置入图片无法读取"));
+    element.src = source;
+  });
+  const previous = cloneLightboxPlacedImage();
+  const canvas = els.lightboxPaintCanvas;
+  const scale = Math.min(canvas.width * .55 / element.naturalWidth, canvas.height * .55 / element.naturalHeight, 1);
+  const width = Math.max(24, element.naturalWidth * scale);
+  const height = Math.max(24, element.naturalHeight * scale);
+  lightboxPlacedImage = { element, source, x: (canvas.width - width) / 2, y: (canvas.height - height) / 2, w: width, h: height, rotation: 0, flipX: false, flipY: false };
+  lightboxPlacedSelected = true;
+  syncLightboxPlacedControls();
+  setLightboxPaintMode("transform");
+  showLightboxToolbarPanel("main");
+  pushLightboxEditUndo(() => {
+    lightboxPlacedImage = cloneLightboxPlacedImage(previous);
+    lightboxPlacedSelected = !!previous;
+    syncLightboxPlacedControls();
+  });
+  renderLightboxPaintComposite();
+}
+
+function compositeNodeLabel(node) {
+  if (node.type === "ai-image") return node.seq ? `AI绘图 #${node.seq}` : "AI绘图结果";
+  if (node.type === "angle-image") return "角度变化结果";
+  return node.fileName || (node.seq ? `图片 #${node.seq}` : "图片节点");
+}
+
+els.lightboxInsertBtn.onclick = () => {
+  const candidates = state.nodes.filter(node => node.id !== lightboxSourceNodeId && nodeImageReference(node));
+  if (!candidates.length) return toast("画布中没有其他可置入的图片节点");
+  els.lightboxCanvasPickerList.innerHTML = "";
+  candidates.forEach(node => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lightbox-canvas-picker-item";
+    const label = compositeNodeLabel(node);
+    button.title = label;
+    button.setAttribute("aria-label", `置入 ${label}`);
+    button.disabled = true;
+    const thumbnail = document.createElement("img");
+    thumbnail.alt = label;
+    thumbnail.draggable = false;
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    button.append(thumbnail, caption);
+    let sourceUrl = "";
+    button.onclick = async () => {
+      if (!sourceUrl) return;
+      els.lightboxCanvasPicker.classList.add("hidden");
+      try {
+        await placeImageInLightbox(sourceUrl);
+      } catch (error) {
+        console.error("[图片编辑] 从画布置入失败", { nodeId: node.id, message: error.message });
+        toast(`置入图片失败：节点原图可能已丢失或目录无权限；请检查 data 素材目录。${error.message || ""}`);
+      }
+    };
+    els.lightboxCanvasPickerList.appendChild(button);
+    materializeReferenceImage(nodeImageReference(node)).then(source => {
+      if (!source) throw new Error("无法读取节点原图");
+      thumbnail.src = source;
+      sourceUrl = source;
+      button.disabled = false;
+    }).catch(error => {
+      button.classList.add("is-unavailable");
+      caption.textContent = "图片不可用";
+      console.warn("[图片编辑] 置入缩略图加载失败", { nodeId: node.id, message: error.message });
+    });
+  });
+  els.lightboxCanvasPicker.classList.remove("hidden");
+};
+els.lightboxCanvasPickerClose.onclick = () => els.lightboxCanvasPicker.classList.add("hidden");
+
+async function openNodeCompositeEditor(baseNode, placedNode) {
+  try {
+    const [baseSource, placedSource] = await Promise.all([
+      materializeReferenceImage(nodeImageReference(baseNode)),
+      materializeReferenceImage(nodeImageReference(placedNode)),
+    ]);
+    if (!baseSource || !placedSource) throw new Error("无法读取参与合成的原图");
+    showLightbox(baseSource, baseNode.id);
+    if (!els.lightboxImg.complete || !els.lightboxImg.naturalWidth) {
+      await new Promise((resolve, reject) => {
+        els.lightboxImg.addEventListener("load", resolve, { once: true });
+        els.lightboxImg.addEventListener("error", () => reject(new Error("底图无法读取")), { once: true });
+      });
+    }
+    startLightboxPaint();
+    await placeImageInLightbox(placedSource);
+  } catch (error) {
+    console.error("[节点叠放合成] 打开失败", { baseNodeId: baseNode?.id, placedNodeId: placedNode?.id, message: error.message });
+    toast(`无法打开合成编辑：节点原图可能丢失或目录无权限；请检查 data 素材目录后重试。${error.message || ""}`);
+  }
+}
+
+function flipLightboxSelection(axis) {
+  if (lightboxPlacedSelected && lightboxPlacedImage) {
+    const placed = lightboxPlacedImage;
+    if (axis === "x") placed.flipX = !placed.flipX;
+    else placed.flipY = !placed.flipY;
+    pushLightboxEditUndo(() => {
+      if (!lightboxPlacedImage) return;
+      if (axis === "x") lightboxPlacedImage.flipX = !lightboxPlacedImage.flipX;
+      else lightboxPlacedImage.flipY = !lightboxPlacedImage.flipY;
+    });
+  } else {
+    if (axis === "x") lightboxBaseFlipX = !lightboxBaseFlipX;
+    else lightboxBaseFlipY = !lightboxBaseFlipY;
+    pushLightboxEditUndo(() => {
+      if (axis === "x") lightboxBaseFlipX = !lightboxBaseFlipX;
+      else lightboxBaseFlipY = !lightboxBaseFlipY;
+    });
+  }
+  renderLightboxPaintComposite();
+}
+
+els.lightboxFlipHorizontal.onclick = () => flipLightboxSelection("x");
+els.lightboxFlipVertical.onclick = () => flipLightboxSelection("y");
 els.lightboxPaintCancel.onclick = cancelLightboxPaint;
 els.lightboxPaintConfirm.onclick = async () => {
   if (!lightboxPainting) return;
+  clearCompositeHover();
   const source = findNode(lightboxSourceNodeId);
+  lightboxPlacedSelected = false;
+  renderLightboxPaintComposite();
   const image = els.lightboxPaintCanvas.toDataURL("image/png");
   const x = source ? source.x + NODE_WIDTH + 40 : lastPointerWorld.x;
   const y = source ? source.y : lastPointerWorld.y;
@@ -3981,10 +4582,14 @@ els.lightboxPaintConfirm.onclick = async () => {
   toast("已生成局部修改图片节点");
 };
 
-els.lightboxClose.onclick = hideLightbox;
+function requestHideLightbox() {
+  if (lightboxPainting) return;
+  hideLightbox();
+}
+els.lightboxClose.onclick = requestHideLightbox;
 els.lightboxPrev.onclick = lightboxPrev;
 els.lightboxNext.onclick = lightboxNext;
-els.lightbox.querySelector(".lightbox-bg").onclick = hideLightbox;
+els.lightbox.querySelector(".lightbox-bg").onclick = requestHideLightbox;
 els.lightbox.addEventListener("wheel", ev => {
   if (lightboxImages.length <= 1) return;
   ev.preventDefault();
@@ -4001,10 +4606,14 @@ els.lightboxDots.addEventListener("click", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
-  if (ev.key === "Escape") { ev.preventDefault(); hideLightbox(); }
+  if (ev.key === "Escape") {
+    ev.preventDefault();
+    if (!lightboxPainting) hideLightbox();
+  }
   if (ev.key === "ArrowLeft") { ev.preventDefault(); lightboxPrev(); }
   if (ev.key === "ArrowRight") { ev.preventDefault(); lightboxNext(); }
 });
+window.addEventListener("resize", updateLightboxPaintDisplaySize);
 
 async function setComposerImage(file) {
   if (!file) return;
@@ -4126,7 +4735,10 @@ async function copyGeneratedImage(node) {
     if (outputPath && window.canvasflowDesktop?.copyImage) {
       await window.canvasflowDesktop.copyImage(outputPath);
     } else {
-      const source = node?.generatedImage || node?.image || "";
+      const source = await materializeReferenceImage({
+        image: node?.generatedImage || node?.image || "",
+        assetId: node?.generatedAssetId || node?.imageAssetId || "",
+      });
       if (!source || !navigator.clipboard?.write || typeof ClipboardItem === "undefined")
         throw new Error("当前运行方式不支持图片剪贴板");
       const blob = await (await fetch(source)).blob();
@@ -4192,8 +4804,8 @@ els.viewport.addEventListener("contextmenu", ev => {
     ));
     const items = [
       ["切换启用/停用", () => toggleDisabled(state.selected)],
-      ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
-      ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)], ["复制生成图片路径", () => copyGeneratedFilePath(selectedNode)]] : []),
+      ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
+      ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
       ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
@@ -4213,10 +4825,6 @@ els.viewport.addEventListener("contextmenu", ev => {
         [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
           if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
           removeBackgroundFromSources(extensionSources);
-        }],
-        [imageUpscalePluginInstalled ? "图片放大" : "图片放大（未安装）", () => {
-          if (!imageUpscalePluginInstalled) return showImageUpscaleInstall();
-          upscaleExtensionSources(extensionSources);
         }],
       ]]] : []),
       ["断开连接", () => disconnectEdges(state.selected)],
@@ -4287,10 +4895,6 @@ els.viewport.addEventListener("contextmenu", ev => {
         [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
           if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
           toast("请先添加或选择图片节点，再使用自动抠图");
-        }],
-        [imageUpscalePluginInstalled ? "图片放大" : "图片放大（未安装）", () => {
-          if (!imageUpscalePluginInstalled) return showImageUpscaleInstall();
-          toast("请先添加或选择图片节点，再使用图片放大");
         }],
       ]],
       ["添加截图功能节点", () => addNode("screenshot-input", p.x, p.y)],
@@ -4373,6 +4977,11 @@ function hideMenu() {
 }
 
 window.addEventListener("keydown", ev => {
+  if (lightboxPainting && (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") {
+    ev.preventDefault();
+    undoLightboxPaint();
+    return;
+  }
   if (ev.target.matches("textarea,input,select")) return;
   if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); }
   if (ev.key === "Delete") deleteNodes(state.selected);
@@ -4975,7 +5584,7 @@ async function refreshBackgroundRemovalPluginStatus() {
 }
 
 async function removeBackgroundFromSources(nodes) {
-  if (desktop?.removeImageBackground) { enqueueExtensionTasks(nodes, "background-removal"); return; }
+  if (desktop?.removeImageBackground) { enqueueExtensionTasks(nodes); return; }
   if (!desktop?.removeImageBackground) return toast("智能抠图仅支持 .NET 桌面版");
   for (const source of nodes) {
     try {
@@ -4993,66 +5602,6 @@ async function removeBackgroundFromSources(nodes) {
     } catch (error) {
       console.error("[智能抠图插件] 处理失败", { nodeId: source.id, message: error.message });
       toast(`智能抠图失败：可能是模型不完整、图片格式不支持或内存不足；建议重新安装插件或换较小图片重试。${error.message || ""}`);
-    }
-  }
-}
-
-function showImageUpscaleInstall() {
-  openPluginSettings();
-  requestAnimationFrame(() => $("installImageUpscalePluginBtn")?.focus());
-}
-
-async function refreshImageUpscalePluginStatus() {
-  const status = $("imageUpscalePluginStatus");
-  const installButton = $("installImageUpscalePluginBtn");
-  const removeButton = $("removeImageUpscalePluginBtn");
-  if (!desktop?.imageUpscaleStatus) {
-    imageUpscalePluginInstalled = false;
-    status.textContent = "仅桌面版";
-    installButton.classList.add("hidden");
-    removeButton.classList.add("hidden");
-    return;
-  }
-  try {
-    const result = await desktop.imageUpscaleStatus();
-    imageUpscalePluginInstalled = result?.installed === true;
-    status.textContent = imageUpscalePluginInstalled ? "已安装" : "未安装";
-    status.classList.toggle("installed", imageUpscalePluginInstalled);
-    installButton.classList.toggle("hidden", imageUpscalePluginInstalled);
-    removeButton.classList.toggle("hidden", !imageUpscalePluginInstalled);
-  } catch (error) {
-    imageUpscalePluginInstalled = false;
-    status.textContent = "检测失败";
-    console.error("[图片放大插件] 状态检测失败", error);
-  }
-}
-
-async function upscaleExtensionSources(nodes) {
-  if (desktop?.upscaleImage) { enqueueExtensionTasks(nodes, "image-upscale"); return; }
-  if (!desktop?.upscaleImage) return toast("图片放大仅支持 .NET 桌面版");
-  for (const source of nodes) {
-    try {
-      const reference = source.type === "image"
-        ? { image: source.image, assetId: source.imageAssetId }
-        : { image: source.generatedImage, assetId: source.generatedAssetId };
-      const dataUrl = await materializeReferenceImage(reference);
-      if (!dataUrl) throw new Error("无法读取原始图片");
-      toast("正在放大图片，请稍候");
-      const result = await desktop.upscaleImage({ dataUrl, fileName: source.fileName || "image.png", outputRoot: state.settings.exportFolderLabel || runtimeExportFolder, model: "realesrgan-x4plus", scale: 4 });
-      const resultNode = addNode("image", source.x + NODE_WIDTH + 40, source.y, false);
-      resultNode.image = result.dataUrl;
-      resultNode.fileName = result.fileName || "upscaled.png";
-      resultNode.mime = "image/png";
-      resultNode.outputPath = result.outputPath || "";
-      resultNode.upscaleSourceNodeId = source.id;
-      await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
-      state.edges.push({ id: uid("e"), from: { node: source.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
-      pushHistory();
-      render();
-      toast("图片放大完成");
-    } catch (error) {
-      console.error("[图片放大插件] 处理失败", { nodeId: source.id, message: error.message });
-      toast(`图片放大失败：可能是显卡不支持 Vulkan、驱动过旧或图片过大；建议更新显卡驱动或换较小图片重试。${error.message || ""}`);
     }
   }
 }
@@ -5408,36 +5957,6 @@ $("removeBackgroundRemovalPluginBtn").onclick = async () => {
   if (!window.confirm("确定卸载智能抠图插件并删除 213.6 MB 模型吗？已生成的图片不会删除。")) return;
   try { await desktop.uninstallBackgroundRemoval(); toast("智能抠图插件已卸载，生成图片保持不变"); $("backgroundRemovalInstallProgress").classList.add("hidden"); await refreshBackgroundRemovalPluginStatus(); }
   catch (error) { showAppAlert(`无法卸载智能抠图插件。可能原因：抠图任务正在运行或目录权限不足。建议办法：等待任务结束后重试。\n${error.message || ""}`); }
-};
-
-$("installImageUpscalePluginBtn").onclick = async () => {
-  const button = $("installImageUpscalePluginBtn");
-  button.disabled = true;
-  button.textContent = "安装中…";
-  $("imageUpscalePluginHint").textContent = "正在从 Real-ESRGAN 官方 Release 下载并校验，约 63 MB，请不要关闭软件。";
-  try {
-    await desktop.installImageUpscale();
-    toast("图片放大插件安装完成");
-  } catch (error) {
-    console.error("[图片放大插件] 安装失败", error);
-    showAppAlert(`图片放大插件安装失败。可能原因：网络无法访问 GitHub、磁盘权限不足或文件校验失败。建议办法：检查网络和 data 目录权限后重试。\n${error.message || ""}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = "安装插件";
-    $("imageUpscalePluginHint").textContent = "当前默认使用照片模型进行 4× 放大。";
-    await refreshImageUpscalePluginStatus();
-  }
-};
-
-$("removeImageUpscalePluginBtn").onclick = async () => {
-  if (!window.confirm("确定卸载图片放大插件吗？已生成的图片不会删除。")) return;
-  try {
-    await desktop.uninstallImageUpscale();
-    toast("图片放大插件已卸载，生成图片保持不变");
-    await refreshImageUpscalePluginStatus();
-  } catch (error) {
-    showAppAlert(`无法卸载图片放大插件。可能原因：插件正在运行或目录权限不足。建议办法：等待当前放大任务结束后重试。\n${error.message || ""}`);
-  }
 };
 
 function openFolderImportDialog(entries, folderName = "") {
@@ -5835,18 +6354,30 @@ els.verifyKeyBtn.onclick = async () => {
 
 async function fetchBalance() {
   const key = state.settings.apiKey || els.apiKeyInput.value.trim();
-  if (!key) { els.balanceDisplay.textContent = "积分：请先填入 API Key"; return; }
-  els.balanceDisplay.textContent = "积分：查询中...";
+  if (!key) { els.balanceDisplay.textContent = "令牌余额：请先填入 API Key"; return; }
+  els.balanceDisplay.textContent = "令牌余额：查询中...";
   try {
     const resp = await apiFetch("/api/balance", { headers: { "X-CanvasFlow-Api-Key": key } });
     const data = await resp.json();
-    if (data.success) {
-      els.balanceDisplay.textContent = `积分：${Number(data.remain_credits).toFixed(2)}（已用 ${Number(data.used_credits).toFixed(2)}）`;
+    if (resp.ok && data.success) {
+      if (data.unlimited_quota === true) {
+        els.balanceDisplay.textContent = "令牌余额：无限额度";
+      } else {
+        const remainBalance = Number(data.remain_balance);
+        const remainCredits = Number(data.remain_credits);
+        const usedBalance = Number(data.used_balance);
+        if (!Number.isFinite(remainBalance)) throw new Error("令牌余额响应缺少 remain_balance");
+        const credits = Number.isFinite(remainCredits) ? Math.trunc(remainCredits) : 0;
+        const used = Number.isFinite(usedBalance) ? usedBalance.toFixed(2) : "0.00";
+        els.balanceDisplay.textContent = `令牌余额：${remainBalance.toFixed(2)}（积分 ${credits}，已用 ${used}）`;
+      }
     } else {
-      els.balanceDisplay.textContent = "积分：查询失败";
+      console.warn("[令牌余额] 查询失败", { status: resp.status, message: data.message || data.error?.message || "" });
+      els.balanceDisplay.textContent = "令牌余额：查询失败";
     }
-  } catch {
-    els.balanceDisplay.textContent = "积分：网络错误";
+  } catch (error) {
+    console.error("[令牌余额] 查询异常", error);
+    els.balanceDisplay.textContent = "令牌余额：网络错误";
   }
 }
 
@@ -6890,7 +7421,6 @@ async function init() {
   applySettings();
   render();
   await refreshBackgroundRemovalPluginStatus();
-  await refreshImageUpscalePluginStatus();
   setUiLanguage(uiLanguage);
   const uiObserver = new MutationObserver(changes => {
     for (const change of changes) {

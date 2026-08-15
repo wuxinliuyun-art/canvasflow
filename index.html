@@ -167,8 +167,8 @@
           <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
           <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
           <div class="balance-row">
-            <span id="balanceDisplay" class="balance-text">积分：--</span>
-            <button id="balanceRefreshBtn" class="apikey-btn" title="刷新余额">刷新</button>
+            <span id="balanceDisplay" class="balance-text">令牌余额：--</span>
+            <button id="balanceRefreshBtn" class="apikey-btn" title="刷新令牌余额">刷新</button>
           </div>
         </label>
 
@@ -194,10 +194,6 @@
           </div>
           <p id="backgroundRemovalPluginHint" class="setting-desc">模型源自 BiRefNet；本插件使用 rembg Release 提供的第三方 ONNX 转换文件，并非 BiRefNet 官方下载。安装后可从“拓展功能”使用。</p>
           <div id="backgroundRemovalInstallProgress" class="plugin-install-progress hidden"><div class="plugin-progress-track"><span id="backgroundRemovalProgressBar"></span></div><span id="backgroundRemovalProgressText">准备下载</span></div>
-        </section>
-        <section class="settings-card plugin-card" data-plugin-id="image-upscale">
-          <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4M8 16 16 8"/></svg></div><div><div class="plugin-title-row"><h3>图片放大</h3><span id="imageUpscalePluginStatus" class="plugin-status">检测中</span><button id="installImageUpscalePluginBtn" class="primary plugin-inline-action hidden">安装插件</button><button id="removeImageUpscalePluginBtn" class="plugin-inline-action hidden">卸载</button></div><p class="setting-desc">使用 Real-ESRGAN 在本机放大图片。插件约 63 MB，需要支持 Vulkan 的显卡。</p></div></div>
-          <p id="imageUpscalePluginHint" class="setting-desc">当前默认使用照片模型进行 4× 放大。</p>
         </section>
         <section class="settings-card plugin-card is-built-in">
           <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18 19 6M9 6h10v10"/></svg></div><div><div class="plugin-title-row"><h3>角度变化</h3><span class="plugin-status installed">已启用</span></div><p class="setting-desc">根据图片创建角度变化节点。此功能随 CanvasFlow 提供，无需额外安装。</p></div></div>
@@ -289,13 +285,36 @@
     <div class="lightbox-bg"></div>
     <img id="lightboxImg" class="lightbox-img" alt="">
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
-    <div id="lightboxPaintToolbar" class="lightbox-paint-toolbar hidden">
-      <label>颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
-      <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
-      <button id="lightboxPaintCancel">取消</button>
-      <button id="lightboxPaintConfirm" class="primary">确认并生成节点</button>
+    <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="镜像图片">
+      <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片">↔</button>
+      <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片">↕</button>
     </div>
-    <button id="lightboxPaintBtn" class="lightbox-paint-btn hidden" title="在图片上绘制色块">画色块</button>
+    <div id="lightboxPaintToolbar" class="lightbox-paint-toolbar hidden">
+      <div id="lightboxMainTools" class="lightbox-toolbar-section lightbox-main-tools" role="group" aria-label="图片编辑">
+        <button id="lightboxInsertBtn" type="button">置入</button>
+        <button id="lightboxRetouchBtn" type="button">涂改</button>
+      </div>
+      <div id="lightboxRetouchTools" class="lightbox-toolbar-section lightbox-paint-tools hidden" role="group" aria-label="涂改工具">
+        <button id="lightboxRetouchBack" type="button">返回</button>
+        <button id="lightboxPaintBrush" class="active" type="button">画笔</button>
+        <button id="lightboxPaintEraser" type="button">橡皮擦</button>
+        <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
+          <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
+          <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+        </div>
+      </div>
+      <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
+      <button id="lightboxPaintUndo" class="hidden" type="button" disabled>撤销</button>
+      <div class="lightbox-toolbar-actions">
+        <button id="lightboxPaintCancel">取消</button>
+        <button id="lightboxPaintConfirm" class="primary">确认并生成节点</button>
+      </div>
+    </div>
+    <div id="lightboxCanvasPicker" class="lightbox-canvas-picker hidden">
+      <div class="lightbox-canvas-picker-head"><strong>从画布置入</strong><button id="lightboxCanvasPickerClose" type="button" title="关闭">×</button></div>
+      <div id="lightboxCanvasPickerList" class="lightbox-canvas-picker-list"></div>
+    </div>
+    <button id="lightboxPaintBtn" class="lightbox-paint-btn hidden" title="绘制、置入或镜像图片">编辑图片</button>
     <button id="lightboxClose" class="lightbox-close" title="关闭">×</button>
     <button id="lightboxPrev" class="lightbox-nav lightbox-prev hidden" title="上一张">‹</button>
     <button id="lightboxNext" class="lightbox-nav lightbox-next hidden" title="下一张">›</button>

@@ -35,7 +35,7 @@ internal sealed class DesktopApi
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.1");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.2");
         _version = ReadVersion();
     }
 
@@ -70,7 +70,7 @@ internal sealed class DesktopApi
                 return await ProxyApiAsync(HttpMethod.Get, "/v1/tasks/" + Uri.EscapeDataString(taskId), null, cancellationToken);
             }
             if (method == "GET" && path == "/api/models") return await ProxyApiAsync(HttpMethod.Get, "/v1/models", null, cancellationToken);
-            if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/user/balance", null, cancellationToken);
+            if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/balance", null, cancellationToken);
             return Json(405, new { error = "请求方法不受支持" });
         }
         catch (Exception error)
@@ -296,7 +296,7 @@ internal sealed class DesktopApi
         var filePath = Path.Combine(_root, "data", "custom-library.json");
         if (method == "GET")
         {
-            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[]}";
+            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[],\"builtinDefaultsInitialized\":false}";
             JsonNode.Parse(content);
             return new DesktopApiResponse(200, content);
         }

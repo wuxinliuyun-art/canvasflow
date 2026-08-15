@@ -24,7 +24,6 @@ public partial class MainWindow : Window
     private const string CanvasUrl = "https://canvasflow.local/index.html";
     private readonly CancellationTokenSource _shutdown = new();
     private DesktopApi? _desktopApi;
-    private ImageUpscalePlugin? _imageUpscalePlugin;
     private BackgroundRemovalPlugin? _backgroundRemovalPlugin;
     private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
@@ -87,10 +86,6 @@ public partial class MainWindow : Window
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
-          imageUpscaleStatus: () => invoke("desktop:image-upscale-status", {}, 60000),
-          installImageUpscale: () => invoke("desktop:install-image-upscale", {}, 1200000),
-          uninstallImageUpscale: () => invoke("desktop:uninstall-image-upscale", {}, 60000),
-          upscaleImage: payload => invoke("desktop:upscale-image", payload || {}, 1200000),
           backgroundRemovalStatus: () => invoke("desktop:background-removal-status", {}, 60000),
           installBackgroundRemoval: () => invoke("desktop:install-background-removal", {}, 2400000),
           uninstallBackgroundRemoval: () => invoke("desktop:uninstall-background-removal", {}, 60000),
@@ -210,7 +205,6 @@ public partial class MainWindow : Window
             (_root, _contentRoot) = FindApplicationPaths();
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
             _desktopApi = new DesktopApi(_root, Log, ReadApiKey);
-            _imageUpscalePlugin = new ImageUpscalePlugin(_root, Log);
             _backgroundRemovalPlugin = new BackgroundRemovalPlugin(_root, Log);
             var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
@@ -328,35 +322,6 @@ public partial class MainWindow : Window
                             PostRpcResult(root, new { opened = true });
                         }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:image-upscale-status")
-                    {
-                        try { PostRpcResult(root, await RequireImageUpscalePlugin().StatusAsync()); }
-                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:install-image-upscale")
-                    {
-                        try { PostRpcResult(root, await RequireImageUpscalePlugin().InstallAsync(_shutdown.Token)); }
-                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:uninstall-image-upscale")
-                    {
-                        try { PostRpcResult(root, RequireImageUpscalePlugin().Uninstall()); }
-                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:upscale-image")
-                    {
-                        try
-                        {
-                            var dataUrl = root.TryGetProperty("dataUrl", out var dataValue) ? dataValue.GetString() ?? "" : "";
-                            var fileName = root.TryGetProperty("fileName", out var nameValue) ? nameValue.GetString() ?? "image.png" : "image.png";
-                            var outputRoot = root.TryGetProperty("outputRoot", out var outputValue) ? outputValue.GetString() ?? "" : "";
-                            var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() ?? "realesrgan-x4plus" : "realesrgan-x4plus";
-                            var scale = root.TryGetProperty("scale", out var scaleValue) && scaleValue.TryGetInt32(out var parsedScale) ? parsedScale : 4;
-                            if (string.IsNullOrWhiteSpace(outputRoot)) outputRoot = Path.Combine(_root!, "export");
-                            PostRpcResult(root, await RequireImageUpscalePlugin().UpscaleAsync(dataUrl, fileName, outputRoot, model, scale, _shutdown.Token));
-                        }
-                        catch (Exception upscaleError) { PostRpcResult(root, error: upscaleError.Message); }
                     }
                     else if (type.GetString() == "desktop:background-removal-status")
                     {
@@ -510,8 +475,6 @@ public partial class MainWindow : Window
         CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
     }
 
-    private ImageUpscalePlugin RequireImageUpscalePlugin() =>
-        _imageUpscalePlugin ?? throw new InvalidOperationException("图片放大插件服务尚未初始化");
     private BackgroundRemovalPlugin RequireBackgroundRemovalPlugin() =>
         _backgroundRemovalPlugin ?? throw new InvalidOperationException("智能抠图插件服务尚未初始化");
 
