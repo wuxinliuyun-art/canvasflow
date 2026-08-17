@@ -130,7 +130,7 @@ const UI_EN = {
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
   "无图片": "No image", "上传": "Upload", "图片节点粘贴后为空": "Image node is empty after pasting", "停用": "Disabled", "启用": "Enabled",
-  "取消连线": "Remove Connection", "已居中显示": "View centered", "已整理节点": "Nodes arranged", "没有需要添加的节点": "No nodes need to be added",
+  "取消连线": "Remove Connection", "已居中显示": "View centered", "已整理节点": "Nodes arranged", "没有需要添加的节点": "No nodes need to be added", "没有需要连接的节点": "No nodes need to be connected",
   "已生成局部修改图片节点": "Edited image node created", "请输入文字或选择图片": "Enter text or choose an image", "已创建节点": "Node created",
   "已从剪贴板创建图片节点": "Image node created from clipboard", "已从剪贴板创建文字节点": "Text node created from clipboard",
   "切换启用/停用": "Toggle Enabled/Disabled", "多任务": "Multi-task", "依次连接": "Connect in Sequence", "取消多任务": "Dissolve Multi-task", "添加输出节点": "Add Output Node",
@@ -204,6 +204,7 @@ function translateEnglishString(source) {
     [/^项目(\d+)$/, "Project $1"], [/^AI绘图 #(\d+)$/, "AI Image #$1"], [/^输出节点 (\d+)$/, "Output Node $1"],
     [/^编组 (\d+)$/, "Group $1"], [/^(\d+) 个节点 · 双击进入$/, "$1 nodes · Double-click to enter"],
     [/^已创建编组，包含 (\d+) 个节点$/, "Created a group containing $1 nodes"], [/^已创建文件夹节点，包含 (\d+) 张图片$/, "Created an image folder containing $1 images"],
+    [/^已依次连接 (\d+) 个节点并添加 1 个 AI 绘图节点$/, "Connected $1 nodes in sequence and added 1 AI image node"],
     [/^已依次连接 (\d+) 个节点$/, "Connected $1 nodes in sequence"],
     [/^图片(\d+)$/, "Image $1"], [/^(\d+) 张图片$/, "$1 images"], [/^已创建多任务 (\d+) 个节点$/, "Created a multi-task with $1 nodes"],
     [/^已复制 (\d+) 个节点$/, "Copied $1 nodes"], [/^已粘贴 (\d+) 个节点$/, "Pasted $1 nodes"],
@@ -3487,19 +3488,38 @@ function tidyNodes() {
 }
 
 function autoAddAiNodes() {
-  const selected = state.nodes.filter(n => state.selected.has(n.id) && n.type !== "output" && n.type !== "ai-image" && !n.disabled);
-  const source = selected.length ? selected : state.nodes.filter(n => n.type !== "output" && n.type !== "ai-image" && !n.disabled);
-  const terminals = source.filter(n => !state.edges.some(e => e.from.node === n.id));
-  if (!terminals.length) return toast("没有需要添加的节点");
+  const isSource = node => node.type !== "output" && node.type !== "ai-image" && !node.disabled;
+  const selected = state.nodes.filter(node => state.selected.has(node.id) && isSource(node));
+  const sources = (selected.length ? selected : state.nodes.filter(isSource))
+    .sort((a, b) => a.x - b.x || a.y - b.y || a.created - b.created);
+  if (!sources.length) return toast("没有需要连接的节点");
 
-  terminals.forEach((n, index) => {
-    const aiNode = addNode("ai-image", snap(n.x + 330), snap(n.y + index * 20), false);
-    aiNode.prompt = n.type === "text" && n.text ? n.text.trim() : "";
-    state.edges.push({ id: uid("e"), from: { node: n.id, port: "out" }, to: { node: aiNode.id, port: "in" } });
-  });
+  const sourceIds = new Set(sources.map(node => node.id));
+  const replacedEdges = state.edges.filter(edge => sourceIds.has(edge.from.node) && sourceIds.has(edge.to.node));
+  state.edges = state.edges.filter(edge => !sourceIds.has(edge.from.node) || !sourceIds.has(edge.to.node));
+  for (let index = 0; index < sources.length - 1; index++) {
+    state.edges.push({
+      id: uid("e"),
+      from: { node: sources[index].id, port: "out" },
+      to: { node: sources[index + 1].id, port: "in" },
+      label: "",
+    });
+  }
+
+  const terminal = sources[sources.length - 1];
+  const aiNode = addNode("ai-image", snap(terminal.x + 330), snap(terminal.y), false);
+  normalizeAiNodeSettings(aiNode);
+  state.edges.push({ id: uid("e"), from: { node: terminal.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
+  state.selected = new Set([aiNode.id]);
+  refreshAiPrompt(aiNode.id);
   pushHistory();
   render();
-  toast(`已添加 ${terminals.length} 个 AI 绘图节点`);
+  console.log("[一键连接] 已按画布位置创建单链", {
+    sourceIds: sources.map(node => node.id),
+    aiNodeId: aiNode.id,
+    replacedEdges: replacedEdges.length,
+  });
+  toast(`已依次连接 ${sources.length} 个节点并添加 1 个 AI 绘图节点`);
 }
 
 function connectSelectionInSequence() {

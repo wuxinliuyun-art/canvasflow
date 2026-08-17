@@ -53,7 +53,7 @@ internal sealed class BackgroundRemovalPlugin : IDisposable
         try
         {
             using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = TimeSpan.FromMinutes(30) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.2");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.3");
             using var response = await client.GetAsync(ModelUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is long length && length != ExpectedBytes)
