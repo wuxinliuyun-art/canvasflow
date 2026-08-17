@@ -210,6 +210,12 @@ Open a [GitHub Issue](https://github.com/wuxinliuyun-art/canvasflow/issues) and,
 
 ---
 
+## Development Note
+
+CanvasFlow is conceived, designed, and maintained by its author, with OpenAI Codex assisting in implementation, UI iteration, debugging, and documentation. This is an author-led open-source project developed with extensive AI assistance.
+
+---
+
 ## License
 
 CanvasFlow is open source under the [MIT License](LICENSE).

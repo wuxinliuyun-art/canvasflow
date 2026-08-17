@@ -210,6 +210,12 @@ CanvasFlow 会检查 GitHub Releases。发现新版后可前往下载 `CanvasFlo
 
 ---
 
+## 开发说明
+
+CanvasFlow 由作者发起、设计并维护，项目的代码实现、界面迭代、调试与文档编写由 OpenAI Codex 协助完成。这是一个由作者主导、AI 深度参与开发的开源项目。
+
+---
+
 ## 许可证
 
 CanvasFlow 使用 [MIT License](LICENSE) 开源。
