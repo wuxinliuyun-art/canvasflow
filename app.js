@@ -217,7 +217,7 @@ function translateEnglishString(source) {
     [/^已完成 (\d+)\/(\d+)$/, "$1/$2 completed"], [/^完成 (\d+)\/(\d+)，失败 (\d+)$/, "$1/$2 completed, $3 failed"], [/^已取消，完成 (\d+)\/(\d+)$/, "Cancelled, $1/$2 completed"],
     [/^收集输出 (\d+)\/(\d+)$/, "Collecting output $1/$2"], [/^写入文件 (\d+)\/(\d+)$/, "Writing files $1/$2"],
     [/^任务(\d+)$/, "Task $1"], [/^共 (\d+) 个任务（(\d+) 个节点）· 双击标题放大$/, "$1 tasks ($2 nodes) · Double-click the title to maximize"],
-    [/^令牌余额：([\d.]+)（积分 ([-\d]+)，已用 ([\d.]+)）$/, "Token balance: $1 ($2 credits, $3 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
+    [/^令牌余额：([\d.]+)（已用 ([\d.]+)）$/, "Token balance: $1 ($2 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
     [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
     [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"],
     [/^自定义文字：(.+)$/, "Custom Text: $1"], [/^自定义图片：(.+)$/, "Custom Image: $1"],
@@ -560,6 +560,7 @@ let connectDraft = null;
 let selectionDraft = null;
 let spaceDown = false;
 let lastPointerWorld = { x: 180, y: 140 };
+let lastPointerClient = null;
 let composerImage = null;
 
 function uid(prefix) {
@@ -770,13 +771,34 @@ function renderLibraryList(kind, container) {
   if (!container) return;
   const items = libraryItems(kind);
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
+    <button class="material-drag-handle" type="button" title="拖动排序" aria-label="拖动排序">⋮⋮</button>
     ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="" title="双击放大预览">` : ""}
     <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
+  const dropIndicator = document.createElement("div");
+  dropIndicator.className = "material-drop-indicator hidden";
+  container.appendChild(dropIndicator);
+  let dropTargetId = "";
+  let dropAfter = false;
   container.querySelectorAll(".material-item").forEach(row => {
     const kind = row.dataset.kind, id = row.dataset.id;
+    const handle = row.querySelector(".material-drag-handle");
+    handle.onpointerdown = () => { row.draggable = true; };
+    handle.onpointerup = () => { if (!row.classList.contains("is-dragging")) row.draggable = false; };
+    row.ondragstart = ev => {
+      if (!row.draggable) { ev.preventDefault(); return; }
+      row.classList.add("is-dragging");
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", `${kind}:${id}`);
+    };
+    row.ondragend = () => {
+      row.draggable = false;
+      row.classList.remove("is-dragging");
+      dropIndicator.classList.add("hidden");
+      dropTargetId = "";
+    };
     const thumb = row.querySelector(".material-thumb");
     if (thumb) thumb.ondblclick = ev => {
       ev.preventDefault();
@@ -786,6 +808,34 @@ function renderLibraryList(kind, container) {
     row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
   });
+  container.ondragover = ev => {
+    const dragging = container.querySelector(".material-item.is-dragging");
+    const target = ev.target.closest?.(".material-item");
+    if (!dragging || !target || target === dragging || target.dataset.kind !== dragging.dataset.kind) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "move";
+    dropAfter = ev.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2;
+    dropTargetId = target.dataset.id;
+    dropIndicator.style.top = `${target.offsetTop + (dropAfter ? target.offsetHeight : 0) - 1}px`;
+    dropIndicator.classList.remove("hidden");
+  };
+  container.ondrop = ev => {
+    const dragging = container.querySelector(".material-item.is-dragging");
+    if (!dragging || !dropTargetId) return;
+    ev.preventDefault();
+    dropIndicator.classList.add("hidden");
+    const key = kind === "text" ? "textTemplates" : "imageMaterials";
+    const items = globalLibrary[key];
+    const sourceIndex = items.findIndex(item => item.id === dragging.dataset.id);
+    if (sourceIndex < 0) return;
+    const [movedItem] = items.splice(sourceIndex, 1);
+    const targetIndex = items.findIndex(item => item.id === dropTargetId);
+    if (targetIndex < 0) { items.splice(sourceIndex, 0, movedItem); return; }
+    items.splice(targetIndex + (dropAfter ? 1 : 0), 0, movedItem);
+    persistLibraries();
+    console.info(`[素材排序] ${kind}：${globalLibrary[key].map(item => item.name).join(" → ")}`);
+    renderLibraryList(kind, container);
+  };
 }
 
 function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -1072,6 +1122,16 @@ function screenToWorld(clientX, clientY) {
     x: (clientX - r.left - state.view.x) / state.view.scale,
     y: (clientY - r.top - state.view.y) / state.view.scale,
   };
+}
+
+function currentPasteAnchor() {
+  const r = els.viewport.getBoundingClientRect();
+  if (!r.width || !r.height) return lastPointerWorld;
+  const sourceX = lastPointerClient?.x ?? (r.left + r.width / 2);
+  const sourceY = lastPointerClient?.y ?? (r.top + r.height / 2);
+  const clientX = Math.max(r.left + 20, Math.min(r.right - 40, sourceX + 16));
+  const clientY = Math.max(r.top + 20, Math.min(r.bottom - 40, sourceY + 16));
+  return screenToWorld(clientX, clientY);
 }
 
 function snap(v) {
@@ -1523,8 +1583,9 @@ function pasteNodes(data, anchor = null) {
   const minY = Math.min(...data.nodes.map(n => n.y));
   const maxX = Math.max(...data.nodes.map(n => n.x + (Number(n.w) || NODE_WIDTH)));
   const maxY = Math.max(...data.nodes.map(n => n.y + (Number(n.h) || nodeHeightForType(n.type))));
-  const desiredMinX = anchor ? anchor.x : minX + 36;
-  const desiredMinY = anchor ? anchor.y : minY + 36;
+  const pasteAnchor = anchor || currentPasteAnchor();
+  const desiredMinX = pasteAnchor.x;
+  const desiredMinY = pasteAnchor.y;
   const groupPosition = findFreeNodePosition(desiredMinX, desiredMinY, maxX - minX, maxY - minY);
   data.nodes.forEach(n => {
     const nn = {
@@ -2072,18 +2133,30 @@ async function submitGeneration(prompt, imageUrls, node) {
 }
 
 async function pollTask(taskId, onProgress = null) {
-  const maxAttempts = 120;
+  const maxAttempts = 360;
   let lastErr = null;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 3000));
+    if (i > 0) await new Promise(r => setTimeout(r, 1000));
     let data;
     try {
       const resp = await apiFetch(`/api/task/${encodeURIComponent(taskId)}`, {
         headers: { "X-CanvasFlow-Api-Key": state.settings.apiKey || "" },
       });
+      if (resp.status === 429 || [500, 502, 503, 504].includes(resp.status)) {
+        lastErr = new Error(`查询服务暂时不可用（${resp.status}）`);
+        console.warn(`[任务查询] ${taskId} 第 ${i + 1} 次遇到临时状态 ${resp.status}，将继续重试`);
+        continue;
+      }
+      if (!resp.ok) {
+        const error = new Error(`查询失败（HTTP ${resp.status}）`);
+        error.retryable = false;
+        throw error;
+      }
       data = await resp.json();
     } catch (e) {
       lastErr = e;
+      console.warn(`[任务查询] ${taskId} 第 ${i + 1} 次失败：${e.message || e}`);
+      if (e.retryable === false) throw e;
       if (i < maxAttempts - 1) continue;
       break;
     }
@@ -2111,14 +2184,30 @@ async function pollTask(taskId, onProgress = null) {
 }
 
 async function fetchImageAsBase64(url) {
-  const resp = await apiFetch("/api/download-image", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageUrl: url }),
-  });
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  return data.base64;
+  const maxAttempts = 3;
+  const retryDelayMs = 2000;
+  let lastError = "";
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await apiFetch("/api/download-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+      const data = await resp.json();
+      if (data.error) {
+        const message = typeof data.error === "string" ? data.error : (data.error.message || "图片下载失败");
+        throw new Error(message);
+      }
+      if (!data.base64) throw new Error("图片下载响应缺少 base64 数据");
+      return data.base64;
+    } catch (error) {
+      lastError = error.message || String(error);
+      console.warn(`[生成结果] 图片下载失败（第 ${attempt}/${maxAttempts} 次）`, { url, message: lastError });
+      if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  throw new Error(`图片下载失败：${lastError}`);
 }
 
 function queueTaskStatusText(task) {
@@ -3658,6 +3747,7 @@ els.viewport.addEventListener("mousedown", ev => {
 });
 
 window.addEventListener("mousemove", ev => {
+  lastPointerClient = { x: ev.clientX, y: ev.clientY };
   if (ev.target.closest?.("#viewport")) lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
   if (connectDraft) {
     connectDraft.end = screenToWorld(ev.clientX, ev.clientY);
@@ -4603,13 +4693,13 @@ els.lightboxPaintConfirm.onclick = async () => {
 };
 
 function requestHideLightbox() {
-  if (lightboxPainting) return;
+  if (lightboxPainting) { cancelLightboxPaint(); return; }
   hideLightbox();
 }
 els.lightboxClose.onclick = requestHideLightbox;
 els.lightboxPrev.onclick = lightboxPrev;
 els.lightboxNext.onclick = lightboxNext;
-els.lightbox.querySelector(".lightbox-bg").onclick = requestHideLightbox;
+els.lightbox.querySelector(".lightbox-bg").onclick = () => { if (!lightboxPainting) hideLightbox(); };
 els.lightbox.addEventListener("wheel", ev => {
   if (lightboxImages.length <= 1) return;
   ev.preventDefault();
@@ -4628,7 +4718,7 @@ document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
   if (ev.key === "Escape") {
     ev.preventDefault();
-    if (!lightboxPainting) hideLightbox();
+    if (lightboxPainting) cancelLightboxPaint(); else hideLightbox();
   }
   if (ev.key === "ArrowLeft") { ev.preventDefault(); lightboxPrev(); }
   if (ev.key === "ArrowRight") { ev.preventDefault(); lightboxNext(); }
@@ -4697,7 +4787,8 @@ async function createNodeFromClipboard(ev) {
   if (imageItem) {
     const file = imageItem.getAsFile();
     if (!file) return false;
-    const node = addNode("image", lastPointerWorld.x, lastPointerWorld.y, false);
+    const anchor = currentPasteAnchor();
+    const node = addNode("image", anchor.x, anchor.y, false);
     node.image = await fileToDataUrl(file);
     node.fileName = file.name || `clipboard_${timestamp()}.png`;
     node.mime = file.type || "image/png";
@@ -4709,7 +4800,8 @@ async function createNodeFromClipboard(ev) {
   }
   const text = data.getData("text/plain");
   if (text && text.trim()) {
-    const node = addNode("text", lastPointerWorld.x, lastPointerWorld.y, false);
+    const anchor = currentPasteAnchor();
+    const node = addNode("text", anchor.x, anchor.y, false);
     node.text = text;
     pushHistory();
     render();
@@ -6213,7 +6305,8 @@ if (window.chrome?.webview) {
         const file = new File([blob], `clipboard_${timestamp()}.png`, { type: message.mime || "image/png" });
         if (active === els.composerText) await createFromImageFile(file);
         else {
-          const node = addNode("image", lastPointerWorld.x, lastPointerWorld.y, false);
+          const anchor = currentPasteAnchor();
+          const node = addNode("image", anchor.x, anchor.y, false);
           node.image = await fileToDataUrl(file);
           node.fileName = file.name;
           node.mime = file.type;
@@ -6223,7 +6316,8 @@ if (window.chrome?.webview) {
           toast("已从剪贴板创建图片节点");
         }
       } else if (message.kind === "text" && String(message.text || "").trim()) {
-        const node = addNode("text", lastPointerWorld.x, lastPointerWorld.y, false);
+        const anchor = currentPasteAnchor();
+        const node = addNode("text", anchor.x, anchor.y, false);
         node.text = String(message.text);
         pushHistory();
         render();
@@ -6348,25 +6442,37 @@ els.verifyKeyBtn.onclick = async () => {
   els.verifyKeyBtn.disabled = true;
   els.verifyKeyBtn.textContent = "...";
   els.verifyKeyBtn.style.color = "";
-  try {
-    const resp = await apiFetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
-    if (resp.status === 200) {
-      els.verifyKeyBtn.textContent = "✓";
-      els.verifyKeyBtn.style.color = "#34c759";
-      toast("API Key 有效");
-    } else if (resp.status === 401 || resp.status === 403) {
-      els.verifyKeyBtn.textContent = "✗";
-      els.verifyKeyBtn.style.color = "#ff3b30";
-      toast("API Key 无效");
-    } else {
-      els.verifyKeyBtn.textContent = "✗";
-      els.verifyKeyBtn.style.color = "#ff3b30";
-      toast("API 返回异常状态 " + resp.status);
+  let verified = false;
+  let invalid = false;
+  let lastStatus = 0;
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3 && !verified && !invalid; attempt++) {
+    try {
+      const resp = await apiFetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
+      lastStatus = resp.status;
+      verified = resp.status === 200;
+      invalid = resp.status === 401 || resp.status === 403;
+      if (!verified && !invalid) console.warn(`[API验证] 第 ${attempt} 次返回 HTTP ${resp.status}`);
+    } catch (err) {
+      lastError = err;
+      console.warn(`[API验证] 第 ${attempt} 次网络失败：${err.message || err}`);
     }
-  } catch (err) {
+    if (!verified && !invalid && attempt < 3) await new Promise(resolve => setTimeout(resolve, 800));
+  }
+  if (verified) {
+    els.verifyKeyBtn.textContent = "✓";
+    els.verifyKeyBtn.style.color = "#34c759";
+    toast("API Key 有效");
+  } else if (invalid) {
     els.verifyKeyBtn.textContent = "✗";
     els.verifyKeyBtn.style.color = "#ff3b30";
-    toast("验证失败，请检查网络");
+    toast("API Key 无效");
+  } else {
+    els.verifyKeyBtn.textContent = "!";
+    els.verifyKeyBtn.style.color = "#ff9f0a";
+    const detail = lastStatus ? `HTTP ${lastStatus}` : (lastError?.message || "网络连接失败");
+    console.warn(`[API验证] 暂时无法确认 Key：${detail}`);
+    toast("暂时无法验证，不代表 API Key 无效，请稍后重试");
   }
   els.verifyKeyBtn.disabled = false;
   window.setTimeout(() => { els.verifyKeyBtn.textContent = "验证"; els.verifyKeyBtn.style.color = ""; }, 2500);
@@ -6384,12 +6490,11 @@ async function fetchBalance() {
         els.balanceDisplay.textContent = "令牌余额：无限额度";
       } else {
         const remainBalance = Number(data.remain_balance);
-        const remainCredits = Number(data.remain_credits);
         const usedBalance = Number(data.used_balance);
         if (!Number.isFinite(remainBalance)) throw new Error("令牌余额响应缺少 remain_balance");
-        const credits = Number.isFinite(remainCredits) ? Math.trunc(remainCredits) : 0;
-        const used = Number.isFinite(usedBalance) ? usedBalance.toFixed(2) : "0.00";
-        els.balanceDisplay.textContent = `令牌余额：${remainBalance.toFixed(2)}（积分 ${credits}，已用 ${used}）`;
+        const balance = remainBalance * 10;
+        const used = (Number.isFinite(usedBalance) ? usedBalance : 0) * 10;
+        els.balanceDisplay.textContent = `令牌余额：${balance.toFixed(2)}（已用 ${used.toFixed(2)}）`;
       }
     } else {
       console.warn("[令牌余额] 查询失败", { status: resp.status, message: data.message || data.error?.message || "" });

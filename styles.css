@@ -10,6 +10,7 @@
   --accent-soft: rgba(17, 24, 39, .08);
   --danger: #ff3b30;
   --selected: #2f80ed;
+  --drop-indicator: #2f80ed;
   --canvas-grid: rgba(20, 24, 31, .055);
   --shadow: 0 18px 46px rgba(17, 24, 39, .12);
   --soft-shadow: 0 8px 24px rgba(17, 24, 39, .08);
@@ -38,6 +39,7 @@ html, body, .app {
   --accent: #f5f5f7;
   --accent-soft: rgba(255, 255, 255, .1);
   --selected: rgba(255,255,255,.35);
+  --drop-indicator: #78aaff;
   --canvas-grid: rgba(255, 255, 255, .065);
   --shadow: 0 22px 58px rgba(0, 0, 0, .45);
   --soft-shadow: 0 10px 26px rgba(0, 0, 0, .34);
@@ -1262,7 +1264,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .lightbox-paint-canvas.transform-mode.is-rotate-target { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M18.4 7.2A8 8 0 1 0 20 12' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='m16 3 3 4-5 1' fill='%23fff' stroke='%23000' stroke-width='.8'/%3E%3Cpath d='M18.4 7.2A8 8 0 1 0 20 12' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair; }
 .lightbox-mirror-tools { position: fixed; z-index: 4; display: grid; gap: 6px; transform: translateY(-50%); }
 .lightbox-mirror-tools button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 9px; background: #17181c; color: #fff; font-size: 18px; line-height: 1; box-shadow: 0 8px 22px rgba(0,0,0,.42); }
-.lightbox.is-editing .lightbox-close { display: none; }
 .lightbox-canvas-picker { position: fixed; z-index: 5; left: 50%; bottom: 92px; width: min(540px, calc(100vw - 32px)); max-height: min(510px, calc(100vh - 150px)); overflow: hidden; transform: translateX(-50%); border: 1px solid rgba(255,255,255,.22); border-radius: 13px; background: rgba(20,20,24,.96); color: #fff; box-shadow: 0 18px 60px rgba(0,0,0,.45); }
 .lightbox-canvas-picker-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.14); }
 .lightbox-canvas-picker-head button { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: #fff; font-size: 20px; }
@@ -1463,6 +1464,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .execute-dialog-head { cursor: default; }
 
 .custom-materials-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1478,6 +1480,34 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   background: var(--panel-2);
   border-radius: 6px;
   font-size: 13px;
+}
+.material-drag-handle {
+  width: 22px;
+  height: 30px;
+  flex: 0 0 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: -3px;
+  opacity: .65;
+}
+.material-drag-handle:active { cursor: grabbing; }
+.material-item.is-dragging { position: relative; }
+.material-item.is-dragging > * { opacity: .42; }
+.material-drop-indicator {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--drop-indicator);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--drop-indicator) 32%, transparent), 0 0 6px color-mix(in srgb, var(--drop-indicator) 36%, transparent);
+  pointer-events: none;
 }
 .material-item .material-thumb {
   width: 30px;

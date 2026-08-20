@@ -66,6 +66,7 @@
 
     <StackPanel Grid.Row="2">
       <CheckBox x:Name="UseCanvasNodeToggle" Margin="2,0,0,8" Content="使用画布节点输入" Checked="UseCanvasNodeToggle_Changed" Unchecked="UseCanvasNodeToggle_Changed"/>
+      <CheckBox x:Name="AutoCaptureToggle" Margin="2,0,0,8" Content="发送前自动使用已保存区域重新截图" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed"/>
       <Border x:Name="CanvasNodePanel" Visibility="Collapsed" Padding="10" Margin="0,0,0,10" CornerRadius="10" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <StackPanel><TextBlock Margin="0,0,0,4" Text="截图功能节点"/><ComboBox x:Name="CanvasNodeCombo" Width="Auto" HorizontalAlignment="Stretch" SelectedValuePath="Id" SelectionChanged="CanvasNodeCombo_SelectionChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBlock x:Name="CanvasNodeSummary" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/></StackPanel>
       </Border>
@@ -85,7 +86,6 @@
               <StackPanel Width="92" Margin="0,0,12,0"><TextBlock Text="比例"/><ComboBox x:Name="RatioCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1:1">1:1</ComboBoxItem><ComboBoxItem Tag="auto">auto</ComboBoxItem><ComboBoxItem Tag="3:2">3:2</ComboBoxItem><ComboBoxItem Tag="2:3">2:3</ComboBoxItem><ComboBoxItem Tag="4:3">4:3</ComboBoxItem><ComboBoxItem Tag="3:4">3:4</ComboBoxItem><ComboBoxItem Tag="5:4">5:4</ComboBoxItem><ComboBoxItem Tag="4:5">4:5</ComboBoxItem><ComboBoxItem Tag="16:9">16:9</ComboBoxItem><ComboBoxItem Tag="9:16">9:16</ComboBoxItem><ComboBoxItem Tag="2:1">2:1</ComboBoxItem><ComboBoxItem Tag="1:2">1:2</ComboBoxItem><ComboBoxItem Tag="3:1">3:1</ComboBoxItem><ComboBoxItem Tag="1:3">1:3</ComboBoxItem><ComboBoxItem Tag="21:9">21:9</ComboBoxItem><ComboBoxItem Tag="9:21">9:21</ComboBoxItem></ComboBox></StackPanel>
               <StackPanel Width="92"><TextBlock Text="生成数量"/><ComboBox x:Name="CountCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1">1</ComboBoxItem><ComboBoxItem Tag="2">2</ComboBoxItem><ComboBoxItem Tag="3">3</ComboBoxItem><ComboBoxItem Tag="4">4</ComboBoxItem></ComboBox></StackPanel>
             </WrapPanel>
-            <CheckBox x:Name="AutoCaptureToggle" Margin="0,2,0,4" Content="发送前自动使用已保存区域重新截图" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed"/>
           </StackPanel>
         </StackPanel>
       </StackPanel>
