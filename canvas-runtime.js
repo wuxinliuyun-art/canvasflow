@@ -2,7 +2,7 @@
   const desktop = window.canvasflowDesktop || null;
   const desktopApiPaths = new Set([
     "/api/runtime-paths", "/api/app-state", "/api/custom-library", "/api/auto-backup",
-    "/api/save-json", "/api/save-images", "/api/custom-material", "/api/save-export-files",
+    "/api/save-json", "/api/save-project", "/api/save-images", "/api/custom-material", "/api/save-export-files",
     "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
   ]);
 

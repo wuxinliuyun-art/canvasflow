@@ -9,6 +9,7 @@ artifact-build/
 *.log
 *.exe
 export/
+projects/
 download/
 data/
 .opencode/

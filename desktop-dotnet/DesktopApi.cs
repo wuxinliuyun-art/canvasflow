@@ -256,11 +256,12 @@ internal sealed class DesktopApi
             var uri = new Uri("https://canvasflow.local" + (pathAndQuery.StartsWith('/') ? pathAndQuery : "/" + pathAndQuery));
             var path = uri.AbsolutePath;
             if (method == "GET" && path == "/api/runtime-paths")
-                return Json(200, new { dataRoot = _root, exportFolder = Path.Combine(_root, "export") });
+                return Json(200, new { dataRoot = _root, exportFolder = Path.Combine(_root, "export"), projectsFolder = Path.Combine(_root, "projects") });
             if (path == "/api/app-state") return HandleAppState(method, body);
             if (path == "/api/custom-library") return HandleCustomLibrary(method, body);
             if (method == "POST" && path == "/api/auto-backup") return SaveAutoBackup(body);
             if (method == "POST" && path == "/api/save-json") return SaveJson(body);
+            if (method == "POST" && path == "/api/save-project") return SaveProject(body);
             if (method == "POST" && path == "/api/save-images") return SaveImages(body);
             if (path == "/api/custom-material") return HandleCustomMaterial(method, body);
             if (method == "POST" && path == "/api/save-export-files") return SaveExportFiles(body);
@@ -332,6 +333,25 @@ internal sealed class DesktopApi
         var filePath = Path.Combine(_root, "download", name);
         AtomicWrite(filePath, content);
         return Json(200, new { success = true, path = filePath });
+    }
+
+    private DesktopApiResponse SaveProject(string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var name = SafeLeafName(root.GetProperty("name").GetString());
+        if (!name.EndsWith(".cflow", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("项目文件必须使用 .cflow 后缀");
+        var content = root.GetProperty("content").GetString() ?? "";
+        using var contentDocument = JsonDocument.Parse(content);
+        var type = contentDocument.RootElement.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "";
+        if (type is not ("project" or "library")) throw new InvalidDataException("CanvasFlow 文件类型不正确");
+        var requestedFolder = root.TryGetProperty("folderPath", out var folderElement) ? folderElement.GetString() ?? "" : "";
+        var folder = string.IsNullOrWhiteSpace(requestedFolder) ? Path.Combine(_root, "projects") : Path.GetFullPath(requestedFolder);
+        Directory.CreateDirectory(folder);
+        var filePath = Path.Combine(folder, name);
+        AtomicWrite(filePath, content);
+        _log($"[项目保存] 类型={type}，路径={filePath}，字节={Encoding.UTF8.GetByteCount(content)}", false);
+        return Json(200, new { success = true, path = filePath, type });
     }
 
     private DesktopApiResponse SaveImages(string body)

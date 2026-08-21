@@ -18,6 +18,7 @@ function mindmapFeatureEnabled() {
 }
 
 let runtimeExportFolder = "export";
+let runtimeProjectFolder = "projects";
 let backgroundRemovalPluginInstalled = false;
 let autoBackupReady = false;
 let autoBackupTimer = null;
@@ -39,6 +40,7 @@ function resolvedExportFolderLabel(value) {
 }
 const LANGUAGE_KEY = "webimage.language";
 const OUTPUT_FOLDER_KEY = "canvasflow.outputFolder.v1";
+const PROJECT_FOLDER_KEY = "canvasflow.projectFolder.v1";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
 const ONBOARDING_VERSION = 1;
 const DEFAULT_TEXT_TEMPLATES = [
@@ -168,7 +170,8 @@ const UI_EN = {
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
-  "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.",
+  "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
+  "项目文件夹": "Project Folder", "修改位置": "Change Folder", "同时备份素材库": "Also back up the asset library",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets", "双击放大预览": "Double-click to enlarge", "当前素材预览": "Current asset preview",
@@ -280,7 +283,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", apiKey: "", zipExport: true, exportInputs: false, customMaterials: [] },
+  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", zipExport: true, exportInputs: false, customMaterials: [] },
   customLibrary: { textTemplates: [], imageMaterials: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -306,6 +309,29 @@ let desktopAssetMigrationPromise = null;
 let desktopAssetMigrationQueued = false;
 const AI_QUEUE_MAX_CONCURRENT = 5;
 const aiTaskQueue = { items: [], running: 0, nextId: 1 };
+const aiApiSlots = { active: 0, waiters: [] };
+
+function acquireAiApiSlot(label = "AI任务") {
+  return new Promise(resolve => {
+    const enter = () => {
+      aiApiSlots.active++;
+      console.info(`[AI并发] 开始：${label}，服务端进行中 ${aiApiSlots.active}/${AI_QUEUE_MAX_CONCURRENT}`);
+      let released = false;
+      resolve(() => {
+        if (released) return;
+        released = true;
+        aiApiSlots.active = Math.max(0, aiApiSlots.active - 1);
+        console.info(`[AI并发] 完成：${label}，服务端进行中 ${aiApiSlots.active}/${AI_QUEUE_MAX_CONCURRENT}`);
+        aiApiSlots.waiters.shift()?.();
+      });
+    };
+    if (aiApiSlots.active < AI_QUEUE_MAX_CONCURRENT) enter();
+    else {
+      aiApiSlots.waiters.push(enter);
+      console.info(`[AI并发] 等待：${label}，前方 ${aiApiSlots.waiters.length - 1} 个任务`);
+    }
+  });
+}
 
 function emptyLibrary() { return { textTemplates: [], imageMaterials: [], builtinDefaultsInitialized: true }; }
 function normalizeLibrary(lib) {
@@ -418,10 +444,10 @@ const els = {
   smoothEdges: $("smoothEdgesToggle"),
   autoFitImageNodes: $("autoFitImageNodesToggle"),
   hideNodeTitles: $("hideNodeTitlesToggle"),
-  exportFolder: $("exportFolderInput"),
-  chooseExportFolderBtn: $("chooseExportFolderBtn"),
-  openExportFolderBtn: $("openExportFolderBtn"),
-  copyExportPathBtn: $("copyExportPathBtn"),
+  projectFolder: $("projectFolderInput"),
+  chooseProjectFolderBtn: $("chooseProjectFolderBtn"),
+  openProjectFolderBtn: $("openProjectFolderBtn"),
+  copyProjectPathBtn: $("copyProjectPathBtn"),
 
   loadJson: $("loadJsonInput"),
   projectNameBtn: $("projectNameBtn"),
@@ -450,7 +476,6 @@ const els = {
   clearKeyBtn: $("clearKeyBtn"),
   balanceDisplay: $("balanceDisplay"),
   balanceRefreshBtn: $("balanceRefreshBtn"),
-  runBtn: $("runBtn"),
   lightbox: $("lightbox"),
   lightboxImg: $("lightboxImg"),
   lightboxClose: $("lightboxClose"),
@@ -634,7 +659,7 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
   const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
   delete state.settings.geminiAutomation;
   delete state.settings.model;
@@ -757,7 +782,8 @@ function syncSettingsPanel() {
   els.autoFitImageNodes.checked = state.settings.autoFitImageNodes !== false;
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
-  els.exportFolder.value = state.settings.exportFolderLabel;
+  state.settings.projectFolderLabel = state.settings.projectFolderLabel || runtimeProjectFolder;
+  els.projectFolder.value = state.settings.projectFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
   syncCustomMaterialsList();
 }
@@ -1853,14 +1879,20 @@ async function generateAngleImage(nodeId) {
   render();
   console.log("[角度变化] 提交生成", { nodeId, pitch: node.anglePitch, yaw: node.angleYaw, roll: node.angleRoll, zoom: node.angleZoom, resolution: node._resolution, size: node._size });
   try {
+    const releaseSlot = await acquireAiApiSlot(`角度变化 ${node.id}`);
+    let imageUrl;
+    try {
     const taskId = await submitGeneration(node.prompt, [source], node);
     node.taskId = taskId;
     node._aiProgress = { status: "generating", label: "正在生成", percent: null, error: "" };
     renderNodes();
-    const imageUrl = await pollTask(taskId, pct => {
+    imageUrl = await pollTask(taskId, pct => {
       node._aiProgress = { status: "generating", label: "正在生成", percent: pct, error: "" };
       renderNodes();
     });
+    } finally {
+      releaseSlot();
+    }
     node._aiProgress = { status: "downloading", label: "正在下载", percent: 96, error: "" };
     renderNodes();
     const generatedImage = await fetchImageAsBase64(imageUrl);
@@ -2228,7 +2260,7 @@ function queueTaskStatusText(task) {
 }
 
 function queueTaskIsRunning(task) {
-  return ["submitting", "generating", "downloading"].includes(task.status);
+  return ["slot-waiting", "submitting", "generating", "downloading"].includes(task.status);
 }
 
 function queueTaskIsSettled(task) {
@@ -2361,14 +2393,25 @@ async function applyQueuedResult(task, node, dataUrl) {
     node.outputPath = saved?.outputPath || "";
     await externalizeImageField(node, "generatedImage", "generatedAssetId", fileName);
   } else {
-    const resultNode = addNode("image", node.x + NODE_WIDTH + 40, node.y + task.resultOrder * IMAGE_NODE_VERTICAL_STEP, false);
+    const columns = Math.min(3, Math.max(1, Number(task.resultCount) || 1));
+    const resultIndex = Math.max(0, Number(task.resultOrder) || 0);
+    const column = resultIndex % columns;
+    const row = Math.floor(resultIndex / columns);
+    const resultNode = addNode("image", node.x + NODE_WIDTH + 40 + column * (NODE_WIDTH + 40), node.y + row * IMAGE_NODE_VERTICAL_STEP, false);
     resultNode.image = dataUrl;
     resultNode.fileName = fileName;
     resultNode.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
     resultNode.aiSourceNodeId = node.id;
     resultNode.aiBatchIndex = task.groupIndex >= 0 ? task.groupIndex : null;
     resultNode.outputPath = saved?.outputPath || "";
-    await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
+    task.resultNodeId = resultNode.id;
+    render();
+    try {
+      await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
+    } catch (error) {
+      task.warning = `结果已显示，但写入素材仓库失败：${error.message}`;
+      console.error("[生成结果] 素材仓库写入失败，保留画布结果", { taskId: task.id, resultNodeId: resultNode.id, message: error.message });
+    }
   }
   pushHistory();
   render();
@@ -2400,6 +2443,12 @@ async function applyScreenshotQueuedResult(task, dataUrl) {
 async function runQueuedAiTask(task) {
   const node = findNode(task.nodeId);
   if (!node && task.source !== "screenshot") throw new Error("对应的 AI 绘图节点已被删除");
+  task.status = "slot-waiting";
+  refreshQueuedNodeProgress(task.nodeId);
+  renderTaskQueue();
+  const releaseSlot = await acquireAiApiSlot(task.label || task.id);
+  let imageUrl;
+  try {
   task.status = "submitting";
   task.progress = 0;
   refreshQueuedNodeProgress(task.nodeId);
@@ -2411,12 +2460,15 @@ async function runQueuedAiTask(task) {
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
   notifyScreenshotTask(task);
-  const imageUrl = await pollTask(task.taskId, progress => {
+  imageUrl = await pollTask(task.taskId, progress => {
     task.progress = progress;
     refreshQueuedNodeProgress(task.nodeId);
     renderTaskQueue();
     notifyScreenshotTask(task);
   });
+  } finally {
+    releaseSlot();
+  }
   task.status = "downloading";
   task.progress = 96;
   refreshQueuedNodeProgress(task.nodeId);
@@ -2677,6 +2729,7 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
     size: generationSettings._size,
     resultMode: groupImages.length ? "image-node" : resultMode,
     resultOrder: existingResultCount + index,
+    resultCount: existingResultCount + taskSources.length,
     status: "waiting",
     progress: 0,
     created: Date.now() + index,
@@ -5609,7 +5662,6 @@ els.projectModeDialog.addEventListener("click", event => {
 $("saveJsonBtn").onclick = saveJson;
 $("loadJsonBtn").onclick = () => els.loadJson.click();
 $("autoOutputBtn").onclick = autoAddAiNodes;
-els.runBtn.onclick = runExport;
 $("themeBtn").onclick = () => {
   state.settings.theme = state.settings.theme === "light" ? "dark" : "light";
   pushHistory();
@@ -6538,40 +6590,40 @@ els.clearKeyBtn.onclick = async () => {
   toast("API Key 已从所有页面清除，可安全分享");
 };
 
-els.copyExportPathBtn.onclick = copyExportPath;
-els.chooseExportFolderBtn.onclick = async () => {
-  if (!desktop?.chooseOutputFolder) return toast("修改生成文件夹仅支持 .NET 桌面版");
+els.copyProjectPathBtn.onclick = copyProjectPath;
+els.chooseProjectFolderBtn.onclick = async () => {
+  if (!desktop?.chooseProjectFolder) return toast("修改项目文件夹仅支持 .NET 桌面版");
   try {
-    const result = await desktop.chooseOutputFolder(els.exportFolder.value.trim());
+    const result = await desktop.chooseProjectFolder(els.projectFolder.value.trim());
     if (result?.cancelled || !result?.path) return;
     const selectedPath = String(result.path).trim();
-    runtimeExportFolder = selectedPath;
-    state.settings.exportFolderLabel = selectedPath;
-    els.exportFolder.value = selectedPath;
-    try { localStorage.setItem(OUTPUT_FOLDER_KEY, selectedPath); } catch (_) { /* 桌面状态仍会保存 */ }
+    runtimeProjectFolder = selectedPath;
+    state.settings.projectFolderLabel = selectedPath;
+    els.projectFolder.value = selectedPath;
+    try { localStorage.setItem(PROJECT_FOLDER_KEY, selectedPath); } catch (_) { /* 桌面状态仍会保存 */ }
     for (const page of state.pages) {
-      if (page?.data?.settings) page.data.settings.exportFolderLabel = selectedPath;
+      if (page?.data?.settings) page.data.settings.projectFolderLabel = selectedPath;
     }
     saveCurrentPage();
     persistPages();
-    console.info("[生成文件夹] 保存位置已修改", { path: selectedPath });
-    toast("生成文件夹已修改");
+    console.info("[项目文件夹] 保存位置已修改", { path: selectedPath });
+    toast("项目保存位置已修改");
   } catch (error) {
-    console.error("[生成文件夹] 选择失败", error);
-    toast(`无法修改生成文件夹：可能是路径权限不足或选择器异常；请换一个普通文件夹后重试。${error.message || ""}`);
+    console.error("[项目文件夹] 选择失败", error);
+    toast(`无法修改项目文件夹：可能是路径权限不足或选择器异常；请换一个普通文件夹后重试。${error.message || ""}`);
   }
 };
-els.openExportFolderBtn.onclick = async () => {
-  const folderPath = els.exportFolder.value.trim();
-  if (!folderPath) return toast("生成文件夹路径为空，请先修改位置");
-  if (!desktop?.openOutputFolder) return toast("打开生成文件夹仅支持 .NET 桌面版");
+els.openProjectFolderBtn.onclick = async () => {
+  const folderPath = els.projectFolder.value.trim();
+  if (!folderPath) return toast("项目文件夹路径为空，请先修改位置");
+  if (!desktop?.openOutputFolder) return toast("打开项目文件夹仅支持 .NET 桌面版");
   try {
     await desktop.openOutputFolder(folderPath);
-    toast("已打开生成文件夹");
+    toast("已打开项目文件夹");
   } catch (error) {
-    console.error("[生成文件夹] 打开失败", error);
+    console.error("[项目文件夹] 打开失败", error);
     try { await copyTextValue(folderPath); } catch (_) { /* 保留原始错误 */ }
-    toast("无法打开生成文件夹：可能被系统或安全软件拦截；路径已复制，可粘贴到资源管理器地址栏");
+    toast("无法打开项目文件夹：可能被系统或安全软件拦截；路径已复制，可粘贴到资源管理器地址栏");
   }
 };
 
@@ -6601,12 +6653,13 @@ els.importLibraryJsonBtn.onclick = () => els.importLibraryJsonInput.click();
 els.importLibraryJsonInput.onchange = async () => {
   const file = els.importLibraryJsonInput.files?.[0]; if (!file) return;
   try {
-    const data = JSON.parse(await file.text());
+    const parsed = JSON.parse(await file.text());
+    const data = parsed?.type === "library" ? { globalLibrary: parsed.library } : parsed;
     const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: file.name.replace(/\.json$/i, ""), data }];
     const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary) }));
     const importedGlobalLibrary = normalizeLibrary(data.globalLibrary);
     if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
-    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length)) return toast("该 JSON 中没有可导入的自定义图文");
+    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length)) return toast("该文件中没有可导入的自定义图文");
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
   finally { els.importLibraryJsonInput.value = ""; }
@@ -6619,8 +6672,16 @@ els.libraryImportConfirmBtn.onclick = confirmLibraryImport;
 els.loadJson.onchange = async () => {
   const file = els.loadJson.files?.[0];
   if (!file) return;
-  const data = JSON.parse(await file.text());
-  await restoreLibrariesFromJson(data);
+  try {
+  const parsed = JSON.parse(await file.text());
+  if (parsed?.type === "library") {
+    toast("这是素材库备份，请在“设置 → 素材库 → 导入素材”中打开");
+    els.loadJson.value = "";
+    return;
+  }
+  const data = parsed?.type === "project" ? parsed.project : parsed;
+  if (!data || (!Array.isArray(data.pages) && !Array.isArray(data.nodes))) throw new Error("缺少项目数据");
+  if (!parsed?.type) await restoreLibrariesFromJson(data);
   if (Array.isArray(data.pages)) {
     state.pages = data.pages.map(page => ({ ...page, mode: page.mode === "mindmap" ? "mindmap" : "ai" }));
     resetGraphNavigation();
@@ -6634,7 +6695,7 @@ els.loadJson.onchange = async () => {
     state.activePageId = page.id;
     restoreData(page.data);
   } else {
-    const page = blankPage(file.name.replace(/\.json$/i, ""), data.mode === "mindmap" ? "mindmap" : "ai");
+    const page = blankPage(file.name.replace(/\.(?:cflow|json)$/i, ""), data.mode === "mindmap" ? "mindmap" : "ai");
     page.data = data;
     state.pages.push(page);
     const activePage = page.mode === "mindmap" && !mindmapFeatureEnabled()
@@ -6654,6 +6715,10 @@ els.loadJson.onchange = async () => {
   updateUndoRedo();
   markDirty();
   toast("项目已打开");
+  } catch (error) {
+    console.error("[项目打开] 失败", { file: file.name, message: error.message });
+    toast(`打开失败：${error.message || "文件格式不正确"}；请选择有效的 .cflow 项目或旧版 JSON`);
+  }
   els.loadJson.value = "";
 };
 
@@ -6684,104 +6749,68 @@ async function materializeNodeAssetsForPortableSave(nodes) {
   }
 }
 
-async function saveJson() {
-  saveCurrentPage();
-  const data = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, globalLibrary }));
-  if (desktop) {
-    for (const page of data.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
-  }
+function confirmProjectSave() {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.className = "canvas-confirm-backdrop";
+    overlay.innerHTML = `<section class="canvas-confirm-panel project-save-panel" role="dialog" aria-modal="true"><h3>保存项目</h3><p>项目将保存为一个可迁移的 .cflow 文件。</p><label class="project-save-library-option"><input type="checkbox" data-save-library> 同时备份素材库</label><small>勾选后会额外生成“CanvasFlow素材库.cflow”，不会把素材库混入项目文件。</small><div class="canvas-confirm-actions"><button data-dialog-cancel>取消</button><button class="primary" data-dialog-confirm>保存</button></div></section>`;
+    const finish = value => { overlay.remove(); resolve(value); };
+    overlay.querySelector("[data-dialog-cancel]").onclick = () => finish(null);
+    overlay.querySelector("[data-dialog-confirm]").onclick = () => finish(overlay.querySelector("[data-save-library]").checked);
+    overlay.addEventListener("mousedown", event => { if (event.target === overlay) finish(null); });
+    document.body.appendChild(overlay);
+  });
+}
 
-  // 收集所有需要提取的图片（data URL → 保存为独立文件）
-  const imageFiles = [];
-  for (const page of data.pages) {
-    for (const node of (page.data.nodes || [])) {
-      const imgFields = [];
-      if (node.image && node.image.startsWith("data:")) imgFields.push("image");
-      if (node.generatedImage && node.generatedImage.startsWith("data:")) imgFields.push("generatedImage");
-      for (const field of imgFields) {
-        const dataUrl = node[field];
-        const parts = dataUrl.split(",");
-        const base64 = parts[1];
-        if (!base64) continue;
-        const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || "image/png";
-        const fullMime = dataUrl.match(/^data:[^;]+/)?.[0] || "data:image/png;base64";
-        const ext = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" }[mime] || "png";
-        let name = node.fileName || `${field}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        if (!name.match(/\.\w{3,4}$/i)) name += "." + ext;
-        imageFiles.push({ name, data: base64, nodeRef: node, field, fullMime });
-        node[field] = name;
-      }
-      // Extract group images
-      if (node.images && Array.isArray(node.images)) {
-        for (let i = 0; i < node.images.length; i++) {
-          const gImg = node.images[i];
-          if (!gImg.image || !gImg.image.startsWith("data:")) continue;
-          const parts = gImg.image.split(",");
-          const base64 = parts[1];
-          if (!base64) continue;
-          const mime = (gImg.image.match(/^data:([^;]+)/) || [])[1] || "image/png";
-          const fullMime = gImg.image.match(/^data:[^;]+/)?.[0] || "data:image/png;base64";
-          const ext = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" }[mime] || "png";
-          let name = gImg.fileName || `group_${i}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-          if (!name.match(/\.\w{3,4}$/i)) name += "." + ext;
-          imageFiles.push({ name, data: base64, groupNode: node, groupIndex: i, fullMime });
-          gImg.image = name;
-        }
-      }
-    }
-  }
-
-  if (imageFiles.length > 0) {
-    try {
-      const resp = await apiFetch("/api/save-images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: imageFiles.map(f => ({ name: f.name, data: f.data })) }),
-      });
-      const result = await resp.json();
-      if (result.error) throw new Error(result.error);
-    } catch {
-      for (const f of imageFiles) {
-        if (f.groupNode) {
-          f.groupNode.images[f.groupIndex].image = f.fullMime + "," + f.data;
-        } else {
-          f.nodeRef[f.field] = f.fullMime + "," + f.data;
-        }
-      }
-    }
-  }
-
-  const libraryFailures = await embedLibraryImages(data);
-  if (libraryFailures.length) {
-    console.error("[保存] 以下自定义图片未能写入 JSON:", libraryFailures);
-    toast(`项目已保存，但 ${libraryFailures.length} 个自定义图片未能备份`);
-  }
-
-  const name = `${safeName(currentPage()?.name || "canvas")}.json`;
-  const content = JSON.stringify(data, null, 2);
-  const blob = new Blob([content], { type: "application/json" });
+async function writeCflowFile(name, payload) {
+  const content = JSON.stringify(payload, null, 2);
+  const blob = new Blob([content], { type: "application/x-canvasflow+json" });
   if (state.exportDirHandle) {
     const handle = await state.exportDirHandle.getFileHandle(name, { create: true });
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
-    toast("JSON已保存到输出文件夹");
-  } else {
-    try {
-      const resp = await apiFetch("/api/save-json", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, content }),
-      });
-      const result = await resp.json();
-      if (result.error) throw new Error(result.error);
-      toast("JSON已保存到 download 文件夹");
-    } catch {
-      downloadBlob(blob, name);
-      toast("JSON已下载（浏览器下载）");
-    }
+    return { path: name };
   }
-  state.dirty = false;
+  if (desktop) {
+    const resp = await apiFetch("/api/save-project", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, content, folderPath: state.settings.projectFolderLabel || runtimeProjectFolder }),
+    });
+    const result = await resp.json().catch(() => ({}));
+    if (!resp.ok || !result.success) throw new Error(result.error || `HTTP ${resp.status}`);
+    return result;
+  }
+  downloadBlob(blob, name);
+  return { path: name };
+}
+
+async function saveJson() {
+  const backupLibrary = await confirmProjectSave();
+  if (backupLibrary === null) return;
+  try {
+    saveCurrentPage();
+    const project = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId }));
+    for (const page of project.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
+    const payload = { canvasflowVersion: 1, type: "project", savedAt: new Date().toISOString(), project };
+    const name = `${safeName(currentPage()?.name || "canvas")}.cflow`;
+    const saved = await writeCflowFile(name, payload);
+    console.info("[项目保存] 已写入", { path: saved.path || name, pages: project.pages?.length || 0 });
+    if (backupLibrary) {
+      const library = JSON.parse(JSON.stringify(globalLibrary));
+      const libraryPayload = { canvasflowVersion: 1, type: "library", savedAt: new Date().toISOString(), library };
+      const failures = await embedLibraryImages({ globalLibrary: libraryPayload.library });
+      if (failures.length) throw new Error(`${failures.length} 个图片素材无法读取`);
+      const librarySaved = await writeCflowFile("CanvasFlow素材库.cflow", libraryPayload);
+      console.info("[素材库备份] 已写入", { path: librarySaved.path || "CanvasFlow素材库.cflow" });
+    }
+    state.dirty = false;
+    toast(backupLibrary ? "项目和素材库备份已保存" : "项目已保存");
+  } catch (error) {
+    console.error("[项目保存] 失败", error);
+    toast(`保存失败：${error.message || "文件夹权限不足或内容无法读取"}；请检查保存位置后重试`);
+  }
 }
 
 async function embedLibraryImages(data) {
@@ -6839,26 +6868,26 @@ async function restoreLibrariesFromJson(data) {
   saveGlobalLibrary();
 }
 
-async function copyExportPath() {
-  const folderPath = els.exportFolder.value.trim();
+async function copyProjectPath() {
+  const folderPath = els.projectFolder.value.trim();
   if (!folderPath) {
-    toast("请先设置导出文件夹路径");
+    toast("请先设置项目文件夹路径");
     return false;
   }
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(folderPath);
     } else {
-      els.exportFolder.focus();
-      els.exportFolder.select();
+      els.projectFolder.focus();
+      els.projectFolder.select();
       if (!document.execCommand("copy")) throw new Error("copy command failed");
     }
-    toast(`已复制导出路径：${folderPath}`);
+    toast(`已复制项目路径：${folderPath}`);
     return true;
   } catch (err) {
-    console.error("[导出] 复制路径失败", err);
-    els.exportFolder.focus();
-    els.exportFolder.select();
+    console.error("[项目文件夹] 复制路径失败", err);
+    els.projectFolder.focus();
+    els.projectFolder.select();
     toast("无法自动复制路径：可能是浏览器权限受限；已为你选中完整路径，请按 Ctrl+C 复制");
     return false;
   }
@@ -7510,6 +7539,7 @@ async function init() {
     const data = await resp.json();
     if (!resp.ok || !data.exportFolder) throw new Error(data.error || `HTTP ${resp.status}`);
     runtimeExportFolder = data.exportFolder;
+    runtimeProjectFolder = data.projectsFolder || runtimeProjectFolder;
     console.info("[初始化] 默认导出目录", { exportFolder: runtimeExportFolder });
   } catch (err) {
     console.error("[初始化] 无法识别默认导出目录", err);
@@ -7523,6 +7553,13 @@ async function init() {
     }
   } catch (error) {
     console.warn("[初始化] 无法读取生成目录设置，将使用默认目录", error);
+  }
+  try {
+    const savedProjectFolder = localStorage.getItem(PROJECT_FOLDER_KEY)?.trim();
+    if (savedProjectFolder) runtimeProjectFolder = savedProjectFolder;
+    console.info("[初始化] 项目保存目录", { projectFolder: runtimeProjectFolder });
+  } catch (error) {
+    console.warn("[初始化] 无法读取项目保存目录，将使用默认目录", error);
   }
   const desktopState = await loadDesktopState();
   const restoredExistingState = loadPagesFromStorage(desktopState);

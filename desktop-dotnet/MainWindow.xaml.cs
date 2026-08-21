@@ -83,6 +83,7 @@ public partial class MainWindow : Window
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
           chooseOutputFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || "") }),
+          chooseProjectFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || ""), purpose: "project" }),
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
@@ -638,9 +639,10 @@ public partial class MainWindow : Window
     private object ChooseOutputFolder(JsonElement request)
     {
         var currentPath = request.TryGetProperty("currentPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        var purpose = request.TryGetProperty("purpose", out var purposeElement) ? purposeElement.GetString() ?? "" : "";
         var picker = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择生成文件保存位置",
+            Title = purpose == "project" ? "选择项目文件保存位置" : "选择生成文件保存位置",
             Multiselect = false
         };
         if (!string.IsNullOrWhiteSpace(currentPath))
