@@ -19,7 +19,6 @@ function mindmapFeatureEnabled() {
 
 let runtimeExportFolder = "export";
 let runtimeProjectFolder = "projects";
-let backgroundRemovalPluginInstalled = false;
 let autoBackupReady = false;
 let autoBackupTimer = null;
 let lastUpdateCheckResult = null;
@@ -58,7 +57,8 @@ const UI_EN = {
   "调整界面语言、画布与工作流体验": "Tune the interface, canvas, and workflow experience",
   "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
-  "启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。": "Automatically check GitHub Releases. Download and replace the app manually when a new version is available.",
+  "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
+  "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
   "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
   "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
@@ -547,6 +547,7 @@ const els = {
   checkUpdateBtn: $("checkUpdateBtn"),
   updateStatus: $("updateStatus"),
   updateActions: $("updateActions"),
+  installWebUpdateBtn: $("installWebUpdateBtn"),
   releasePageLink: $("releasePageLink"),
   mindmapBreadcrumb: $("mindmapBreadcrumb"),
   mindmapBackBtn: $("mindmapBackBtn"),
@@ -2243,11 +2244,6 @@ async function fetchImageAsBase64(url) {
 }
 
 function queueTaskStatusText(task) {
-  if (task.kind === "background-removal") {
-    if (task.status === "generating") return "正在抠图";
-    if (task.status === "submitting") return "正在读取图片";
-    if (task.status === "downloading") return "正在保存结果";
-  }
   const status = task.status === "waiting" ? "等待发送"
     : task.status === "paused" ? "已暂停"
       : task.status === "submitting" ? "正在提交"
@@ -2482,83 +2478,8 @@ async function runQueuedAiTask(task) {
   notifyScreenshotTask(task);
 }
 
-function enqueueExtensionTasks(nodes) {
-  const valid = (nodes || []).filter(node => node && (node.type === "image" || node.generatedImage || node.image));
-  if (!valid.length) return toast("请选择至少一个图片节点");
-  valid.forEach((source, index) => {
-    const preview = source.type === "image" ? source.image : source.generatedImage;
-    aiTaskQueue.items.push({
-      id: `q${aiTaskQueue.nextId++}`,
-      kind: "background-removal",
-      nodeId: source.id,
-      status: "waiting",
-      progress: 0,
-      label: "智能抠图",
-      prompt: source.fileName || `图片 ${index + 1}`,
-      model: "BiRefNet · DirectML/CPU",
-      resolution: "本地处理",
-      size: "",
-      thumbnail: preview || "",
-      sourceFileName: source.fileName || "image.png",
-      exportFolder: state.settings.exportFolderLabel || runtimeExportFolder,
-      resultOrder: index,
-    });
-  });
-  renderTaskQueue();
-  setTaskQueueOpen(true);
-  toast(`已加入任务队列：${valid.length} 个任务`);
-  pumpAiTaskQueue();
-}
-
-async function runQueuedExtensionTask(task) {
-  const source = findNode(task.nodeId);
-  if (!source) throw new Error("来源图片节点已被删除");
-  const reference = source.type === "image"
-    ? { image: source.image, assetId: source.imageAssetId }
-    : { image: source.generatedImage, assetId: source.generatedAssetId };
-  task.status = "submitting";
-  task.progress = 8;
-  renderTaskQueue();
-  const dataUrl = await materializeReferenceImage(reference);
-  if (!dataUrl) throw new Error("无法读取原始图片");
-  task.status = "generating";
-  task.progress = 18;
-  renderTaskQueue();
-  const progressTimer = window.setInterval(() => {
-    if (!queueTaskIsRunning(task)) return;
-    task.progress = Math.min(90, (Number(task.progress) || 18) + 2);
-    renderTaskQueue();
-  }, 700);
-  try {
-    const payload = { dataUrl, fileName: task.sourceFileName, outputRoot: task.exportFolder };
-    const result = await desktop.removeImageBackground(payload);
-    task.status = "downloading";
-    task.progress = 96;
-    renderTaskQueue();
-    const currentSource = findNode(task.nodeId);
-    if (!currentSource) throw new Error("处理完成，但来源图片节点已被删除");
-    const resultNode = addNode("image", currentSource.x + NODE_WIDTH + 40, currentSource.y + (task.resultOrder || 0) * IMAGE_NODE_VERTICAL_STEP, false);
-    resultNode.image = result.dataUrl;
-    resultNode.fileName = result.fileName || "transparent.png";
-    resultNode.mime = "image/png";
-    resultNode.outputPath = result.outputPath || "";
-    resultNode.backgroundRemovalSourceNodeId = currentSource.id;
-    await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
-    state.edges.push({ id: uid("e"), from: { node: currentSource.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
-    pushHistory();
-    render();
-    task.status = "done";
-    task.progress = 100;
-    task.outputPath = result.outputPath || "";
-  } finally {
-    window.clearInterval(progressTimer);
-  }
-}
-
 function runQueuedTask(task) {
-  return task.kind === "background-removal"
-    ? runQueuedExtensionTask(task)
-    : runQueuedAiTask(task);
+  return runQueuedAiTask(task);
 }
 
 function pumpAiTaskQueue() {
@@ -4987,10 +4908,6 @@ els.viewport.addEventListener("contextmenu", ev => {
         ["角度变化", () => {
           extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
         }],
-        [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
-          if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
-          removeBackgroundFromSources(extensionSources);
-        }],
       ]]] : []),
       ["断开连接", () => disconnectEdges(state.selected)],
       ["复制节点", () => copySelection()],
@@ -5057,10 +4974,6 @@ els.viewport.addEventListener("contextmenu", ev => {
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
       ["拓展功能", [
         ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
-        [backgroundRemovalPluginInstalled ? "自动抠图" : "自动抠图（未安装）", () => {
-          if (!backgroundRemovalPluginInstalled) return showBackgroundRemovalInstall();
-          toast("请先添加或选择图片节点，再使用自动抠图");
-        }],
       ]],
       ["添加截图功能节点", () => addNode("screenshot-input", p.x, p.y)],
       ["节点对齐", () => tidyNodes()],
@@ -5559,6 +5472,7 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
     lastUpdateCheckResult = data;
     els.updateActions.classList.toggle("hidden", !data.hasUpdate);
+    els.installWebUpdateBtn?.classList.toggle("hidden", !data.hasUpdate || !data.canHotUpdate || !desktop?.applyWebUpdate);
     els.releasePageLink.href = data.pageUrl || "https://github.com/wuxinliuyun-art/canvasflow/releases";
     renderCheckedUpdateStatus(data);
     console.info("[自动更新] 检查完成", { current: data.currentVersion, latest: data.latestVersion, hasUpdate: data.hasUpdate, asset: data.asset && data.asset.name });
@@ -5714,59 +5628,6 @@ function switchSettingsTab(name) {
   var pages = els.settings.querySelectorAll(".tab-page");
   for (var j = 0; j < pages.length; j++) {
     pages[j].classList.toggle("hidden", pages[j].getAttribute("data-tab") !== name);
-  }
-}
-
-function openPluginSettings() {
-  setSettingsSidebarOpen(true);
-  switchSettingsTab("plugins");
-}
-
-function showBackgroundRemovalInstall() {
-  console.info("[插件] 打开智能抠图安装页");
-  openPluginSettings();
-  requestAnimationFrame(() => $("installBackgroundRemovalPluginBtn")?.focus());
-}
-
-async function refreshBackgroundRemovalPluginStatus() {
-  const status = $("backgroundRemovalPluginStatus");
-  const installButton = $("installBackgroundRemovalPluginBtn");
-  const removeButton = $("removeBackgroundRemovalPluginBtn");
-  if (!desktop?.backgroundRemovalStatus) {
-    backgroundRemovalPluginInstalled = false; status.textContent = "仅桌面版";
-    installButton.classList.add("hidden"); removeButton.classList.add("hidden"); return;
-  }
-  try {
-    const result = await desktop.backgroundRemovalStatus();
-    backgroundRemovalPluginInstalled = result?.installed === true;
-    status.textContent = backgroundRemovalPluginInstalled ? "已安装" : "未安装";
-    status.classList.toggle("installed", backgroundRemovalPluginInstalled);
-    installButton.classList.toggle("hidden", backgroundRemovalPluginInstalled);
-    removeButton.classList.toggle("hidden", !backgroundRemovalPluginInstalled);
-    if (backgroundRemovalPluginInstalled && !installButton.disabled) $("backgroundRemovalInstallProgress").classList.add("hidden");
-  } catch (error) { backgroundRemovalPluginInstalled = false; status.textContent = "检测失败"; console.error("[智能抠图插件] 状态检测失败", error); }
-}
-
-async function removeBackgroundFromSources(nodes) {
-  if (desktop?.removeImageBackground) { enqueueExtensionTasks(nodes); return; }
-  if (!desktop?.removeImageBackground) return toast("智能抠图仅支持 .NET 桌面版");
-  for (const source of nodes) {
-    try {
-      const reference = source.type === "image" ? { image: source.image, assetId: source.imageAssetId } : { image: source.generatedImage, assetId: source.generatedAssetId };
-      const dataUrl = await materializeReferenceImage(reference);
-      if (!dataUrl) throw new Error("无法读取原始图片");
-      toast("正在抠图，首次运行可能需要加载模型");
-      const result = await desktop.removeImageBackground({ dataUrl, fileName: source.fileName || "image.png", outputRoot: state.settings.exportFolderLabel || runtimeExportFolder });
-      const resultNode = addNode("image", source.x + NODE_WIDTH + 40, source.y, false);
-      resultNode.image = result.dataUrl; resultNode.fileName = result.fileName || "transparent.png"; resultNode.mime = "image/png";
-      resultNode.outputPath = result.outputPath || ""; resultNode.backgroundRemovalSourceNodeId = source.id;
-      await externalizeImageField(resultNode, "image", "imageAssetId", resultNode.fileName);
-      state.edges.push({ id: uid("e"), from: { node: source.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
-      pushHistory(); render(); toast("抠图完成");
-    } catch (error) {
-      console.error("[智能抠图插件] 处理失败", { nodeId: source.id, message: error.message });
-      toast(`智能抠图失败：可能是模型不完整、图片格式不支持或内存不足；建议重新安装插件或换较小图片重试。${error.message || ""}`);
-    }
   }
 }
 
@@ -6093,36 +5954,6 @@ function closeFolderImportDialog(force = false) {
   pendingFolderImport = null;
 }
 
-$("installBackgroundRemovalPluginBtn").onclick = async () => {
-  const button = $("installBackgroundRemovalPluginBtn");
-  const progress = $("backgroundRemovalInstallProgress");
-  button.disabled = true; button.textContent = "安装中…"; progress.classList.remove("hidden");
-  $("backgroundRemovalProgressBar").style.width = "0%"; $("backgroundRemovalProgressText").textContent = "准备下载";
-  try {
-    await desktop.installBackgroundRemoval();
-    toast("智能抠图插件安装完成");
-  } catch (error) {
-    console.error("[智能抠图插件] 安装失败", error);
-    showAppAlert(`智能抠图插件安装失败。可能原因：网络无法访问 GitHub、磁盘空间不足或模型校验失败。建议办法：检查网络、剩余空间和 data 目录权限后重试。\n${error.message || ""}`);
-  } finally {
-    button.disabled = false; button.textContent = "安装插件";
-    await refreshBackgroundRemovalPluginStatus();
-    if (backgroundRemovalPluginInstalled) {
-      $("backgroundRemovalProgressBar").style.width = "100%";
-      $("backgroundRemovalProgressText").textContent = "安装完成";
-      window.setTimeout(() => progress.classList.add("hidden"), 900);
-    } else {
-      progress.classList.add("hidden");
-    }
-  }
-};
-
-$("removeBackgroundRemovalPluginBtn").onclick = async () => {
-  if (!window.confirm("确定卸载智能抠图插件并删除 213.6 MB 模型吗？已生成的图片不会删除。")) return;
-  try { await desktop.uninstallBackgroundRemoval(); toast("智能抠图插件已卸载，生成图片保持不变"); $("backgroundRemovalInstallProgress").classList.add("hidden"); await refreshBackgroundRemovalPluginStatus(); }
-  catch (error) { showAppAlert(`无法卸载智能抠图插件。可能原因：抠图任务正在运行或目录权限不足。建议办法：等待任务结束后重试。\n${error.message || ""}`); }
-};
-
 function openFolderImportDialog(entries, folderName = "") {
   const imageEntries = Array.from(entries || []).filter(entry => isSupportedImageFile(entry.file || entry));
   if (!imageEntries.length) {
@@ -6338,12 +6169,7 @@ async function collectFolderImageFiles(directoryHandle) {
 if (window.chrome?.webview) {
   window.chrome.webview.addEventListener("message", async event => {
     const message = event.data || {};
-    if (message.type === "plugin-install-progress" && message.pluginId === "background-removal") {
-      const percent = Math.max(0, Math.min(100, Number(message.percent) || 0));
-      $("backgroundRemovalInstallProgress").classList.remove("hidden");
-      $("backgroundRemovalProgressBar").style.width = `${percent}%`;
-      $("backgroundRemovalProgressText").textContent = message.stage === "verifying" ? "正在校验模型" : message.stage === "complete" ? "安装完成" : `下载 ${percent}%`;
-    } else if (message.type === "desktop:paste") {
+    if (message.type === "desktop:paste") {
       const active = document.activeElement;
       const isTextField = active?.matches?.("textarea,input");
       if (message.kind === "text" && isTextField) {
@@ -6481,6 +6307,7 @@ if (els.languageSelect) {
 }
 
 if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
+if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
 
 els.apiKeyInput.onchange = () => {
   state.settings.apiKey = els.apiKeyInput.value.trim();
@@ -6555,6 +6382,27 @@ async function fetchBalance() {
   } catch (error) {
     console.error("[令牌余额] 查询异常", error);
     els.balanceDisplay.textContent = "令牌余额：网络错误";
+  }
+}
+
+async function applyWebUpdate() {
+  if (!desktop?.applyWebUpdate || !lastUpdateCheckResult?.canHotUpdate) return;
+  if (!window.confirm(updateText("更新前会保存当前项目，完成后画布会自动重新载入。现在更新吗？", "The current project will be saved and the canvas will reload after updating. Continue?"))) return;
+  els.installWebUpdateBtn.disabled = true;
+  els.updateStatus.textContent = updateText("正在下载并校验界面更新…", "Downloading and verifying the interface update…");
+  try {
+    saveCurrentPage();
+    await persistDesktopStateNow();
+    const backupSaved = await writeAutoBackup("web-update");
+    if (!backupSaved) throw new Error(updateText("自动备份失败", "automatic backup failed"));
+    const result = await desktop.applyWebUpdate();
+    console.info("[界面热更新] 已完成，等待重新载入", result);
+    els.updateStatus.textContent = updateText(`界面 ${result.version || ""} 已安装，正在重新载入…`, `Interface ${result.version || ""} installed; reloading…`);
+  } catch (error) {
+    els.updateStatus.textContent = updateText("热更新失败，当前版本未改变；请重试或下载完整安装包。", "Hot update failed and the current version was kept. Retry or download the full installer.");
+    toast(updateText(`更新没有完成：${error.message}`, `Update did not complete: ${error.message}`));
+    console.error("[界面热更新] 失败", error);
+    els.installWebUpdateBtn.disabled = false;
   }
 }
 
@@ -7582,7 +7430,6 @@ async function init() {
   updateUndoRedo();
   applySettings();
   render();
-  await refreshBackgroundRemovalPluginStatus();
   setUiLanguage(uiLanguage);
   const uiObserver = new MutationObserver(changes => {
     for (const change of changes) {
@@ -7616,6 +7463,7 @@ async function init() {
       desktop.completeSave({ requestId: request.requestId, ok: false, error: error.message });
     }
   });
+  if (desktop?.webReady) desktop.webReady();
 }
 
 init().catch(e => { console.error("[初始化] 启动失败", e); toast("启动失败：" + e.message); });

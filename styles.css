@@ -1126,9 +1126,9 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .update-actions { display:flex; align-items:center; gap:14px; margin-top:12px; }
 .update-actions a { color:var(--accent); text-decoration:none; }
 .update-actions a:hover { text-decoration:underline; }
-.update-actions a.primary { padding:8px 14px; border-radius:9px; color:#fff; background:#27292d; }
-.update-actions a.primary:hover { text-decoration:none; filter:brightness(1.08); }
-.theme-dark .update-actions a.primary { color:#17181a; background:#e1e2e5; }
+.update-actions .primary { padding:8px 14px; border-radius:9px; color:#fff; background:#27292d; }
+.update-actions .primary:hover { text-decoration:none; filter:brightness(1.08); }
+.theme-dark .update-actions .primary { color:#17181a; background:#e1e2e5; }
 
 .settings-page-head { margin-bottom: 14px; }
 .settings-page-head h2 { margin: 0 0 4px; font-size: 19px; }

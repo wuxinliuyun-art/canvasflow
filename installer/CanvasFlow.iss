@@ -1,5 +1,5 @@
 #define AppName "CanvasFlow"
-#define AppVersion "2.6.3"
+#define AppVersion "2.6.4"
 #define PublishDir "..\desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish"
 
 [Setup]

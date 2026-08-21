@@ -9,13 +9,6 @@
 - 解决：中文 BAT 使用无 BOM 的 GBK（代码页 936）与 CRLF，首行保持纯 ASCII `@echo off`，第二行执行 `chcp 936 >nul`。
 - 避免：发布前必须从 `cmd.exe` 实际调用 BAT，验证中文路径、括号分支、命令回显和退出码；不要只在编辑器中检查文本。
 
-### ONNX Runtime 在 WPF 宿主中初始化失败
-
-- 现象：BiRefNet 模型下载和校验均成功，但在 CanvasFlow WPF 进程中加载 `onnxruntime.dll` 报 `0x8007045A（DLL 初始化例程失败）`；同一 DLL 和模型在独立 .NET 控制台程序中运行正常。
-- 原因：ONNX Runtime 原生库在当前 WPF/WebView2 宿主进程内初始化冲突，并非模型损坏、文件缺失或路径错误；显式绝对路径加载不能解决。
-- 解决：智能抠图改为独立插件工作进程执行 ONNX 推理，主程序只通过受限临时输入/输出文件交换结果；工作进程结束后释放全部模型内存。
-- 避免：不得再次把 ONNX Runtime 直接加载进 CanvasFlow 主进程，也不得把该错误笼统提示为模型不完整；工作进程不得使用 CMD 或 PowerShell，且只能访问插件模型、`data/plugin-work/background-removal/` 和用户生成目录下的 `background_removed/`。
-
 ### SVG 图标在按钮内视觉不居中
 
 - 现象：快捷键、上传等 SVG 图标看起来偏向按钮一侧，不同按钮重复出现类似问题。
@@ -41,7 +34,7 @@
 
 - 现象：Windows 或第三方杀毒软件将分发版 EXE 标记为可疑程序或木马。
 - 原因：未签名单文件 EXE 曾同时包含 PowerShell `EncodedCommand`、强制结束端口进程、复制并覆盖自身更新、启动资源管理器等高敏感行为。
-- 解决：移除 PowerShell、资源管理器调用、强制结束进程和自动覆盖更新；端口冲突时安全换端口；更新只保留检查和手动下载。
+- 解决：移除 PowerShell、资源管理器调用、强制结束进程和自动覆盖 EXE；端口冲突时安全换端口；界面更新只切换经过双重校验的静态资源版本。
 - 避免：新增功能不得通过编码脚本、Shell COM、`taskkill`、复制自身或覆盖当前 EXE 实现；确需系统集成时先评估签名和杀毒软件影响。
 
 ### GitHub Release API 检查更新被限流
@@ -49,7 +42,7 @@
 - 现象：连续检查更新后 `/api/update/check` 返回 HTTP 502，服务端记录 GitHub HTTP 403。
 - 原因：GitHub 未登录 REST API 有请求频率限制，同一公网出口下多台电脑会共用额度。
 - 解决：成功结果缓存 10 分钟；API 不可用时只能通过公开的 `/releases/latest` 判断版本，未取得 SHA-256 digest 时不得自动安装。
-- 避免：Release 的唯一手工 Windows 资产固定命名为 `CanvasFlow-Setup.exe`；下载后同时校验文件大小和 GitHub API digest。
+- 避免：Release 的完整安装资产固定命名为 `CanvasFlow-Setup.exe`，可选界面热更新资产固定命名为 `CanvasFlow-Web.zip`；热更新必须同时校验 GitHub API digest 与清单内逐文件 SHA-256。
 
 ### 拖动节点图片时意外复制图片节点
 
@@ -92,8 +85,9 @@
 - .NET桌面版正式发布时使用EXE所在目录的`data/`、`download/`、`export/`；源码运行时使用项目根目录。Electron仅在`legacy/`保留为回退，不得擅自改变已有数据格式。
 
 - EXE由`.gitignore`排除；Windows分发文件使用.NET 10自包含publish目录，并由`installer/CanvasFlow.iss`生成`CanvasFlow-Setup.exe`。正式安装包包含.NET运行库，用户无需另行安装.NET。
-- GitHub Release 仅上传一个手工资产 `CanvasFlow-Setup.exe`；GitHub 自动生成的 Source code 条目无法关闭。
-- 更新只下载并校验安装程序；用户确认后保存项目、启动安装程序并退出，不静默复制或覆盖正在运行的 EXE。
+- GitHub Release 固定上传 `CanvasFlow-Setup.exe`，仅包含兼容界面变化时可额外上传 `CanvasFlow-Web.zip`；GitHub 自动生成的 Source code 条目无法关闭。
+- 界面热更新保存项目后下载到 `data/web-updates/` 暂存区，同时校验 GitHub digest、包内清单与逐文件 SHA-256，再原子切换 `active.json` 并重载 WebView；启动时活动版本无效则回退上一版，仍无效则使用安装包内置界面。不得通过热更新替换 EXE、DLL 或任意宿主文件。
+- 抠图模块、桌面桥接、工作进程和发布依赖已移除；旧抠图结果继续作为普通图片使用，不自动删除用户已有的 `data/plugins/background-removal/`、工作目录或生成结果。
 - 端口冲突时自动尝试后续端口，不得结束占用端口的其他进程。
 - 新安装且图文素材库完全为空时初始化“图片转线稿”和“多视角参考”两条默认文字；已有素材库不得覆盖或追加。
 - 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。

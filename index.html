@@ -123,9 +123,9 @@
           <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
         </section>
         <section class="settings-card update-settings-card">
-          <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">启动时自动检查 GitHub Releases；发现新版后由用户手动下载替换。</p></div><button id="checkUpdateBtn">检查更新</button></div>
+          <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
-          <div id="updateActions" class="update-actions hidden"><a id="releasePageLink" class="primary" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载 Windows 新版本</a></div>
+          <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
         </section>
       </div>
 
@@ -186,14 +186,6 @@
 
       <div class="tab-page hidden" data-tab="plugins">
         <div class="settings-page-head"><h2>插件</h2><p>按需安装拓展功能；未安装的插件不会下载模型或占用运行内存。</p></div>
-        <section class="settings-card plugin-card" data-plugin-id="background-removal">
-          <div class="plugin-card-main">
-            <div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 15l3-3 2 2 2-2 3 3M9 9h.01"/></svg></div>
-            <div><div class="plugin-title-row"><h3>智能抠图</h3><span id="backgroundRemovalPluginStatus" class="plugin-status">未安装</span><button id="installBackgroundRemovalPluginBtn" class="primary plugin-inline-action">安装插件</button><button id="removeBackgroundRemovalPluginBtn" class="plugin-inline-action hidden">卸载</button></div><p class="setting-desc">使用 BiRefNet General Lite 在本机生成透明背景 PNG。模型约 213.6 MB，默认使用 CPU。</p></div>
-          </div>
-          <p id="backgroundRemovalPluginHint" class="setting-desc">模型源自 BiRefNet；本插件使用 rembg Release 提供的第三方 ONNX 转换文件，并非 BiRefNet 官方下载。安装后可从“拓展功能”使用。</p>
-          <div id="backgroundRemovalInstallProgress" class="plugin-install-progress hidden"><div class="plugin-progress-track"><span id="backgroundRemovalProgressBar"></span></div><span id="backgroundRemovalProgressText">准备下载</span></div>
-        </section>
         <section class="settings-card plugin-card is-built-in">
           <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18 19 6M9 6h10v10"/></svg></div><div><div class="plugin-title-row"><h3>角度变化</h3><span class="plugin-status installed">已启用</span></div><p class="setting-desc">根据图片创建角度变化节点。此功能随 CanvasFlow 提供，无需额外安装。</p></div></div>
         </section>

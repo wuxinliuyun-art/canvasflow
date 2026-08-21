@@ -41,6 +41,7 @@ node server.js
 ## 数据与发布
 
 - 不要提交`data/`、`download/`、`export/`、`dist-dotnet/`或任何EXE。
-- GitHub Release 只手工上传 `CanvasFlow-Setup.exe`。
+- GitHub Release 上传完整安装包 `CanvasFlow-Setup.exe`；仅修改 HTML/CSS/JS 时，再运行 `build-web-update.ps1` 并上传固定名称 `CanvasFlow-Web.zip`。
+- 热更新包的 `minimumHostVersion` 必须是能够运行该界面的最低 .NET 宿主版本；若修改桌面桥接或 .NET 代码，应提升最低宿主版本并同时发布完整安装包。
 - 发布前检查publish目录包含`CanvasFlow.exe`、`index.html`、`app.js`和`styles.css`。
 - 安装和更新测试必须确认 `data`、`download`、`export` 不被覆盖或删除。

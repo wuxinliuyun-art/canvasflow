@@ -24,7 +24,7 @@ public partial class MainWindow : Window
     private const string CanvasUrl = "https://canvasflow.local/index.html";
     private readonly CancellationTokenSource _shutdown = new();
     private DesktopApi? _desktopApi;
-    private BackgroundRemovalPlugin? _backgroundRemovalPlugin;
+    private WebUpdateManager? _webUpdateManager;
     private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _root;
@@ -87,10 +87,8 @@ public partial class MainWindow : Window
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
-          backgroundRemovalStatus: () => invoke("desktop:background-removal-status", {}, 60000),
-          installBackgroundRemoval: () => invoke("desktop:install-background-removal", {}, 2400000),
-          uninstallBackgroundRemoval: () => invoke("desktop:uninstall-background-removal", {}, 60000),
-          removeImageBackground: payload => invoke("desktop:remove-image-background", payload || {}, 1200000),
+          applyWebUpdate: () => invoke("desktop:apply-web-update", {}, 600000),
+          webReady: () => window.chrome.webview.postMessage({ type: "desktop:web-ready" }),
           apiRequest: (path, options = {}) => invoke("desktop:api", {
             path: String(path || ""),
             method: String(options.method || "GET"),
@@ -203,10 +201,13 @@ public partial class MainWindow : Window
         var startupTimer = Stopwatch.StartNew();
         try
         {
-            (_root, _contentRoot) = FindApplicationPaths();
+            var paths = FindApplicationPaths();
+            _root = paths.DataRoot;
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
-            _desktopApi = new DesktopApi(_root, Log, ReadApiKey);
-            _backgroundRemovalPlugin = new BackgroundRemovalPlugin(_root, Log);
+            var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
+            _contentRoot = _webUpdateManager.ResolveContentRoot();
+            _desktopApi = new DesktopApi(_root, Log, ReadApiKey, _webUpdateManager);
             var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
             await InitializeWebViewAsync(_shutdown.Token);
@@ -324,37 +325,27 @@ public partial class MainWindow : Window
                         }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
                     }
-                    else if (type.GetString() == "desktop:background-removal-status")
-                    {
-                        try { PostRpcResult(root, await RequireBackgroundRemovalPlugin().StatusAsync()); }
-                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:install-background-removal")
+                    else if (type.GetString() == "desktop:apply-web-update")
                     {
                         try
                         {
-                            var result = await RequireBackgroundRemovalPlugin().InstallAsync((percent, stage) => Dispatcher.Invoke(() =>
-                                CanvasView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "plugin-install-progress", pluginId = "background-removal", percent, stage }))), _shutdown.Token);
+                            if (_desktopApi is null || _webUpdateManager is null) throw new InvalidOperationException("更新服务尚未初始化");
+                            var result = await _desktopApi.ApplyLatestWebUpdateAsync(_shutdown.Token);
+                            _contentRoot = _webUpdateManager.CurrentContentRoot;
                             PostRpcResult(root, result);
+                            _ = Dispatcher.InvokeAsync(async () =>
+                            {
+                                await Task.Delay(350);
+                                if (CanvasView.CoreWebView2 is null) return;
+                                CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot, CoreWebView2HostResourceAccessKind.DenyCors);
+                                CanvasView.CoreWebView2.Navigate(CanvasUrl + $"?web={Uri.EscapeDataString(_webUpdateManager.ActiveVersion)}");
+                            });
                         }
-                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
+                        catch (Exception updateError) { PostRpcResult(root, error: updateError.Message); }
                     }
-                    else if (type.GetString() == "desktop:uninstall-background-removal")
+                    else if (type.GetString() == "desktop:web-ready")
                     {
-                        try { PostRpcResult(root, RequireBackgroundRemovalPlugin().Uninstall()); }
-                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
-                    }
-                    else if (type.GetString() == "desktop:remove-image-background")
-                    {
-                        try
-                        {
-                            var dataUrl = root.TryGetProperty("dataUrl", out var dataValue) ? dataValue.GetString() ?? "" : "";
-                            var fileName = root.TryGetProperty("fileName", out var nameValue) ? nameValue.GetString() ?? "image.png" : "image.png";
-                            var outputRoot = root.TryGetProperty("outputRoot", out var outputValue) ? outputValue.GetString() ?? "" : "";
-                            if (string.IsNullOrWhiteSpace(outputRoot)) outputRoot = Path.Combine(_root!, "export");
-                            PostRpcResult(root, await RequireBackgroundRemovalPlugin().RemoveBackgroundAsync(dataUrl, fileName, outputRoot, _shutdown.Token));
-                        }
-                        catch (Exception removalError) { Log($"[智能抠图插件] 任务失败：{removalError}", true); PostRpcResult(root, error: removalError.Message); }
+                        _webUpdateManager?.ConfirmActiveVersionReady();
                     }
                     else if (type.GetString() == "screenshot:task-update")
                     {
@@ -475,9 +466,6 @@ public partial class MainWindow : Window
         });
         CanvasView.CoreWebView2.PostWebMessageAsJson(payload);
     }
-
-    private BackgroundRemovalPlugin RequireBackgroundRemovalPlugin() =>
-        _backgroundRemovalPlugin ?? throw new InvalidOperationException("智能抠图插件服务尚未初始化");
 
     private string SecretsPath => Path.Combine(_root!, "data", "secrets.json");
     private string AssetsDirectory => Path.Combine(_root!, "data", "assets");

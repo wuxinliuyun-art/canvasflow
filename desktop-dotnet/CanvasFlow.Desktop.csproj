@@ -12,7 +12,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <StartupObject>CanvasFlow.Desktop.Program</StartupObject>
-    <Version>2.6.3</Version>
+    <Version>2.6.4</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
@@ -20,8 +20,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3537.50" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.1" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\index.html" Link="index.html" CopyToPublishDirectory="PreserveNewest" />
@@ -32,34 +30,5 @@
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\canvasflow-logo.png" Link="assets\canvasflow-logo.png" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\plugins\background-removal\plugin.json" Link="plugins\background-removal\plugin.json" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\plugins\background-removal\THIRD-PARTY-NOTICES.md" Link="plugins\background-removal\THIRD-PARTY-NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <Target Name="PublishBackgroundRemovalWorker" BeforeTargets="Publish">
-    <PropertyGroup>
-      <BackgroundRemovalWorkerPublishDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\obj\background-removal-worker\publish\'))</BackgroundRemovalWorkerPublishDir>
-    </PropertyGroup>
-    <RemoveDir Directories="$(BackgroundRemovalWorkerPublishDir)" />
-    <MSBuild Projects="..\background-removal-worker\CanvasFlow.BackgroundRemovalWorker.csproj"
-             Targets="Publish"
-             Properties="Configuration=$(Configuration);SelfContained=false;PublishSingleFile=false;PublishDir=$(BackgroundRemovalWorkerPublishDir)" />
-    <ItemGroup>
-      <BackgroundRemovalWorkerFiles Include="$(BackgroundRemovalWorkerPublishDir)**\*" Exclude="$(BackgroundRemovalWorkerPublishDir)**\*.pdb;$(BackgroundRemovalWorkerPublishDir)**\DirectML.Debug.dll" />
-      <BackgroundRemovalDotnetHost Include="$(NetCoreRoot)dotnet.exe" />
-      <BackgroundRemovalRuntimeHostFiles Include="$(NetCoreRoot)host\fxr\10.*\**\*" />
-      <BackgroundRemovalRuntimeSharedFiles Include="$(NetCoreRoot)shared\Microsoft.NETCore.App\10.*\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(BackgroundRemovalWorkerFiles)"
-          DestinationFiles="@(BackgroundRemovalWorkerFiles->'$(PublishDir)workers\background-removal\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(BackgroundRemovalDotnetHost)"
-          DestinationFolder="$(PublishDir)workers\background-removal\runtime\"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(BackgroundRemovalRuntimeHostFiles)"
-          DestinationFiles="@(BackgroundRemovalRuntimeHostFiles->'$(PublishDir)workers\background-removal\runtime\host\fxr\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(BackgroundRemovalRuntimeSharedFiles)"
-          DestinationFiles="@(BackgroundRemovalRuntimeSharedFiles->'$(PublishDir)workers\background-removal\runtime\shared\Microsoft.NETCore.App\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
 </Project>

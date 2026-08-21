@@ -22,21 +22,40 @@ internal sealed class DesktopApi
     private readonly Func<string> _getApiKey;
     private readonly HttpClient _http;
     private readonly string _version;
+    private readonly WebUpdateManager _webUpdateManager;
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager)
     {
         _root = Path.GetFullPath(root);
         _log = log;
         _getApiKey = getApiKey;
+        _webUpdateManager = webUpdateManager;
         _http = new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.3");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.4");
         _version = ReadVersion();
+    }
+
+    public async Task<object> ApplyLatestWebUpdateAsync(CancellationToken cancellationToken)
+    {
+        if (_releaseCache is null || DateTimeOffset.UtcNow - _releaseCacheAt >= TimeSpan.FromMinutes(10))
+            await CheckForUpdatesAsync(cancellationToken);
+        var webAsset = _releaseCache?["webAsset"] as JsonObject ?? throw new InvalidOperationException("当前 Release 没有可用的界面热更新包，请下载完整安装包");
+        var version = _releaseCache?["latestVersion"]?.GetValue<string>() ?? "";
+        var url = webAsset["url"]?.GetValue<string>() ?? "";
+        var digest = webAsset["digest"]?.GetValue<string>() ?? "";
+        var result = await _webUpdateManager.DownloadAndApplyAsync(url, digest, version, cancellationToken);
+        if (_releaseCache is not null)
+        {
+            _releaseCache["currentVersion"] = _webUpdateManager.ActiveVersion;
+            _releaseCache["hasUpdate"] = false;
+        }
+        return result;
     }
 
     public Task<DesktopApiResponse> HandleAsync(string method, string pathAndQuery, string body, CancellationToken cancellationToken)
@@ -175,22 +194,34 @@ internal sealed class DesktopApi
         var setupAssets = (release["assets"] as JsonArray)?.OfType<JsonObject>().Where(asset => string.Equals(asset["name"]?.GetValue<string>(), "CanvasFlow-Setup.exe", StringComparison.OrdinalIgnoreCase)).ToList() ?? [];
         if (setupAssets.Count != 1) throw new InvalidDataException($"最新Release应包含且只包含一个CanvasFlow-Setup.exe，当前检测到{setupAssets.Count}个");
         var asset = setupAssets[0];
+        var webAssets = (release["assets"] as JsonArray)?.OfType<JsonObject>().Where(item => string.Equals(item["name"]?.GetValue<string>(), "CanvasFlow-Web.zip", StringComparison.OrdinalIgnoreCase)).ToList() ?? [];
+        if (webAssets.Count > 1) throw new InvalidDataException($"最新Release最多包含一个CanvasFlow-Web.zip，当前检测到{webAssets.Count}个");
+        var webAsset = webAssets.FirstOrDefault();
         var latestVersion = (release["tag_name"]?.GetValue<string>() ?? release["name"]?.GetValue<string>() ?? "").TrimStart('v', 'V');
+        var displayedVersion = string.IsNullOrWhiteSpace(_webUpdateManager.ActiveVersion) ? _version : _webUpdateManager.ActiveVersion;
         _releaseCache = new JsonObject
         {
-            ["currentVersion"] = _version,
+            ["currentVersion"] = displayedVersion,
             ["latestVersion"] = latestVersion,
             ["releaseName"] = release["name"]?.GetValue<string>() ?? release["tag_name"]?.GetValue<string>() ?? latestVersion,
             ["notes"] = release["body"]?.GetValue<string>() ?? "",
             ["pageUrl"] = release["html_url"]?.GetValue<string>() ?? "https://github.com/wuxinliuyun-art/canvasflow/releases/latest",
-            ["hasUpdate"] = IsNewerVersion(latestVersion, _version),
+            ["hasUpdate"] = IsNewerVersion(latestVersion, displayedVersion),
             ["canAutoInstall"] = !string.IsNullOrWhiteSpace(asset["digest"]?.GetValue<string>()),
+            ["canHotUpdate"] = webAsset is not null && !string.IsNullOrWhiteSpace(webAsset["digest"]?.GetValue<string>()),
             ["asset"] = new JsonObject
             {
                 ["name"] = asset["name"]?.GetValue<string>() ?? "CanvasFlow-Setup.exe",
                 ["size"] = asset["size"]?.GetValue<long>() ?? 0,
                 ["url"] = asset["browser_download_url"]?.GetValue<string>() ?? "",
                 ["digest"] = asset["digest"]?.GetValue<string>() ?? ""
+            },
+            ["webAsset"] = webAsset is null ? null : new JsonObject
+            {
+                ["name"] = webAsset["name"]?.GetValue<string>() ?? "CanvasFlow-Web.zip",
+                ["size"] = webAsset["size"]?.GetValue<long>() ?? 0,
+                ["url"] = webAsset["browser_download_url"]?.GetValue<string>() ?? "",
+                ["digest"] = webAsset["digest"]?.GetValue<string>() ?? ""
             }
         };
         _releaseCacheAt = DateTimeOffset.UtcNow;
@@ -217,6 +248,8 @@ internal sealed class DesktopApi
                 ["pageUrl"] = absolute.ToString(),
                 ["hasUpdate"] = IsNewerVersion(latestVersion, _version),
                 ["canAutoInstall"] = false,
+                ["canHotUpdate"] = false,
+                ["webAsset"] = null,
                 ["asset"] = new JsonObject
                 {
                     ["name"] = "CanvasFlow-Setup.exe",
@@ -234,10 +267,12 @@ internal sealed class DesktopApi
     {
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(_root, "package.json"), Encoding.UTF8));
+            var candidates = new[] { Path.Combine(_root, "package.json"), Path.Combine(_root, "app", "package.json") };
+            var path = candidates.FirstOrDefault(File.Exists) ?? throw new FileNotFoundException("package.json not found");
+            using var document = JsonDocument.Parse(File.ReadAllText(path, Encoding.UTF8));
             return document.RootElement.GetProperty("version").GetString() ?? "0.0.0";
         }
-        catch { return "0.0.0"; }
+        catch { return typeof(DesktopApi).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"; }
     }
 
     private static bool IsNewerVersion(string candidate, string current)

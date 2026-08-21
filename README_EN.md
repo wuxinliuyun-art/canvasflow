@@ -9,8 +9,8 @@ CanvasFlow lets you connect text, reference images, and AI Image nodes to genera
 ## What's New in the 2.6 Series
 
 - Native `.NET 10 WPF + WebView2` desktop app with no Node process, local server, or listening port
-- Optional **Background Removal** plugin powered by BiRefNet General Lite, using DirectML first with automatic CPU fallback
-- AI generation and background removal share one right-side task queue with progress
+- Interface hot updates with release-digest verification, per-file manifest verification, and startup rollback
+- AI generation jobs share one right-side task queue with progress
 - Independent always-on-top screenshot tool for fixed-region AI workflows
 - Faster startup, image preview, and refined minimap and node interactions
 - Program files live under `app\`; user data remains in `data\`, `download\`, and `export\`
@@ -83,16 +83,9 @@ Connect only text for text-to-image generation. Add an Image node when you want 
 
 ### Task Queue
 
-- AI generation and background removal jobs appear in the right-side task queue, with up to five jobs processed at once
+- AI generation jobs appear in the right-side task queue, with up to five jobs processed at once
 - Each task shows a thumbnail, prompt summary, and status; queued jobs that have not been sent can be paused, resumed, or removed
 - Running jobs continue to completion to avoid duplicate charges or lost results
-
-### Optional Local Plugins
-
-- Install or uninstall plugins yourself from **Settings → Plugins**; large models are not bundled with the base installer
-- **Background Removal** uses BiRefNet General Lite to create transparent PNGs locally, preferring DirectML and falling back to CPU automatically
-- Completed plugin tasks create result Image nodes connected to their source nodes
-- Uninstalling the background-removal plugin never deletes generated images
 
 ### Screenshot Tool
 
@@ -185,7 +178,7 @@ Some antivirus tools block applications from launching Windows File Explorer. Co
 
 ### How do updates work?
 
-CanvasFlow checks GitHub Releases. When a new version is available, download `CanvasFlow-Setup.exe`. Save the current project before updating; the installer never silently overwrites the running EXE.
+CanvasFlow checks GitHub Releases. When `CanvasFlow-Web.zip` is available, Settings can hot-update the interface after saving the project, verifying the GitHub SHA-256 digest and every manifest file, and atomically switching versions. Startup falls back if an installed interface is invalid. Updates that change the .NET host still use `CanvasFlow-Setup.exe`.
 
 ---
 
