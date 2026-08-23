@@ -1687,6 +1687,8 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   min-width: 0;
 }
 .custom-material-add {
+  display: grid;
+  gap: 7px;
   margin-bottom: 4px;
 }
 
@@ -2250,11 +2252,10 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   border-radius: 0 0 16px 16px;
   background: #191a1c;
 }
-.theme-dark .node.variable > .node-body { border-radius: 0 0 20px 20px; }
 .theme-dark.hide-node-titles .node > .node-body { border-radius: 16px; }
 .node.selected { outline: 2px solid var(--selected); outline-offset: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--selected) 12%, transparent), var(--soft-shadow); }
 .node-head {
-  height: 40px;
+  height: 46px;
   padding: 0 13px;
   border-bottom: 0;
   font-size: 13px;
@@ -2273,7 +2274,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .node.group .node-body { min-height: 0; overflow: hidden; }
 .node.group .image-actions { flex: 0 0 auto; }
 .node.text .node-body {
-  height: calc(100% - 40px);
+  height: calc(100% - 46px);
   padding-top: 0;
   min-width: 0;
   min-height: 0;

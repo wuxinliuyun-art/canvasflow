@@ -171,9 +171,9 @@ const UI_EN = {
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
-  "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量组合节点。": "Define global variables and single-choice values for variable combination nodes.",
+  "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量节点。": "Define global variables and single-choice values for variable nodes.",
   "＋ 新建变量": "+ New Variable", "变量名": "Variable Name", "可选值（每行一个）": "Choices (one per line)", "保存变量": "Save Variable",
-  "变量组合节点": "Variable Combination", "添加变量组合节点": "Add Variable Combination Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
+  "变量节点": "Variable Node", "添加变量节点": "Add Variable Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
   "＋ 添加一行": "+ Add Row", "请先在设置 → 变量库中创建变量": "Create a variable in Settings → Variable Library first",
   "项目文件夹": "Project Folder", "修改位置": "Change Folder", "同时备份素材库": "Also back up the asset library",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
@@ -1172,6 +1172,15 @@ function fileToBase64(file) {
       var comma = result.indexOf(",");
       resolve(comma >= 0 ? result.substring(comma + 1) : result);
     };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileToDataUrl(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result); };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -3411,7 +3420,7 @@ function syncSelectedNodeClasses() {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量组合节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = (node.type === "output" || node.type === "screenshot-input") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
@@ -3422,13 +3431,13 @@ function nodeTemplate(node) {
     if (!globalLibrary.variableDefinitions.length && !node.variableRows.some(row => row.variableNameSnapshot)) {
       body = `<div class="variable-node-empty">请先在设置 → 变量库中创建变量</div><button data-role="variable-add-row" class="variable-add-row" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加一行</span></button>`;
     } else {
-      const definitionOptions = globalLibrary.variableDefinitions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
       const rows = node.variableRows.map(row => {
         const resolved = resolvedVariableRow(row);
+        const definitionOptions = globalLibrary.variableDefinitions.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === row.definitionId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
         const missingDefinition = row.definitionId && !resolved.definition ? `<option value="${escapeHtml(row.definitionId)}" selected>已失效：${escapeHtml(row.variableNameSnapshot || "未知变量")}</option>` : "";
         const options = resolved.definition?.options.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === row.optionId ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("") || "";
         const missingOption = row.optionId && !resolved.option ? `<option value="${escapeHtml(row.optionId)}" selected>已失效：${escapeHtml(row.valueLabelSnapshot || "未知值")}</option>` : "";
-        return `<div class="variable-node-row ${resolved.invalid ? "is-invalid" : ""}" data-row-id="${escapeHtml(row.id)}"><span class="variable-select-wrap"><select data-role="variable-definition" aria-label="变量">${missingDefinition}${definitionOptions.replace(`value="${escapeHtml(row.definitionId)}"`, `value="${escapeHtml(row.definitionId)}" selected`)}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><span class="variable-select-wrap"><select data-role="variable-option" aria-label="变量值" ${resolved.definition ? "" : "disabled"}>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><button class="variable-row-remove" data-role="variable-remove-row" type="button" title="删除该行" aria-label="删除该行"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+        return `<div class="variable-node-row ${resolved.invalid ? "is-invalid" : ""}" data-row-id="${escapeHtml(row.id)}"><span class="variable-select-wrap"><select data-role="variable-definition" aria-label="变量">${missingDefinition}${definitionOptions}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><span class="variable-select-wrap"><select data-role="variable-option" aria-label="变量值" ${resolved.definition ? "" : "disabled"}>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><button class="variable-row-remove" data-role="variable-remove-row" type="button" title="删除该行" aria-label="删除该行"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
       }).join("");
       const output = variableNodeOutput(node);
       body = `<div class="variable-node-rows">${rows}</div><div class="variable-node-add-wrap"><button data-role="variable-add-row" class="variable-add-row" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加一行</span></button></div><div class="variable-node-output">${escapeHtml(output || "暂无组合数据")}</div>`;
@@ -3504,7 +3513,7 @@ function nodeTemplate(node) {
     body = `<div class="output-label">图片${num}</div>`;
   }
   const head = node.type === "variable"
-    ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量组合</span></div>`
+    ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量节点</span></div>`
     : `<div class="node-head"><span>${title}</span></div>`;
   return `${inPort}${outPort}${head}<div class="node-body">${body}</div>`;
 }
@@ -5149,7 +5158,7 @@ els.viewport.addEventListener("contextmenu", ev => {
     }
     items.push(
       ["添加文字节点", () => addNode("text", p.x, p.y)],
-      ["添加变量组合节点", () => addNode("variable", p.x, p.y)],
+      ["添加变量节点", () => addNode("variable", p.x, p.y)],
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
@@ -6670,7 +6679,7 @@ els.customMaterialFileInput.onchange = async function() {
   }
   if (file && els.customMaterialEditorPreview) {
     try {
-      els.customMaterialEditorPreview.src = await fileToBase64(file);
+      els.customMaterialEditorPreview.src = await fileToDataUrl(file);
       els.customMaterialEditorPreview.classList.remove("hidden");
     } catch (error) {
       console.error("[自定义图片] 预览失败", error);
