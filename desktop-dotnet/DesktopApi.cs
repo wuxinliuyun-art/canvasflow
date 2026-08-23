@@ -41,7 +41,7 @@ internal sealed class DesktopApi
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.4");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.5");
         _version = ReadVersion();
     }
 

@@ -3420,7 +3420,7 @@ function nodeTemplate(node) {
   } else if (node.type === "variable") {
     normalizeVariableNode(node);
     if (!globalLibrary.variableDefinitions.length && !node.variableRows.some(row => row.variableNameSnapshot)) {
-      body = `<div class="variable-node-empty">请先在设置 → 变量库中创建变量</div><button data-role="variable-add-row" class="variable-add-row" type="button">＋ 添加一行</button>`;
+      body = `<div class="variable-node-empty">请先在设置 → 变量库中创建变量</div><button data-role="variable-add-row" class="variable-add-row" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加一行</span></button>`;
     } else {
       const definitionOptions = globalLibrary.variableDefinitions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
       const rows = node.variableRows.map(row => {
@@ -3428,10 +3428,10 @@ function nodeTemplate(node) {
         const missingDefinition = row.definitionId && !resolved.definition ? `<option value="${escapeHtml(row.definitionId)}" selected>已失效：${escapeHtml(row.variableNameSnapshot || "未知变量")}</option>` : "";
         const options = resolved.definition?.options.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === row.optionId ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("") || "";
         const missingOption = row.optionId && !resolved.option ? `<option value="${escapeHtml(row.optionId)}" selected>已失效：${escapeHtml(row.valueLabelSnapshot || "未知值")}</option>` : "";
-        return `<div class="variable-node-row ${resolved.invalid ? "is-invalid" : ""}" data-row-id="${escapeHtml(row.id)}"><button class="variable-row-drag" data-role="variable-row-drag" type="button" title="拖动排序" aria-label="拖动排序">⋮⋮</button><span class="variable-select-wrap"><select data-role="variable-definition" aria-label="变量"><option value="">选择变量</option>${missingDefinition}${definitionOptions.replace(`value="${escapeHtml(row.definitionId)}"`, `value="${escapeHtml(row.definitionId)}" selected`)}</select><span class="variable-select-chevron" aria-hidden="true">⌄</span></span><span class="variable-select-wrap"><select data-role="variable-option" aria-label="变量值" ${resolved.definition ? "" : "disabled"}><option value="">选择值</option>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true">⌄</span></span><button class="variable-row-remove" data-role="variable-remove-row" type="button" title="删除该行" aria-label="删除该行">×</button></div>`;
+        return `<div class="variable-node-row ${resolved.invalid ? "is-invalid" : ""}" data-row-id="${escapeHtml(row.id)}"><span class="variable-select-wrap"><select data-role="variable-definition" aria-label="变量">${missingDefinition}${definitionOptions.replace(`value="${escapeHtml(row.definitionId)}"`, `value="${escapeHtml(row.definitionId)}" selected`)}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><span class="variable-select-wrap"><select data-role="variable-option" aria-label="变量值" ${resolved.definition ? "" : "disabled"}>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><button class="variable-row-remove" data-role="variable-remove-row" type="button" title="删除该行" aria-label="删除该行"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
       }).join("");
       const output = variableNodeOutput(node);
-      body = `<div class="variable-node-rows">${rows}</div><div class="variable-node-add-wrap"><button data-role="variable-add-row" class="variable-add-row" type="button">＋</button></div><div class="variable-node-output">${escapeHtml(output || "暂无组合数据")}</div>`;
+      body = `<div class="variable-node-rows">${rows}</div><div class="variable-node-add-wrap"><button data-role="variable-add-row" class="variable-add-row" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加一行</span></button></div><div class="variable-node-output">${escapeHtml(output || "暂无组合数据")}</div>`;
     }
   } else if (node.type === "mind-group") {
     const count = node.subgraph?.nodes?.length || 0;
@@ -3504,7 +3504,7 @@ function nodeTemplate(node) {
     body = `<div class="output-label">图片${num}</div>`;
   }
   const head = node.type === "variable"
-    ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量组合</span><span class="variable-node-more" aria-hidden="true">⋮</span></div>`
+    ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量组合</span></div>`
     : `<div class="node-head"><span>${title}</span></div>`;
   return `${inPort}${outPort}${head}<div class="node-body">${body}</div>`;
 }
@@ -5384,15 +5384,6 @@ function clearImageDragState() {
 }
 
 els.nodes.addEventListener("dragstart", ev => {
-  const variableRow = ev.target.closest(".variable-node-row");
-  if (variableRow?.draggable) {
-    const nodeId = variableRow.closest(".node")?.dataset.id || "";
-    ev.dataTransfer.effectAllowed = "move";
-    ev.dataTransfer.setData("application/x-canvasflow-variable-row", JSON.stringify({ nodeId, rowId: variableRow.dataset.rowId }));
-    variableRow.classList.add("is-dragging");
-    ev.stopPropagation();
-    return;
-  }
   const nodeEl = ev.target.closest(".node");
   if (!nodeEl) return;
   if (ev.dataTransfer) ev.dataTransfer.setData("application/x-canvasflow-internal-image", "1");
@@ -5400,41 +5391,6 @@ els.nodes.addEventListener("dragstart", ev => {
   ev.stopPropagation();
   clearImageDragState();
   console.info("[节点拖动] 已阻止浏览器原生拖放", { nodeId: nodeEl.dataset.id, source: ev.target.tagName });
-});
-
-els.nodes.addEventListener("pointerdown", ev => {
-  if (ev.target.dataset.role === "variable-row-drag") ev.target.closest(".variable-node-row").draggable = true;
-});
-
-els.nodes.addEventListener("dragend", ev => {
-  const row = ev.target.closest(".variable-node-row");
-  if (!row) return;
-  row.draggable = false;
-  row.classList.remove("is-dragging");
-});
-
-els.nodes.addEventListener("dragover", ev => {
-  if (!Array.from(ev.dataTransfer?.types || []).includes("application/x-canvasflow-variable-row")) return;
-  if (!ev.target.closest(".variable-node-row")) return;
-  ev.preventDefault();
-  ev.dataTransfer.dropEffect = "move";
-});
-
-els.nodes.addEventListener("drop", ev => {
-  const raw = ev.dataTransfer?.getData("application/x-canvasflow-variable-row");
-  const target = ev.target.closest(".variable-node-row");
-  if (!raw || !target) return;
-  ev.preventDefault(); ev.stopPropagation();
-  let payload;
-  try { payload = JSON.parse(raw); } catch { return; }
-  const node = findNode(payload.nodeId);
-  if (!node || node.type !== "variable" || target.closest(".node")?.dataset.id !== node.id) return;
-  const from = node.variableRows.findIndex(row => row.id === payload.rowId);
-  const to = node.variableRows.findIndex(row => row.id === target.dataset.rowId);
-  if (from < 0 || to < 0 || from === to) return;
-  const [moved] = node.variableRows.splice(from, 1);
-  node.variableRows.splice(to, 0, moved);
-  pushHistory(); render();
 });
 
 els.viewport.addEventListener("dragenter", ev => {
