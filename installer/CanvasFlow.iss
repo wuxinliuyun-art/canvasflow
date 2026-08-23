@@ -10,6 +10,7 @@ AppPublisher=wuxinliuyun-art
 AppPublisherURL=https://github.com/wuxinliuyun-art/canvasflow
 DefaultDirName={code:GetDefaultInstallDir}
 UsePreviousAppDir=yes
+DisableDirPage=no
 DefaultGroupName=CanvasFlow
 OutputDir=..\dist-dotnet
 OutputBaseFilename=CanvasFlow-Setup
@@ -79,6 +80,7 @@ Name: "{group}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{
 Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"; Description: "启动 CanvasFlow"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
+Type: files; Name: "{autodesktop}\CanvasFlow.lnk"
 Type: filesandordirs; Name: "{app}\data\webview2"
 Type: filesandordirs; Name: "{app}\app"
 Type: files; Name: "{app}\*.dll"
