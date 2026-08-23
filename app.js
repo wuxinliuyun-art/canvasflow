@@ -6497,19 +6497,31 @@ els.customMaterialFileInput.onchange = async function() {
 
 els.customMaterialAddBtn.onclick = () => addCustomMaterial();
 els.customTextAddBtn.onclick = () => addCustomText();
-els.importLibraryJsonBtn.onclick = () => els.importLibraryJsonInput.click();
-els.importLibraryJsonInput.onchange = async () => {
-  const file = els.importLibraryJsonInput.files?.[0]; if (!file) return;
+async function importLibraryFile(name, content) {
   try {
-    const parsed = JSON.parse(await file.text());
+    const parsed = JSON.parse(content);
     const data = parsed?.type === "library" ? { globalLibrary: parsed.library } : parsed;
-    const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: file.name.replace(/\.json$/i, ""), data }];
+    const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: name.replace(/\.(?:cflow|json)$/i, ""), data }];
     const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary) }));
     const importedGlobalLibrary = normalizeLibrary(data.globalLibrary);
     if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
     if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length)) return toast("该文件中没有可导入的自定义图文");
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
+}
+els.importLibraryJsonBtn.onclick = async () => {
+  if (!desktop?.chooseLibraryFile) return els.importLibraryJsonInput.click();
+  try {
+    const result = await desktop.chooseLibraryFile(state.settings.projectFolderLabel || runtimeProjectFolder);
+    if (!result?.cancelled && result?.name && typeof result.content === "string") await importLibraryFile(result.name, result.content);
+  } catch (error) {
+    console.error("[导入] 无法读取素材文件", error);
+    toast(`导入失败：${error.message || "无法读取文件"}`);
+  }
+};
+els.importLibraryJsonInput.onchange = async () => {
+  const file = els.importLibraryJsonInput.files?.[0]; if (!file) return;
+  try { await importLibraryFile(file.name, await file.text()); }
   finally { els.importLibraryJsonInput.value = ""; }
 };
 els.libraryImportCloseBtn.onclick = closeLibraryImport;

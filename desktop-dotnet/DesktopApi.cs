@@ -17,6 +17,10 @@ internal sealed class DesktopApi
     private static readonly string[] ApiBaseUrls = [
         "https://api.apib.ai", "https://api.aiuxu.com", "https://api.aishuch.com", "https://api.apimart.ai"
     ];
+    private static readonly HashSet<string> TrustedImageHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "getapib.org"
+    };
     private readonly string _root;
     private readonly Action<string, bool> _log;
     private readonly Func<string> _getApiKey;
@@ -58,18 +62,18 @@ internal sealed class DesktopApi
         return result;
     }
 
-    public Task<DesktopApiResponse> HandleAsync(string method, string pathAndQuery, string body, CancellationToken cancellationToken)
+    public Task<DesktopApiResponse> HandleAsync(string method, string pathAndQuery, string body, string apiKey, CancellationToken cancellationToken)
     {
         if (body.Length > MaxBodyCharacters) return Task.FromResult(Json(413, new { error = "请求内容超过128MB限制" }));
         var uri = new Uri("https://canvasflow.local" + (pathAndQuery.StartsWith('/') ? pathAndQuery : "/" + pathAndQuery));
-        if (IsNetworkRoute(uri.AbsolutePath)) return HandleNetworkAsync(method.ToUpperInvariant(), uri, body, cancellationToken);
+        if (IsNetworkRoute(uri.AbsolutePath)) return HandleNetworkAsync(method.ToUpperInvariant(), uri, body, apiKey, cancellationToken);
         return Task.Run(() => HandleLocal(method.ToUpperInvariant(), pathAndQuery, body), cancellationToken);
     }
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         || path.StartsWith("/api/task/", StringComparison.Ordinal);
 
-    private async Task<DesktopApiResponse> HandleNetworkAsync(string method, Uri requestUri, string body, CancellationToken cancellationToken)
+    private async Task<DesktopApiResponse> HandleNetworkAsync(string method, Uri requestUri, string body, string apiKey, CancellationToken cancellationToken)
     {
         try
         {
@@ -88,8 +92,8 @@ internal sealed class DesktopApi
                 if (!Regex.IsMatch(taskId, @"^[A-Za-z0-9._:-]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
                 return await ProxyApiAsync(HttpMethod.Get, "/v1/tasks/" + Uri.EscapeDataString(taskId), null, cancellationToken);
             }
-            if (method == "GET" && path == "/api/models") return await ProxyApiAsync(HttpMethod.Get, "/v1/models", null, cancellationToken);
-            if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/balance", null, cancellationToken);
+            if (method == "GET" && path == "/api/models") return await ProxyApiAsync(HttpMethod.Get, "/v1/models", null, cancellationToken, apiKey);
+            if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/balance", null, cancellationToken, apiKey);
             return Json(405, new { error = "请求方法不受支持" });
         }
         catch (Exception error)
@@ -99,7 +103,7 @@ internal sealed class DesktopApi
         }
     }
 
-    private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken)
+    private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken, string apiKey = "")
     {
         Exception? lastError = null;
         DesktopApiResponse? lastRetryableResponse = null;
@@ -108,7 +112,7 @@ internal sealed class DesktopApi
             try
             {
                 using var request = new HttpRequestMessage(method, baseUrl + apiPath);
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _getApiKey());
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", string.IsNullOrWhiteSpace(apiKey) ? _getApiKey() : apiKey.Trim());
                 if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
                 using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -160,6 +164,7 @@ internal sealed class DesktopApi
     private static async Task ValidatePublicHttpsUriAsync(Uri uri, CancellationToken cancellationToken)
     {
         if (uri.Scheme != Uri.UriSchemeHttps || uri.IsDefaultPort is false && uri.Port != 443) throw new InvalidDataException("只允许下载HTTPS图片");
+        if (TrustedImageHosts.Contains(uri.DnsSafeHost)) return;
         var addresses = await Dns.GetHostAddressesAsync(uri.DnsSafeHost, cancellationToken);
         if (addresses.Length == 0 || addresses.Any(IsPrivateAddress)) throw new InvalidDataException("图片地址指向本机或内网，已拒绝访问");
     }

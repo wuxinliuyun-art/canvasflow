@@ -8,7 +8,8 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=wuxinliuyun-art
 AppPublisherURL=https://github.com/wuxinliuyun-art/canvasflow
-DefaultDirName={localappdata}\Programs\CanvasFlow
+DefaultDirName={code:GetDefaultInstallDir}
+UsePreviousAppDir=yes
 DefaultGroupName=CanvasFlow
 OutputDir=..\dist-dotnet
 OutputBaseFilename=CanvasFlow-Setup
@@ -55,6 +56,15 @@ Type: filesandordirs; Name: "{app}\ru"
 Type: filesandordirs; Name: "{app}\tr"
 Type: filesandordirs; Name: "{app}\zh-Hans"
 Type: filesandordirs; Name: "{app}\zh-Hant"
+
+[Code]
+function GetDefaultInstallDir(Param: String): String;
+begin
+  if DirExists('D:\') then
+    Result := 'D:\CanvasFlow'
+  else
+    Result := ExpandConstant('{localappdata}\Programs\CanvasFlow');
+end;
 
 [Dirs]
 Name: "{app}\data"; Permissions: users-modify; Flags: uninsneveruninstall

@@ -10,9 +10,11 @@
     const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
     const url = new URL(rawUrl, location.href);
     if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/"))) {
+      const headers = new Headers(options.headers || {});
       const result = await desktop.apiRequest(url.pathname + url.search, {
         method: options.method || "GET",
         body: typeof options.body === "string" ? options.body : "",
+        apiKey: headers.get("X-CanvasFlow-Api-Key") || "",
       });
       return new Response(result.body || "", {
         status: Number(result.status) || 500,

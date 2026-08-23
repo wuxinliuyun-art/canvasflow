@@ -84,6 +84,7 @@ public partial class MainWindow : Window
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
           chooseOutputFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || "") }),
           chooseProjectFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || ""), purpose: "project" }),
+          chooseLibraryFile: currentPath => invoke("desktop:choose-library-file", { currentPath: String(currentPath || "") }, 60000),
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
@@ -92,7 +93,8 @@ public partial class MainWindow : Window
           apiRequest: (path, options = {}) => invoke("desktop:api", {
             path: String(path || ""),
             method: String(options.method || "GET"),
-            body: typeof options.body === "string" ? options.body : ""
+            body: typeof options.body === "string" ? options.body : "",
+            apiKey: String(options.apiKey || "")
           }, 120000),
           onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
           completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
@@ -306,6 +308,11 @@ public partial class MainWindow : Window
                         try { PostRpcResult(root, ChooseOutputFolder(root)); }
                         catch (Exception chooseError) { PostRpcResult(root, error: chooseError.Message); }
                     }
+                    else if (type.GetString() == "desktop:choose-library-file")
+                    {
+                        try { PostRpcResult(root, await ChooseLibraryFileAsync(root)); }
+                        catch (Exception chooseError) { PostRpcResult(root, error: chooseError.Message); }
+                    }
                     else if (type.GetString() == "desktop:open-output-folder")
                     {
                         try { PostRpcResult(root, OpenOutputFolder(root)); }
@@ -391,7 +398,8 @@ public partial class MainWindow : Window
                             var method = root.TryGetProperty("method", out var methodElement) ? methodElement.GetString() ?? "GET" : "GET";
                             var path = root.TryGetProperty("path", out var pathElement) ? pathElement.GetString() ?? "" : "";
                             var body = root.TryGetProperty("body", out var bodyElement) ? bodyElement.GetString() ?? "" : "";
-                            var response = await _desktopApi.HandleAsync(method, path, body, _shutdown.Token);
+                            var apiKey = root.TryGetProperty("apiKey", out var apiKeyElement) ? apiKeyElement.GetString() ?? "" : "";
+                            var response = await _desktopApi.HandleAsync(method, path, body, apiKey, _shutdown.Token);
                             PostRpcResult(root, new { status = response.Status, body = response.Body, contentType = response.ContentType });
                         }
                         catch (Exception apiError) { PostRpcResult(root, error: apiError.Message); }
@@ -646,6 +654,34 @@ public partial class MainWindow : Window
         var selectedPath = Path.GetFullPath(picker.FolderName);
         Log($"[生成文件夹] 用户已选择：{selectedPath}", false);
         return new { cancelled = false, path = selectedPath };
+    }
+
+    private async Task<object> ChooseLibraryFileAsync(JsonElement request)
+    {
+        var currentPath = request.TryGetProperty("currentPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "导入素材",
+            Filter = "CanvasFlow 文件 (*.cflow)|*.cflow|JSON 文件 (*.json)|*.json|CanvasFlow/JSON 文件|*.cflow;*.json",
+            Multiselect = false,
+            CheckFileExists = true
+        };
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            try
+            {
+                var fullCurrentPath = Path.GetFullPath(currentPath);
+                if (Directory.Exists(fullCurrentPath)) picker.InitialDirectory = fullCurrentPath;
+            }
+            catch (Exception error) { Log($"[素材导入] 忽略无效的初始路径：{error.Message}", true); }
+        }
+        if (picker.ShowDialog(this) != true) return new { cancelled = true };
+        var selectedPath = Path.GetFullPath(picker.FileName);
+        var info = new FileInfo(selectedPath);
+        if (info.Length > 180L * 1024 * 1024) throw new InvalidDataException("素材文件超过180MB限制");
+        var content = await File.ReadAllTextAsync(selectedPath, _shutdown.Token);
+        Log($"[素材导入] 已选择：{selectedPath}", false);
+        return new { cancelled = false, name = Path.GetFileName(selectedPath), content };
     }
 
     private object OpenOutputFolder(JsonElement request)
