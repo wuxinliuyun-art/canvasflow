@@ -85,6 +85,7 @@ public partial class MainWindow : Window
           chooseOutputFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || "") }),
           chooseProjectFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || ""), purpose: "project" }),
           chooseLibraryFile: currentPath => invoke("desktop:choose-library-file", { currentPath: String(currentPath || "") }, 60000),
+          chooseImageFile: currentPath => invoke("desktop:choose-image-file", { currentPath: String(currentPath || "") }, 60000),
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
@@ -311,6 +312,11 @@ public partial class MainWindow : Window
                     else if (type.GetString() == "desktop:choose-library-file")
                     {
                         try { PostRpcResult(root, await ChooseLibraryFileAsync(root)); }
+                        catch (Exception chooseError) { PostRpcResult(root, error: chooseError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:choose-image-file")
+                    {
+                        try { PostRpcResult(root, await ChooseImageFileAsync(root)); }
                         catch (Exception chooseError) { PostRpcResult(root, error: chooseError.Message); }
                     }
                     else if (type.GetString() == "desktop:open-output-folder")
@@ -682,6 +688,47 @@ public partial class MainWindow : Window
         var content = await File.ReadAllTextAsync(selectedPath, _shutdown.Token);
         Log($"[素材导入] 已选择：{selectedPath}", false);
         return new { cancelled = false, name = Path.GetFileName(selectedPath), content };
+    }
+
+    private async Task<object> ChooseImageFileAsync(JsonElement request)
+    {
+        var currentPath = request.TryGetProperty("currentPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择图片",
+            Filter = "图片文件 (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp",
+            Multiselect = false,
+            CheckFileExists = true
+        };
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            try
+            {
+                var fullCurrentPath = Path.GetFullPath(currentPath);
+                if (Directory.Exists(fullCurrentPath)) picker.InitialDirectory = fullCurrentPath;
+            }
+            catch (Exception error) { Log($"[自定义图片] 忽略无效的初始路径：{error.Message}", true); }
+        }
+        if (picker.ShowDialog(this) != true) return new { cancelled = true };
+        var selectedPath = Path.GetFullPath(picker.FileName);
+        var info = new FileInfo(selectedPath);
+        if (info.Length > 180L * 1024 * 1024) throw new InvalidDataException("图片文件超过180MB限制");
+        var bytes = await File.ReadAllBytesAsync(selectedPath, _shutdown.Token);
+        var mime = GetImageMime(selectedPath);
+        Log($"[自定义图片] 已选择：{selectedPath}", false);
+        return new { cancelled = false, name = info.Name, mime, size = info.Length, data = Convert.ToBase64String(bytes) };
+    }
+
+    private static string GetImageMime(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "image/jpeg",
+        };
     }
 
     private object OpenOutputFolder(JsonElement request)

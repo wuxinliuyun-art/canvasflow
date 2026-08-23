@@ -58,55 +58,7 @@
 - 解决：固定名称截图继续使用文件流与 `BitmapCacheOption.OnLoad` 强制读取新内容，但不得同时设置 `IgnoreImageCache`；预览加载必须通过异常隔离方法更新。
 - 避免：所有 WPF 图片预览统一使用“文件流 + OnLoad + Freeze”方式；预览失败只能清空当前图片并提示，不得将异常传播到桌面消息循环。
 
-## 架构决策
 
-- 用户手工保存统一使用 `.cflow`：项目文件内部标记 `type: "project"`，素材库备份标记 `type: "library"`。项目保存默认不包含全局素材库；用户勾选“同时备份素材库”时额外生成独立的 `CanvasFlow素材库.cflow`。旧 `.json` 只保留打开兼容，新保存不得继续生成项目 JSON。项目文件内置节点所需图片，确保跨设备迁移后可恢复；自动备份仍是内部恢复机制，不替代用户项目文件。
-
-- 图片放大插件已从界面、任务队列和桌面桥接中移除；旧项目的放大结果继续作为普通图片载入，历史 `upscaleSourceNodeId` 字段原样保留。升级和卸载均不得自动删除用户已有的 `data/plugins/image-upscale/`、工作目录或 `upscaled/` 结果。
-
-- 项目创建时固定为 `ai` 或 `mindmap` 模式；旧项目和缺少 `mode` 字段的 JSON 默认按 `ai` 载入，避免破坏既有工作流。
-- 思维导图第一版复用现有文字、图片、框选、连线、历史记录与项目持久化能力，新增独立的 `folder` 和 `mind-group` 节点；`mind-group.subgraph` 保存独立子画布，不能与 AI 模式的多任务 `group` 混用。
-- 思维导图关系线不显示箭头，可保存名称；编组通过双击进入子画布，并提供返回、解散、复制、删除和保存恢复闭环。
-- 思维导图作为可选功能模块保存在 `modules/mindmap-module.js`，正式界面默认关闭；关闭时不显示模式入口和已有思维导图项目，但必须原样保留其项目数据。后续需要恢复时只启用模块开关，不重新设计或迁移数据。
-
-- 桌面架构采用`.NET 10 WPF + WebView2`，保留现有HTML/CSS/JS画布；WPF通过`https://canvasflow.local/`虚拟主机加载本地界面，文件与联网接口由白名单桌面桥接处理，不启动Node、不监听本地端口。
-- .NET窗口不重复设置画布已有的顶部工具栏，也不常驻显示运行日志；启动状态使用临时覆盖层，详细日志写入`data/desktop.log`。
-- .NET页面必须在`app.js`执行前注入`window.canvasflowDesktop`桥接对象；不得依赖Electron preload判断WPF桌面模式。桌面项目状态写入`data/app-state.json`并带`updatedAt`，缺少时间戳的旧状态首次启动时由WebView2本地状态重建。
-- .NET桌面版API Key使用Windows DPAPI按当前用户加密到`data/secrets.json`；项目、历史记录、localStorage、自动备份和URL均不得保存API Key。
-- .NET窗口退出前必须通过桌面桥接等待页面状态与自动备份保存成功；保存失败时恢复窗口并阻止退出。
-- 页面不得向.NET提交任意绝对路径读取文件；WPF将导入原图按SHA-256内容哈希保存到`data/assets/originals/`，项目只保存约420px的WebP缩略图与`assetId`。AI提交、导出和便携JSON保存时才通过最小权限桥接读取原图，素材索引路径必须再次限制在`data/assets/`内。
-- .NET桌面版的图片文件夹上传不使用WebView2原生`webkitdirectory`确认框；由WPF选择目录、将受支持原图复制进素材仓库，并以只读`FileSystemDirectoryHandle`传给页面生成缩略图，再使用应用内、主题化、居中的确认弹窗。源文件夹之后可以移动或删除；浏览器源码模式保留`webkitdirectory`和完整图片数据作为兼容降级。
-- 旧项目中的Base64原图在.NET桌面版启动后逐张迁移到素材仓库；迁移前原状态保留备份，迁移完成后清空旧撤销快照以释放内存。新导入与新生成图片应在写入历史记录前完成外置，避免日常操作反复清空撤销历史。
-- .NET迁移期间前端统一通过`apiFetch`访问应用接口；桌面模式下项目状态、自动备份、素材库、JSON、图片和导出文件写入由白名单桌面桥接处理，浏览器源码模式继续回退到`server.js`。不得把任意文件路径或任意HTTP地址透传给本地文件接口。
-- 桌面与浏览器的接口适配集中在`canvas-runtime.js`；桌面端允许的本地接口必须同时在前端白名单和`DesktopApi`中显式实现。
-- 画布拖动、缩放、框选和连线预览采用`requestAnimationFrame`合并更新，只同步变换、节点几何、连线和小地图；不得在高频鼠标事件中重建全部节点DOM。
-- .NET窗口保留Windows原生标题栏和最小化、最大化、关闭行为；通过DWM按主题设置标题栏颜色，并与画布背景保持一档明度差，避免窗口边界融在画布中。系统不支持相关属性时允许自然降级。
-- .NET窗口关闭时先等待页面状态和自动备份确认成功，再隐藏窗口并结束当前宿主；桌面版不创建Node子进程，也不得恢复端口扫描、结束其他进程或Shell脚本启动逻辑。
-- .NET桌面版正式发布时使用EXE所在目录的`data/`、`download/`、`export/`；源码运行时使用项目根目录。Electron仅在`legacy/`保留为回退，不得擅自改变已有数据格式。
-
-- EXE由`.gitignore`排除；Windows分发文件使用.NET 10自包含publish目录，并由`installer/CanvasFlow.iss`生成`CanvasFlow-Setup.exe`。正式安装包包含.NET运行库，用户无需另行安装.NET。
-- GitHub Release 固定上传 `CanvasFlow-Setup.exe`，仅包含兼容界面变化时可额外上传 `CanvasFlow-Web.zip`；GitHub 自动生成的 Source code 条目无法关闭。
-- 界面热更新保存项目后下载到 `data/web-updates/` 暂存区，同时校验 GitHub digest、包内清单与逐文件 SHA-256，再原子切换 `active.json` 并重载 WebView；启动时活动版本无效则回退上一版，仍无效则使用安装包内置界面。不得通过热更新替换 EXE、DLL 或任意宿主文件。
-- 抠图模块、桌面桥接、工作进程和发布依赖已移除；旧抠图结果继续作为普通图片使用，不自动删除用户已有的 `data/plugins/background-removal/`、工作目录或生成结果。
-- 端口冲突时自动尝试后续端口，不得结束占用端口的其他进程。
-- 新安装且图文素材库完全为空时初始化“图片转线稿”和“多视角参考”两条默认文字；已有素材库不得覆盖或追加。
-- 2.4.x 及更早版本把用户数据存储在 `%USERPROFILE%\Documents\CanvasFlow\`；2.5.0 首次启动时只复制这些旧数据到新位置，旧目录继续保留为备份。
-- `config.json` 存储在数据目录中，保存应用级设置（如自动打开浏览器），不参与项目数据（localStorage）序列化。
-- 节点连线支持平滑贝塞尔曲线模式（`smoothEdges` 设置）。开启后 SVG 路径使用 `C` 三次贝塞尔曲线替代 L 形折线。设置存储在页面数据中，默认开启。
-- Electron实现仅作为迁移回退保留；当前桌面发行目标为.NET WPF，不再运行CMD，也不再通过PowerShell、`taskkill`、Node服务或额外进程启动。
-- 截图生成模组采用 .NET WPF 原生置顶窗口，截取固定屏幕矩形区域，不绑定软件窗口；区域按显示器边界、DPI 与相对比例保存，环境变化时必须重新框选。
-- 截图工具复用全局自定义文字、DPAPI API Key 和现有最多 5 并发的 AI 任务队列；结果只保存到 `export/ai_generated/`，第一版不自动创建画布节点。截图设置写入 `data/screenshot-settings.json`，最近截图写入 `data/screenshots/latest.png`。
-- 截图实现不得调用 PowerShell、CMD、系统截图命令、Electron或额外程序；关闭截图窗口只隐藏，主程序退出时再销毁。
-- Inno Setup采用当前用户安装；升级不得覆盖`data/`、`download/`、`export/`，卸载默认保留这三个目录，只清理可重新生成的`data/webview2`缓存。
- 
-- API Key不写入项目状态、浏览器持久化数据、自动备份或请求URL；.NET桌面版使用Windows DPAPI按当前用户加密到`data/secrets.json`。
-- AI 绘图请求通过以下 4 个代理地址依次尝试，第一个可用即停止，全不可用时报错：`api.apib.ai` → `api.aiuxu.com` → `api.aishuch.com` → `api.apimart.ai`。定义在 `server.js:95-100` 的 `API_BASE_URLS`。
-- AI 绘图统一进入全局任务队列，最多同时运行 5 个任务；只有尚未发送的等待任务允许暂停、恢复、删除和调整顺序。任务运行期间不允许切换、新建或删除项目，避免结果落入错误项目。
-- AI 与角度变化的用户输出统一写入配置导出根目录下的 `ai_generated/`，节点保存完整 `outputPath`；用于项目恢复的生成图片副本存放在 `data/assets/generated/`，上传和粘贴的输入素材继续存放在 `data/assets/originals/`。
-- 图片节点默认根据图片原始宽高比自动调整节点高度；可在常规设置中关闭，关闭后保留当前尺寸并允许手动调整。旧项目缺少该设置时按开启处理。
-- 节点名称支持在常规设置中统一隐藏；默认关闭，不删除节点类型、名称或项目数据。隐藏时文字节点保留正文，带预览的功能节点默认只显示预览；鼠标悬浮后必须在原节点内部向下展开完整操作区，不得使用脱离节点的浮动面板。后续功能节点的可折叠操作区统一使用 `.node-hover-controls`。
-- 画布不使用横贯窗口的顶部菜单条：项目入口固定为左上角独立长方形按钮；保存、导入、主题、快捷键和设置组成独立的右上角横向胶囊工具组；一键连接、批量执行和任务队列位于底部创建框右侧的横向胶囊工具组。设置和任务队列均为右侧栏，宽屏可并列（队列在左、设置在右），窄屏自动互斥。
-- 首次安装使用四步蒙版引导介绍项目入口、底部操作区、右上工具和 API Key 设置；完成状态使用应用级 `onboardingSeenVersion` 保存，不写入项目 JSON。已有应用状态缺少该字段时视为老用户，不强制弹出；设置“常规”页始终提供回看入口。
 
 ## 中长期规划 / TODO
 

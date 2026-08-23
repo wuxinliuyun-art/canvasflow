@@ -37,6 +37,13 @@ function resolvedExportFolderLabel(value) {
     ? runtimeExportFolder
     : label;
 }
+
+function resolvedProjectFolderLabel(value) {
+  const label = String(value || "").trim();
+  return !label || label === "projects" || label === "projects（项目文件夹）" || label === "projects (project folder)"
+    ? runtimeProjectFolder
+    : label;
+}
 const LANGUAGE_KEY = "webimage.language";
 const OUTPUT_FOLDER_KEY = "canvasflow.outputFolder.v1";
 const PROJECT_FOLDER_KEY = "canvasflow.projectFolder.v1";
@@ -307,6 +314,7 @@ let pendingLibraryImport = null;
 let editingTextTemplate = null;
 let editingVariableDefinitionId = "";
 let editingImageTemplate = null;
+let pendingCustomImage = null;
 let librarySaveQueue = Promise.resolve();
 let pendingFolderImport = null;
 let desktopAssetMigrationTimer = null;
@@ -638,7 +646,25 @@ function blankPage(name = "未命名", mode = "ai") {
       nextNode: 1,
       nextEdge: 1,
     },
+    _history: [],
+    _future: [],
   };
+}
+
+function savePageHistory() {
+  const page = currentPage();
+  if (page) { page._history = state.history; page._future = state.future; }
+}
+
+function loadPageHistory() {
+  const page = currentPage();
+  if (page && Array.isArray(page._history) && page._history.length) {
+    state.history = page._history;
+    state.future = Array.isArray(page._future) ? page._future : [];
+  } else {
+    state.history = [cloneData()];
+    state.future = [];
+  }
 }
 
 function cloneData() {
@@ -749,8 +775,7 @@ function undo() {
     state._deletedPage = null;
     state.activePageId = page.id;
     restoreData(page.data);
-    state.history = [cloneData()];
-    state.future = [];
+    loadPageHistory();
     persistPages();
     updateUndoRedo();
     render();
@@ -811,7 +836,7 @@ function syncSettingsPanel() {
   els.autoFitImageNodes.checked = state.settings.autoFitImageNodes !== false;
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
-  state.settings.projectFolderLabel = state.settings.projectFolderLabel || runtimeProjectFolder;
+  state.settings.projectFolderLabel = resolvedProjectFolderLabel(state.settings.projectFolderLabel) || runtimeProjectFolder;
   els.projectFolder.textContent = state.settings.projectFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
   syncCustomMaterialsList();
@@ -1015,6 +1040,10 @@ async function addCustomMaterial(source) {
   if (!name) { toast("请输入素材名称"); return; }
   var file = source?.file || els.customMaterialFileInput.files?.[0];
   var base64 = source?.data || "";
+  if (pendingCustomImage) {
+    base64 = pendingCustomImage.data || "";
+    file = null;
+  }
   const editingLoc = !source && editingImageTemplate ? templateLocation("image", editingImageTemplate.id) : null;
   if (editingImageTemplate && !source && !editingLoc) { closeImageTemplateEditor(); toast("保存失败：原图片素材不存在"); return false; }
   if (!file && !base64 && !editingLoc) { toast("请选择图片文件"); return; }
@@ -1027,11 +1056,12 @@ async function addCustomMaterial(source) {
   }
   const target = globalLibrary;
   if (!editingLoc) name = uniqueTemplateName("image", name, target);
-  console.log(`[自定义图片] ${editingLoc ? "替换" : "添加"}: 名称=${name}, 原始文件=${file?.name || source?.fileName || "节点图片"}, size=${file?.size || "base64"}`);
+  const srcName = source?.fileName || file?.name || pendingCustomImage?.name || "custom.png";
+  const srcMime = source?.mime || file?.type || pendingCustomImage?.mime || "image/png";
+  console.log(`[自定义图片] ${editingLoc ? "替换" : "添加"}: 名称=${name}, 原始文件=${srcName}, size=${file?.size || pendingCustomImage?.size || "base64"}`);
   if (!base64) base64 = await fileToBase64(file);
   try {
-    const originalName = source?.fileName || file?.name || "custom.png";
-    var resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: originalName, data: stripDataUrl(base64) }) });
+    var resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: srcName, data: stripDataUrl(base64) }) });
     var result = await resp.json();
     if (!result.success) { toast("保存失败: " + (result.error || "")); return; }
     console.log("[自定义素材] 服务端保存成功: fileName=" + result.fileName);
@@ -1040,7 +1070,7 @@ async function addCustomMaterial(source) {
       const oldFileName = item.fileName;
       item.name = name;
       item.fileName = result.fileName;
-      item.mime = source?.mime || file?.type || "image/png";
+      item.mime = srcMime;
       item.revision = (item.revision || 1) + 1;
       if (oldFileName && oldFileName !== result.fileName) {
         try {
@@ -1048,7 +1078,7 @@ async function addCustomMaterial(source) {
         } catch (cleanupError) { console.error("[自定义图片] 旧图片清理失败", cleanupError); }
       }
     } else {
-      target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: source?.mime || file?.type || "image/png", revision: 1 }));
+      target.imageMaterials.push(normalizeTemplate({ name, fileName: result.fileName, mime: srcMime, revision: 1 }));
     }
     closeImageTemplateEditor();
     persistLibraries();
@@ -1095,6 +1125,7 @@ function closeTextTemplateEditor() {
 
 function closeImageTemplateEditor() {
   editingImageTemplate = null;
+  pendingCustomImage = null;
   els.customMaterialName.value = "";
   els.customMaterialFileInput.value = "";
   els.customMaterialFileHint.textContent = "";
@@ -5165,9 +5196,7 @@ els.viewport.addEventListener("contextmenu", ev => {
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
       ]],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
-      ["拓展功能", [
-        ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
-      ]],
+      ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
       ["添加截图功能节点", () => addNode("screenshot-input", p.x, p.y)],
       ["节点对齐", () => tidyNodes()],
     );
@@ -5470,10 +5499,12 @@ els.viewport.addEventListener("drop", async ev => {
 
 function createNewPage(mode = "ai") {
   saveCurrentPage();
+  savePageHistory();
   resetGraphNavigation();
   const page = blankPage(`项目${state.nextPageNum++}`, mode);
   state.pages.push(page);
   state.activePageId = page.id;
+  state._deletedPage = null;
   restoreData(page.data);
   state.history = [cloneData()];
   state.future = [];
@@ -5513,6 +5544,7 @@ function deletePage(id) {
   const idx = state.pages.findIndex(p => p.id === id);
   if (idx === -1) return;
   saveCurrentPage();
+  savePageHistory();
   const removed = state.pages.splice(idx, 1)[0];
   state._deletedPage = { page: removed, index: idx };
   if (state.activePageId === id) {
@@ -5521,9 +5553,8 @@ function deletePage(id) {
     state.activePageId = (fallbackPages[Math.min(idx, fallbackPages.length - 1)] || fallbackPages[0]).id;
     const page = currentPage();
     if (page) restoreData(page.data);
+    loadPageHistory();
   }
-  state.history = [cloneData()];
-  state.future = [];
   updateUndoRedo();
   markDirty();
   render();
@@ -5539,12 +5570,13 @@ function switchPage(id) {
   const targetPage = state.pages.find(page => page.id === id);
   if (!targetPage || (targetPage.mode === "mindmap" && !mindmapFeatureEnabled())) return;
   saveCurrentPage();
+  savePageHistory();
   resetGraphNavigation();
   state.activePageId = id;
+  state._deletedPage = null;
   const page = currentPage();
   restoreData(page.data);
-  state.history = [cloneData()];
-  state.future = [];
+  loadPageHistory();
   updateUndoRedo();
 }
 
@@ -5576,7 +5608,11 @@ function renamePage() {
 
 function persistPages() {
   const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion }));
-  for (const page of snapshot.pages || []) if (page.data?.settings) page.data.settings.apiKey = "";
+  for (const page of snapshot.pages || []) {
+    if (page.data?.settings) page.data.settings.apiKey = "";
+    delete page._history;
+    delete page._future;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
@@ -5600,7 +5636,11 @@ async function persistDesktopStateNow() {
 
 function desktopStateSnapshot() {
   const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion, updatedAt: Date.now() }));
-  for (const page of snapshot.pages || []) if (page.data?.settings) page.data.settings.apiKey = "";
+  for (const page of snapshot.pages || []) {
+    if (page.data?.settings) page.data.settings.apiKey = "";
+    delete page._history;
+    delete page._future;
+  }
   return snapshot;
 }
 
@@ -5609,6 +5649,8 @@ function autoBackupContent() {
   const data = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, globalLibrary }));
   for (const page of data.pages || []) {
     if (page.data?.settings) page.data.settings.apiKey = "";
+    delete page._history;
+    delete page._future;
   }
   return JSON.stringify(data, null, 2);
 }
@@ -6668,7 +6710,26 @@ els.openProjectFolderBtn.onclick = async () => {
   }
 };
 
-els.customMaterialFileBtn.onclick = () => {
+els.customMaterialFileBtn.onclick = async () => {
+  if (desktop?.chooseImageFile) {
+    try {
+      const exportPath = state.settings.exportFolderLabel || runtimeExportFolder;
+      const result = await desktop.chooseImageFile(exportPath);
+      if (result?.cancelled || !result?.data) return;
+      pendingCustomImage = result;
+      if (els.customMaterialFileHint) {
+        els.customMaterialFileHint.textContent = result.name || "";
+      }
+      if (els.customMaterialEditorPreview) {
+        els.customMaterialEditorPreview.src = `data:${result.mime || "image/png"};base64,${result.data}`;
+        els.customMaterialEditorPreview.classList.remove("hidden");
+      }
+    } catch (error) {
+      console.error("[自定义图片] 选择图片失败", error);
+      toast(`选择图片失败：${error.message || "无法选择图片"}`);
+    }
+    return;
+  }
   els.customMaterialFileInput.click();
 };
 
@@ -6784,6 +6845,7 @@ els.loadJson.onchange = async () => {
   for (const page of state.pages) {
     if (page.id !== state.activePageId) await resolveImageRefs(page.data?.nodes || []);
   }
+  state._deletedPage = null;
   state.history = [cloneData()];
   state.future = [];
   updateUndoRedo();
@@ -6866,6 +6928,7 @@ async function saveJson() {
   try {
     saveCurrentPage();
     const project = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId }));
+    for (const page of project.pages || []) { delete page._history; delete page._future; }
     for (const page of project.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
     const payload = { canvasflowVersion: 1, type: "project", savedAt: new Date().toISOString(), project };
     const name = `${safeName(currentPage()?.name || "canvas")}.cflow`;
