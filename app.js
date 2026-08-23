@@ -171,6 +171,10 @@ const UI_EN = {
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
+  "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量组合节点。": "Define global variables and single-choice values for variable combination nodes.",
+  "＋ 新建变量": "+ New Variable", "变量名": "Variable Name", "可选值（每行一个）": "Choices (one per line)", "保存变量": "Save Variable",
+  "变量组合节点": "Variable Combination", "添加变量组合节点": "Add Variable Combination Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
+  "＋ 添加一行": "+ Add Row", "请先在设置 → 变量库中创建变量": "Create a variable in Settings → Variable Library first",
   "项目文件夹": "Project Folder", "修改位置": "Change Folder", "同时备份素材库": "Also back up the asset library",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
@@ -284,7 +288,7 @@ const state = {
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
   settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", zipExport: true, exportInputs: false, customMaterials: [] },
-  customLibrary: { textTemplates: [], imageMaterials: [] },
+  customLibrary: { textTemplates: [], imageMaterials: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
   nextPageNum: 1,
@@ -301,6 +305,7 @@ let onboardingSeenVersion = 0;
 let globalLibrary = loadGlobalLibrary();
 let pendingLibraryImport = null;
 let editingTextTemplate = null;
+let editingVariableDefinitionId = "";
 let editingImageTemplate = null;
 let librarySaveQueue = Promise.resolve();
 let pendingFolderImport = null;
@@ -333,15 +338,27 @@ function acquireAiApiSlot(label = "AI任务") {
   });
 }
 
-function emptyLibrary() { return { textTemplates: [], imageMaterials: [], builtinDefaultsInitialized: true }; }
+function emptyLibrary() { return { textTemplates: [], imageMaterials: [], variableDefinitions: [], builtinDefaultsInitialized: true }; }
 function normalizeLibrary(lib) {
   const source = lib || {};
   return {
     textTemplates: Array.isArray(source.textTemplates) ? source.textTemplates.map(normalizeTemplate) : [],
     imageMaterials: Array.isArray(source.imageMaterials) ? source.imageMaterials.map(normalizeTemplate) : [],
+    variableDefinitions: Array.isArray(source.variableDefinitions) ? source.variableDefinitions.map(normalizeVariableDefinition) : [],
     // A missing marker means this is an existing pre-marker library. Never append defaults to it.
     builtinDefaultsInitialized: source.builtinDefaultsInitialized !== false,
   };
+}
+function normalizeVariableDefinition(item) {
+  const value = { ...(item || {}) };
+  value.id = value.id || uid("var");
+  value.name = String(value.name || "未命名变量").trim();
+  value.options = Array.isArray(value.options) ? value.options.map(option => ({
+    id: option?.id || uid("opt"),
+    label: String(option?.label ?? option ?? "").trim(),
+  })).filter(option => option.label) : [];
+  value.revision = Math.max(1, Number(value.revision) || 1);
+  return value;
 }
 function normalizeTemplate(item, idx) {
   const value = { ...(item || {}) };
@@ -355,7 +372,7 @@ function loadGlobalLibrary() {
   try {
     const stored = localStorage.getItem(GLOBAL_LIBRARY_KEY);
     return stored === null
-      ? { textTemplates: [], imageMaterials: [], builtinDefaultsInitialized: false }
+      ? { textTemplates: [], imageMaterials: [], variableDefinitions: [], builtinDefaultsInitialized: false }
       : normalizeLibrary(JSON.parse(stored));
   }
   catch (e) { console.error("[加载] 全局素材库读取失败", e); return emptyLibrary(); }
@@ -375,6 +392,9 @@ async function loadGlobalLibraryFromDisk() {
         globalLibrary[key].push(item); migrated++;
       }
     }
+    for (const item of browserLibrary.variableDefinitions) {
+      if (!globalLibrary.variableDefinitions.some(existing => existing.id === item.id)) globalLibrary.variableDefinitions.push(item);
+    }
     const shouldInitializeDefaults = globalLibrary.builtinDefaultsInitialized === false
       && browserLibrary.builtinDefaultsInitialized === false
       && !globalLibrary.textTemplates.length
@@ -385,7 +405,7 @@ async function loadGlobalLibraryFromDisk() {
     }
     // Persist immediately after the first decision, including an intentionally empty library.
     globalLibrary.builtinDefaultsInitialized = true;
-    console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}`);
+    console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}，变量=${globalLibrary.variableDefinitions.length}`);
     if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
     saveGlobalLibrary();
   } catch (e) {
@@ -529,6 +549,13 @@ const els = {
   customImageEditor: $("customImageEditor"),
   newCustomTextBtn: $("newCustomTextBtn"),
   newCustomImageBtn: $("newCustomImageBtn"),
+  variableDefinitionsList: $("variableDefinitionsList"),
+  variableDefinitionEditor: $("variableDefinitionEditor"),
+  variableDefinitionName: $("variableDefinitionName"),
+  variableDefinitionOptions: $("variableDefinitionOptions"),
+  newVariableDefinitionBtn: $("newVariableDefinitionBtn"),
+  variableDefinitionSaveBtn: $("variableDefinitionSaveBtn"),
+  variableDefinitionCancelBtn: $("variableDefinitionCancelBtn"),
   customTextCancelBtn: $("customTextCancelBtn"),
   customImageCancelBtn: $("customImageCancelBtn"),
   shortcutHelpBtn: $("shortcutHelpBtn"),
@@ -606,7 +633,7 @@ function blankPage(name = "未命名", mode = "ai") {
       nodes: [],
       edges: [],
       settings: { ...state.settings },
-      customLibrary: { textTemplates: [], imageMaterials: [] },
+      customLibrary: { textTemplates: [], imageMaterials: [], variableDefinitions: [] },
       view: { x: 120, y: 90, scale: 1 },
       nextNode: 1,
       nextEdge: 1,
@@ -672,6 +699,7 @@ function restoreData(data) {
   state.customLibrary = emptyLibrary();
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
   walkNodes(state.nodes, node => normalizeAiNodeSettings(node, legacyAiSettings));
+  walkNodes(state.nodes, node => { if (node.type === "variable") normalizeVariableNode(node); });
   walkNodes(state.nodes, node => {
     if (node.type !== "ai-image" && node.type !== "angle-image") return;
     const hasLiveQueueTask = aiTaskQueue.items.some(task => task.nodeId === node.id && task.runId === node._queueRunId && !queueTaskIsSettled(task));
@@ -784,9 +812,72 @@ function syncSettingsPanel() {
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
   state.settings.projectFolderLabel = state.settings.projectFolderLabel || runtimeProjectFolder;
-  els.projectFolder.value = state.settings.projectFolderLabel;
+  els.projectFolder.textContent = state.settings.projectFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
   syncCustomMaterialsList();
+  renderVariableDefinitions();
+}
+
+function variableDefinitionById(id) {
+  return globalLibrary.variableDefinitions.find(item => item.id === id) || null;
+}
+
+function renderVariableDefinitions() {
+  if (!els.variableDefinitionsList) return;
+  const items = globalLibrary.variableDefinitions;
+  els.variableDefinitionsList.innerHTML = items.length ? items.map((item, index) => `<div class="variable-definition-item" data-id="${escHtml(item.id)}">
+    <div><strong>${escHtml(item.name)}</strong><p>${escHtml(item.options.map(option => option.label).join("、") || "暂无可选值")}</p></div>
+    <div class="variable-definition-actions"><button data-variable-action="up" ${index === 0 ? "disabled" : ""} title="上移">↑</button><button data-variable-action="down" ${index === items.length - 1 ? "disabled" : ""} title="下移">↓</button><button data-variable-action="edit" title="编辑">✎</button><button data-variable-action="delete" title="删除">×</button></div>
+  </div>`).join("") : '<div class="setting-desc variable-definition-empty">还没有变量，请创建一个全局变量。</div>';
+}
+
+function openVariableDefinitionEditor(id = "") {
+  editingVariableDefinitionId = id;
+  const item = id ? variableDefinitionById(id) : null;
+  els.variableDefinitionName.value = item?.name || "";
+  els.variableDefinitionOptions.value = item?.options.map(option => option.label).join("\n") || "";
+  els.variableDefinitionSaveBtn.textContent = item ? "保存修改" : "保存变量";
+  els.variableDefinitionEditor.classList.remove("hidden");
+  els.variableDefinitionName.focus();
+}
+
+function closeVariableDefinitionEditor() {
+  editingVariableDefinitionId = "";
+  els.variableDefinitionEditor.classList.add("hidden");
+  els.variableDefinitionName.value = "";
+  els.variableDefinitionOptions.value = "";
+}
+
+function saveVariableDefinition() {
+  const name = els.variableDefinitionName.value.trim();
+  const labels = els.variableDefinitionOptions.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+  if (!name) return toast("请输入变量名");
+  if (!labels.length) return toast("请至少输入一个可选值");
+  const folded = labels.map(value => value.toLocaleLowerCase());
+  if (new Set(folded).size !== folded.length) return toast("同一变量内的可选值不能重名");
+  if (globalLibrary.variableDefinitions.some(item => item.id !== editingVariableDefinitionId && item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) return toast("变量名不能重复");
+  const existing = variableDefinitionById(editingVariableDefinitionId);
+  if (existing) {
+    const oldByLabel = new Map(existing.options.map(option => [option.label.toLocaleLowerCase(), option]));
+    const usedOptionIds = new Set();
+    existing.name = name;
+    existing.options = labels.map((label, index) => {
+      const exact = oldByLabel.get(label.toLocaleLowerCase());
+      const positional = existing.options[index];
+      const option = exact || (positional && !usedOptionIds.has(positional.id) ? positional : null) || { id: uid("opt"), label };
+      usedOptionIds.add(option.id);
+      return option;
+    });
+    existing.options.forEach((option, index) => { option.label = labels[index]; });
+    existing.revision = (existing.revision || 1) + 1;
+  } else {
+    globalLibrary.variableDefinitions.push(normalizeVariableDefinition({ name, options: labels.map(label => ({ id: uid("opt"), label })) }));
+  }
+  persistLibraries();
+  closeVariableDefinitionEditor();
+  renderVariableDefinitions();
+  render();
+  toast(existing ? "变量已更新" : "变量已创建");
 }
 
 function syncCustomMaterialsList() {
@@ -1030,10 +1121,11 @@ function renderLibraryImportItems() {
   const rows = [];
   for (const item of source.library.textTemplates || []) rows.push({ kind: "text", item });
   for (const item of source.library.imageMaterials || []) rows.push({ kind: "image", item });
+  for (const item of source.library.variableDefinitions || []) rows.push({ kind: "variable", item });
   els.libraryImportItems.innerHTML = rows.length ? rows.map(row => `<label class="library-import-item">
     <input type="checkbox" class="library-import-check" data-kind="${row.kind}" data-id="${escHtml(row.item.id)}" checked>
-    <span>${row.kind === "text" ? "文字" : "图片"}：${escHtml(row.item.name)}</span>
-  </label>`).join("") : '<div class="setting-desc">没有可导入的自定义图文素材</div>';
+    <span>${row.kind === "text" ? "文字" : row.kind === "image" ? "图片" : "变量"}：${escHtml(row.item.name)}</span>
+  </label>`).join("") : '<div class="setting-desc">没有可导入的图文或变量</div>';
 }
 
 async function confirmLibraryImport() {
@@ -1041,14 +1133,21 @@ async function confirmLibraryImport() {
   const selected = Array.from(els.libraryImportItems.querySelectorAll(".library-import-check:checked"));
   if (!selected.length) return toast("请至少勾选一个素材");
   els.libraryImportConfirmBtn.disabled = true;
-  let textCount = 0, imageCount = 0, failed = 0;
+  let textCount = 0, imageCount = 0, variableCount = 0, failed = 0;
   for (const checkbox of selected) {
     const kind = checkbox.dataset.kind;
-    const key = kind === "text" ? "textTemplates" : "imageMaterials";
+    const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "variableDefinitions";
     const item = source.library[key].find(x => x.id === checkbox.dataset.id); if (!item) continue;
     try {
       if (kind === "text") { if (addCustomText({ ...item })) textCount++; else failed++; }
-      else {
+      else if (kind === "variable") {
+        const copy = normalizeVariableDefinition(JSON.parse(JSON.stringify(item)));
+        if (globalLibrary.variableDefinitions.some(existing => existing.id === copy.id)) copy.id = uid("var");
+        let desiredName = copy.name, suffix = 2;
+        while (globalLibrary.variableDefinitions.some(existing => existing.name.toLocaleLowerCase() === desiredName.toLocaleLowerCase())) desiredName = `${copy.name} (${suffix++})`;
+        copy.name = desiredName;
+        globalLibrary.variableDefinitions.push(copy); variableCount++;
+      } else {
         let data = item.data || "";
         if (!data && item.fileName) {
           const resp = await fetch("/download/images/" + encodeURIComponent(item.fileName));
@@ -1059,9 +1158,10 @@ async function confirmLibraryImport() {
       }
     } catch (e) { failed++; console.error("[导入] 素材导入失败", item.name, e); }
   }
+  if (variableCount) { persistLibraries(); renderVariableDefinitions(); }
   els.libraryImportConfirmBtn.disabled = false; closeLibraryImport();
-  console.log(`[导入] 文字=${textCount}, 图片=${imageCount}, 失败=${failed}`);
-  toast(`导入完成：文字 ${textCount}，图片 ${imageCount}${failed ? `，失败 ${failed}` : ""}`);
+  console.log(`[导入] 文字=${textCount}, 图片=${imageCount}, 变量=${variableCount}, 失败=${failed}`);
+  toast(`导入完成：文字 ${textCount}，图片 ${imageCount}，变量 ${variableCount}${failed ? `，失败 ${failed}` : ""}`);
 }
 
 function fileToBase64(file) {
@@ -1228,6 +1328,27 @@ function nextScreenshotNodeSequence() {
   return state.nodes.reduce((max, node) => node.type === "screenshot-input" ? Math.max(max, Number(node.screenshotSeq) || 0) : max, 0) + 1;
 }
 
+function normalizeVariableNode(node) {
+  node.w = Math.max(420, Number(node.w) || 420);
+  if (!Array.isArray(node.variableRows) || !node.variableRows.length) node.variableRows = [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }];
+  node.variableRows = node.variableRows.map(row => ({
+    id: row?.id || uid("vrow"), definitionId: String(row?.definitionId || ""), optionId: String(row?.optionId || ""),
+    variableNameSnapshot: String(row?.variableNameSnapshot || ""), valueLabelSnapshot: String(row?.valueLabelSnapshot || ""),
+  }));
+  return node;
+}
+
+function resolvedVariableRow(row) {
+  const definition = variableDefinitionById(row.definitionId);
+  const option = definition?.options.find(item => item.id === row.optionId) || null;
+  return { definition, option, variableName: definition?.name || row.variableNameSnapshot || "", valueLabel: option?.label || row.valueLabelSnapshot || "", invalid: !!(row.definitionId && (!definition || (row.optionId && !option))) };
+}
+
+function variableNodeOutput(node) {
+  normalizeVariableNode(node);
+  return node.variableRows.map(resolvedVariableRow).filter(row => row.variableName && row.valueLabel).map(row => `${row.valueLabel}${row.variableName}`).join("，");
+}
+
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const width = NODE_WIDTH;
   const height = nodeHeightForType(type);
@@ -1267,6 +1388,7 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     label: type === "mind-group" ? "编组" : "",
     seq: 0,
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
+    variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
   };
   state.nodes.push(node);
   state.selected = new Set([node.id]);
@@ -2020,6 +2142,10 @@ function collectUpstreamForAI(nodeId, incoming) {
     }
     if (n.disabled) return;
     if (n.type === "text" && n.text && n.text.trim()) result.texts.push(n.text.trim());
+    if (n.type === "variable") {
+      const output = variableNodeOutput(n);
+      if (output) result.texts.push(output);
+    }
     if (n.type === "image" && n.image) {
       const ref = { image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x };
       result.images.push(ref);
@@ -2087,6 +2213,9 @@ function directScreenshotNodeInputs(nodeId) {
     const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
     if (node.type === "text" && String(node.text || "").trim()) {
       textEntries.push({ text: node.text.trim(), ...order });
+    } else if (node.type === "variable") {
+      const output = variableNodeOutput(node);
+      if (output) textEntries.push({ text: output, ...order });
     } else if (node.type === "image" && (node.image || node.imageAssetId)) {
       imageEntries.push({ image: node.image || "", assetId: node.imageAssetId || "", fileName: node.fileName || "参考图.png", mime: node.mime || "image/png", ...order });
     } else if (node.type === "group" || node.type === "folder") {
@@ -3219,7 +3348,8 @@ function renderNodes(options = {}) {
   for (const node of state.nodes) {
     const div = document.createElement("div");
     const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
-    div.className = `node ${node.type} ${progressClass} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""}`;
+    const variableInvalid = node.type === "variable" && (normalizeVariableNode(node), node.variableRows.some(row => resolvedVariableRow(row).invalid));
+    div.className = `node ${node.type} ${progressClass} ${variableInvalid ? "variable-invalid" : ""} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""}`;
     div.dataset.id = node.id;
     div.draggable = false;
     div.style.left = `${node.x}px`;
@@ -3281,12 +3411,28 @@ function syncSelectedNodeClasses() {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量组合节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = (node.type === "output" || node.type === "screenshot-input") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
     body = `<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
+  } else if (node.type === "variable") {
+    normalizeVariableNode(node);
+    if (!globalLibrary.variableDefinitions.length && !node.variableRows.some(row => row.variableNameSnapshot)) {
+      body = `<div class="variable-node-empty">请先在设置 → 变量库中创建变量</div><button data-role="variable-add-row" class="variable-add-row" type="button">＋ 添加一行</button>`;
+    } else {
+      const definitionOptions = globalLibrary.variableDefinitions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+      const rows = node.variableRows.map(row => {
+        const resolved = resolvedVariableRow(row);
+        const missingDefinition = row.definitionId && !resolved.definition ? `<option value="${escapeHtml(row.definitionId)}" selected>已失效：${escapeHtml(row.variableNameSnapshot || "未知变量")}</option>` : "";
+        const options = resolved.definition?.options.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === row.optionId ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("") || "";
+        const missingOption = row.optionId && !resolved.option ? `<option value="${escapeHtml(row.optionId)}" selected>已失效：${escapeHtml(row.valueLabelSnapshot || "未知值")}</option>` : "";
+        return `<div class="variable-node-row ${resolved.invalid ? "is-invalid" : ""}" data-row-id="${escapeHtml(row.id)}"><button class="variable-row-drag" data-role="variable-row-drag" type="button" title="拖动排序" aria-label="拖动排序">⋮⋮</button><span class="variable-select-wrap"><select data-role="variable-definition" aria-label="变量"><option value="">选择变量</option>${missingDefinition}${definitionOptions.replace(`value="${escapeHtml(row.definitionId)}"`, `value="${escapeHtml(row.definitionId)}" selected`)}</select><span class="variable-select-chevron" aria-hidden="true">⌄</span></span><span class="variable-select-wrap"><select data-role="variable-option" aria-label="变量值" ${resolved.definition ? "" : "disabled"}><option value="">选择值</option>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true">⌄</span></span><button class="variable-row-remove" data-role="variable-remove-row" type="button" title="删除该行" aria-label="删除该行">×</button></div>`;
+      }).join("");
+      const output = variableNodeOutput(node);
+      body = `<div class="variable-node-rows">${rows}</div><div class="variable-node-add-wrap"><button data-role="variable-add-row" class="variable-add-row" type="button">＋</button></div><div class="variable-node-output">${escapeHtml(output || "暂无组合数据")}</div>`;
+    }
   } else if (node.type === "mind-group") {
     const count = node.subgraph?.nodes?.length || 0;
     body = `<div class="mind-group-icon" title="双击进入编组"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="9" y="14" width="6" height="6" rx="1.5"/><path d="M7 10v2h10v-2M12 12v2"/></svg></div><div class="mind-group-summary">${count} 个节点 · 双击进入</div>`;
@@ -3357,7 +3503,10 @@ function nodeTemplate(node) {
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
-  return `${inPort}${outPort}<div class="node-head"><span>${title}</span></div><div class="node-body">${body}</div>`;
+  const head = node.type === "variable"
+    ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量组合</span><span class="variable-node-more" aria-hidden="true">⋮</span></div>`
+    : `<div class="node-head"><span>${title}</span></div>`;
+  return `${inPort}${outPort}${head}<div class="node-body">${body}</div>`;
 }
 
 function escapeHtml(s) {
@@ -3587,10 +3736,10 @@ function autoAddAiNodes() {
 
 function connectSelectionInSequence() {
   const selectedSources = state.nodes
-    .filter(n => state.selected.has(n.id) && (isMindmapMode() || (!n.disabled && (n.type === "text" || n.type === "image" || n.type === "ai-image"))));
+    .filter(n => state.selected.has(n.id) && (isMindmapMode() || (!n.disabled && (n.type === "text" || n.type === "variable" || n.type === "image" || n.type === "ai-image"))));
   const byCanvasOrder = (a, b) => a.x - b.x || a.y - b.y || a.created - b.created;
   const sources = selectedSources.sort(byCanvasOrder);
-  if (sources.length < 2) return toast(isMindmapMode() ? "请至少选择 2 个节点" : "请至少选择 2 个文字、图片或 AI 绘图节点");
+  if (sources.length < 2) return toast(isMindmapMode() ? "请至少选择 2 个节点" : "请至少选择 2 个文字、变量、图片或 AI 绘图节点");
 
   const selectedIds = new Set(sources.map(n => n.id));
   const desiredPairs = new Set();
@@ -3881,6 +4030,26 @@ els.nodes.addEventListener("change", ev => {
   const role = ev.target.dataset.role;
   if (role === "text") pushHistory();
   if (!node) return;
+  if (node.type === "variable") {
+    const rowElement = ev.target.closest(".variable-node-row");
+    const row = node.variableRows?.find(item => item.id === rowElement?.dataset.rowId);
+    if (!row) return;
+    if (role === "variable-definition") {
+      const definition = variableDefinitionById(ev.target.value);
+      row.definitionId = definition?.id || "";
+      row.variableNameSnapshot = definition?.name || "";
+      row.optionId = "";
+      row.valueLabelSnapshot = "";
+    } else if (role === "variable-option") {
+      const definition = variableDefinitionById(row.definitionId);
+      const option = definition?.options.find(item => item.id === ev.target.value);
+      row.optionId = option?.id || "";
+      row.valueLabelSnapshot = option?.label || "";
+      row.variableNameSnapshot = definition?.name || row.variableNameSnapshot;
+    } else return;
+    pushHistory(); render();
+    return;
+  }
   if (node.type === "screenshot-input") {
     if (role === "screenshot-model") node._model = ev.target.value;
     else if (role === "screenshot-resolution") node._resolution = ev.target.value;
@@ -3916,11 +4085,25 @@ els.nodes.addEventListener("click", ev => {
   const nodeEl = ev.target.closest(".node");
   if (!nodeEl) return;
   const node = findNode(nodeEl.dataset.id);
+  const action = ev.target.closest("[data-role]");
+  const actionRole = action?.dataset.role;
   if (ev.target.dataset.role === "upload") uploadImage(node);
   if (ev.target.dataset.role === "upload-group") uploadGroupImages(node);
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
+  if (actionRole === "variable-add-row") {
+    normalizeVariableNode(node);
+    node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
+    pushHistory(); render();
+  }
+  if (actionRole === "variable-remove-row") {
+    normalizeVariableNode(node);
+    const rowId = action.closest(".variable-node-row")?.dataset.rowId;
+    node.variableRows = node.variableRows.filter(row => row.id !== rowId);
+    if (!node.variableRows.length) node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
+    pushHistory(); render();
+  }
   if (ev.target.dataset.role === "clear-image") {
     node.outputPath = "";
     if (node.type === "ai-image" || node.type === "angle-image") {
@@ -4966,6 +5149,7 @@ els.viewport.addEventListener("contextmenu", ev => {
     }
     items.push(
       ["添加文字节点", () => addNode("text", p.x, p.y)],
+      ["添加变量组合节点", () => addNode("variable", p.x, p.y)],
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
@@ -5200,6 +5384,15 @@ function clearImageDragState() {
 }
 
 els.nodes.addEventListener("dragstart", ev => {
+  const variableRow = ev.target.closest(".variable-node-row");
+  if (variableRow?.draggable) {
+    const nodeId = variableRow.closest(".node")?.dataset.id || "";
+    ev.dataTransfer.effectAllowed = "move";
+    ev.dataTransfer.setData("application/x-canvasflow-variable-row", JSON.stringify({ nodeId, rowId: variableRow.dataset.rowId }));
+    variableRow.classList.add("is-dragging");
+    ev.stopPropagation();
+    return;
+  }
   const nodeEl = ev.target.closest(".node");
   if (!nodeEl) return;
   if (ev.dataTransfer) ev.dataTransfer.setData("application/x-canvasflow-internal-image", "1");
@@ -5207,6 +5400,41 @@ els.nodes.addEventListener("dragstart", ev => {
   ev.stopPropagation();
   clearImageDragState();
   console.info("[节点拖动] 已阻止浏览器原生拖放", { nodeId: nodeEl.dataset.id, source: ev.target.tagName });
+});
+
+els.nodes.addEventListener("pointerdown", ev => {
+  if (ev.target.dataset.role === "variable-row-drag") ev.target.closest(".variable-node-row").draggable = true;
+});
+
+els.nodes.addEventListener("dragend", ev => {
+  const row = ev.target.closest(".variable-node-row");
+  if (!row) return;
+  row.draggable = false;
+  row.classList.remove("is-dragging");
+});
+
+els.nodes.addEventListener("dragover", ev => {
+  if (!Array.from(ev.dataTransfer?.types || []).includes("application/x-canvasflow-variable-row")) return;
+  if (!ev.target.closest(".variable-node-row")) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = "move";
+});
+
+els.nodes.addEventListener("drop", ev => {
+  const raw = ev.dataTransfer?.getData("application/x-canvasflow-variable-row");
+  const target = ev.target.closest(".variable-node-row");
+  if (!raw || !target) return;
+  ev.preventDefault(); ev.stopPropagation();
+  let payload;
+  try { payload = JSON.parse(raw); } catch { return; }
+  const node = findNode(payload.nodeId);
+  if (!node || node.type !== "variable" || target.closest(".node")?.dataset.id !== node.id) return;
+  const from = node.variableRows.findIndex(row => row.id === payload.rowId);
+  const to = node.variableRows.findIndex(row => row.id === target.dataset.rowId);
+  if (from < 0 || to < 0 || from === to) return;
+  const [moved] = node.variableRows.splice(from, 1);
+  node.variableRows.splice(to, 0, moved);
+  pushHistory(); render();
 });
 
 els.viewport.addEventListener("dragenter", ev => {
@@ -6442,12 +6670,12 @@ els.copyProjectPathBtn.onclick = copyProjectPath;
 els.chooseProjectFolderBtn.onclick = async () => {
   if (!desktop?.chooseProjectFolder) return toast("修改项目文件夹仅支持 .NET 桌面版");
   try {
-    const result = await desktop.chooseProjectFolder(els.projectFolder.value.trim());
+    const result = await desktop.chooseProjectFolder(els.projectFolder.textContent.trim());
     if (result?.cancelled || !result?.path) return;
     const selectedPath = String(result.path).trim();
     runtimeProjectFolder = selectedPath;
     state.settings.projectFolderLabel = selectedPath;
-    els.projectFolder.value = selectedPath;
+    els.projectFolder.textContent = selectedPath;
     try { localStorage.setItem(PROJECT_FOLDER_KEY, selectedPath); } catch (_) { /* 桌面状态仍会保存 */ }
     for (const page of state.pages) {
       if (page?.data?.settings) page.data.settings.projectFolderLabel = selectedPath;
@@ -6462,7 +6690,7 @@ els.chooseProjectFolderBtn.onclick = async () => {
   }
 };
 els.openProjectFolderBtn.onclick = async () => {
-  const folderPath = els.projectFolder.value.trim();
+  const folderPath = els.projectFolder.textContent.trim();
   if (!folderPath) return toast("项目文件夹路径为空，请先修改位置");
   if (!desktop?.openOutputFolder) return toast("打开项目文件夹仅支持 .NET 桌面版");
   try {
@@ -6497,6 +6725,27 @@ els.customMaterialFileInput.onchange = async function() {
 
 els.customMaterialAddBtn.onclick = () => addCustomMaterial();
 els.customTextAddBtn.onclick = () => addCustomText();
+els.newVariableDefinitionBtn.onclick = () => openVariableDefinitionEditor();
+els.variableDefinitionCancelBtn.onclick = closeVariableDefinitionEditor;
+els.variableDefinitionSaveBtn.onclick = saveVariableDefinition;
+els.variableDefinitionsList.onclick = event => {
+  const row = event.target.closest(".variable-definition-item");
+  if (!row) return;
+  const index = globalLibrary.variableDefinitions.findIndex(item => item.id === row.dataset.id);
+  if (index < 0) return;
+  const action = event.target.dataset.variableAction;
+  if (action === "edit") return openVariableDefinitionEditor(row.dataset.id);
+  if (action === "delete") {
+    const item = globalLibrary.variableDefinitions[index];
+    if (!confirm(`删除变量“${item.name}”？已有节点会保留快照并标记为失效。`)) return;
+    globalLibrary.variableDefinitions.splice(index, 1);
+  } else if (action === "up" && index > 0) {
+    [globalLibrary.variableDefinitions[index - 1], globalLibrary.variableDefinitions[index]] = [globalLibrary.variableDefinitions[index], globalLibrary.variableDefinitions[index - 1]];
+  } else if (action === "down" && index < globalLibrary.variableDefinitions.length - 1) {
+    [globalLibrary.variableDefinitions[index + 1], globalLibrary.variableDefinitions[index]] = [globalLibrary.variableDefinitions[index], globalLibrary.variableDefinitions[index + 1]];
+  } else return;
+  persistLibraries(); renderVariableDefinitions(); render();
+};
 async function importLibraryFile(name, content) {
   try {
     const parsed = JSON.parse(content);
@@ -6504,8 +6753,8 @@ async function importLibraryFile(name, content) {
     const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: name.replace(/\.(?:cflow|json)$/i, ""), data }];
     const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary) }));
     const importedGlobalLibrary = normalizeLibrary(data.globalLibrary);
-    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
-    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length)) return toast("该文件中没有可导入的自定义图文");
+    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length || importedGlobalLibrary.variableDefinitions.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
+    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length || source.library.variableDefinitions.length)) return toast("该文件中没有可导入的图文或变量");
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
 }
@@ -6704,6 +6953,7 @@ async function restoreLibrariesFromJson(data) {
     }
     importedGlobal.textTemplates.push(...library.textTemplates);
     importedGlobal.imageMaterials.push(...library.imageMaterials);
+    importedGlobal.variableDefinitions.push(...library.variableDefinitions);
     if (page.data) {
       page.data.customLibrary = emptyLibrary();
       walkNodes(page.data.nodes || [], node => { if (node.customRef) delete node.customRef; });
@@ -6725,11 +6975,19 @@ async function restoreLibrariesFromJson(data) {
       item.name = uniqueTemplateName("image", item.name, globalLibrary); delete item.data; globalLibrary.imageMaterials.push(item);
     } catch (e) { console.error("[加载] 全局自定义图片恢复失败", item.name, e); }
   }
+  for (const item of importedGlobal.variableDefinitions) {
+    if (globalLibrary.variableDefinitions.some(existing => existing.id === item.id)) continue;
+    const copy = normalizeVariableDefinition(item);
+    let desiredName = copy.name, suffix = 2;
+    while (globalLibrary.variableDefinitions.some(existing => existing.name.toLocaleLowerCase() === desiredName.toLocaleLowerCase())) desiredName = `${copy.name} (${suffix++})`;
+    copy.name = desiredName;
+    globalLibrary.variableDefinitions.push(copy);
+  }
   saveGlobalLibrary();
 }
 
 async function copyProjectPath() {
-  const folderPath = els.projectFolder.value.trim();
+  const folderPath = els.projectFolder.textContent.trim();
   if (!folderPath) {
     toast("请先设置项目文件夹路径");
     return false;
@@ -6738,16 +6996,12 @@ async function copyProjectPath() {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(folderPath);
     } else {
-      els.projectFolder.focus();
-      els.projectFolder.select();
       if (!document.execCommand("copy")) throw new Error("copy command failed");
     }
     toast(`已复制项目路径：${folderPath}`);
     return true;
   } catch (err) {
     console.error("[项目文件夹] 复制路径失败", err);
-    els.projectFolder.focus();
-    els.projectFolder.select();
     toast("无法自动复制路径：可能是浏览器权限受限；已为你选中完整路径，请按 Ctrl+C 复制");
     return false;
   }

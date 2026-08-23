@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260812-onboarding-v3">
+  <link rel="stylesheet" href="styles.css?v=20260823-variable-node">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -99,10 +99,10 @@
       <div class="settings-layout">
         <nav class="settings-side-nav" aria-label="设置分类">
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
-          <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
           <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
-          <button class="settings-tab-btn" data-tab="plugins"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v4M16 3v4M5 7h14v4a7 7 0 0 1-7 7 7 7 0 0 1-7-7V7zM12 18v3"/></svg></span><span>插件</span></button>
+          <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
+          <button class="settings-tab-btn" data-tab="variables"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h4M5 12h4M5 18h4M12 6h7M12 12h7M12 18h7"/></svg></span><span>变量库</span></button>
           <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h16v10.5H4zM4 8.5 7 5h5l2 3.5M12 12v5M9.5 14.5 12 17l2.5-2.5"/></svg></span><span>保存</span></button>
         </nav>
         <div class="settings-content">
@@ -151,6 +151,16 @@
         </section>
       </div>
 
+      <div class="tab-page hidden" data-tab="variables">
+        <div class="settings-page-head settings-page-head-row"><div><h2>变量库</h2><p>定义所有项目共用的变量和单选值，用于画布中的变量组合节点。</p></div><button id="newVariableDefinitionBtn" class="primary" type="button">＋ 新建变量</button></div>
+        <div id="variableDefinitionsList" class="variable-definitions-list"></div>
+        <section id="variableDefinitionEditor" class="settings-card variable-definition-editor hidden">
+          <label>变量名<input id="variableDefinitionName" type="text" placeholder="例如：产品"></label>
+          <label>可选值（每行一个）<textarea id="variableDefinitionOptions" rows="7" placeholder="哑铃&#10;壶铃&#10;球拍"></textarea></label>
+          <div class="asset-editor-actions"><button id="variableDefinitionCancelBtn" type="button">取消</button><button id="variableDefinitionSaveBtn" class="primary" type="button">保存变量</button></div>
+        </section>
+      </div>
+
       <div class="tab-page hidden" data-tab="ai">
         <div class="settings-page-head"><h2>AI 绘图</h2><p>配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。</p></div>
         <section id="apiSettingsCard" class="settings-card api-settings-card">
@@ -184,16 +194,9 @@
         </section>
       </div>
 
-      <div class="tab-page hidden" data-tab="plugins">
-        <div class="settings-page-head"><h2>插件</h2><p>按需安装拓展功能；未安装的插件不会下载模型或占用运行内存。</p></div>
-        <section class="settings-card plugin-card is-built-in">
-          <div class="plugin-card-main"><div class="plugin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18 19 6M9 6h10v10"/></svg></div><div><div class="plugin-title-row"><h3>角度变化</h3><span class="plugin-status installed">已启用</span></div><p class="setting-desc">根据图片创建角度变化节点。此功能随 CanvasFlow 提供，无需额外安装。</p></div></div>
-        </section>
-      </div>
-
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>保存</h2><p>选择项目文件的默认保存位置。</p></div>
-        <section class="settings-card"><h3>项目文件夹</h3><p class="setting-desc">“保存项目”会在这里生成 .cflow 文件。素材库只在保存时勾选后另行备份。</p><label>保存位置<textarea id="projectFolderInput" rows="2" spellcheck="false" wrap="soft" readonly placeholder="projects（项目文件夹）">projects（项目文件夹）</textarea></label><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
+        <section class="settings-card"><h3>项目文件夹</h3><p class="setting-desc">“保存项目”会在这里生成 .cflow 文件。素材库只在保存时勾选后另行备份。</p><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
       </div>
 
         </div>
@@ -330,6 +333,6 @@
 
   <script src="canvas-runtime.js?v=20260811-dotnet-runtime"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20260812-onboarding-v3"></script>
+  <script src="app.js?v=20260823-variable-node"></script>
 </body>
 </html>

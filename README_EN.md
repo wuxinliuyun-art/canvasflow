@@ -42,7 +42,7 @@ The desktop app encrypts the API Key through Windows secure storage. If secure s
 
 ### 3. Create Nodes
 
-Right-click an empty area of the canvas to create Text, Image, AI Image, Angle Change, Group, and Screenshot Input nodes, or insert saved custom text and images.
+Right-click an empty area of the canvas to create Text, Variable Combination, Image, AI Image, Angle Change, Group, and Screenshot Input nodes, or insert saved custom text and images.
 
 You can also drag images from your computer onto the canvas or paste copied images.
 
@@ -108,6 +108,13 @@ Multiple AI Image nodes can run at the same time. When using multiple references
 - Double-click custom images for a larger preview
 
 On a fresh installation with an empty library, CanvasFlow provides two sample text assets: **Image to Line Art** and **Multi-view Reference**.
+
+### Variable Library and Combination Nodes
+
+- Define global variables and single-choice values in **Settings → Variable Library**.
+- Each row selects one variable and one value; rows can be added, removed, and reordered by dragging.
+- Output uses `value + variable name` in row order. For example, `Material: Plastic` and `Product: Dumbbell` produce `Plastic Material, Dumbbell Product`.
+- Deleted variables or choices remain as invalid snapshots in existing nodes instead of silently changing prompts.
 
 ### Angle Change
 

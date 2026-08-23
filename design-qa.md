@@ -53,6 +53,53 @@
 
 final result: passed
 
+## Variable combination node pass — 2026-08-23
+
+### Evidence
+
+- Source visual truth: `F:\TEMP\codex-clipboard-b7393bed-c1b8-47cd-8c52-da170d93e9f9.png`.
+- Implementation screenshot: `C:\Users\wuxinliuyun\.codex\visualizations\2026\08\16\01a00b38-575b-75e1-9050-28f74c243ed8\variable-node-implementation.png`.
+- Browser viewport: 1280 × 720 CSS pixels, device scale factor 1.
+- Source pixels: 1424 × 1106. Implementation pixels: 1280 × 720.
+- Normalization: compared the variable-node component region at its native rendered scale; surrounding canvas crop differs.
+- State: light-theme variable node with two rows, `材质 / 塑料` and `产品 / 哑铃`, producing `塑料材质，哑铃产品`.
+- Primary interactions tested: create node, choose both variables and values, add a row using the nested icon/text button, and switch light/dark themes.
+- Browser-visible runtime errors: none during the tested interactions.
+
+### Full-view comparison evidence
+
+- The implementation keeps the source hierarchy: variable badge and title, two paired selector rows, a centered add action, and one soft result surface.
+- Node ports remain vertically centered and the canvas grid, neutral borders, rounded corners, and low-contrast elevation remain consistent with CanvasFlow.
+- The user-requested removal of the `组合结果` label intentionally makes the result surface shorter than the original source visual.
+
+### Focused-region comparison evidence
+
+- Header controls, drag handles, delete controls, and add action were checked at full browser resolution; each uses a fixed centered alignment box.
+- The paired selects share equal height, radius, gap, and vertical alignment in both rows.
+- The result text remains readable and vertically centered in both light and dark themes.
+
+### Required fidelity surfaces
+
+- Fonts and typography: passed; the existing HarmonyOS Sans SC stack and restrained 400/500 weights preserve the product language.
+- Spacing and layout rhythm: passed; the node uses a 420px minimum width, 64px header, 48px selector rows, consistent 10–16px rhythm, and centered icon controls.
+- Colors and visual tokens: passed; all new surfaces use existing theme tokens and retain sufficient light/dark contrast.
+- Image quality and asset fidelity: not applicable; the component contains no raster imagery. The `{x}` notation is functional variable notation from the selected design, not a substituted image asset.
+- Copy and content: passed with the user-requested omission of `组合结果`; output remains exactly `塑料材质，哑铃产品`.
+
+### Comparison history
+
+- Earlier P2: the initial implementation was materially smaller and denser than the source. Fixed by scaling node width, header, selector rows, spacing, result surface, and ports together.
+- Earlier P2: nested spans inside `添加变量` prevented the existing target-only click handler from adding a row. Fixed by resolving the closest `data-role` action; post-fix browser evidence shows the row count increasing from one to two.
+- Earlier P2: glyph buttons and add-action contents did not share a strict center alignment rule. Fixed with fixed square grid alignment for icon controls and inline-flex centering for the add action.
+- Post-fix evidence: the saved implementation screenshot and successful light/dark interaction pass above.
+
+### Findings
+
+- No actionable P0, P1, or P2 findings remain.
+- P3: the source mock uses a slightly larger visual crop than the application screenshot; this is expected from different canvas framing rather than component layout drift.
+
+final result: passed
+
 ## Settings prototype pass — 2026-08-04
 
 - Source visual truth: `C:\Users\jiaqing\AppData\Local\Temp\codex-clipboard-02b341ed-f97d-4ef9-9dca-9c94a2aac0c0.png`.

@@ -7,8 +7,8 @@ namespace CanvasFlow.Desktop;
 internal sealed class ScreenshotToolSettings
 {
     public int Version { get; set; } = 1;
-    public double WindowLeft { get; set; } = double.NaN;
-    public double WindowTop { get; set; } = double.NaN;
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
     public bool IsCollapsed { get; set; }
     public bool IsTopmost { get; set; } = true;
     public bool PreviewVisible { get; set; } = true;

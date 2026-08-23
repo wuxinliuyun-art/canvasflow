@@ -337,7 +337,7 @@ internal sealed class DesktopApi
         var filePath = Path.Combine(_root, "data", "custom-library.json");
         if (method == "GET")
         {
-            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[],\"builtinDefaultsInitialized\":false}";
+            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[],\"variableDefinitions\":[],\"builtinDefaultsInitialized\":false}";
             JsonNode.Parse(content);
             return new DesktopApiResponse(200, content);
         }
@@ -345,8 +345,10 @@ internal sealed class DesktopApi
         var library = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("素材库内容为空");
         if (library["textTemplates"] is not JsonArray texts || library["imageMaterials"] is not JsonArray images)
             throw new InvalidDataException("素材库格式不正确");
+        var variables = library["variableDefinitions"] as JsonArray ?? [];
+        library["variableDefinitions"] = variables;
         AtomicWrite(filePath, library.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        _log($"[素材库] 已保存：文字={texts.Count}，图片={images.Count}", false);
+        _log($"[素材库] 已保存：文字={texts.Count}，图片={images.Count}，变量={variables.Count}", false);
         return Json(200, new { success = true });
     }
 

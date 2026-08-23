@@ -179,10 +179,11 @@ public partial class ScreenshotToolWindow : Window
         if (string.IsNullOrWhiteSpace(_settings.PromptText) && PromptCombo.SelectedItem is PromptTemplate initialPrompt)
             _settings.PromptText = initialPrompt.Content;
         PromptTextBox.Text = _settings.PromptText;
-        if (!double.IsNaN(_settings.WindowLeft) && !double.IsNaN(_settings.WindowTop))
+        if (_settings.WindowLeft is double savedLeft && double.IsFinite(savedLeft)
+            && _settings.WindowTop is double savedTop && double.IsFinite(savedTop))
         {
-            Left = _settings.WindowLeft;
-            Top = _settings.WindowTop;
+            Left = savedLeft;
+            Top = savedTop;
         }
         SetCollapsed(_settings.IsCollapsed);
         _settings.PreviewVisible = true;
@@ -514,7 +515,7 @@ public partial class ScreenshotToolWindow : Window
         var region = _settings.Region;
         var valid = region is not null && ScreenCaptureService.ResolveScreen(region) is not null;
         RegionStatus.Text = valid
-            ? $"已设置区域 · {region!.MonitorWidth}×{region.MonitorHeight} 显示器"
+            ? "截图区域属于截图面板当前所在的显示器"
             : "截图区域未设置或已失效，请点击“截图”框选";
     }
 
@@ -617,6 +618,8 @@ public partial class ScreenshotToolWindow : Window
     private void SaveSettings()
     {
         if (_loading) return;
+        if (_settings.WindowLeft is double savedLeft && !double.IsFinite(savedLeft)) _settings.WindowLeft = null;
+        if (_settings.WindowTop is double savedTop && !double.IsFinite(savedTop)) _settings.WindowTop = null;
         try { ScreenshotSettingsStore.Save(_settingsPath, _settings); }
         catch (Exception error) { SetStatus($"截图设置保存失败。可能原因：data 目录没有写入权限。建议：检查安装目录权限。详细信息：{error.Message}", true); }
     }

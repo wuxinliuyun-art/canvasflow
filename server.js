@@ -412,7 +412,7 @@ async function requestHandler(req, res) {
   if (pathname === "/api/custom-library" && req.method === "GET") {
     try {
       const libraryPath = path.join(dataRoot, "data", "custom-library.json");
-      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"builtinDefaultsInitialized":false}';
+      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"variableDefinitions":[],"builtinDefaultsInitialized":false}';
       JSON.parse(content);
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
       res.end(content);
@@ -429,6 +429,7 @@ async function requestHandler(req, res) {
       const body = await readBody(req);
       const library = JSON.parse(body.toString("utf-8"));
       if (!Array.isArray(library.textTemplates) || !Array.isArray(library.imageMaterials)) throw new Error("素材库格式不正确");
+      if (!Array.isArray(library.variableDefinitions)) library.variableDefinitions = [];
       const dataDir = path.join(dataRoot, "data");
       if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
       const libraryPath = path.join(dataDir, "custom-library.json");
@@ -436,7 +437,7 @@ async function requestHandler(req, res) {
       fs.writeFileSync(tempPath, JSON.stringify(library, null, 2), "utf-8");
       fs.copyFileSync(tempPath, libraryPath);
       fs.unlinkSync(tempPath);
-      console.log(`[Library] saved: texts=${library.textTemplates.length} images=${library.imageMaterials.length}`);
+      console.log(`[Library] saved: texts=${library.textTemplates.length} images=${library.imageMaterials.length} variables=${library.variableDefinitions.length}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true }));
     } catch (err) {
