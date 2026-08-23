@@ -73,8 +73,8 @@ Name: "{app}\download"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\export"; Permissions: users-modify; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{autodesktop}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
-Name: "{group}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
+Name: "{group}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
 
 [Run]
 Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"; Description: "启动 CanvasFlow"; Flags: nowait postinstall skipifsilent
