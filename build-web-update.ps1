@@ -11,8 +11,17 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = [string]$package.version
 }
 if ([string]::IsNullOrWhiteSpace($MinimumHostVersion)) {
-    [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot "desktop-dotnet\CanvasFlow.Desktop.csproj") -Raw
-    $MinimumHostVersion = [string]$project.Project.PropertyGroup.Version
+    # Default MinimumHostVersion to the latest PUBLISHED release, so UI-only
+    # updates are not blocked on older hosts. Pass -MinimumHostVersion with the
+    # CURRENT version only when the UI update really needs new host features.
+    try {
+        $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest" -Headers @{ "User-Agent" = "CanvasFlow-Build" } -TimeoutSec 15
+        $MinimumHostVersion = ([string]$latest.tag_name).TrimStart("v", "V")
+        Write-Host "[Info] MinimumHostVersion defaulting to latest published release: $MinimumHostVersion"
+    }
+    catch {
+        throw "Could not fetch the latest published release as MinimumHostVersion. Possible causes: network unavailable or GitHub rate limited. Suggested fix: retry later, or pass -MinimumHostVersion explicitly (usually the previous released version)."
+    }
 }
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $projectRoot "release\CanvasFlow-Web.zip"
