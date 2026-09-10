@@ -56,6 +56,9 @@ const DEFAULT_TEXT_TEMPLATES = [
   { id: "builtin_text_multi_view_v1", name: "多视角参考", content: "生成参考图的正前侧、左侧、右侧、顶侧，四个视角的视图", revision: 1 },
   { id: "builtin_text_cmf_transfer_v1", name: "cmf迁移", content: "将第二张图的材质迁移应用到一张图的产品上", revision: 1 },
   { id: "builtin_text_hd_restore_v1", name: "高清修复", content: "严格参考输入图片重新绘制，保持原有主体、结构、轮廓、比例、视角、构图、颜色和材质一致，不增加或删除元素。修复模糊、噪点、压缩痕迹和锯齿，重建清晰自然的边缘与细节，真实准确的材质表现，细腻柔和的光影，主体完整居中，背景简洁干净，专业高品质视觉效果，高清，高细节，8K。", revision: 1 },
+  { id: "builtin_text_photo_line_art_v1", name: "照片转线稿", content: "照片转线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
+  { id: "builtin_text_sketch_line_art_v1", name: "草图转线稿", content: "将线框图转效果图，哑铃，黑色塑料材质，图片中红色部分使用银色金属材质", revision: 1 },
+  { id: "builtin_text_sketch_line_art_v2", name: "草图转线稿v2（材质需补充）", content: "将上传的产品线稿转换为高质量产品设计效果图。严格保持原始线稿中的产品外轮廓、结构、比例、透视角度、曲面关系、分件线和设计细节。在线稿基础上完成真实合理的材质、颜色、光影和细节表现。准确表现不同材质之间的质感差异、曲面起伏、边缘高光、环境反射、接触阴影和结构层次。采用专业工业设计产品渲染风格，造型清晰，材质细腻，光影自然，高级简洁，产品主体突出。棚拍级柔和布光，干净背景，高品质商业产品视觉效果，精致、真实、高完成度。", revision: 1 },
 ];
 
 // UI language is stored separately from project data so switching projects never
@@ -173,6 +176,7 @@ const UI_EN = {
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
   "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image",
+  "提取生成所用关键词": "Extract Generation Keywords",
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
@@ -1028,7 +1032,6 @@ function editTemplate(kind, id) {
 async function deleteTemplate(kind, id) {
   const loc = templateLocation(kind, id); if (!loc) return;
   const item = loc.library[loc.key][loc.index];
-  if (!confirm(`删除“${item.name}”？已创建的节点不会受影响。`)) return;
   loc.library[loc.key].splice(loc.index, 1);
   if (kind === "image" && item.fileName) try { await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) }); } catch (e) { console.error("[自定义图片] 删除文件失败", e); }
   persistLibraries(); syncCustomMaterialsList(); toast("素材已删除");
@@ -2059,6 +2062,8 @@ async function generateAngleImage(nodeId) {
     node._aiProgress = { status: "downloading", label: "正在下载", percent: 96, error: "" };
     renderNodes();
     const generatedImage = await fetchImageAsBase64(imageUrl);
+    node.generationPrompt = node.prompt || "";
+    const taggedImage = embedGenerationMetadata(generatedImage, generationMetadataFor(node.generationPrompt, currentPage()?.name || "项目", node.taskId));
     const outputTask = {
       id: `angle-${Date.now()}`,
       projectName: currentPage()?.name || "项目",
@@ -2067,7 +2072,7 @@ async function generateAngleImage(nodeId) {
     };
     let savedOutput = null;
     try {
-      savedOutput = await saveGeneratedOutput(generatedImage, outputTask, node);
+      savedOutput = await saveGeneratedOutput(taggedImage, outputTask, node);
     } catch (saveError) {
       console.warn("[角度变化] 图片已生成，但保存到输出文件夹失败", saveError);
       toast(`图片已生成，但保存失败：${saveError.message || saveError}`);
@@ -2075,7 +2080,8 @@ async function generateAngleImage(nodeId) {
     const fileName = savedOutput?.fileName || `angle_generated_${Date.now()}.png`;
     const existingResults = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id);
     const resultNode = addNode("image", node.x + NODE_WIDTH + 40, node.y + existingResults.length * IMAGE_NODE_VERTICAL_STEP, false);
-    resultNode.image = generatedImage;
+    resultNode.image = taggedImage;
+    resultNode.generationPrompt = node.generationPrompt;
     resultNode.fileName = fileName;
     resultNode.mime = "image/png";
     resultNode.outputPath = savedOutput?.outputPath || "";
@@ -2174,7 +2180,7 @@ function collectUpstreamForAI(nodeId, incoming) {
     // AI 节点截断：收集已生成图片后不再向上追溯（包括停用的 AI 节点）
     if (n.type === "ai-image" || n.type === "angle-image") {
       if (n.generatedImage) {
-        const ref = { image: n.generatedImage, assetId: n.generatedAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x };
+        const ref = { image: n.generatedImage, assetId: n.generatedAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
         result.images.push(ref);
         result.orderedRefs.push(ref);
       }
@@ -2187,7 +2193,7 @@ function collectUpstreamForAI(nodeId, incoming) {
       if (output) result.texts.push(output);
     }
     if (n.type === "image" && n.image) {
-      const ref = { image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x };
+      const ref = { image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
       result.images.push(ref);
       result.orderedRefs.push(ref);
     }
@@ -2197,12 +2203,12 @@ function collectUpstreamForAI(nodeId, incoming) {
         for (const item of n.items) {
           if (item.type === "text" && item.text && item.text.trim()) result.texts.push(item.text.trim());
           if (item.type === "image" && item.image) {
-            const ref = { image: item.image, assetId: item.imageAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x };
+            const ref = { image: item.image, assetId: item.imageAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x, _nodeId: n.id };
             result.groupImages.push(ref);
             result.orderedRefs.push(ref);
           }
           if (item.type === "ai-image" && item.generatedImage) {
-            const ref = { image: item.generatedImage, assetId: item.generatedAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x };
+            const ref = { image: item.generatedImage, assetId: item.generatedAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x, _nodeId: n.id };
             result.groupImages.push(ref);
             result.orderedRefs.push(ref);
           }
@@ -2217,6 +2223,7 @@ function collectUpstreamForAI(nodeId, incoming) {
             fileName: gImg.fileName,
             mime: gImg.mime,
             _x: n.x,
+            _nodeId: n.id,
           };
           result.groupImages.push(ref);
           result.orderedRefs.push(ref);
@@ -2298,10 +2305,30 @@ function publishScreenshotNodeCatalog(force = false) {
 async function materializeReferenceImage(reference) {
   if (typeof reference === "string") return reference;
   if (desktop && reference?.assetId) {
-    const result = await desktop.readAsset(reference.assetId);
-    return result.dataUrl || "";
+    try {
+      const result = await desktop.readAsset(reference.assetId);
+      return result.dataUrl || "";
+    } catch (error) {
+      const node = reference._nodeId ? findNode(reference._nodeId) : null;
+      const inline = String(reference.image || node?.image || node?.generatedImage || "");
+      const fallback = inline.startsWith("data:image/") ? inline : "";
+      console.warn("[参考图] 素材读取失败", { assetId: reference.assetId, fileName: reference.fileName, usedInline: Boolean(fallback), message: error.message });
+      if (fallback) {
+        markNodeAssetIssue(node, `素材文件丢失，本次已自动改用内嵌缩略图（清晰度可能降低）；建议重新上传图片：${reference.fileName || "未命名图片"}`);
+        return fallback;
+      }
+      markNodeAssetIssue(node, `素材文件丢失，可能已被移动或删除，请重新上传图片：${reference.fileName || "未命名图片"}`);
+      throw error;
+    }
   }
   return reference?.image || "";
+}
+
+function markNodeAssetIssue(node, message) {
+  if (!node || node._assetIssue === message) return;
+  node._assetIssue = message;
+  console.warn("[参考图] 节点素材问题标记", { nodeId: node.id, message });
+  renderNodes();
 }
 
 async function submitGeneration(prompt, imageUrls, node) {
@@ -2523,9 +2550,121 @@ function generatedResultFileName(task, node, dataUrl) {
   const mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
   const extension = extensionFor("", mime);
   const project = safeName(task.projectName || "项目").slice(0, 36) || "项目";
-  const nodeLabel = task.source === "screenshot" ? "截图工具" : (node?.seq ? `AI${node.seq}` : (node?.id || "AI"));
-  const reference = safeName((task.referenceName || "生成结果").replace(/\.[^.]+$/, "")).slice(0, 36) || "生成结果";
-  return `${project}_${nodeLabel}_${reference}_${timestamp()}_${task.id}.${extension}`;
+  const taskNumber = Number(String(task.id || "").replace(/^q/, ""));
+  const sequence = String(Number.isFinite(taskNumber) && taskNumber > 0 ? taskNumber : Math.max(0, Number(task.resultOrder) || 0) + 1).padStart(2, "0");
+  return `${timestamp()}_${project}_${sequence}.${extension}`;
+}
+
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+let pngCrcTable = null;
+function pngCrc32(bytes) {
+  if (!pngCrcTable) {
+    pngCrcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      pngCrcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = pngCrcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function dataUrlToBytes(dataUrl) {
+  const body = String(dataUrl).split(",")[1] || "";
+  const bin = atob(body);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function bytesToDataUrl(bytes, mime = "image/png") {
+  let bin = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+  return `data:${mime};base64,${btoa(bin)}`;
+}
+
+function pngChunk(type, data) {
+  const out = new Uint8Array(12 + data.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+  out.set(data, 8);
+  view.setUint32(8 + data.length, pngCrc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+
+// iTXt uses UTF-8 so Chinese prompts survive; layout: keyword NUL flag method langNUL translatedNUL text
+function embedGenerationMetadata(dataUrl, meta) {
+  try {
+    if (!/^data:image\/png;base64,/i.test(String(dataUrl))) return dataUrl;
+    const bytes = dataUrlToBytes(dataUrl);
+    if (bytes.length < 8 || PNG_SIGNATURE.some((value, index) => bytes[index] !== value)) return dataUrl;
+    const chunks = [];
+    for (const [keyword, value] of Object.entries(meta)) {
+      if (!value) continue;
+      const keywordBytes = new TextEncoder().encode(keyword);
+      const textBytes = new TextEncoder().encode(String(value));
+      const payload = new Uint8Array(keywordBytes.length + 5 + textBytes.length);
+      payload.set(keywordBytes, 0);
+      payload.set(textBytes, keywordBytes.length + 5);
+      chunks.push(pngChunk("iTXt", payload));
+    }
+    if (!chunks.length) return dataUrl;
+    const extra = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const insertAt = bytes.length - 12; // before IEND chunk (length + type + crc)
+    const out = new Uint8Array(bytes.length + extra);
+    out.set(bytes.subarray(0, insertAt), 0);
+    let offset = insertAt;
+    for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.length; }
+    out.set(bytes.subarray(insertAt), offset);
+    console.debug("[生成结果] 已写入PNG生成信息", Object.keys(meta));
+    return bytesToDataUrl(out);
+  } catch (error) {
+    console.warn("[生成结果] 写入PNG生成信息失败，使用原始图片", error);
+    return dataUrl;
+  }
+}
+
+function readGenerationMetadataFromPng(dataUrl) {
+  try {
+    const bytes = dataUrlToBytes(dataUrl);
+    if (bytes.length < 8 || PNG_SIGNATURE.some((value, index) => bytes[index] !== value)) return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const decoder = new TextDecoder();
+    const meta = {};
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+      const length = view.getUint32(offset);
+      const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+      if (type === "IEND") break;
+      if (type === "iTXt") {
+        const data = bytes.subarray(offset + 8, offset + 8 + length);
+        const keywordEnd = data.indexOf(0);
+        // uncompressed iTXt: flag=0 right after keyword NUL; text starts after flag + method + lang NUL + translated NUL
+        if (keywordEnd > 0 && data[keywordEnd + 1] === 0 && data[keywordEnd + 4] === 0) {
+          const keyword = decoder.decode(data.subarray(0, keywordEnd));
+          meta[keyword] = decoder.decode(data.subarray(keywordEnd + 5));
+        }
+      }
+      offset += 12 + length;
+    }
+    return Object.keys(meta).length ? meta : null;
+  } catch (error) {
+    console.warn("[生成结果] 读取PNG生成信息失败", error);
+    return null;
+  }
+}
+
+function generationMetadataFor(prompt, projectName, taskId) {
+  return {
+    prompt,
+    "CanvasFlow.Project": projectName || "",
+    "CanvasFlow.Time": new Date().toISOString(),
+    "CanvasFlow.TaskId": taskId || "",
+  };
 }
 
 async function saveGeneratedOutput(dataUrl, task, node) {
@@ -2540,7 +2679,8 @@ async function saveGeneratedOutput(dataUrl, task, node) {
   return { fileName, outputPath: result.files?.[0] || "", outputFolder: result.path || "" };
 }
 
-async function applyQueuedResult(task, node, dataUrl) {
+async function applyQueuedResult(task, node, rawResultDataUrl) {
+  const dataUrl = embedGenerationMetadata(rawResultDataUrl, generationMetadataFor(task.prompt, task.projectName, task.id));
   let saved = null;
   try {
     saved = await saveGeneratedOutput(dataUrl, task, node);
@@ -2555,6 +2695,7 @@ async function applyQueuedResult(task, node, dataUrl) {
     delete node.generatedAssetId;
     node.fileName = fileName;
     node.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
+    node.generationPrompt = task.prompt || "";
     node.outputPath = saved?.outputPath || "";
     await externalizeImageField(node, "generatedImage", "generatedAssetId", fileName);
   } else {
@@ -2566,6 +2707,7 @@ async function applyQueuedResult(task, node, dataUrl) {
     resultNode.image = dataUrl;
     resultNode.fileName = fileName;
     resultNode.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
+    resultNode.generationPrompt = task.prompt || "";
     resultNode.aiSourceNodeId = node.id;
     resultNode.aiBatchIndex = task.groupIndex >= 0 ? task.groupIndex : null;
     resultNode.outputPath = saved?.outputPath || "";
@@ -2619,7 +2761,11 @@ async function runQueuedAiTask(task) {
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
   notifyScreenshotTask(task);
-  const taskImages = task.groupImage ? [...task.regularImages, task.groupImage] : task.regularImages;
+  const taskImages = task.orderedImages || (task.groupImage ? [...task.regularImages, task.groupImage] : task.regularImages);
+  console.debug("[AI队列] 提交参考图顺序", {
+    taskId: task.id,
+    images: taskImages.map(image => image?.fileName || image?.assetId || "未命名图片"),
+  });
   task.taskId = await submitGeneration(task.prompt, taskImages, task.generationSettings);
   task.status = "generating";
   refreshQueuedNodeProgress(task.nodeId);
@@ -2796,6 +2942,7 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
   const generationSettings = queuedGenerationSettings(node);
   const prompt = upstream.texts.join("，");
   const groupImages = upstream.groupImages || [];
+  const groupImageSet = new Set(groupImages);
   const taskSources = groupImages.length ? groupImages : [null];
   const page = currentPage();
   const existingResultCount = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id).length;
@@ -2810,6 +2957,9 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
     prompt,
     regularImages: upstream.images.map(image => ({ ...image })),
     groupImage: groupImage ? { ...groupImage } : null,
+    orderedImages: (upstream.orderedRefs || [])
+      .filter(image => !groupImageSet.has(image) || image === groupImage)
+      .map(image => ({ ...image })),
     groupIndex: groupImage ? index : -1,
     referenceName: groupImage?.fileName || upstream.images[0]?.fileName || "生成结果",
     thumbnail: groupImage?.image || upstream.images[0]?.image || "",
@@ -2896,7 +3046,9 @@ async function generateSingle(node, upstream) {
     setProgress(92, "下载生成图片");
     await nextPaint();
     const base64 = await fetchImageAsBase64(imageUrl);
-    node.generatedImage = base64;
+    node.generationPrompt = texts.join("，");
+    const taggedBase64 = embedGenerationMetadata(base64, generationMetadataFor(node.generationPrompt, currentPage()?.name || "项目", taskId));
+    node.generatedImage = taggedBase64;
     delete node.generatedAssetId;
     node.generating = false;
     node.fileName = `ai_generated_${Date.now()}.png`;
@@ -2905,7 +3057,7 @@ async function generateSingle(node, upstream) {
     apiFetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: node.fileName, data: base64 }] }),
+      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: node.fileName, data: taggedBase64 }] }),
     }).catch(() => {});
     setAiNodeProgress(node, "done", "生成完成", 100);
     clearAiNodeProgressSoon(node);
@@ -2982,7 +3134,7 @@ async function generateBatchFromGroup(node, upstream) {
         t.status = "downloading";
         t.progress = 96;
         syncAiNodeTaskProgress(node, node.batchTasks);
-        t.result = await fetchImageAsBase64(imageUrl);
+        t.result = embedGenerationMetadata(await fetchImageAsBase64(imageUrl), generationMetadataFor(prompt, currentPage()?.name || "项目", t.taskId));
         await externalizeImageField(t, "result", "resultAssetId", t.fileName || "ai_batch.png");
         t.status = "done";
         t.progress = 100;
@@ -3372,10 +3524,27 @@ function beginProjectMenuRename(page, button) {
 }
 
 let pendingNodeRenderAfterTextEdit = false;
+let pendingNodeRenderAfterSelect = false;
 
 function activeNodeTextEditor() {
   const active = document.activeElement;
   return active?.matches?.('.node textarea[data-role="text"]') && els.nodes.contains(active) ? active : null;
+}
+
+function activeNodeSelect() {
+  const active = document.activeElement;
+  return active?.matches?.(".node select") && els.nodes.contains(active) ? active : null;
+}
+
+function releaseNodeSelectLock(select) {
+  select?.closest?.(".node")?.classList.remove("select-menu-open");
+  window.queueMicrotask(() => {
+    if (activeNodeSelect() || !pendingNodeRenderAfterSelect) return;
+    pendingNodeRenderAfterSelect = false;
+    renderNodes({ force: true });
+    renderEdges();
+    renderMinimap();
+  });
 }
 
 function renderNodes(options = {}) {
@@ -3383,7 +3552,12 @@ function renderNodes(options = {}) {
     pendingNodeRenderAfterTextEdit = true;
     return;
   }
+  if (!options.force && activeNodeSelect()) {
+    pendingNodeRenderAfterSelect = true;
+    return;
+  }
   pendingNodeRenderAfterTextEdit = false;
+  pendingNodeRenderAfterSelect = false;
   els.nodes.innerHTML = "";
   for (const node of state.nodes) {
     const div = document.createElement("div");
@@ -3545,7 +3719,7 @@ function nodeTemplate(node) {
   }
   const head = node.type === "variable"
     ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量节点</span></div>`
-    : `<div class="node-head"><span>${title}</span></div>`;
+    : `<div class="node-head"><span>${title}</span>${node._assetIssue ? `<span class="node-asset-flag" title="${escapeHtml(node._assetIssue)}">!</span>` : ""}</div>`;
   return `${inPort}${outPort}${head}<div class="node-body">${body}</div>`;
 }
 
@@ -4039,6 +4213,15 @@ els.nodes.addEventListener("input", ev => {
   }
 });
 
+els.nodes.addEventListener("pointerdown", ev => {
+  const select = ev.target.closest?.(".node select");
+  if (!select) return;
+  els.nodes.querySelectorAll(".node.select-menu-open").forEach(node => {
+    if (node !== select.closest(".node")) node.classList.remove("select-menu-open");
+  });
+  select.closest(".node")?.classList.add("select-menu-open");
+});
+
 els.nodes.addEventListener("focusin", ev => {
   if (ev.target.dataset.role !== "text") return;
   const value = ev.target.value.trim();
@@ -4064,10 +4247,16 @@ els.nodes.addEventListener("focusout", ev => {
   });
 });
 
+els.nodes.addEventListener("focusout", ev => {
+  if (!ev.target.matches?.(".node select")) return;
+  releaseNodeSelectLock(ev.target);
+});
+
 els.nodes.addEventListener("change", ev => {
   const nodeEl = ev.target.closest(".node");
   const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
   const role = ev.target.dataset.role;
+  if (ev.target.matches?.(".node select")) releaseNodeSelectLock(ev.target);
   if (role === "text") pushHistory();
   if (!node) return;
   if (node.type === "variable") {
@@ -4127,7 +4316,7 @@ els.nodes.addEventListener("click", ev => {
   const node = findNode(nodeEl.dataset.id);
   const action = ev.target.closest("[data-role]");
   const actionRole = action?.dataset.role;
-  if (ev.target.dataset.role === "upload") uploadImage(node);
+  if (ev.target.dataset.role === "upload") { uploadImage(node); delete node._assetIssue; }
   if (ev.target.dataset.role === "upload-group") uploadGroupImages(node);
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
@@ -4146,6 +4335,7 @@ els.nodes.addEventListener("click", ev => {
   }
   if (ev.target.dataset.role === "clear-image") {
     node.outputPath = "";
+    delete node._assetIssue;
     if (node.type === "ai-image" || node.type === "angle-image") {
       node.generatedImage = null;
       delete node.generatedAssetId;
@@ -5085,6 +5275,57 @@ async function openGeneratedFileLocation(node) {
   }
 }
 
+async function resolveNodeImageDataUrl(node) {
+  const assetId = node.generatedAssetId || node.imageAssetId || "";
+  // 优先读素材仓库的原始完整图：节点上的内嵌图是 canvas 缩略图，重编码会丢失PNG元数据
+  if (assetId && window.canvasflowDesktop?.readAsset) {
+    try {
+      const asset = await window.canvasflowDesktop.readAsset(assetId);
+      if (asset?.dataUrl) {
+        console.debug("[关键词提取] 使用素材仓库原始图", { nodeId: node.id, assetId });
+        return asset.dataUrl;
+      }
+    } catch (error) {
+      console.warn("[关键词提取] 读取素材仓库失败，回退内嵌图", { assetId, message: error.message });
+    }
+  }
+  const direct = String(node.generatedImage || node.image || "");
+  if (/^data:image/.test(direct)) {
+    console.debug("[关键词提取] 使用节点内嵌图", { nodeId: node.id, hasAssetId: Boolean(assetId) });
+    return direct;
+  }
+  return "";
+}
+
+async function extractGenerationKeywords(node) {
+  if (!node) return;
+  const dataUrl = await resolveNodeImageDataUrl(node);
+  if (!dataUrl) {
+    toast("没有可提取的图片：该节点上没有图片内容，也没有可读取的素材文件；请先生成或导入图片再提取");
+    return;
+  }
+  const meta = readGenerationMetadataFromPng(dataUrl) || {};
+  console.debug("[关键词提取] 读取结果", {
+    nodeId: node.id,
+    metaKeys: Object.keys(meta),
+    hasEmbeddedPrompt: Boolean(meta.prompt),
+    hasNodePrompt: Boolean(node.generationPrompt),
+  });
+  const prompt = String(meta.prompt || node.generationPrompt || "").trim();
+  if (!prompt) {
+    toast("没有找到生成关键词：该图片没有嵌入的生成信息，节点上也没有备用记录；通常是图片被重新编码或来自其他软件，可重新生成后再试");
+    return;
+  }
+  const textNode = addNode("text", node.x + NODE_WIDTH + 40, node.y, false);
+  textNode.text = prompt;
+  state.edges.push({ id: uid("e"), from: { node: textNode.id, port: "out" }, to: { node: node.id, port: "in" } });
+  state.selected = new Set([textNode.id]);
+  console.debug("[关键词提取] 已创建关键词文字节点", { sourceNodeId: node.id, textNodeId: textNode.id, length: prompt.length });
+  pushHistory();
+  render();
+  toast("已提取生成关键词并创建文字节点");
+}
+
 els.viewport.addEventListener("contextmenu", ev => {
   ev.preventDefault();
   const nodeEl = ev.target.closest(".node");
@@ -5096,6 +5337,7 @@ els.viewport.addEventListener("contextmenu", ev => {
     if (isMindmapMode()) {
       const mindmapItems = [
         ...((selectedNode?.type === "text" || selectedNode?.type === "image") ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
+        ...(selectedNode?.type === "image" ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode)]] : []),
         ...(state.selected.size > 1 ? [["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()]] : []),
         ...(selectedNode?.type === "mind-group" ? [["进入编组", () => enterMindmapGroup(id)], ["重命名编组", () => renameMindmapGroup(id)], ["解散编组", () => ungroupMindmapNode(id)]] : []),
         ["断开连接", () => disconnectEdges(state.selected)],
@@ -5116,6 +5358,7 @@ els.viewport.addEventListener("contextmenu", ev => {
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
+      ...((selectedNode?.type === "image" || selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode)]] : []),
       ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
@@ -7561,7 +7804,7 @@ async function executeAllAiNodes() {
       t.status = "downloading";
       t.progress = 96;
       syncAiNodeTaskProgress(node, nodeTasks);
-      t.result = await fetchImageAsBase64(imageUrl);
+      t.result = embedGenerationMetadata(await fetchImageAsBase64(imageUrl), generationMetadataFor(prompt, currentPage()?.name || "项目", t.taskId));
       await externalizeImageField(t, "result", "resultAssetId", t.fileName || "ai_batch.png");
       t.status = "done";
       t.progress = 100;

@@ -1566,7 +1566,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   flex-direction: column;
   gap: 6px;
   margin-bottom: 0;
-  max-height: 280px;
+  max-height: min(70vh, 900px);
   overflow-y: auto;
 }
 .material-item {
@@ -1623,7 +1623,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 .material-copy { min-width: 0; flex: 1; display: block; }
 .material-copy.with-preview { display: grid; grid-template-columns: minmax(68px, .55fr) minmax(0, 1.45fr); align-items: center; gap: 8px; }
-.material-content-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.material-content-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .material-rename-btn {
   background: none;
   border: none;
@@ -2328,8 +2328,27 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   display: none;
 }
 .hide-node-titles .node:hover .node-hover-controls,
-.hide-node-titles .node:focus-within .node-hover-controls {
+.hide-node-titles .node:focus-within .node-hover-controls,
+.hide-node-titles .node.select-menu-open .node-hover-controls {
   display: block;
+}
+
+/* 素材异常标记：图片素材文件丢失时显示在节点标题栏，悬停查看说明 */
+.node-asset-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  flex: none;
+  cursor: help;
 }
 .image-preview,
 .theme-dark .image-preview,
