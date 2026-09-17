@@ -208,6 +208,8 @@ Open a [GitHub Issue](https://github.com/wuxinliuyun-art/canvasflow/issues) and,
 - AI generation sends prompts and reference images to the API service configured by the user.
 - Do not upload private, confidential, or unauthorized images.
 
+See the complete [CanvasFlow Privacy Policy](PRIVACY.md). Release verification and signing rules are documented in the [Code Signing Policy](CODE_SIGNING_POLICY.md).
+
 ---
 
 ## Development Note

@@ -5,7 +5,7 @@
 ## .NET桌面版环境
 
 - Windows 10/11 x64
-- .NET 8 SDK（仅源码运行和构建需要）
+- .NET 10 SDK（仅源码运行和构建需要）
 - Microsoft Edge WebView2 Runtime
 - Inno Setup 6（仅生成`CanvasFlow-Setup.exe`时需要）
 - 首次还原NuGet依赖和检查更新时需要联网
@@ -34,9 +34,11 @@ node server.js
 .\build-dotnet.cmd
 ```
 
-自包含发布目录位于`desktop-dotnet\bin\Release\net8.0-windows\win-x64\publish`。随后用Inno Setup 6编译`installer\CanvasFlow.iss`，输出`dist-dotnet\CanvasFlow-Setup.exe`。
+自包含发布目录位于`desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish`。随后用Inno Setup 6编译`installer\CanvasFlow.iss`，输出`dist-dotnet\CanvasFlow-Setup.exe`。
 
 安装包为Windows x64当前用户安装，不需要管理员权限；当前没有商业代码签名。
+
+仓库中的 GitHub Actions 工作流会执行同一套 Windows 构建并上传未签名安装包，用于验证公开源码能够稳定生成发布文件。该工作流不会发布 Release，也不会进行代码签名；正式签名流程将在 SignPath Foundation 审核通过后单独接入。
 
 ## 数据与发布
 
@@ -45,3 +47,5 @@ node server.js
 - 热更新包的 `minimumHostVersion` 必须是能够运行该界面的最低 .NET 宿主版本；若修改桌面桥接或 .NET 代码，应提升最低宿主版本并同时发布完整安装包。
 - 发布前检查publish目录包含`CanvasFlow.exe`、`index.html`、`app.js`和`styles.css`。
 - 安装和更新测试必须确认 `data`、`download`、`export` 不被覆盖或删除。
+
+代码签名政策见 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)，隐私政策见 [PRIVACY.md](PRIVACY.md)。

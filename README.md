@@ -208,6 +208,8 @@ CanvasFlow 会检查 GitHub Releases。Release 包含 `CanvasFlow-Web.zip` 时�
 - 使用 AI 生成功能时，输入文字和参考图片会发送给用户配置的 API 服务。
 - 请勿上传包含隐私、机密或无权使用的图片。
 
+完整说明见 [CanvasFlow 隐私政策](PRIVACY.md)。代码签名和发布审核规则见 [代码签名政策](CODE_SIGNING_POLICY.md)。
+
 ---
 
 ## 开发说明

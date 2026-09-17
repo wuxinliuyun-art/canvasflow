@@ -1,0 +1,62 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build unsigned Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: cmd
+        run: build-dotnet.cmd
+
+      - name: Verify expected artifacts
+        shell: powershell
+        run: |
+          $requiredFiles = @(
+            "desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish\CanvasFlow.exe",
+            "desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish\index.html",
+            "desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish\app.js",
+            "desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish\styles.css",
+            "dist-dotnet\CanvasFlow-Setup.exe"
+          )
+
+          $missingFiles = $requiredFiles | Where-Object { -not (Test-Path -LiteralPath $_) }
+          if ($missingFiles.Count -gt 0) {
+            throw "Windows build completed without required files: $($missingFiles -join ', ')"
+          }
+
+      - name: Upload unsigned installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvasflow-windows-unsigned
+          path: dist-dotnet/CanvasFlow-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
