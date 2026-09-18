@@ -1866,12 +1866,22 @@ function isImage25StandardModel(model) {
   return model === "gpt-image-2.5";
 }
 
+function image25ExtVersion(model) {
+  if (model === "gpt-image-2.5-flare") return "flare";
+  if (model === "gpt-image-2.5-sunburst") return "sunburst";
+  return "";
+}
+
+function isImage25ExtModel(model) {
+  return Boolean(image25ExtVersion(model));
+}
+
 function isImage25Model(model) {
-  return model === "gpt-image-2.5" || model === "gpt-image-2.5-flare" || model === "gpt-image-2.5-sunburst";
+  return isImage25StandardModel(model) || isImage25ExtModel(model);
 }
 
 function modelSupportsQuality(model) {
-  return model === "gpt-image-2" || isImage25Model(model);
+  return model === "gpt-image-2" || isImage25StandardModel(model);
 }
 
 function normalizeAiNodeSettings(node, fallback = {}) {
@@ -1880,6 +1890,7 @@ node._model = node._model || fallback.model || "gpt-image-2";
   if (isImage25StandardModel(node._model)) node._resolution = "1k";
 node._resolution = node._resolution || fallback.resolution || "1k";
 node._size = node._size || fallback.size || "1:1";
+  if (isImage25ExtModel(node._model) && !["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"].includes(node._size)) node._size = "1:1";
   if (modelSupportsQuality(node._model)) {
     let quality = node._quality || fallback.quality || (node.type === "screenshot-input" ? "low" : "medium");
     if (isImage25Model(node._model) && (quality === "auto" || quality === "standard" || quality === "xhigh")) quality = quality === "xhigh" ? "high" : "medium";
@@ -1899,10 +1910,14 @@ function aiNodeControls(node) {
 normalizeAiNodeSettings(node);
   const isGpt = modelSupportsQuality(node._model);
   const isStandard25 = isImage25StandardModel(node._model);
+  const isExt25 = isImage25ExtModel(node._model);
   const models = [["gpt-image-2", "GPT Image 2"], ["gpt-image-2.5-flare", "GPT Image 2.5 Flare（快速）"], ["gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst（质量）"], ["gemini-3.1-flash-image-preview", "Gemini 3.1 Flash"]];
   const resolutions = isStandard25 ? [["1k", "1K"]] : [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
   const qualities = [["auto", "auto"], ["low", "low"], ["medium", "medium"], ["high", "high"]];
-  const ratios = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"].map(value => [value, value]);
+  const ratios = (isExt25
+    ? ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    : ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]
+  ).map(value => [value, value]);
   return `<div class="ai-node-settings">
     <label class="ai-model-field"><span>模型</span><select data-role="ai-model">${selectOptions(models, node._model)}</select></label>
     <label><span>分辨率</span><select data-role="ai-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
@@ -2362,16 +2377,18 @@ function markNodeAssetIssue(node, message) {
 async function submitGeneration(prompt, imageUrls, node) {
   if (!prompt && !imageUrls.length) throw new Error("需要提示词或参考图");
   normalizeAiNodeSettings(node);
+  const extVersion = image25ExtVersion(node._model);
   const payload = {
-    model: node._model,
+    model: extVersion ? "gpt-image-2.5-ext" : node._model,
     prompt: prompt || "generate an image",
     n: 1,
     size: node._size,
-    resolution: node._resolution,
+    resolution: extVersion ? String(node._resolution || "1k").toUpperCase() : node._resolution,
   };
+  if (extVersion) payload.version = extVersion;
 if (node._model === "gpt-image-2") {
 payload.quality = node._quality || "medium";
-  } else if (isImage25Model(node._model)) {
+  } else if (isImage25StandardModel(node._model)) {
     payload.quality = node._quality || "medium";
 }
   if (imageUrls.length) payload.image_urls = await Promise.all(imageUrls.map(materializeReferenceImage));
@@ -2387,8 +2404,9 @@ payload.quality = node._quality || "medium";
   });
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message || "提交失败");
-  if (!data.data || !data.data[0] || !data.data[0].task_id) throw new Error("未获取到任务ID");
-  return data.data[0].task_id;
+  const taskId = data.data?.id || data.data?.[0]?.task_id;
+  if (!taskId) throw new Error("未获取到任务ID");
+  return taskId;
 }
 
 async function pollTask(taskId, onProgress = null) {
@@ -4035,7 +4053,7 @@ function nodeTemplate(node) {
   } else if (node.type === "screenshot-input") {
     normalizeAiNodeSettings(node);
     node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
-    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gpt-image-2.5-flare" ${node._model === "gpt-image-2.5-flare" ? "selected" : ""}>GPT Image 2.5 Flare（快速）</option><option value="gpt-image-2.5-sunburst" ${node._model === "gpt-image-2.5-sunburst" ? "selected" : ""}>GPT Image 2.5 Sunburst（质量）</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label>画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
+    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gpt-image-2.5-flare" ${node._model === "gpt-image-2.5-flare" ? "selected" : ""}>GPT Image 2.5 Flare（快速）</option><option value="gpt-image-2.5-sunburst" ${node._model === "gpt-image-2.5-sunburst" ? "selected" : ""}>GPT Image 2.5 Sunburst（质量）</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label class="${modelSupportsQuality(node._model) ? "" : "hidden"}">画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
