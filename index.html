@@ -11,7 +11,7 @@
     <header class="topbar">
       <div class="project-shell">
         <button id="projectNameBtn" class="project-name-btn" title="单击切换项目，双击重命名">未命名项目</button>
-        <div id="projectMenu" class="project-menu hidden"></div>
+        <div id="projectMenu" class="project-panel hidden"></div>
         <button id="newCanvasBtn" class="icon-btn subtle" title="新建项目" aria-label="新建项目"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
       <div class="utility-track top-utility-track" aria-label="项目工具">
@@ -166,6 +166,14 @@
         <section id="apiSettingsCard" class="settings-card api-settings-card">
         <div class="ai-section-head">API</div>
 
+        <label>API 类型
+          <select id="apiTypeSelect">
+            <option value="apimart">apimart（内置代理）</option>
+            <option value="agtoken">agtoken</option>
+            <option value="custom">自定义</option>
+          </select>
+        </label>
+
         <label>API Key
           <div class="apikey-row">
             <input id="apiKeyInput" type="password" placeholder="输入你的 API Key">
@@ -180,6 +188,26 @@
             <button id="balanceRefreshBtn" class="apikey-btn" title="刷新令牌余额">刷新</button>
           </div>
         </label>
+
+        <div id="apimartApiInfo">
+          <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
+          <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
+        </div>
+
+        <div id="agtokenApiInfo" class="hidden">
+          <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果）</span>
+          <span class="api-url-hint">模型：gpt-image-2.5（仅 1K）/ -flare / -sunburst（1K / 2K / 4K）；质量 low / medium / high</span>
+        </div>
+
+        <div id="customApiSettings" class="hidden">
+          <label>API 地址（Base URL）
+            <input id="customApiBaseUrlInput" type="text" placeholder="例如 https://api.example.com">
+          </label>
+          <label>自定义请求头（每行一条，格式：名称: 值）
+            <textarea id="customApiHeadersInput" rows="3" placeholder="X-Source: canvasflow"></textarea>
+          </label>
+          <span class="api-url-hint">会自动携带 Authorization: Bearer &lt;API Key&gt;；此处可追加或覆盖其他请求头。</span>
+        </div>
 
         </section>
       </div>

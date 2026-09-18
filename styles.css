@@ -2805,3 +2805,198 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   .onboarding-settings-head button { align-self: flex-start; }
   .onboarding-item { padding: 7px; }
 }
+
+/* 项目管理器侧边面板 */
+.project-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  gap: 8px;
+  border-right: 1px solid var(--panel-2);
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+  animation: shadcn-in .15s ease-out;
+}
+.project-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--panel-2);
+}
+.project-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.project-panel-mini-btn {
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 8px;
+  min-height: 24px;
+  cursor: pointer;
+  box-shadow: none;
+}
+.project-panel-mini-btn:hover {
+  background: var(--accent-soft);
+}
+.project-panel-mini-btn.danger:hover {
+  background: rgb(220 38 38 / 0.12);
+  color: #dc2626;
+}
+.project-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.project-panel-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.project-panel-group-head[draggable="true"] {
+  cursor: grab;
+}
+.project-panel-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.project-panel-group-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 0 6px;
+  min-height: 16px;
+  line-height: 16px;
+}
+.project-panel-list {
+  display: grid;
+  gap: 2px;
+  padding: 0 0 2px 10px;
+}
+.project-panel-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 4px;
+}
+.project-panel-row button:first-child {
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+}
+.project-panel-row button.active {
+  background: var(--accent-soft);
+}
+.project-panel-empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 8px;
+  min-height: 14px;
+}
+.drop-above { box-shadow: inset 0 2px 0 0 var(--selected); }
+.drop-below { box-shadow: inset 0 -2px 0 0 var(--selected); }
+
+.project-panel-head {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  background: var(--panel);
+  padding-top: 4px;
+}
+.project-panel-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.project-panel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.project-panel-icon-btn {
+  width: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  box-shadow: none;
+  transition: all .1s ease;
+}
+.project-panel-icon-btn:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.project-panel-icon-btn.danger:hover {
+  background: rgb(220 38 38 / 0.12);
+  color: #dc2626;
+}
+.project-panel-icon-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.project-panel-icon-btn.open:hover {
+  color: var(--selected);
+}
+
+.project-panel-mini-btn.fixed {
+  width: 26px;
+  min-width: 26px;
+  height: 24px;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+}
+.project-panel-list.drop-target {
+  outline: 1px dashed var(--selected);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.project-panel-footer {
+  margin-top: auto;
+  padding: 8px 4px 2px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}

@@ -293,12 +293,13 @@ function setUiLanguage(language) {
 
 const state = {
   pages: [],
+  groups: [],
   activePageId: "",
   nodes: [],
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", zipExport: true, exportInputs: false, customMaterials: [] },
+  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", zipExport: true, exportInputs: false, customMaterials: [] },
   customLibrary: { textTemplates: [], imageMaterials: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -505,6 +506,12 @@ const els = {
   aiGenerateBtn: $("aiGenerateBtn"),
   verifyKeyBtn: $("verifyKeyBtn"),
   saveKeyBtn: $("saveKeyBtn"),
+  apiTypeSelect: $("apiTypeSelect"),
+  apimartApiInfo: $("apimartApiInfo"),
+  agtokenApiInfo: $("agtokenApiInfo"),
+  customApiSettings: $("customApiSettings"),
+  customApiBaseUrlInput: $("customApiBaseUrlInput"),
+  customApiHeadersInput: $("customApiHeadersInput"),
   clearKeyBtn: $("clearKeyBtn"),
   balanceDisplay: $("balanceDisplay"),
   balanceRefreshBtn: $("balanceRefreshBtn"),
@@ -717,7 +724,7 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
   const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
   delete state.settings.geminiAutomation;
   delete state.settings.model;
@@ -843,6 +850,7 @@ function syncSettingsPanel() {
   state.settings.projectFolderLabel = resolvedProjectFolderLabel(state.settings.projectFolderLabel) || runtimeProjectFolder;
   els.projectFolder.textContent = state.settings.projectFolderLabel;
   els.apiKeyInput.value = state.settings.apiKey || "";
+  applyApiTypeSettingsUi();
   syncCustomMaterialsList();
   renderVariableDefinitions();
 }
@@ -1854,14 +1862,33 @@ function findNode(id) {
   return state.nodes.find(n => n.id === id);
 }
 
+function isImage25StandardModel(model) {
+  return model === "gpt-image-2.5";
+}
+
+function isImage25Model(model) {
+  return model === "gpt-image-2.5" || model === "gpt-image-2.5-flare" || model === "gpt-image-2.5-sunburst";
+}
+
+function modelSupportsQuality(model) {
+  return model === "gpt-image-2" || isImage25Model(model);
+}
+
 function normalizeAiNodeSettings(node, fallback = {}) {
-  if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
-  node._model = node._model || fallback.model || "gpt-image-2";
-  node._resolution = node._resolution || fallback.resolution || "1k";
-  node._size = node._size || fallback.size || "1:1";
-  node._quality = node._model === "gpt-image-2" ? (node._quality || fallback.quality || (node.type === "screenshot-input" ? "low" : "medium")) : null;
-  if (node.type === "screenshot-input") node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
-  return node;
+if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
+node._model = node._model || fallback.model || "gpt-image-2";
+  if (isImage25StandardModel(node._model)) node._resolution = "1k";
+node._resolution = node._resolution || fallback.resolution || "1k";
+node._size = node._size || fallback.size || "1:1";
+  if (modelSupportsQuality(node._model)) {
+    let quality = node._quality || fallback.quality || (node.type === "screenshot-input" ? "low" : "medium");
+    if (isImage25Model(node._model) && (quality === "auto" || quality === "standard" || quality === "xhigh")) quality = quality === "xhigh" ? "high" : "medium";
+    node._quality = quality;
+  } else {
+    node._quality = null;
+  }
+if (node.type === "screenshot-input") node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
+return node;
 }
 
 function selectOptions(options, selected) {
@@ -1869,10 +1896,11 @@ function selectOptions(options, selected) {
 }
 
 function aiNodeControls(node) {
-  normalizeAiNodeSettings(node);
-  const isGpt = node._model === "gpt-image-2";
-  const models = [["gpt-image-2", "GPT Image 2"], ["gemini-3.1-flash-image-preview", "Gemini 3.1 Flash"]];
-  const resolutions = [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
+normalizeAiNodeSettings(node);
+  const isGpt = modelSupportsQuality(node._model);
+  const isStandard25 = isImage25StandardModel(node._model);
+  const models = [["gpt-image-2", "GPT Image 2"], ["gpt-image-2.5-flare", "GPT Image 2.5 Flare"], ["gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst"], ["gemini-3.1-flash-image-preview", "Gemini 3.1 Flash"]];
+  const resolutions = isStandard25 ? [["1k", "1K"]] : [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
   const qualities = [["auto", "auto"], ["low", "low"], ["medium", "medium"], ["high", "high"]];
   const ratios = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"].map(value => [value, value]);
   return `<div class="ai-node-settings">
@@ -2341,9 +2369,11 @@ async function submitGeneration(prompt, imageUrls, node) {
     size: node._size,
     resolution: node._resolution,
   };
-  if (node._model === "gpt-image-2") {
+if (node._model === "gpt-image-2") {
+payload.quality = node._quality || "medium";
+  } else if (isImage25Model(node._model)) {
     payload.quality = node._quality || "medium";
-  }
+}
   if (imageUrls.length) payload.image_urls = await Promise.all(imageUrls.map(materializeReferenceImage));
 
   // Node is still a temporary local backend during the first .NET migration stage.
@@ -3450,53 +3480,319 @@ function projectButtonMarkup(page) {
   return `<span class="project-name-text">${escapeHtml(name)}</span>`;
 }
 
+const UNGROUPED_GROUP_ID = "__ungrouped__";
+
+function normalizeGroups(rawGroups = null) {
+  if (rawGroups !== null) state.groups = Array.isArray(rawGroups) ? rawGroups : [];
+  if (!Array.isArray(state.groups)) state.groups = [];
+  const seen = new Set();
+  state.groups = state.groups.filter(group => {
+    if (!group || typeof group.id !== "string" || !group.id || group.id === UNGROUPED_GROUP_ID) return false;
+    if (typeof group.name !== "string" || !group.name.trim()) return false;
+    if (seen.has(group.id)) return false;
+    seen.add(group.id);
+    return true;
+  }).map(group => ({ id: group.id, name: group.name }));
+  for (const page of state.pages) {
+    if (!page.groupId || !state.groups.some(group => group.id === page.groupId)) page.groupId = UNGROUPED_GROUP_ID;
+  }
+}
+
+function createGroupId() {
+  return "grp_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function projectGroupId(page) {
+  return page && page.groupId && state.groups.some(group => group.id === page.groupId) ? page.groupId : UNGROUPED_GROUP_ID;
+}
+
 function renderPageTabs() {
   const page = currentPage();
   els.projectNameBtn.innerHTML = projectButtonMarkup(page);
-  els.projectNameBtn.title = page ? `${page.name} · ${projectModeName(page.mode)}（单击切换项目，双击重命名）` : "未命名项目";
-  els.projectMenu.innerHTML = "";
-  state.pages.filter(page => page.mode !== "mindmap" || mindmapFeatureEnabled()).forEach(page => {
-    const row = document.createElement("div");
-    row.className = "project-menu-row";
-
-    const btn = document.createElement("button");
-    btn.className = page.id === state.activePageId ? "active" : "";
-    btn.innerHTML = projectButtonMarkup(page);
-    btn.title = `${page.name} · ${projectModeName(page.mode)}（双击重命名）`;
-    let clickTimer = null;
-    btn.onclick = () => {
-      if (clickTimer) window.clearTimeout(clickTimer);
-      clickTimer = window.setTimeout(() => {
-        clickTimer = null;
-        if (page.id !== state.activePageId) switchPage(page.id);
-        els.projectMenu.classList.add("hidden");
-      }, 220);
-    };
-    btn.ondblclick = ev => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (clickTimer) window.clearTimeout(clickTimer);
-      clickTimer = null;
-      beginProjectMenuRename(page, btn);
-    };
-    row.appendChild(btn);
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "project-delete-btn";
-    delBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8"/></svg>';
-    delBtn.setAttribute("aria-label", "删除项目");
-    delBtn.title = "删除项目";
-    delBtn.onclick = (ev) => {
-      ev.stopPropagation();
-      deletePage(page.id);
-    };
-    row.appendChild(delBtn);
-
-    els.projectMenu.appendChild(row);
-  });
+  els.projectNameBtn.title = page ? page.name + " · " + projectModeName(page.mode) + "（点击打开项目管理器）" : "未命名项目";
+  const menu = els.projectMenu;
+  if (menu.classList.contains("hidden")) return;
+  normalizeGroups();
+  menu.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "project-panel-head";
+  const title = document.createElement("span");
+  title.className = "project-panel-title";
+  title.textContent = "项目管理器";
+  head.appendChild(title);
+  const addGroupBtn = document.createElement("button");
+  addGroupBtn.type = "button";
+  addGroupBtn.className = "project-panel-mini-btn";
+  addGroupBtn.textContent = "＋ 新建分组";
+  addGroupBtn.onclick = () => {
+    state.groups.push({ id: createGroupId(), name: "分组" + (state.groups.length + 1) });
+    markDirty();
+    persistPages();
+    renderPageTabs();
+  };
+  head.appendChild(addGroupBtn);
+  menu.appendChild(head);
+  for (const group of state.groups) menu.appendChild(projectPanelGroupSection(group));
+  menu.appendChild(projectPanelGroupSection({ id: UNGROUPED_GROUP_ID, name: "未分组" }));
+  const footer = document.createElement("div");
+  footer.className = "project-panel-footer";
+  footer.textContent = "点击切换项目";
+  menu.appendChild(footer);
 }
 
-function beginProjectMenuRename(page, button) {
+function projectPanelVisiblePages(groupId) {
+  return state.pages.filter(page => projectGroupId(page) === groupId && (page.mode !== "mindmap" || mindmapFeatureEnabled()));
+}
+
+function projectPanelIconBtn(className, title, svgPath, onclick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = className;
+  btn.title = title;
+  btn.setAttribute("aria-label", title);
+  btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + svgPath + "</svg>";
+  btn.onclick = onclick;
+  return btn;
+}
+
+function projectPanelPageRow(page) {
+  const row = document.createElement("div");
+  row.className = "project-panel-row";
+  row.dataset.pageId = page.id;
+  row.draggable = true;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = page.id === state.activePageId ? "active" : "";
+  btn.innerHTML = projectButtonMarkup(page);
+  btn.title = page.name + " · " + projectModeName(page.mode) + "（双击重命名）";
+  btn.onclick = () => {
+    if (page.id !== state.activePageId) switchPage(page.id);
+    els.projectMenu.classList.add("hidden");
+  };
+  btn.ondblclick = ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    beginProjectPanelRename(page, btn);
+  };
+  row.appendChild(btn);
+
+  const actions = document.createElement("div");
+  actions.className = "project-panel-row-actions";
+  actions.appendChild(projectPanelIconBtn("project-panel-icon-btn", "重命名项目",
+    '<path d="M4 20l4.5-1L20 7.5a2.1 2.1 0 0 0-3-3L5.5 16 4 20z"/><path d="M13.5 6l3 3"/>',
+    ev => {
+      ev.stopPropagation();
+      beginProjectPanelRename(page, btn);
+    }));
+  actions.appendChild(projectPanelIconBtn("project-panel-icon-btn danger", "删除项目",
+    '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>',
+    ev => {
+      ev.stopPropagation();
+      deletePage(page.id);
+    }));
+  row.appendChild(actions);
+
+  row.addEventListener("dragstart", ev => {
+    ev.dataTransfer.setData("text/canvasflow-page", page.id);
+    ev.dataTransfer.effectAllowed = "move";
+  });
+  row.addEventListener("dragend", () => {
+    document.querySelectorAll(".drop-above, .drop-below").forEach(el => el.classList.remove("drop-above", "drop-below"));
+  });
+  row.addEventListener("dragover", ev => {
+    if (!Array.from(ev.dataTransfer.types).includes("text/canvasflow-page")) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "move";
+    const rect = row.getBoundingClientRect();
+    const before = ev.clientY < rect.top + rect.height / 2;
+    row.classList.toggle("drop-above", before);
+    row.classList.toggle("drop-below", !before);
+  });
+  row.addEventListener("dragleave", () => row.classList.remove("drop-above", "drop-below"));
+  row.addEventListener("drop", ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    row.classList.remove("drop-above", "drop-below");
+    const pageId = ev.dataTransfer.getData("text/canvasflow-page");
+    if (!pageId || pageId === page.id) return;
+    const rect = row.getBoundingClientRect();
+    const before = ev.clientY < rect.top + rect.height / 2;
+    const groupId = projectGroupId(page);
+    let beforePageId = page.id;
+    if (!before) {
+      const groupPages = projectPanelVisiblePages(groupId);
+      const pos = groupPages.findIndex(item => item.id === page.id);
+      const next = groupPages[pos + 1];
+      beforePageId = next ? next.id : null;
+    }
+    moveProjectPage(pageId, groupId, beforePageId);
+  });
+  return row;
+}
+
+function moveProjectPage(pageId, groupId, beforePageId) {
+  const fromIdx = state.pages.findIndex(item => item.id === pageId);
+  if (fromIdx === -1) return;
+  const moved = state.pages.splice(fromIdx, 1)[0];
+  moved.groupId = groupId;
+  let insertIdx = state.pages.length;
+  if (beforePageId) {
+    const targetIdx = state.pages.findIndex(item => item.id === beforePageId);
+    if (targetIdx !== -1) insertIdx = targetIdx;
+  } else {
+    const groupPages = state.pages.filter(item => projectGroupId(item) === groupId);
+    if (groupPages.length) insertIdx = state.pages.findIndex(item => item.id === groupPages[groupPages.length - 1].id) + 1;
+  }
+  state.pages.splice(insertIdx, 0, moved);
+  normalizeGroups();
+  markDirty();
+  persistPages();
+  renderPageTabs();
+}
+
+function projectPanelGroupSection(group) {
+  const isUngrouped = group.id === UNGROUPED_GROUP_ID;
+  const section = document.createElement("div");
+  section.className = "project-panel-group";
+  section.dataset.groupId = group.id;
+
+  const head = document.createElement("div");
+  head.className = "project-panel-group-head";
+  if (!isUngrouped) head.draggable = true;
+
+  const name = document.createElement("span");
+  name.className = "project-panel-group-name";
+  name.textContent = group.name;
+  name.title = isUngrouped ? "默认分组（固定在最后，不可删除）" : "双击重命名分组；拖动可排序";
+  if (!isUngrouped) {
+    name.ondblclick = ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      beginProjectPanelGroupRename(group, name);
+    };
+  }
+  head.appendChild(name);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "project-panel-mini-btn fixed";
+  addBtn.textContent = "＋";
+  addBtn.title = "在此分组新建项目";
+  addBtn.onclick = ev => {
+    ev.stopPropagation();
+    newPage(isUngrouped ? null : group.id);
+  };
+  head.appendChild(addBtn);
+
+  if (!isUngrouped) {
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "project-panel-mini-btn danger fixed";
+    delBtn.textContent = "×";
+    delBtn.title = "删除分组（组内项目移入未分组）";
+    delBtn.onclick = ev => {
+      ev.stopPropagation();
+      const inside = state.pages.filter(item => projectGroupId(item) === group.id).length;
+      const text = inside
+        ? "分组“" + group.name + "”包含 " + inside + " 个项目，删除分组后这些项目将移入“未分组”。确定删除该分组吗？"
+        : "确定删除空分组“" + group.name + "”吗？";
+      if (!window.confirm(text)) return;
+      for (const item of state.pages) {
+        if (projectGroupId(item) === group.id) item.groupId = UNGROUPED_GROUP_ID;
+      }
+      state.groups = state.groups.filter(item => item.id !== group.id);
+      markDirty();
+      persistPages();
+      renderPageTabs();
+      toast("已删除分组");
+    };
+    head.appendChild(delBtn);
+  }
+
+  head.addEventListener("dragstart", ev => {
+    if (isUngrouped) {
+      ev.preventDefault();
+      return;
+    }
+    ev.dataTransfer.setData("text/canvasflow-group", group.id);
+    ev.dataTransfer.effectAllowed = "move";
+  });
+  head.addEventListener("dragend", () => {
+    document.querySelectorAll(".drop-above, .drop-below").forEach(el => el.classList.remove("drop-above", "drop-below"));
+  });
+  head.addEventListener("dragover", ev => {
+    const types = Array.from(ev.dataTransfer.types);
+    if (types.includes("text/canvasflow-group") && !isUngrouped) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      const rect = head.getBoundingClientRect();
+      const before = ev.clientY < rect.top + rect.height / 2;
+      head.classList.toggle("drop-above", before);
+      head.classList.toggle("drop-below", !before);
+    } else if (types.includes("text/canvasflow-page")) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+    }
+  });
+  head.addEventListener("dragleave", () => head.classList.remove("drop-above", "drop-below"));
+  head.addEventListener("drop", ev => {
+    head.classList.remove("drop-above", "drop-below");
+    const types = Array.from(ev.dataTransfer.types);
+    if (types.includes("text/canvasflow-page")) {
+      ev.preventDefault();
+      const pageId = ev.dataTransfer.getData("text/canvasflow-page");
+      if (pageId) moveProjectPage(pageId, group.id, null);
+      return;
+    }
+    if (isUngrouped) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const groupId = ev.dataTransfer.getData("text/canvasflow-group");
+    if (!groupId || groupId === group.id) return;
+    const from = state.groups.findIndex(item => item.id === groupId);
+    if (from === -1) return;
+    const rect = head.getBoundingClientRect();
+    const before = ev.clientY < rect.top + rect.height / 2;
+    const moved = state.groups.splice(from, 1)[0];
+    let to = state.groups.findIndex(item => item.id === group.id);
+    if (to === -1) to = state.groups.length;
+    state.groups.splice(before ? to : to + 1, 0, moved);
+    markDirty();
+    persistPages();
+    renderPageTabs();
+  });
+
+  section.appendChild(head);
+
+  const list = document.createElement("div");
+  list.className = "project-panel-list";
+  list.addEventListener("dragover", ev => {
+    if (!Array.from(ev.dataTransfer.types).includes("text/canvasflow-page")) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "move";
+    section.classList.add("drop-target");
+  });
+  list.addEventListener("dragleave", () => section.classList.remove("drop-target"));
+  list.addEventListener("drop", ev => {
+    section.classList.remove("drop-target");
+    const pageId = ev.dataTransfer.getData("text/canvasflow-page");
+    if (!Array.from(ev.dataTransfer.types).includes("text/canvasflow-page") || !pageId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    moveProjectPage(pageId, group.id, null);
+  });
+  const groupPages = projectPanelVisiblePages(group.id);
+  for (const item of groupPages) list.appendChild(projectPanelPageRow(item));
+  const empty = document.createElement("div");
+  empty.className = "project-panel-empty";
+  empty.textContent = groupPages.length ? "" : "暂无项目，点“＋”新建";
+  list.appendChild(empty);
+  section.appendChild(list);
+  return section;
+}
+
+function beginProjectPanelRename(page, button) {
   const input = document.createElement("input");
   input.className = "project-menu-name-input";
   input.value = page.name;
@@ -3514,7 +3810,33 @@ function beginProjectMenuRename(page, button) {
       persistPages();
     }
     renderPageTabs();
-    els.projectMenu.classList.remove("hidden");
+  };
+  input.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") finish(true);
+    if (ev.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true), { once: true });
+}
+
+function beginProjectPanelGroupRename(group, nameEl) {
+  const input = document.createElement("input");
+  input.className = "project-menu-name-input";
+  input.value = group.name;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let finished = false;
+  const finish = save => {
+    if (finished) return;
+    finished = true;
+    const name = input.value.trim();
+    const target = state.groups.find(item => item.id === group.id);
+    if (save && name && target) {
+      target.name = name;
+      markDirty();
+      persistPages();
+    }
+    renderPageTabs();
   };
   input.addEventListener("keydown", ev => {
     if (ev.key === "Enter") finish(true);
@@ -3713,7 +4035,7 @@ function nodeTemplate(node) {
   } else if (node.type === "screenshot-input") {
     normalizeAiNodeSettings(node);
     node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
-    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label>画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
+    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gpt-image-2.5-flare" ${node._model === "gpt-image-2.5-flare" ? "selected" : ""}>GPT Image 2.5 Flare</option><option value="gpt-image-2.5-sunburst" ${node._model === "gpt-image-2.5-sunburst" ? "selected" : ""}>GPT Image 2.5 Sunburst</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label>画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
@@ -4280,7 +4602,10 @@ els.nodes.addEventListener("change", ev => {
     return;
   }
   if (node.type === "screenshot-input") {
-    if (role === "screenshot-model") node._model = ev.target.value;
+    if (role === "screenshot-model") {
+      node._model = ev.target.value;
+      if (isImage25StandardModel(node._model)) node._resolution = "1k";
+    }
     else if (role === "screenshot-resolution") node._resolution = ev.target.value;
     else if (role === "screenshot-quality") node._quality = ev.target.value;
     else if (role === "screenshot-size") node._size = ev.target.value;
@@ -4299,7 +4624,12 @@ els.nodes.addEventListener("change", ev => {
   if (node.type !== "ai-image") return;
   if (role === "ai-model") {
     node._model = ev.target.value;
-    node._quality = node._model === "gpt-image-2" ? (node._quality || "medium") : null;
+    if (isImage25StandardModel(node._model)) node._resolution = "1k";
+    if (modelSupportsQuality(node._model)) {
+      node._quality = node._quality || "medium";
+    } else {
+      node._quality = null;
+    }
     pushHistory(); render();
   } else if (role === "ai-resolution") {
     node._resolution = ev.target.value; pushHistory();
@@ -5740,11 +6070,12 @@ els.viewport.addEventListener("drop", async ev => {
   }
 });
 
-function createNewPage(mode = "ai") {
+function createNewPage(mode = "ai", groupId = null) {
   saveCurrentPage();
   savePageHistory();
   resetGraphNavigation();
   const page = blankPage(`项目${state.nextPageNum++}`, mode);
+  page.groupId = groupId || UNGROUPED_GROUP_ID;
   state.pages.push(page);
   state.activePageId = page.id;
   state._deletedPage = null;
@@ -5757,15 +6088,16 @@ function createNewPage(mode = "ai") {
   toast(mode === "mindmap" ? "已新建思维导图项目" : "已新建 AI 绘图项目");
 }
 
-function newPage() {
+function newPage(groupId = null) {
   if (hasUnsettledAiQueueTasks()) {
     toast("任务队列仍有待处理任务，请完成或删除等待任务后再新建项目");
     return;
   }
   if (!mindmapFeatureEnabled()) {
-    createNewPage("ai");
+    createNewPage("ai", groupId);
     return;
   }
+  state._pendingNewPageGroupId = groupId;
   els.projectModeDialog.classList.remove("hidden");
   window.setTimeout(() => els.projectModeDialog.querySelector('[data-project-mode="ai"]')?.focus(), 0);
 }
@@ -5850,7 +6182,7 @@ function renamePage() {
 }
 
 function persistPages() {
-  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion }));
+  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion }));
   for (const page of snapshot.pages || []) {
     if (page.data?.settings) page.data.settings.apiKey = "";
     delete page._history;
@@ -5878,7 +6210,7 @@ async function persistDesktopStateNow() {
 }
 
 function desktopStateSnapshot() {
-  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion, updatedAt: Date.now() }));
+  const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion, updatedAt: Date.now() }));
   for (const page of snapshot.pages || []) {
     if (page.data?.settings) page.data.settings.apiKey = "";
     delete page._history;
@@ -5889,7 +6221,7 @@ function desktopStateSnapshot() {
 
 function autoBackupContent() {
   saveCurrentPage();
-  const data = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId, globalLibrary }));
+  const data = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, globalLibrary }));
   for (const page of data.pages || []) {
     if (page.data?.settings) page.data.settings.apiKey = "";
     delete page._history;
@@ -6002,6 +6334,7 @@ function loadPagesFromStorage(savedState = null) {
     const saved = savedState || JSON.parse(raw);
     if (!Array.isArray(saved.pages) || !saved.pages.length) return false;
     state.pages = saved.pages.map(page => ({ ...page, mode: page.mode === "mindmap" ? "mindmap" : "ai" }));
+    normalizeGroups(saved.groups);
     state.activePageId = saved.activePageId || state.pages[0].id;
     state.nextPageNum = saved.nextPageNum || (state.pages.length + 1);
     let page = currentPage();
@@ -6049,7 +6382,8 @@ els.projectModeDialog.addEventListener("click", event => {
   if (!modeButton) return;
   const mode = modeButton.dataset.projectMode === "mindmap" ? "mindmap" : "ai";
   closeProjectModeDialog();
-  createNewPage(mode);
+  createNewPage(mode, state._pendingNewPageGroupId || null);
+  state._pendingNewPageGroupId = null;
 });
 $("saveJsonBtn").onclick = saveJson;
 $("loadJsonBtn").onclick = () => els.loadJson.click();
@@ -6371,7 +6705,18 @@ document.addEventListener("keydown", ev => { if (ev.key === "Escape") setShortcu
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && !els.projectModeDialog.classList.contains("hidden")) closeProjectModeDialog();
 });
-els.projectNameBtn.onclick = () => els.projectMenu.classList.toggle("hidden");
+els.projectNameBtn.onclick = () => {
+  els.projectMenu.classList.toggle("hidden");
+  renderPageTabs();
+};
+document.addEventListener("mousedown", ev => {
+  if (els.projectMenu.classList.contains("hidden")) return;
+  if (els.projectMenu.contains(ev.target) || els.projectNameBtn.contains(ev.target)) return;
+  els.projectMenu.classList.add("hidden");
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape" && !els.projectMenu.classList.contains("hidden")) els.projectMenu.classList.add("hidden");
+});
 els.projectNameBtn.ondblclick = ev => {
   ev.preventDefault();
   els.projectMenu.classList.add("hidden");
@@ -6787,6 +7132,50 @@ if (els.languageSelect) {
 if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
 if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
 
+function applyApiTypeSettingsUi() {
+  const apiType = ["apimart", "agtoken", "custom"].includes(state.settings.apiType) ? state.settings.apiType : "apimart";
+  if (els.apiTypeSelect) els.apiTypeSelect.value = apiType;
+  if (els.apimartApiInfo) els.apimartApiInfo.classList.toggle("hidden", apiType !== "apimart");
+  if (els.agtokenApiInfo) els.agtokenApiInfo.classList.toggle("hidden", apiType !== "agtoken");
+  if (els.customApiSettings) els.customApiSettings.classList.toggle("hidden", apiType !== "custom");
+  if (els.customApiBaseUrlInput) els.customApiBaseUrlInput.value = state.settings.customApiBaseUrl || "";
+  if (els.customApiHeadersInput) els.customApiHeadersInput.value = state.settings.customApiHeaders || "";
+  const card = els.apiSettingsCard;
+  if (card) card.dataset.apiType = apiType;
+  console.info("[API类型] 当前类型：", apiType);
+}
+
+function parseCustomApiHeaders(raw) {
+  const headers = {};
+  String(raw || "").split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const idx = trimmed.indexOf(":");
+    if (idx <= 0) return;
+    const name = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    if (name && value) headers[name] = value;
+  });
+  return headers;
+}
+
+els.apiTypeSelect.onchange = () => {
+  state.settings.apiType = els.apiTypeSelect.value;
+  applyApiTypeSettingsUi();
+  pushHistory();
+};
+
+els.customApiBaseUrlInput.onchange = () => {
+  state.settings.customApiBaseUrl = els.customApiBaseUrlInput.value.trim().replace(/\/+$/, "");
+  els.customApiBaseUrlInput.value = state.settings.customApiBaseUrl;
+  pushHistory();
+};
+
+els.customApiHeadersInput.onchange = () => {
+  state.settings.customApiHeaders = els.customApiHeadersInput.value;
+  pushHistory();
+};
+
 els.apiKeyInput.onchange = () => {
   state.settings.apiKey = els.apiKeyInput.value.trim();
   if (desktop) desktop.saveApiKey(state.settings.apiKey).then(result => { if (result.warning) toast(result.warning); });
@@ -7062,6 +7451,7 @@ els.loadJson.onchange = async () => {
   if (!parsed?.type) await restoreLibrariesFromJson(data);
   if (Array.isArray(data.pages)) {
     state.pages = data.pages.map(page => ({ ...page, mode: page.mode === "mindmap" ? "mindmap" : "ai" }));
+    normalizeGroups(Array.isArray(data.groups) ? data.groups : []);
     resetGraphNavigation();
     state.activePageId = data.activePageId || state.pages[0].id;
     let page = currentPage();
@@ -7075,6 +7465,7 @@ els.loadJson.onchange = async () => {
   } else {
     const page = blankPage(file.name.replace(/\.(?:cflow|json)$/i, ""), data.mode === "mindmap" ? "mindmap" : "ai");
     page.data = data;
+    normalizeGroups([]);
     state.pages.push(page);
     const activePage = page.mode === "mindmap" && !mindmapFeatureEnabled()
       ? blankPage(`项目${state.nextPageNum++}`, "ai")
@@ -7170,7 +7561,8 @@ async function saveJson() {
   if (backupLibrary === null) return;
   try {
     saveCurrentPage();
-    const project = JSON.parse(JSON.stringify({ pages: state.pages, activePageId: state.activePageId }));
+    normalizeGroups();
+    const project = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId }));
     for (const page of project.pages || []) { delete page._history; delete page._future; }
     for (const page of project.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
     const payload = { canvasflowVersion: 1, type: "project", savedAt: new Date().toISOString(), project };
