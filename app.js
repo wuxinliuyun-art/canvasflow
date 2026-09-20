@@ -1428,10 +1428,10 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     angleRoll: type === "angle-image" ? 0 : undefined,
     angleZoom: type === "angle-image" ? 1 : undefined,
     angleReverseDirection: type === "angle-image" ? false : undefined,
-    _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : undefined,
+    _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : type === "ai-image" ? "gpt-image-2.5-flare" : undefined,
     _resolution: type === "angle-image" ? "1k" : undefined,
     _size: type === "angle-image" ? "1:1" : undefined,
-    _count: type === "screenshot-input" ? 1 : undefined,
+    _count: (type === "ai-image" || type === "screenshot-input") ? 1 : undefined,
     images: (type === "group" || type === "folder") ? [] : undefined,
     items: null,
     internalEdges: null,
@@ -1886,7 +1886,7 @@ function modelSupportsQuality(model) {
 
 function normalizeAiNodeSettings(node, fallback = {}) {
 if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
-node._model = node._model || fallback.model || "gpt-image-2";
+node._model = node._model || fallback.model || "gpt-image-2.5-flare";
   if (isImage25StandardModel(node._model)) node._resolution = "1k";
 node._resolution = node._resolution || fallback.resolution || "1k";
 node._size = node._size || fallback.size || "1:1";
@@ -1898,7 +1898,7 @@ node._size = node._size || fallback.size || "1:1";
   } else {
     node._quality = null;
   }
-if (node.type === "screenshot-input") node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
+if (node.type === "screenshot-input" || node.type === "ai-image") node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
 return node;
 }
 
@@ -1923,6 +1923,7 @@ normalizeAiNodeSettings(node);
     <label><span>分辨率</span><select data-role="ai-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
     <label class="${isGpt ? "" : "hidden"}"><span>画质</span><select data-role="ai-quality">${selectOptions(qualities, node._quality || "medium")}</select></label>
     <label><span>比例</span><select data-role="ai-size">${selectOptions(ratios, node._size)}</select></label>
+    <label class="${isExt25 ? "" : "hidden"}"><span>生成张数</span><select data-role="ai-count">${selectOptions([[1, "1"], [2, "2"], [3, "3"], [4, "4"]], node._count)}</select></label>
   </div>`;
 }
 
@@ -2017,10 +2018,9 @@ function aiNodeProgressMarkup(node) {
   const progress = node._aiProgress;
   if (!progress) return "";
   const hasPercent = progress.percent !== null;
-  const percentText = hasPercent ? `${Math.round(progress.percent)}%` : "";
   const title = progress.error || progress.label;
-  return `<div class="ai-node-progress ai-progress-${progress.status}" title="${escapeHtml(title)}">
-    <div class="ai-node-progress-row"><span>${escapeHtml(progress.label)}</span><b>${percentText}</b></div>
+  const progressValue = hasPercent ? ` aria-valuenow="${Math.round(progress.percent)}"` : "";
+  return `<div class="ai-node-progress ai-progress-${progress.status}" role="progressbar" aria-label="${escapeHtml(title)}" aria-valuemin="0" aria-valuemax="100"${progressValue} title="${escapeHtml(title)}">
     <div class="ai-node-progress-track"><span class="${hasPercent ? "" : "indeterminate"}" style="${hasPercent ? `width:${progress.percent}%` : ""}"></span></div>
   </div>`;
 }
@@ -2381,7 +2381,7 @@ async function submitGeneration(prompt, imageUrls, node) {
   const payload = {
     model: extVersion ? "gpt-image-2.5-ext" : node._model,
     prompt: prompt || "generate an image",
-    n: 1,
+    n: extVersion ? Math.max(1, Math.min(4, Number(node._count) || 1)) : 1,
     size: node._size,
     resolution: extVersion ? String(node._resolution || "1k").toUpperCase() : node._resolution,
   };
@@ -2409,7 +2409,7 @@ payload.quality = node._quality || "medium";
   return taskId;
 }
 
-async function pollTask(taskId, onProgress = null) {
+async function pollTask(taskId, onProgress = null, returnAllImages = false) {
   const maxAttempts = 360;
   let lastErr = null;
   for (let i = 0; i < maxAttempts; i++) {
@@ -2443,9 +2443,9 @@ async function pollTask(taskId, onProgress = null) {
       if (data.data.status === "completed") {
         if (onProgress) onProgress(100, "completed");
         const images = data.data.result?.images;
-        if (images && images.length && images[0].url) {
-          const url = images[0].url;
-          return Array.isArray(url) ? url[0] : url;
+        if (images && images.length) {
+          const urls = images.flatMap(image => Array.isArray(image?.url) ? image.url : [image?.url]).filter(Boolean);
+          if (urls.length) return returnAllImages ? urls : urls[0];
         }
         throw new Error("任务完成但无图片结果");
       }
@@ -2591,7 +2591,7 @@ function manageQueuedTask(taskId, action) {
 
 function queuedGenerationSettings(node) {
   normalizeAiNodeSettings(node);
-  return { type: "ai-image", _model: node._model, _resolution: node._resolution, _quality: node._quality, _size: node._size };
+  return { type: "ai-image", _model: node._model, _resolution: node._resolution, _quality: node._quality, _size: node._size, _count: node._count };
 }
 
 function generatedResultFileName(task, node, dataUrl) {
@@ -2600,7 +2600,8 @@ function generatedResultFileName(task, node, dataUrl) {
   const project = safeName(task.projectName || "项目").slice(0, 36) || "项目";
   const taskNumber = Number(String(task.id || "").replace(/^q/, ""));
   const sequence = String(Number.isFinite(taskNumber) && taskNumber > 0 ? taskNumber : Math.max(0, Number(task.resultOrder) || 0) + 1).padStart(2, "0");
-  return `${timestamp()}_${project}_${sequence}.${extension}`;
+  const resultSuffix = Number(task.resultImageIndex) > 0 ? `_${String(Number(task.resultImageIndex) + 1).padStart(2, "0")}` : "";
+  return `${timestamp()}_${project}_${sequence}${resultSuffix}.${extension}`;
 }
 
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -2802,7 +2803,7 @@ async function runQueuedAiTask(task) {
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
   const releaseSlot = await acquireAiApiSlot(task.label || task.id);
-  let imageUrl;
+  let imageUrls;
   try {
   task.status = "submitting";
   task.progress = 0;
@@ -2819,12 +2820,12 @@ async function runQueuedAiTask(task) {
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
   notifyScreenshotTask(task);
-  imageUrl = await pollTask(task.taskId, progress => {
+  imageUrls = await pollTask(task.taskId, progress => {
     task.progress = progress;
     refreshQueuedNodeProgress(task.nodeId);
     renderTaskQueue();
     notifyScreenshotTask(task);
-  });
+  }, isImage25ExtModel(task.generationSettings?._model));
   } finally {
     releaseSlot();
   }
@@ -2833,9 +2834,42 @@ async function runQueuedAiTask(task) {
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
   notifyScreenshotTask(task);
-  const dataUrl = await fetchImageAsBase64(imageUrl);
-  if (task.source === "screenshot") await applyScreenshotQueuedResult(task, dataUrl);
-  else await applyQueuedResult(task, node, dataUrl);
+  const urls = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
+  const expectedCount = isImage25ExtModel(task.generationSettings?._model)
+    ? Math.max(1, Math.min(4, Number(task.generationSettings?._count) || 1))
+    : 1;
+  if (urls.length < expectedCount) console.warn("[生成结果] 返回图片数量少于请求数量", { taskId: task.id, expectedCount, actualCount: urls.length });
+  const baseOrder = Math.max(0, Number(task.resultOrder) || 0);
+  const firstResultStaysInNode = task.resultMode === "node-preview" && expectedCount === 1;
+  const externalResultCount = Math.max(0, urls.length - (firstResultStaysInNode ? 1 : 0));
+  const totalResults = firstResultStaysInNode
+    ? baseOrder + externalResultCount
+    : Math.max(Number(task.resultCount) || 0, baseOrder + externalResultCount);
+  task.outputPaths = [];
+  for (let index = 0; index < urls.length; index++) {
+    const dataUrl = await fetchImageAsBase64(urls[index]);
+    if (task.source === "screenshot") {
+      await applyScreenshotQueuedResult(task, dataUrl);
+      if (task.outputPath) task.outputPaths.push(task.outputPath);
+      continue;
+    }
+    const resultTask = index === 0 ? task : {
+      ...task,
+      id: `${task.id}-${index + 1}`,
+      resultMode: "image-node",
+      resultOrder: baseOrder + index - (firstResultStaysInNode ? 1 : 0),
+      resultCount: totalResults,
+      resultImageIndex: index,
+      outputPath: "",
+    };
+    if (index === 0) {
+      resultTask.resultOrder = baseOrder;
+      resultTask.resultCount = totalResults;
+    }
+    await applyQueuedResult(resultTask, node, dataUrl);
+    if (resultTask.outputPath) task.outputPaths.push(resultTask.outputPath);
+  }
+  task.outputPath = task.outputPaths[0] || task.outputPath || "";
   task.status = "done";
   task.progress = 100;
   notifyScreenshotTask(task);
@@ -2988,6 +3022,7 @@ function notifyScreenshotRequestFailure(message, error) { notifyScreenshotReques
 
 function buildAiQueueTasks(node, upstream, resultMode, runId) {
   const generationSettings = queuedGenerationSettings(node);
+  const imagesPerRequest = isImage25ExtModel(generationSettings._model) ? Math.max(1, Math.min(4, Number(generationSettings._count) || 1)) : 1;
   const prompt = upstream.texts.join("，");
   const groupImages = upstream.groupImages || [];
   const groupImageSet = new Set(groupImages);
@@ -3016,8 +3051,8 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
     resolution: generationSettings._resolution,
     size: generationSettings._size,
     resultMode: groupImages.length ? "image-node" : resultMode,
-    resultOrder: existingResultCount + index,
-    resultCount: existingResultCount + taskSources.length,
+    resultOrder: existingResultCount + index * imagesPerRequest,
+    resultCount: existingResultCount + taskSources.length * imagesPerRequest,
     status: "waiting",
     progress: 0,
     created: Date.now() + index,
@@ -4655,6 +4690,8 @@ els.nodes.addEventListener("change", ev => {
     node._quality = ev.target.value; pushHistory();
   } else if (role === "ai-size") {
     node._size = ev.target.value; pushHistory();
+  } else if (role === "ai-count") {
+    node._count = Math.max(1, Math.min(4, Number(ev.target.value) || 1)); pushHistory();
   }
 });
 

@@ -763,15 +763,8 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   left: 11px;
   right: 11px;
   bottom: 9px;
-  display: grid;
-  gap: 4px;
-  font-size: 10px;
-  color: var(--muted);
   pointer-events: none;
 }
-.ai-node-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.ai-node-progress-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-node-progress-row b { flex: 0 0 auto; color: var(--text); font-size: 10px; }
 .ai-node-progress-track { height: 4px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .22); }
 .ai-node-progress-track span { display: block; height: 100%; border-radius: inherit; transition: width .25s ease; background: #8b5cf6; }
 .ai-progress-waiting .ai-node-progress-track span, .ai-progress-cancelled .ai-node-progress-track span { background: #94a3b8; }
@@ -1173,8 +1166,9 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 
 .apikey-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
 }
 
 .api-type-fixed {
@@ -2822,6 +2816,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 }
 
 @media (max-width: 540px) {
+  .apikey-row { grid-template-columns: minmax(0, 1fr); }
   .topbar { top: 8px; right: 8px; left: 8px; gap: 6px; }
   .project-name-btn { width: 112px; min-height: 38px; padding: 0 10px; }
   .top-utility-track { gap: 2px; min-height: 40px; padding: 3px; }
