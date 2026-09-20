@@ -181,20 +181,20 @@
             <button id="saveKeyBtn" class="apikey-btn" title="保存 API Key">保存</button>
             <button id="clearKeyBtn" class="apikey-btn danger" title="清除所有已保存的 API Key（分享前使用）">清除</button>
           </div>
-          <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
-          <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
-          <div class="balance-row">
-            <span id="balanceDisplay" class="balance-text">令牌余额：--</span>
-            <button id="balanceRefreshBtn" class="apikey-btn" title="刷新令牌余额">刷新</button>
-          </div>
         </label>
 
-        <div id="apimartApiInfo">
+        <div id="apimartApiInfo" class="api-provider-info">
           <span class="api-url-hint">API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）</span>
-          <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
+          <div class="api-provider-actions">
+            <a class="api-register-link" href="https://apimart.ai/register?aff=W5d401" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
+            <div class="balance-row">
+              <span id="balanceDisplay" class="balance-text">令牌余额：--</span>
+              <button id="balanceRefreshBtn" class="apikey-btn" title="刷新令牌余额">刷新</button>
+            </div>
+          </div>
         </div>
 
-        <div id="agtokenApiInfo" class="hidden">
+        <div id="agtokenApiInfo" class="api-provider-info hidden">
           <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果）</span>
           <span class="api-url-hint">模型：gpt-image-2.5（仅 1K）/ -flare / -sunburst（1K / 2K / 4K）；质量 low / medium / high</span>
         </div>

@@ -1170,9 +1170,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   border-color: var(--selected);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--selected) 15%, transparent);
 }
-  border-color: rgba(47, 128, 237, .55);
-  box-shadow: 0 0 0 4px rgba(47, 128, 237, .12);
-}
 
 .apikey-row {
   display: grid;
@@ -1265,9 +1262,10 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 
 .api-url-hint {
   display: block;
-  margin-top: 4px;
+  margin: 0;
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.5;
 }
 .api-url-hint a {
   color: var(--muted);
@@ -1281,11 +1279,26 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin: 0;
 }
 .balance-text {
   font-size: 12px;
   color: var(--muted);
+}
+
+.api-provider-info {
+  display: grid;
+  gap: 9px;
+  margin: 2px 0 12px 156px;
+  padding-top: 2px;
+}
+
+.api-provider-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* Export folder actions */
@@ -2698,10 +2711,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .material-item { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; background: transparent; }
 .asset-editor { border-radius: 12px; background: color-mix(in srgb, var(--bg) 64%, var(--panel)); }
 .settings label:has(.apikey-row) { grid-template-columns: 142px minmax(0, 1fr); align-items: start; column-gap: 14px; }
-.settings label:has(.apikey-row) > .apikey-row,
-.settings label:has(.apikey-row) > .api-url-hint,
-.settings label:has(.apikey-row) > .api-register-link,
-.settings label:has(.apikey-row) > .balance-row { grid-column: 2; }
+.settings label:has(.apikey-row) > .apikey-row { grid-column: 2; }
 .api-register-link { align-self: start; margin: 0; border-color: var(--panel-2); color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); font-weight: 400; }
 .onboarding-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .onboarding-settings-head h3 { margin: 0 0 4px; }
@@ -2787,10 +2797,8 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   .settings-layout { grid-template-columns: 94px minmax(0, 1fr); }
   .settings-content { padding: 18px; }
   .settings label:has(.apikey-row) { grid-template-columns: 1fr; }
-  .settings label:has(.apikey-row) > .apikey-row,
-  .settings label:has(.apikey-row) > .api-url-hint,
-  .settings label:has(.apikey-row) > .api-register-link,
-  .settings label:has(.apikey-row) > .balance-row { grid-column: 1; }
+  .settings label:has(.apikey-row) > .apikey-row { grid-column: 1; }
+  .api-provider-info { margin-left: 0; }
   .onboarding-card { width: min(380px, calc(100vw - 24px)); padding: 17px; }
 }
 
