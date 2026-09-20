@@ -1173,7 +1173,14 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 
 .apikey-row {
   display: grid;
-  grid-template-columns: 1fr 52px 52px 52px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.apikey-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -1289,7 +1296,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .api-provider-info {
   display: grid;
   gap: 9px;
-  margin: 2px 0 12px 156px;
+  margin: 2px 0 12px;
   padding-top: 2px;
 }
 
@@ -2710,8 +2717,8 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .custom-materials-list { gap: 0; }
 .material-item { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; background: transparent; }
 .asset-editor { border-radius: 12px; background: color-mix(in srgb, var(--bg) 64%, var(--panel)); }
-.settings label:has(.apikey-row) { grid-template-columns: 142px minmax(0, 1fr); align-items: start; column-gap: 14px; }
-.settings label:has(.apikey-row) > .apikey-row { grid-column: 2; }
+.settings label:has(.apikey-row) { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.settings label:has(.apikey-row) > .apikey-row { grid-column: 1; }
 .api-register-link { align-self: start; margin: 0; border-color: var(--panel-2); color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); font-weight: 400; }
 .onboarding-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .onboarding-settings-head h3 { margin: 0 0 4px; }
@@ -2798,7 +2805,6 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   .settings-content { padding: 18px; }
   .settings label:has(.apikey-row) { grid-template-columns: 1fr; }
   .settings label:has(.apikey-row) > .apikey-row { grid-column: 1; }
-  .api-provider-info { margin-left: 0; }
   .onboarding-card { width: min(380px, calc(100vw - 24px)); padding: 17px; }
 }
 
