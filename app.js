@@ -57,8 +57,6 @@ const DEFAULT_TEXT_TEMPLATES = [
   { id: "builtin_text_cmf_transfer_v1", name: "cmf迁移", content: "将第二张图的材质迁移应用到一张图的产品上", revision: 1 },
   { id: "builtin_text_hd_restore_v1", name: "高清修复", content: "严格参考输入图片重新绘制，保持原有主体、结构、轮廓、比例、视角、构图、颜色和材质一致，不增加或删除元素。修复模糊、噪点、压缩痕迹和锯齿，重建清晰自然的边缘与细节，真实准确的材质表现，细腻柔和的光影，主体完整居中，背景简洁干净，专业高品质视觉效果，高清，高细节，8K。", revision: 1 },
   { id: "builtin_text_photo_line_art_v1", name: "照片转线稿", content: "照片转线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
-  { id: "builtin_text_sketch_line_art_v1", name: "草图转线稿", content: "将线框图转效果图，哑铃，黑色塑料材质，图片中红色部分使用银色金属材质", revision: 1 },
-  { id: "builtin_text_sketch_line_art_v2", name: "草图转线稿v2（材质需补充）", content: "将上传的产品线稿转换为高质量产品设计效果图。严格保持原始线稿中的产品外轮廓、结构、比例、透视角度、曲面关系、分件线和设计细节。在线稿基础上完成真实合理的材质、颜色、光影和细节表现。准确表现不同材质之间的质感差异、曲面起伏、边缘高光、环境反射、接触阴影和结构层次。采用专业工业设计产品渲染风格，造型清晰，材质细腻，光影自然，高级简洁，产品主体突出。棚拍级柔和布光，干净背景，高品质商业产品视觉效果，精致、真实、高完成度。", revision: 1 },
 ];
 
 // UI language is stored separately from project data so switching projects never
