@@ -7151,7 +7151,8 @@ if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ sil
 if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
 
 function applyApiTypeSettingsUi() {
-  const apiType = ["apimart", "agtoken", "custom"].includes(state.settings.apiType) ? state.settings.apiType : "apimart";
+  const apiType = "apimart";
+  state.settings.apiType = apiType;
   if (els.apiTypeSelect) els.apiTypeSelect.value = apiType;
   if (els.apimartApiInfo) els.apimartApiInfo.classList.toggle("hidden", apiType !== "apimart");
   if (els.agtokenApiInfo) els.agtokenApiInfo.classList.toggle("hidden", apiType !== "agtoken");

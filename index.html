@@ -167,10 +167,9 @@
         <div class="ai-section-head">API</div>
 
         <label>API 类型
-          <select id="apiTypeSelect">
-            <option value="apimart">apimart（内置代理）</option>
-            <option value="agtoken">agtoken</option>
-            <option value="custom">自定义</option>
+          <div class="api-type-fixed" aria-label="当前 API 类型">APIMart（内置代理）</div>
+          <select id="apiTypeSelect" class="hidden" aria-hidden="true" tabindex="-1">
+            <option value="apimart">APIMart（内置代理）</option>
           </select>
         </label>
 

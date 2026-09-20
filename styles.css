@@ -1177,6 +1177,19 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   gap: 8px;
 }
 
+.api-type-fixed {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--panel-2);
+  border-radius: 11px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 62%, var(--panel));
+  font-size: 12px;
+}
+
 .apikey-actions {
   display: flex;
   align-items: center;
