@@ -44,7 +44,13 @@ if not defined ISCC (
 "%ISCC%" "%PROJECT_ROOT%installer\CanvasFlow.iss"
 if errorlevel 1 exit /b 1
 
+rem -- Also keep a versioned copy next to the fixed-name installer for manual distribution
+for /f "tokens=3 delims=<>" %%V in ('findstr /r "<Version>.*</Version>" "%DESKTOP_PROJECT%"') do set "APP_VER=%%V"
+if defined APP_VER copy /y "%SETUP_FILE%" "%PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup-%APP_VER%.exe" >nul
+
 echo.
 echo CanvasFlow installer:
 echo %SETUP_FILE%
+echo CanvasFlow installer (versioned copy):
+echo %PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup-%APP_VER%.exe
 exit /b 0
