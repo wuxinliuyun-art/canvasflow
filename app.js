@@ -4732,32 +4732,69 @@ function tidyNodes() {
       components.push(component);
     });
 
+  // 行式布局：同一条链上的节点排在同一行，行距由该行最高的节点决定，列宽由该层最宽的节点决定。
+  const successors = new Map(scope.map(node => [node.id, []]));
+  edges.forEach(edge => successors.get(edge.from.node)?.push(edge.to.node));
+  const columnWidths = new Map();
+  scope.forEach(node => {
+    const depth = depths.get(node.id) || 0;
+    columnWidths.set(depth, Math.max(columnWidths.get(depth) || 0, node.w));
+  });
+  const columnX = new Map();
+  let nextColumnX = 0;
+  [...columnWidths.keys()].sort((a, b) => a - b).forEach(depth => {
+    columnX.set(depth, nextColumnX);
+    nextColumnX += columnWidths.get(depth) + 80;
+  });
+  const sourceIds = new Set(scope.map(n => n.id));
+  edges.forEach(e => sourceIds.delete(e.to.node));
+
   let nextGroupY = 0;
   components.forEach(component => {
-    const rowsByDepth = new Map();
-    component.forEach(node => {
-      const depth = depths.get(node.id) || 0;
-      if (!rowsByDepth.has(depth)) rowsByDepth.set(depth, []);
-      rowsByDepth.get(depth).push(node);
-    });
-    let groupBottom = nextGroupY;
-    rowsByDepth.forEach((nodes, depth) => {
-      let branchY = nextGroupY;
-      nodes.sort((a, b) => a.created - b.created).forEach(node => {
-        node.x = depth * 330;
-        node.y = branchY;
-        branchY = node.y + node.h + 40;
-        groupBottom = Math.max(groupBottom, node.y + node.h);
+    const rows = [];
+    const rowOf = new Map();
+    const newRow = () => { rows.push([]); return rows.length - 1; };
+    const walk = (nodeId, row) => {
+      if (rowOf.has(nodeId)) return;
+      rowOf.set(nodeId, row);
+      rows[row].push(nodeId);
+      const next = (successors.get(nodeId) || [])
+        .slice()
+        .sort((a, b) => (findNode(a)?.created || 0) - (findNode(b)?.created || 0));
+      next.forEach((id, index) => {
+        if (rowOf.has(id)) return;
+        walk(id, index === 0 ? row : newRow());
       });
+    };
+    component
+      .slice()
+      .sort((a, b) => a.created - b.created)
+      .forEach(node => {
+        if (sourceIds.has(node.id)) walk(node.id, newRow());
+      });
+    component.forEach(node => {
+      if (!rowOf.has(node.id)) walk(node.id, newRow());
     });
-    nextGroupY = groupBottom + 80;
+
+    const rowHeights = rows.map(ids => Math.max(...ids.map(id => findNode(id)?.h || 0)));
+    const rowYs = [];
+    let rowCursor = 0;
+    rows.forEach((ids, row) => { rowYs[row] = rowCursor; rowCursor += rowHeights[row] + 40; });
+    rows.forEach((ids, row) => ids.forEach(id => {
+      const node = findNode(id);
+      node.x = snap(columnX.get(depths.get(id) || 0));
+      // 吸附行中心而不是逐节点吸附，保证同一条链的节点中心严格对齐
+      node.y = snap(nextGroupY + rowYs[row] + rowHeights[row] / 2) - node.h / 2;
+    }));
+    nextGroupY = nextGroupY + rowCursor - 40 + 80;
   });
 
   const bx = Math.min(...scope.map(n => n.x)), by = Math.min(...scope.map(n => n.y));
   const bx2 = Math.max(...scope.map(n => n.x + n.w)), by2 = Math.max(...scope.map(n => n.y + n.h));
+  // 偏移量吸附网格即可；节点坐标不能二次吸附，否则奇数高度节点会被挪偏、破坏行中心对齐
   const dx = snap(targetCenter.x - (bx + bx2) / 2);
   const dy = snap(targetCenter.y - (by + by2) / 2);
-  scope.forEach(n => { n.x = snap(n.x + dx); n.y = snap(n.y + dy); });
+  scope.forEach(n => { n.x += dx; n.y += dy; });
 
   pushHistory();
   render();
@@ -6259,11 +6296,9 @@ els.viewport.addEventListener("contextmenu", async ev => {
           });
         }
       }],
-      ...(extensionSources.length ? [["拓展功能", [
-        ["角度变化", () => {
-          extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
-        }],
-      ]]] : []),
+      ...(extensionSources.length ? [["角度变化", () => {
+        extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
+      }]] : []),
       ["断开连接", () => disconnectEdges(state.selected)],
       ["复制节点", () => copySelection()],
       ["删除节点", () => deleteNodes(state.selected)],
