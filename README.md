@@ -6,16 +6,7 @@ CanvasFlow 通过连接文字、参考图片和 AI 绘图节点，帮助你快�
 
 [下载 Windows 版](https://github.com/wuxinliuyun-art/canvasflow/releases/latest) · [English](README_EN.md)
 
-## 2.6 系列新增功能
 
-- 原生 `.NET 10 WPF + WebView2` 桌面版，无需 Node、本地服务或端口
-- 支持经过签名校验、文件清单校验和失败回退的界面热更新
-- AI 绘图任务统一进入右侧任务队列并显示进度
-- 独立置顶截图工具，可框选固定区域并直接提交 AI 绘图任务
-- 更快的启动加载、图片双击预览、改进的小地图和节点交互
-- 程序文件统一放在 `app\`，用户数据继续保存在 `data\`、`download\` 和 `export\`
-
----
 
 ## 如何使用
 
