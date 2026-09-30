@@ -29,6 +29,7 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 
 $files = @(
     "index.html",
+    "model-catalog.js",
     "app.js",
     "styles.css",
     "canvas-runtime.js",

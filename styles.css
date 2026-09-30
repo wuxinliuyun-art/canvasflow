@@ -362,12 +362,19 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   overflow: hidden;
   cursor: default;
   outline: none;
+  -webkit-user-select: none;
+  user-select: none;
   background-color: var(--bg);
   background-image:
     linear-gradient(var(--canvas-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--canvas-grid) 1px, transparent 1px);
   background-size: 32px 32px;
   background-position: 120px 90px;
+}
+
+.viewport :is(textarea, input[type="text"], input[type="password"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], [contenteditable]:not([contenteditable="false"])) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .world {
@@ -415,6 +422,22 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .edges {
   overflow: visible;
   pointer-events: auto;
+}
+
+.gesture-stroke {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cut-stroke-line {
+  fill: none;
+  stroke: #ff2d2d;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .edge {
@@ -762,7 +785,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   position: absolute;
   left: 11px;
   right: 11px;
-  bottom: 9px;
+  bottom: 5px;
   pointer-events: none;
 }
 .ai-node-progress-track { height: 4px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .22); }

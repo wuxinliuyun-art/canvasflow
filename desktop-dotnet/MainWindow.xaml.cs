@@ -78,7 +78,7 @@ public partial class MainWindow : Window
         window.canvasflowDesktop = {
           isDesktop: true,
           getApiKey: () => invoke("desktop:get-api-key"),
-          saveApiKey: apiKey => invoke("desktop:save-api-key", { apiKey: String(apiKey || "") }),
+          saveApiKey: (apiKey, apiType) => invoke("desktop:save-api-key", { apiKey: String(apiKey || ""), apiType: String(apiType || "apimart") }),
           storeImage: (dataUrl, fileName, mime, category = "originals") => invoke("desktop:store-image", { dataUrl, fileName, mime, category }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
@@ -96,7 +96,7 @@ public partial class MainWindow : Window
             method: String(options.method || "GET"),
             body: typeof options.body === "string" ? options.body : "",
             apiKey: String(options.apiKey || "")
-          }, 120000),
+          }, 600000),
           onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
           completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
         };
@@ -210,7 +210,7 @@ public partial class MainWindow : Window
             var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
             _contentRoot = _webUpdateManager.ResolveContentRoot();
-            _desktopApi = new DesktopApi(_root, Log, ReadApiKey, _webUpdateManager);
+            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager);
             var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
             await InitializeWebViewAsync(_shutdown.Token);
@@ -252,6 +252,7 @@ public partial class MainWindow : Window
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
             CanvasView.PreviewKeyDown += CanvasView_PreviewKeyDown;
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot!, CoreWebView2HostResourceAccessKind.DenyCors);
+            CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-data.local", Path.Combine(_root!, "download", "images"), CoreWebView2HostResourceAccessKind.Allow);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
             CanvasView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -412,14 +413,15 @@ public partial class MainWindow : Window
                     }
                     else if (type.GetString() == "desktop:get-api-key")
                     {
-                        PostRpcResult(root, new { apiKey = ReadApiKey() });
+                        PostRpcResult(root, new { apiKey = ReadApiKey("apimart"), agtokenApiKey = ReadApiKey("agtoken") });
                     }
                     else if (type.GetString() == "desktop:save-api-key")
                     {
                         var apiKey = root.TryGetProperty("apiKey", out var keyElement) ? keyElement.GetString() ?? "" : "";
+                        var apiType = root.TryGetProperty("apiType", out var typeElement) ? typeElement.GetString() ?? "apimart" : "apimart";
                         try
                         {
-                            SaveApiKey(apiKey);
+                            SaveApiKey(apiKey, apiType);
                             PostRpcResult(root, new { saved = true, persistent = true });
                         }
                         catch (Exception saveError)
@@ -516,13 +518,21 @@ public partial class MainWindow : Window
         File.Move(temporary, AssetsIndexPath, true);
     }
 
-    private string ReadApiKey()
+    private static string ApiKeySlot(string apiType) => string.Equals(apiType, "agtoken", StringComparison.OrdinalIgnoreCase) ? "agtoken" : "apimart";
+
+    private string ReadApiKey(string apiType)
     {
+        var slot = ApiKeySlot(apiType);
         try
         {
             if (!File.Exists(SecretsPath)) return "";
             using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
-            var encrypted = document.RootElement.TryGetProperty("apiKey", out var keyElement) ? keyElement.GetString() : null;
+            var encrypted = "";
+            if (document.RootElement.TryGetProperty("keys", out var keys) && keys.TryGetProperty(slot, out var slotElement))
+                encrypted = slotElement.GetString() ?? "";
+            // 兼容 v1 单 Key 格式：旧文件中的 apiKey 属于 apimart
+            if (string.IsNullOrWhiteSpace(encrypted) && slot == "apimart" && document.RootElement.TryGetProperty("apiKey", out var keyElement))
+                encrypted = keyElement.GetString() ?? "";
             if (string.IsNullOrWhiteSpace(encrypted)) return "";
             var protectedBytes = Convert.FromBase64String(encrypted);
             var bytes = ProtectedData.Unprotect(protectedBytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
@@ -535,17 +545,28 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SaveApiKey(string value)
+    private void SaveApiKey(string value, string apiType)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SecretsPath)!);
-        if (string.IsNullOrWhiteSpace(value))
+        var slot = ApiKeySlot(apiType);
+        var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        keys["apimart"] = ReadApiKey("apimart");
+        keys["agtoken"] = ReadApiKey("agtoken");
+        keys[slot] = (value ?? "").Trim();
+        if (keys["apimart"].Length == 0 && keys["agtoken"].Length == 0)
         {
             if (File.Exists(SecretsPath)) File.Delete(SecretsPath);
             return;
         }
-        var bytes = Encoding.UTF8.GetBytes(value.Trim());
-        var protectedBytes = ProtectedData.Protect(bytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
-        var content = JsonSerializer.Serialize(new { version = 1, apiKey = Convert.ToBase64String(protectedBytes) }, new JsonSerializerOptions { WriteIndented = true });
+        var keyObject = new Dictionary<string, string>();
+        foreach (var pair in keys)
+        {
+            if (pair.Value.Length == 0) continue;
+            var bytes = Encoding.UTF8.GetBytes(pair.Value);
+            var protectedBytes = ProtectedData.Protect(bytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
+            keyObject[pair.Key] = Convert.ToBase64String(protectedBytes);
+        }
+        var content = JsonSerializer.Serialize(new { version = 2, keys = keyObject }, new JsonSerializerOptions { WriteIndented = true });
         var temporary = SecretsPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
         File.WriteAllText(temporary, content, Encoding.UTF8);
         File.Move(temporary, SecretsPath, true);

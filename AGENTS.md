@@ -23,6 +23,11 @@
 - 解决：由`CanvasFlow.Desktop.csproj`将界面资源复制到publish目录，再由Inno Setup整体打包。
 - 避免：发布前必须在隔离目录验证安装版，确认程序不依赖源码目录、Node或本地端口。
 
+### 发布包中的 export 目录必须为空
+
+- 规则：所有发布形式均须保留空的 `export` 目录，但不得打包该目录中已有的任何图片或其他导出文件。
+- 避免：生成完整安装包、便携包、界面热更新包或其他发布产物前，必须排除 `export` 目录内容，并检查最终产物中该目录存在且为空。
+
 ### 360 重复拦截“打开导出文件夹”
 
 - 现象：程序调用资源管理器时，360反复提示进程创建；即使允许，资源管理器窗口也可能没有打开。
@@ -57,6 +62,23 @@
 - 原因：WPF `BitmapImage` 使用文件流加载时同时设置了 `BitmapCreateOptions.IgnoreImageCache`，内部缓存尝试使用空 URI 作为键并抛出 `ArgumentNullException`。
 - 解决：固定名称截图继续使用文件流与 `BitmapCacheOption.OnLoad` 强制读取新内容，但不得同时设置 `IgnoreImageCache`；预览加载必须通过异常隔离方法更新。
 - 避免：所有 WPF 图片预览统一使用“文件流 + OnLoad + Freeze”方式；预览失败只能清空当前图片并提示，不得将异常传播到桌面消息循环。
+
+### 图片扇入按支线拆任务
+
+- 规则:`collectUpstreamForAI` 返回分支列表——上游任一节点同时接多条图片线(扇入)时,按线拆成多个任务,每个任务的参考图 = 该支线路径上的图片(含汇聚节点自身图片,按画布 x 排序);文字/变量节点全局共享不拆分;AI/角度节点截断(取其生成图);组节点维持"每组图一任务"批量语义不变;多支线任务结果各自生成图片节点(image-node 模式)。
+- 避免:`keepCombinedInputs` 的合并打平必须作用在顶层汇总处(对全部分支去重合并),不能只写在递归中间节点层,否则 AI 节点多条直连入线仍会被拆开;单支线画布的行为必须与拆分逻辑上线前完全一致(分支数恒为 1)。
+
+### 覆盖安装新版后不得继续使用旧版界面热更新
+
+- 现象：用户把新版安装包装到旧版同一路径时，`data\web-updates` 会保留旧版下载过的界面热更新包；若启动时无条件优先加载该目录，新 EXE 会继续运行旧 app.js，新功能（如 agtoken 设置入口）不可见。
+- 解决：`WebUpdateManager.ResolveContentRoot` 只启用“版本号严格高于宿主 EXE”的热更新界面，否则清空指针、回退随包界面；Inno 脚本 `[InstallDelete]` 在安装前清理 `{app}\app` 下旧版残留的 js/html/css/modules。
+- 避免：不得无条件信任 `active.json` 指针；发布纯界面热更新时版本号必须高于所有在役宿主 EXE 版本，否则用户装了也不会生效。
+
+### agtoken 与 APIMart 是两套彼此独立的请求格式
+
+- 规则：APIMart 走“提交任务 + 轮询”（`/api/generate` → `/api/task/:id`），agtoken（https://agtoken.vip，OpenAI 兼容）走同步直连（`/api/agtoken/generate|edits`，响应直接含图片，600 秒超时）。两套格式不做归一化转换；APIMart 特有的 flare/sunburst → `gpt-image-2.5-ext` + `version` 映射只允许在 apimart 分支生效。
+- 实现：绘图模型列表、画质档、分辨率档统一由 `model-catalog.js` 声明式目录驱动；增删模型只改该文件并发布 `CanvasFlow-Web.zip` 界面热更新，不需要重发 EXE。API Key 按 `apiType` 分槽保存（`settings.apiKey` / `settings.agtokenApiKey`，桌面端 secrets.json v2 双槽），所有落盘路径（localStorage、/api/app-state、自动备份）必须同时剥离两个 key。
+- 避免：不得在 agtoken 分支复用 APIMart 的 ext 映射、任务轮询或 apimart 的 key；节点模型切换 API 类型后不属于当前目录时必须回退当前类型默认模型；静态资源响应必须带 `Cache-Control: no-cache`，且改动前端文件时同步递增 index.html 中的 `?v=` 版本号，否则界面热更新会被浏览器启发式缓存吞掉。
 
 
 

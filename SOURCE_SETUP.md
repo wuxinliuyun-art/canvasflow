@@ -38,7 +38,7 @@ node server.js
 
 安装包为Windows x64当前用户安装，不需要管理员权限；当前没有商业代码签名。
 
-仓库中的 GitHub Actions 工作流会执行同一套 Windows 构建并上传未签名安装包，用于验证公开源码能够稳定生成发布文件。该工作流不会发布 Release，也不会进行代码签名；正式签名流程将在 SignPath Foundation 审核通过后单独接入。
+仓库中的 GitHub Actions 工作流会执行同一套 Windows 构建并上传未签名安装包，用于验证公开源码能够稳定生成发布文件。该工作流不会发布 Release，也不会进行代码签名。
 
 ## 数据与发布
 
@@ -48,4 +48,4 @@ node server.js
 - 发布前检查publish目录包含`CanvasFlow.exe`、`index.html`、`app.js`和`styles.css`。
 - 安装和更新测试必须确认 `data`、`download`、`export` 不被覆盖或删除。
 
-代码签名政策见 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)，隐私政策见 [PRIVACY.md](PRIVACY.md)。
+隐私政策见 [PRIVACY.md](PRIVACY.md)。

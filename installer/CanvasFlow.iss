@@ -57,6 +57,10 @@ Type: filesandordirs; Name: "{app}\ru"
 Type: filesandordirs; Name: "{app}\tr"
 Type: filesandordirs; Name: "{app}\zh-Hans"
 Type: filesandordirs; Name: "{app}\zh-Hant"
+Type: files; Name: "{app}\app\*.js"
+Type: files; Name: "{app}\app\*.html"
+Type: files; Name: "{app}\app\*.css"
+Type: filesandordirs; Name: "{app}\app\modules"
 
 [Code]
 function GetDefaultInstallDir(Param: String): String;

@@ -114,6 +114,7 @@ const UI_EN = {
   "置入": "Insert", "涂改": "Retouch", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
   "将选中节点设为多任务": "Create a multi-task node from selected nodes", "右键多任务节点": "Right-click a multi-task node",
   "取消多任务，还原内部节点和连线": "Dissolve multi-task and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
+  "Alt + 拖拽": "Alt + Drag", "划线切断连线；同时划中两条连线时自动桥接两端节点": "Draw a line to cut a connection; crossing two at once bridges their endpoints",
   "多选节点": "Select multiple nodes", "Space + 拖拽": "Space + Drag", "平移画布": "Pan canvas",
   "鼠标滚轮": "Mouse Wheel", "缩放画布": "Zoom canvas", "颜色": "Color", "大小": "Size",
   "取消": "Cancel", "确认并生成节点": "Confirm & Create Node", "在图片上绘制色块": "Paint color blocks on image",
@@ -166,18 +167,18 @@ const UI_EN = {
   "当前项目还没有保存，确定要离开吗？": "This project has not been saved. Are you sure you want to leave?",
   "画布上没有可执行的 AI 绘图节点": "There are no runnable AI image nodes on the canvas", "双击标题栏可最大化窗口": "Double-click the title bar to maximize",
   "无参考图": "No reference image", "(无文字输入)": "(no text input)", "单图": "Single image",
-  "自定义文字": "Custom Text", "自定义图片": "Custom Images",
+  "自定义文字": "Custom Text", "自定义图片": "Custom Images", "自定义多个节点": "Custom Node Sets",
   "添加常用图片，或在图片节点上右键收藏。支持项目独立和全局共用。": "Add reusable images or save one from an image node. Assets can be project-only or global.",
   "模板名称（如：产品摄影）": "Template name (e.g. product photography)", "输入需要重复使用的完整文字": "Enter the complete reusable text",
   "边框颜色": "Border color", "添加文字模板": "Add Text Template", "添加图片素材": "Add Image Asset",
   "从 JSON 导入素材": "Import Assets from JSON",
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
-  "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image",
+  "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image", "保存为自定义多个节点": "Save as Custom Node Set",
   "提取生成所用关键词": "Extract Generation Keywords",
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
-  "保存常用图文，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text and images for every project; created nodes are independent copies.",
+  "保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text, images, and node sets for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
   "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量节点。": "Define global variables and single-choice values for variable nodes.",
@@ -186,9 +187,11 @@ const UI_EN = {
   "＋ 添加一行": "+ Add Row", "请先在设置 → 变量库中创建变量": "Create a variable in Settings → Variable Library first",
   "项目文件夹": "Project Folder", "修改位置": "Change Folder", "同时备份素材库": "Also back up the asset library",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
-  "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.",
+  "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.", "在画布中多选节点后右键保存，同时保留节点布局和内部连线。": "Select multiple nodes on the canvas, then right-click to save their layout and internal connections.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets", "双击放大预览": "Double-click to enlarge", "当前素材预览": "Current asset preview",
-  "配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。": "Configure the API key; set model and image options separately in each AI Image node.",
+  "配置新建节点的默认模型和 API Key；画面参数在每个 AI 绘图节点中单独设置。": "Configure the default model for new nodes and the API key; set image options separately in each AI Image node.",
+  "默认绘图模型": "Default image model",
+  "仅影响之后新建的 AI 绘图节点，不会修改已有节点。": "Only affects AI Image nodes created later; existing nodes are unchanged.",
   "文件导出": "File Export", "同时导出输入素材（关键词和参考图）": "Also export inputs (prompts and reference images)",
   "默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。": "By default, export only AI results. Inputs are stored separately and project JSON is never included."
   ,"任务队列": "Task Queue", "AI 任务队列": "AI Task Queue", "暂无任务": "No tasks", "最多同时处理 5 个任务": "Up to 5 tasks run at once", "最多同时处理 5 个任务；仅未发送任务可暂停或调整。": "Up to 5 tasks run at once. Only unsent tasks can be paused or reordered.",
@@ -297,8 +300,8 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", zipExport: true, exportInputs: false, customMaterials: [] },
-  customLibrary: { textTemplates: [], imageMaterials: [], variableDefinitions: [] },
+  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: true, exportInputs: false, customMaterials: [] },
+  customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
   nextPageNum: 1,
@@ -349,12 +352,13 @@ function acquireAiApiSlot(label = "AI任务") {
   });
 }
 
-function emptyLibrary() { return { textTemplates: [], imageMaterials: [], variableDefinitions: [], builtinDefaultsInitialized: true }; }
+function emptyLibrary() { return { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: true }; }
 function normalizeLibrary(lib) {
   const source = lib || {};
   return {
     textTemplates: Array.isArray(source.textTemplates) ? source.textTemplates.map(normalizeTemplate) : [],
     imageMaterials: Array.isArray(source.imageMaterials) ? source.imageMaterials.map(normalizeTemplate) : [],
+    multiNodeTemplates: Array.isArray(source.multiNodeTemplates) ? source.multiNodeTemplates.map(normalizeMultiNodeTemplate) : [],
     variableDefinitions: Array.isArray(source.variableDefinitions) ? source.variableDefinitions.map(normalizeVariableDefinition) : [],
     // A missing marker means this is an existing pre-marker library. Never append defaults to it.
     builtinDefaultsInitialized: source.builtinDefaultsInitialized !== false,
@@ -383,7 +387,7 @@ function loadGlobalLibrary() {
   try {
     const stored = localStorage.getItem(GLOBAL_LIBRARY_KEY);
     return stored === null
-      ? { textTemplates: [], imageMaterials: [], variableDefinitions: [], builtinDefaultsInitialized: false }
+      ? { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: false }
       : normalizeLibrary(JSON.parse(stored));
   }
   catch (e) { console.error("[加载] 全局素材库读取失败", e); return emptyLibrary(); }
@@ -403,20 +407,26 @@ async function loadGlobalLibraryFromDisk() {
         globalLibrary[key].push(item); migrated++;
       }
     }
+    for (const item of browserLibrary.multiNodeTemplates) {
+      if (globalLibrary.multiNodeTemplates.some(existing => existing.id === item.id)) continue;
+      item.name = uniqueMultiNodeTemplateName(item.name, globalLibrary);
+      globalLibrary.multiNodeTemplates.push(item); migrated++;
+    }
     for (const item of browserLibrary.variableDefinitions) {
       if (!globalLibrary.variableDefinitions.some(existing => existing.id === item.id)) globalLibrary.variableDefinitions.push(item);
     }
     const shouldInitializeDefaults = globalLibrary.builtinDefaultsInitialized === false
       && browserLibrary.builtinDefaultsInitialized === false
       && !globalLibrary.textTemplates.length
-      && !globalLibrary.imageMaterials.length;
+      && !globalLibrary.imageMaterials.length
+      && !globalLibrary.multiNodeTemplates.length;
     if (shouldInitializeDefaults) {
       globalLibrary.textTemplates = DEFAULT_TEXT_TEMPLATES.map(item => normalizeTemplate({ ...item }));
       console.log(`[初始化] 已创建 ${globalLibrary.textTemplates.length} 个默认文字素材`);
     }
     // Persist immediately after the first decision, including an intentionally empty library.
     globalLibrary.builtinDefaultsInitialized = true;
-    console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}，变量=${globalLibrary.variableDefinitions.length}`);
+    console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}，多节点=${globalLibrary.multiNodeTemplates.length}，变量=${globalLibrary.variableDefinitions.length}`);
     if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
     saveGlobalLibrary();
   } catch (e) {
@@ -446,14 +456,19 @@ function migrateLegacyMaterials(data) {
       globalLibrary[key].push(item); migrated++;
     }
   }
+  for (const item of projectLibrary.multiNodeTemplates) {
+    if (globalLibrary.multiNodeTemplates.some(existing => existing.id === item.id)) continue;
+    item.name = uniqueMultiNodeTemplateName(item.name, globalLibrary);
+    globalLibrary.multiNodeTemplates.push(item); migrated++;
+  }
   if (migrated) { saveGlobalLibrary(); console.log(`[迁移] 已将 ${migrated} 个项目素材合并到全局素材库`); }
 }
 function libraryItems(kind) {
-  const key = kind === "text" ? "textTemplates" : "imageMaterials";
+  const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
   return globalLibrary[key] || [];
 }
 function findTemplate(kind, id) {
-  const key = kind === "text" ? "textTemplates" : "imageMaterials";
+  const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
   return (globalLibrary[key] || []).find(x => x.id === id) || null;
 }
 function persistLibraries() {
@@ -466,6 +481,7 @@ const els = {
   world: $("world"),
   nodes: $("nodes"),
   edges: $("edges"),
+  gestureStroke: $("gestureStroke"),
   selectionBox: $("selectionBox"),
   contextMenu: $("contextMenu"),
   minimap: $("minimap"),
@@ -501,6 +517,7 @@ const els = {
   folderImportCancelBtn: $("folderImportCancelBtn"),
   folderImportConfirmBtn: $("folderImportConfirmBtn"),
   apiKeyInput: $("apiKeyInput"),
+  defaultImageModelSelect: $("defaultImageModelSelect"),
   aiGenerateBtn: $("aiGenerateBtn"),
   verifyKeyBtn: $("verifyKeyBtn"),
   saveKeyBtn: $("saveKeyBtn"),
@@ -558,6 +575,7 @@ const els = {
   customMaterialAddBtn: $("customMaterialAddBtn"),
   customMaterialGlobal: $("customMaterialGlobal"),
   customTextsList: $("customTextsList"),
+  multiNodeTemplatesList: $("multiNodeTemplatesList"),
   customTextName: $("customTextName"),
   customTextContent: $("customTextContent"),
   customTextGlobal: $("customTextGlobal"),
@@ -629,6 +647,8 @@ let compositeHoverReady = false;
 let connectDraft = null;
 let selectionDraft = null;
 let spaceDown = false;
+let altDown = false;
+let cutStroke = null;
 let lastPointerWorld = { x: 180, y: 140 };
 let lastPointerClient = null;
 let composerImage = null;
@@ -650,7 +670,7 @@ function blankPage(name = "未命名", mode = "ai") {
       nodes: [],
       edges: [],
       settings: { ...state.settings },
-      customLibrary: { textTemplates: [], imageMaterials: [], variableDefinitions: [] },
+      customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
       view: { x: 120, y: 90, scale: 1 },
       nextNode: 1,
       nextEdge: 1,
@@ -722,7 +742,11 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  if (!activeCatalog().models.some(model => model.id === state.settings.defaultImageModel)) {
+    console.warn("[默认绘图模型] 存档值在当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
+    state.settings.defaultImageModel = activeCatalog().defaultModel;
+  }
   const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
   delete state.settings.geminiAutomation;
   delete state.settings.model;
@@ -847,7 +871,8 @@ function syncSettingsPanel() {
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
   state.settings.projectFolderLabel = resolvedProjectFolderLabel(state.settings.projectFolderLabel) || runtimeProjectFolder;
   els.projectFolder.textContent = state.settings.projectFolderLabel;
-  els.apiKeyInput.value = state.settings.apiKey || "";
+  els.apiKeyInput.value = activeApiKey();
+  els.defaultImageModelSelect.value = state.settings.defaultImageModel || "gpt-image-2.5-flare";
   applyApiTypeSettingsUi();
   syncCustomMaterialsList();
   renderVariableDefinitions();
@@ -918,6 +943,19 @@ function saveVariableDefinition() {
 function syncCustomMaterialsList() {
   renderLibraryList("text", els.customTextsList);
   renderLibraryList("image", els.customMaterialsList);
+  renderLibraryList("multi", els.multiNodeTemplatesList);
+}
+function normalizeMultiNodeTemplate(item) {
+  const value = normalizeTemplate(item);
+  value.nodes = Array.isArray(value.nodes) ? value.nodes : [];
+  value.edges = Array.isArray(value.edges) ? value.edges : [];
+  value.imageFiles = Array.isArray(value.imageFiles) ? value.imageFiles : [];
+  return value;
+}
+
+function customMaterialImageUrl(fileName) {
+  const path = `/download/images/${encodeURIComponent(fileName || "")}`;
+  return desktop ? `https://canvasflow-data.local/${encodeURIComponent(fileName || "")}` : path;
 }
 
 function renderLibraryList(kind, container) {
@@ -925,8 +963,8 @@ function renderLibraryList(kind, container) {
   const items = libraryItems(kind);
   container.innerHTML = items.map(item => `<div class="material-item" data-kind="${kind}" data-id="${escHtml(item.id)}">
     <button class="material-drag-handle" type="button" title="拖动排序" aria-label="拖动排序">⋮⋮</button>
-    ${kind === "image" ? `<img class="material-thumb" src="/download/images/${encodeURIComponent(item.fileName || "")}" alt="" title="双击放大预览">` : ""}
-    <span class="material-copy ${kind === "text" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : ""}</span>
+    ${kind === "image" ? `<img class="material-thumb" src="${customMaterialImageUrl(item.fileName)}" alt="${escHtml(item.name)}" title="双击放大预览">` : ""}
+    <span class="material-copy ${kind !== "image" ? "with-preview" : ""}"><span class="material-name" title="${escHtml(item.name)}">${escHtml(item.name)}</span>${kind === "text" ? `<span class="material-content-preview" title="${escHtml(item.content || "")}">${escHtml((item.content || "").replace(/\s+/g, " "))}</span>` : kind === "multi" ? `<span class="material-content-preview">${uiLanguage === "en" ? `${item.nodes.length} nodes · ${item.edges.length} connections` : `${item.nodes.length} 个节点 · ${item.edges.length} 条连线`}</span>` : ""}</span>
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
@@ -958,7 +996,7 @@ function renderLibraryList(kind, container) {
       ev.stopPropagation();
       showLightbox(thumb.src);
     };
-    row.querySelector(".material-rename-btn").onclick = () => editTemplate(kind, id);
+    row.querySelector(".material-rename-btn").onclick = () => kind === "multi" ? renameMultiNodeTemplate(id) : editTemplate(kind, id);
     row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
   });
   container.ondragover = ev => {
@@ -977,7 +1015,7 @@ function renderLibraryList(kind, container) {
     if (!dragging || !dropTargetId) return;
     ev.preventDefault();
     dropIndicator.classList.add("hidden");
-    const key = kind === "text" ? "textTemplates" : "imageMaterials";
+    const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
     const items = globalLibrary[key];
     const sourceIndex = items.findIndex(item => item.id === dragging.dataset.id);
     if (sourceIndex < 0) return;
@@ -994,7 +1032,7 @@ function renderLibraryList(kind, container) {
 function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 function templateLocation(kind, id) {
-  const key = kind === "text" ? "textTemplates" : "imageMaterials";
+  const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
   const index = globalLibrary[key].findIndex(x => x.id === id);
   return index >= 0 ? { library: globalLibrary, key, index } : null;
 }
@@ -1028,7 +1066,7 @@ function editTemplate(kind, id) {
   els.customMaterialName.value = item.name;
   els.customMaterialFileInput.value = "";
   els.customMaterialFileHint.textContent = `当前图片：${item.fileName || "未知文件"}（可选择新图片替换）`;
-  els.customMaterialEditorPreview.src = "/download/images/" + encodeURIComponent(item.fileName || "");
+  els.customMaterialEditorPreview.src = customMaterialImageUrl(item.fileName);
   els.customMaterialEditorPreview.classList.remove("hidden");
   els.customMaterialAddBtn.textContent = "保存修改";
   els.customImageEditor.classList.remove("hidden");
@@ -1040,6 +1078,13 @@ async function deleteTemplate(kind, id) {
   const item = loc.library[loc.key][loc.index];
   loc.library[loc.key].splice(loc.index, 1);
   if (kind === "image" && item.fileName) try { await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.fileName }) }); } catch (e) { console.error("[自定义图片] 删除文件失败", e); }
+  if (kind === "multi") {
+    for (const image of item.imageFiles || []) {
+      if (!image.fileName) continue;
+      try { await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: image.fileName }) }); }
+      catch (e) { console.error("[自定义多个节点] 删除图片副本失败", { fileName: image.fileName, message: e.message }); }
+    }
+  }
   persistLibraries(); syncCustomMaterialsList(); toast("素材已删除");
 }
 
@@ -1161,11 +1206,12 @@ function renderLibraryImportItems() {
   const rows = [];
   for (const item of source.library.textTemplates || []) rows.push({ kind: "text", item });
   for (const item of source.library.imageMaterials || []) rows.push({ kind: "image", item });
+  for (const item of source.library.multiNodeTemplates || []) rows.push({ kind: "multi", item });
   for (const item of source.library.variableDefinitions || []) rows.push({ kind: "variable", item });
   els.libraryImportItems.innerHTML = rows.length ? rows.map(row => `<label class="library-import-item">
     <input type="checkbox" class="library-import-check" data-kind="${row.kind}" data-id="${escHtml(row.item.id)}" checked>
-    <span>${row.kind === "text" ? "文字" : row.kind === "image" ? "图片" : "变量"}：${escHtml(row.item.name)}</span>
-  </label>`).join("") : '<div class="setting-desc">没有可导入的图文或变量</div>';
+    <span>${row.kind === "text" ? "文字" : row.kind === "image" ? "图片" : row.kind === "multi" ? "多个节点" : "变量"}：${escHtml(row.item.name)}</span>
+  </label>`).join("") : '<div class="setting-desc">没有可导入的图文、多个节点或变量</div>';
 }
 
 async function confirmLibraryImport() {
@@ -1173,14 +1219,30 @@ async function confirmLibraryImport() {
   const selected = Array.from(els.libraryImportItems.querySelectorAll(".library-import-check:checked"));
   if (!selected.length) return toast("请至少勾选一个素材");
   els.libraryImportConfirmBtn.disabled = true;
-  let textCount = 0, imageCount = 0, variableCount = 0, failed = 0;
+  let textCount = 0, imageCount = 0, multiCount = 0, variableCount = 0, failed = 0;
   for (const checkbox of selected) {
     const kind = checkbox.dataset.kind;
-    const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "variableDefinitions";
+    const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : kind === "multi" ? "multiNodeTemplates" : "variableDefinitions";
     const item = source.library[key].find(x => x.id === checkbox.dataset.id); if (!item) continue;
     try {
       if (kind === "text") { if (addCustomText({ ...item })) textCount++; else failed++; }
-      else if (kind === "variable") {
+      else if (kind === "multi") {
+        const copy = normalizeMultiNodeTemplate(JSON.parse(JSON.stringify(item)));
+        if (globalLibrary.multiNodeTemplates.some(existing => existing.id === copy.id)) copy.id = `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        for (const image of copy.imageFiles) {
+          let data = image.data || "";
+          if (!data && image.fileName) {
+            const resp = await fetch(customMaterialImageUrl(image.fileName));
+            if (!resp.ok) throw new Error(`模板图片不存在：${image.fileName}`);
+            data = await blobToBase64(await resp.blob());
+          }
+          const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: image.fileName || "template.png", data: stripDataUrl(data) }) });
+          const result = await resp.json(); if (!result.success) throw new Error(result.error || "模板图片恢复失败");
+          image.fileName = result.fileName; delete image.data;
+        }
+        copy.name = uniqueMultiNodeTemplateName(copy.name);
+        globalLibrary.multiNodeTemplates.push(copy); multiCount++;
+      } else if (kind === "variable") {
         const copy = normalizeVariableDefinition(JSON.parse(JSON.stringify(item)));
         if (globalLibrary.variableDefinitions.some(existing => existing.id === copy.id)) copy.id = uid("var");
         let desiredName = copy.name, suffix = 2;
@@ -1190,7 +1252,7 @@ async function confirmLibraryImport() {
       } else {
         let data = item.data || "";
         if (!data && item.fileName) {
-          const resp = await fetch("/download/images/" + encodeURIComponent(item.fileName));
+            const resp = await fetch(customMaterialImageUrl(item.fileName));
           if (!resp.ok) throw new Error("图片文件不存在");
           data = await blobToBase64(await resp.blob());
         }
@@ -1200,8 +1262,9 @@ async function confirmLibraryImport() {
   }
   if (variableCount) { persistLibraries(); renderVariableDefinitions(); }
   els.libraryImportConfirmBtn.disabled = false; closeLibraryImport();
-  console.log(`[导入] 文字=${textCount}, 图片=${imageCount}, 变量=${variableCount}, 失败=${failed}`);
-  toast(`导入完成：文字 ${textCount}，图片 ${imageCount}，变量 ${variableCount}${failed ? `，失败 ${failed}` : ""}`);
+  if (multiCount) { persistLibraries(); syncCustomMaterialsList(); }
+  console.log(`[导入] 文字=${textCount}, 图片=${imageCount}, 多节点=${multiCount}, 变量=${variableCount}, 失败=${failed}`);
+  toast(`导入完成：文字 ${textCount}，图片 ${imageCount}，多个节点 ${multiCount}，变量 ${variableCount}${failed ? `，失败 ${failed}` : ""}`);
 }
 
 function fileToBase64(file) {
@@ -1426,7 +1489,7 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     angleRoll: type === "angle-image" ? 0 : undefined,
     angleZoom: type === "angle-image" ? 1 : undefined,
     angleReverseDirection: type === "angle-image" ? false : undefined,
-    _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : type === "ai-image" ? "gpt-image-2.5-flare" : undefined,
+    _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : type === "ai-image" ? (state.settings.defaultImageModel || "gpt-image-2.5-flare") : undefined,
     _resolution: type === "angle-image" ? "1k" : undefined,
     _size: type === "angle-image" ? "1:1" : undefined,
     _count: (type === "ai-image" || type === "screenshot-input") ? 1 : undefined,
@@ -1461,7 +1524,7 @@ async function createNodeFromTemplate(kind, template, x, y) {
   if (kind === "text") node.text = template.content || "";
   else {
     try {
-      const resp = await fetch("/download/images/" + encodeURIComponent(template.fileName));
+      const resp = await fetch(customMaterialImageUrl(template.fileName));
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       node.image = await blobToBase64(await resp.blob()); node.fileName = template.fileName; node.mime = template.mime || "image/png";
       await externalizeImageField(node, "image", "imageAssetId", node.fileName);
@@ -1472,7 +1535,7 @@ async function createNodeFromTemplate(kind, template, x, y) {
 
 async function saveNodeAsTemplate(node) {
   const kind = node.type === "text" ? "text" : "image";
-  const content = kind === "text" ? String(node.text || "").trim() : (node.type === "ai-image" ? node.generatedImage : node.image);
+  const content = kind === "text" ? String(node.text || "").trim() : await resolveNodeImageDataUrl(node);
   if (!content) return toast(kind === "text" ? "无法收藏：文字节点内容为空" : "无法收藏：图片节点没有图片");
   const suggested = kind === "text" ? content.split(/\r?\n/)[0].slice(0, 30) : (node.fileName || "自定义图片");
   const name = prompt("自定义素材名称", suggested); if (name === null || !name.trim()) return;
@@ -1492,6 +1555,124 @@ async function saveNodeAsTemplate(node) {
     } catch (e) { console.error("[自定义图片] 节点收藏失败", e); return toast("收藏失败：" + e.message); }
   }
   persistLibraries(); syncCustomMaterialsList(); toast("已保存到全局素材库");
+}
+
+async function storeMultiTemplateImage(dataUrl, originalName, mime, imageFiles) {
+  if (!dataUrl) throw new Error(`图片内容为空：${originalName || "未命名图片"}`);
+  const resp = await apiFetch("/api/custom-material", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: originalName || "template.png", data: stripDataUrl(dataUrl) }),
+  });
+  const result = await resp.json().catch(() => ({}));
+  if (!resp.ok || !result.success || !result.fileName) throw new Error(result.error || `图片副本保存失败：HTTP ${resp.status}`);
+  const image = { id: `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, fileName: result.fileName, mime: mime || "image/png" };
+  imageFiles.push(image);
+  return image.id;
+}
+
+function clearGeneratedTemplateState(node) {
+  node.generating = false;
+  node.taskId = null;
+  node.outputPath = "";
+  node._aiProgress = null;
+  delete node._queueRunId;
+  if (node.type === "ai-image" || node.type === "angle-image") {
+    node.generatedImage = null;
+    delete node.generatedAssetId;
+    if (Array.isArray(node.batchTasks)) node.batchTasks = [];
+  }
+  if (node.type === "image" && (node.aiSourceNodeId || node.angleSourceNodeId)) {
+    node.image = null;
+    delete node.imageAssetId;
+  }
+}
+
+async function captureMultiTemplateImages(nodes, imageFiles) {
+  for (const node of nodes || []) {
+    clearGeneratedTemplateState(node);
+    if (node.type === "image" && !node.aiSourceNodeId && !node.angleSourceNodeId && (node.image || node.imageAssetId)) {
+      const dataUrl = await materializeReferenceImage({ image: node.image || "", assetId: node.imageAssetId || "", fileName: node.fileName || "template.png" });
+      node.templateImageId = await storeMultiTemplateImage(dataUrl, node.fileName, node.mime, imageFiles);
+      node.image = null;
+      delete node.imageAssetId;
+    }
+    for (const image of node.images || []) {
+      if (!image?.image && !image?.assetId) continue;
+      const dataUrl = await materializeReferenceImage(image);
+      image.templateImageId = await storeMultiTemplateImage(dataUrl, image.fileName, image.mime, imageFiles);
+      image.image = null;
+      delete image.assetId;
+    }
+    if (Array.isArray(node.items)) await captureMultiTemplateImages(node.items, imageFiles);
+    if (Array.isArray(node.subgraph?.nodes)) await captureMultiTemplateImages(node.subgraph.nodes, imageFiles);
+  }
+}
+
+async function saveSelectionAsMultiNodeTemplate() {
+  const selectedIds = new Set([...state.selected].filter(id => !!findNode(id)));
+  if (selectedIds.size < 2) return toast("至少选中 2 个节点才能保存为自定义多个节点");
+  const name = prompt("自定义多个节点名称", `多节点模板 ${globalLibrary.multiNodeTemplates.length + 1}`);
+  if (name === null || !name.trim()) return;
+  const nodes = state.nodes.filter(node => selectedIds.has(node.id)).map(node => JSON.parse(JSON.stringify(node)));
+  const edges = state.edges.filter(edge => selectedIds.has(edge.from.node) && selectedIds.has(edge.to.node)).map(edge => JSON.parse(JSON.stringify(edge)));
+  const imageFiles = [];
+  try {
+    await captureMultiTemplateImages(nodes, imageFiles);
+    const template = normalizeMultiNodeTemplate({ name: uniqueMultiNodeTemplateName(name.trim()), nodes, edges, imageFiles, revision: 1 });
+    globalLibrary.multiNodeTemplates.push(template);
+    persistLibraries(); syncCustomMaterialsList();
+    console.info("[自定义多个节点] 已保存", { id: template.id, nodes: nodes.length, edges: edges.length, images: imageFiles.length });
+    toast(`已保存 ${nodes.length} 个节点和 ${edges.length} 条内部连线`);
+  } catch (error) {
+    for (const image of imageFiles) {
+      try { await apiFetch("/api/custom-material", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: image.fileName }) }); } catch (_) {}
+    }
+    console.error("[自定义多个节点] 保存失败", error);
+    toast(`保存失败：${error.message || "节点图片无法读取"}；请检查图片文件和程序目录权限后重试`);
+  }
+}
+
+async function hydrateMultiTemplateImages(nodes, imageFiles) {
+  const byId = new Map((imageFiles || []).map(image => [image.id, image]));
+  for (const node of nodes || []) {
+    if (node.templateImageId) {
+      const image = byId.get(node.templateImageId);
+      if (!image?.fileName) throw new Error(`模板图片记录不存在：${node.fileName || node.templateImageId}`);
+      const resp = await fetch(customMaterialImageUrl(image.fileName));
+      if (!resp.ok) throw new Error(`模板图片无法读取：${image.fileName}`);
+      node.image = await blobToBase64(await resp.blob());
+      node.mime = image.mime || node.mime || "image/png";
+      delete node.templateImageId;
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName || image.fileName);
+    }
+    for (const entry of node.images || []) {
+      if (!entry.templateImageId) continue;
+      const image = byId.get(entry.templateImageId);
+      if (!image?.fileName) throw new Error(`模板图片记录不存在：${entry.fileName || entry.templateImageId}`);
+      const resp = await fetch(customMaterialImageUrl(image.fileName));
+      if (!resp.ok) throw new Error(`模板图片无法读取：${image.fileName}`);
+      entry.image = await blobToBase64(await resp.blob());
+      entry.mime = image.mime || entry.mime || "image/png";
+      delete entry.templateImageId;
+      await externalizeImageField(entry, "image", "assetId", entry.fileName || image.fileName);
+    }
+    if (Array.isArray(node.items)) await hydrateMultiTemplateImages(node.items, imageFiles);
+    if (Array.isArray(node.subgraph?.nodes)) await hydrateMultiTemplateImages(node.subgraph.nodes, imageFiles);
+  }
+}
+
+async function createNodesFromMultiTemplate(template, x, y) {
+  if (!template?.nodes?.length) return toast("创建失败：该多节点模板没有节点；请删除后重新保存");
+  const data = { nodes: JSON.parse(JSON.stringify(template.nodes)), edges: JSON.parse(JSON.stringify(template.edges || [])) };
+  try {
+    await hydrateMultiTemplateImages(data.nodes, template.imageFiles || []);
+    pasteNodes(data, { x, y });
+    console.info("[自定义多个节点] 已插入", { id: template.id, nodes: data.nodes.length, edges: data.edges.length });
+  } catch (error) {
+    console.error("[自定义多个节点] 插入失败", error);
+    toast(`创建失败：${error.message || "模板图片无法读取"}；请检查素材文件是否存在后重试`);
+  }
 }
 
 function createMindmapGroup() {
@@ -1774,6 +1955,30 @@ function stripCopiedImage(n) {
   return copy;
 }
 
+function rekeyContainedGraph(nodes, edges) {
+  const map = new Map();
+  for (const node of nodes || []) {
+    const oldId = node.id;
+    node.id = uid("n");
+    map.set(oldId, node.id);
+  }
+  for (const node of nodes || []) {
+    if (map.has(node.aiSourceNodeId)) node.aiSourceNodeId = map.get(node.aiSourceNodeId);
+    if (map.has(node.angleSourceNodeId)) node.angleSourceNodeId = map.get(node.angleSourceNodeId);
+    if (Array.isArray(node.items)) rekeyContainedGraph(node.items, node.internalEdges || []);
+    if (Array.isArray(node.subgraph?.nodes)) {
+      rekeyContainedGraph(node.subgraph.nodes, node.subgraph.edges || []);
+      node.subgraph.nextNode = inferNext("n", node.subgraph.nodes.map(item => item.id));
+      node.subgraph.nextEdge = inferNext("e", (node.subgraph.edges || []).map(edge => edge.id));
+    }
+  }
+  for (const edge of edges || []) {
+    edge.id = uid("e");
+    if (map.has(edge.from?.node)) edge.from.node = map.get(edge.from.node);
+    if (map.has(edge.to?.node)) edge.to.node = map.get(edge.to.node);
+  }
+}
+
 function pasteNodes(data, anchor = null) {
   const map = new Map();
   const pasted = [];
@@ -1796,6 +2001,8 @@ function pasteNodes(data, anchor = null) {
       created: Date.now() + state.nextNode,
     };
     if (nn.type === "screenshot-input") nn.screenshotSeq = nextScreenshotNodeSequence() + pasted.filter(item => item.type === "screenshot-input").length;
+    if (Array.isArray(nn.items)) rekeyContainedGraph(nn.items, nn.internalEdges || []);
+    if (Array.isArray(nn.subgraph?.nodes)) rekeyContainedGraph(nn.subgraph.nodes, nn.subgraph.edges || []);
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
     map.set(n.id, nn.id);
     pasted.push(nn);
@@ -1864,6 +2071,66 @@ function isImage25StandardModel(model) {
   return model === "gpt-image-2.5";
 }
 
+// ---- 模型目录（model-catalog.js）访问层：模型列表/画质档/分辨率档均由目录驱动 ----
+function activeApiType() {
+  const value = state.settings.apiType;
+  return value === "agtoken" ? "agtoken" : "apimart";
+}
+
+function activeCatalog() {
+  const fallback = {
+    defaultModel: "gpt-image-2.5-flare",
+    models: [
+      { id: "gpt-image-2", label: "GPT Image 2", quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"] },
+      { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"] },
+      { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"] },
+      { id: "gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"] },
+    ],
+  };
+  const catalog = (window.CANVASFLOW_MODEL_CATALOG || {})[activeApiType()];
+  return catalog && Array.isArray(catalog.models) && catalog.models.length ? catalog : fallback;
+}
+
+function modelCatalogEntry(model) {
+  return activeCatalog().models.find(item => item.id === model) || null;
+}
+
+function catalogModels() {
+  return activeCatalog().models.filter(model => !model.hidden);
+}
+
+function activeApiKey() {
+  return activeApiType() === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+}
+
+function setActiveApiKey(value) {
+  if (activeApiType() === "agtoken") state.settings.agtokenApiKey = value;
+  else state.settings.apiKey = value;
+}
+
+function uniqueMultiNodeTemplateName(desired, library = globalLibrary) {
+  const names = new Set((library.multiNodeTemplates || []).map(item => item.name));
+  if (!names.has(desired)) return desired;
+  let index = 2;
+  while (names.has(`${desired} (${index})`)) index++;
+  return `${desired} (${index})`;
+}
+
+function renameMultiNodeTemplate(id) {
+  const loc = templateLocation("multi", id); if (!loc) return;
+  const item = loc.library[loc.key][loc.index];
+  const name = prompt("自定义多个节点名称", item.name || "多节点模板");
+  if (name === null || !name.trim()) return;
+  const desired = name.trim();
+  const otherNames = new Set(globalLibrary.multiNodeTemplates.filter(template => template.id !== id).map(template => template.name));
+  let finalName = desired, suffix = 2;
+  while (otherNames.has(finalName)) finalName = `${desired} (${suffix++})`;
+  item.name = finalName;
+  item.revision = (item.revision || 1) + 1;
+  persistLibraries(); syncCustomMaterialsList();
+  toast("多节点模板已重命名");
+}
+
 function image25ExtVersion(model) {
   if (model === "gpt-image-2.5-flare") return "flare";
   if (model === "gpt-image-2.5-sunburst") return "sunburst";
@@ -1879,19 +2146,33 @@ function isImage25Model(model) {
 }
 
 function modelSupportsQuality(model) {
-  return model === "gpt-image-2" || isImage25StandardModel(model);
+  return Boolean(modelCatalogEntry(model)?.quality);
 }
 
 function normalizeAiNodeSettings(node, fallback = {}) {
 if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
-node._model = node._model || fallback.model || "gpt-image-2.5-flare";
-  if (isImage25StandardModel(node._model)) node._resolution = "1k";
-node._resolution = node._resolution || fallback.resolution || "1k";
-node._size = node._size || fallback.size || "1:1";
-  if (isImage25ExtModel(node._model) && !["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"].includes(node._size)) node._size = "1:1";
-  if (modelSupportsQuality(node._model)) {
+  const catalog = activeCatalog();
+  if (node._model && !modelCatalogEntry(node._model)) {
+    const target = fallback.model && modelCatalogEntry(fallback.model) ? fallback.model : catalog.defaultModel;
+    console.warn("[AI节点] 模型在当前 API 类型下不可用，已回退默认模型", { model: node._model, apiType: activeApiType(), fallback: target });
+    node._model = target;
+  }
+  node._model = node._model || fallback.model || catalog.defaultModel;
+  const entry = modelCatalogEntry(node._model) || catalog.models.find(model => !model.hidden) || catalog.models[0];
+  if (!entry.resolutions.includes(node._resolution)) {
+    if (node._resolution) console.warn("[AI节点] 分辨率在当前模型下不可用，已调整", { model: node._model, resolution: node._resolution });
+    node._resolution = entry.resolutions.includes(fallback.resolution) ? fallback.resolution : entry.resolutions[0];
+  }
+  if (!entry.sizes.includes(node._size)) {
+    node._size = entry.sizes.includes(fallback.size) ? fallback.size : entry.sizes[0];
+  }
+  if (entry.quality) {
     let quality = node._quality || fallback.quality || (node.type === "screenshot-input" ? "low" : "medium");
-    if (isImage25Model(node._model) && (quality === "auto" || quality === "standard" || quality === "xhigh")) quality = quality === "xhigh" ? "high" : "medium";
+    if (!entry.qualities.includes(quality)) {
+      if (quality === "auto") quality = "medium";
+      else if ((quality === "xhigh" || quality === "max") && entry.qualities.includes("high")) quality = "high";
+      else quality = entry.qualities.includes("medium") ? "medium" : entry.qualities[0];
+    }
     node._quality = quality;
   } else {
     node._quality = null;
@@ -1906,22 +2187,18 @@ function selectOptions(options, selected) {
 
 function aiNodeControls(node) {
 normalizeAiNodeSettings(node);
-  const isGpt = modelSupportsQuality(node._model);
-  const isStandard25 = isImage25StandardModel(node._model);
-  const isExt25 = isImage25ExtModel(node._model);
-  const models = [["gpt-image-2", "GPT Image 2"], ["gpt-image-2.5-flare", "GPT Image 2.5 Flare（快速）"], ["gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst（质量）"], ["gemini-3.1-flash-image-preview", "Gemini 3.1 Flash"]];
-  const resolutions = isStandard25 ? [["1k", "1K"]] : [["1k", "1K"], ["2k", "2K"], ["4k", "4K"]];
-  const qualities = [["auto", "auto"], ["low", "low"], ["medium", "medium"], ["high", "high"]];
-  const ratios = (isExt25
-    ? ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
-    : ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]
-  ).map(value => [value, value]);
+  const entry = modelCatalogEntry(node._model) || catalogModels()[0];
+  const isGpt = entry.quality;
+  const models = catalogModels().map(model => [model.id, model.label]);
+  const resolutions = entry.resolutions.map(value => [value, value.toUpperCase()]);
+  const qualities = entry.qualities.map(value => [value, value]);
+  const ratios = entry.sizes.map(value => [value, value]);
   return `<div class="ai-node-settings">
     <label class="ai-model-field"><span>模型</span><select data-role="ai-model">${selectOptions(models, node._model)}</select></label>
     <label><span>分辨率</span><select data-role="ai-resolution">${selectOptions(resolutions, node._resolution)}</select></label>
     <label class="${isGpt ? "" : "hidden"}"><span>画质</span><select data-role="ai-quality">${selectOptions(qualities, node._quality || "medium")}</select></label>
     <label><span>比例</span><select data-role="ai-size">${selectOptions(ratios, node._size)}</select></label>
-    <label class="${isExt25 ? "" : "hidden"}"><span>生成张数</span><select data-role="ai-count">${selectOptions([[1, "1"], [2, "2"], [3, "3"], [4, "4"]], node._count)}</select></label>
+    <label class="${isImage25ExtModel(node._model) ? "" : "hidden"}"><span>生成张数</span><select data-role="ai-count">${selectOptions([[1, "1"], [2, "2"], [3, "3"], [4, "4"]], node._count)}</select></label>
   </div>`;
 }
 
@@ -2076,7 +2353,7 @@ function angleImageBody(node) {
 async function generateAngleImage(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "angle-image") return;
-  if (!state.settings.apiKey) return toast("请先在设置中填入 API Key");
+  if (!activeApiKey()) return toast("请先在设置中填入 API Key");
   const source = angleNodeInput(node.id);
   if (!source) return toast("请先连接一个图片节点");
   normalizeAngleNodeSettings(node);
@@ -2211,72 +2488,87 @@ function openAngleEditor(nodeId) {
 
 function collectUpstreamForAI(nodeId, incoming) {
   incoming = incoming || buildIncomingIndex();
-  const result = { texts: [], images: [], groupImages: [], orderedRefs: [] };
-  const visited = new Set();
-  function visit(id) {
-    if (visited.has(id) || id === nodeId) { visited.add(id); return; }
-    visited.add(id);
+  const result = { texts: [], images: [], groupImages: [], orderedRefs: [], branches: [] };
+  const aiNode = findNode(nodeId);
+  const keepCombined = aiNode?.keepCombinedInputs === true;
+  const textsSeen = new Set();
+  const groupsSeen = new Set();
+
+  function imageRef(n, image, assetId) {
+    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
+  }
+
+  // 深度优先展开上游,返回该子图的分支列表;每个分支是路径上的图片引用数组。
+  // 一个节点同时接多条图片线(扇入)时按线拆分支;文字/变量与组节点共享、不产生分支。
+  function visit(id, pathVisited) {
+    if (pathVisited.has(id)) return [];
+    const nextVisited = new Set(pathVisited);
+    nextVisited.add(id);
     const n = findNode(id);
-    if (!n) return;
-    // AI 节点截断：收集已生成图片后不再向上追溯（包括停用的 AI 节点）
+    if (!n || n.disabled) return [];
     if (n.type === "ai-image" || n.type === "angle-image") {
-      if (n.generatedImage) {
-        const ref = { image: n.generatedImage, assetId: n.generatedAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
-        result.images.push(ref);
-        result.orderedRefs.push(ref);
-      }
-      return;
+      // AI/角度节点截断:取其已生成图片作为参考,不再向上追溯
+      if (n.generatedImage) return [[imageRef(n, n.generatedImage, n.generatedAssetId)]];
+      return [];
     }
-    if (n.disabled) return;
-    if (n.type === "text" && n.text && n.text.trim()) result.texts.push(n.text.trim());
+    if (n.type === "text") {
+      if (n.text && n.text.trim() && !textsSeen.has(n.id)) { textsSeen.add(n.id); result.texts.push(n.text.trim()); }
+      return [];
+    }
     if (n.type === "variable") {
       const output = variableNodeOutput(n);
-      if (output) result.texts.push(output);
-    }
-    if (n.type === "image" && n.image) {
-      const ref = { image: n.image, assetId: n.imageAssetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
-      result.images.push(ref);
-      result.orderedRefs.push(ref);
+      if (output && !textsSeen.has(n.id)) { textsSeen.add(n.id); result.texts.push(output); }
+      return [];
     }
     if (n.type === "group") {
-      // Ctrl+G 多任务节点 (items)
+      // 组节点维持现有批量语义:全部条目进 groupImages,由任务构建按组拆任务
+      if (groupsSeen.has(n.id)) return [];
+      groupsSeen.add(n.id);
       if (n.items) {
         for (const item of n.items) {
           if (item.type === "text" && item.text && item.text.trim()) result.texts.push(item.text.trim());
-          if (item.type === "image" && item.image) {
-            const ref = { image: item.image, assetId: item.imageAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x, _nodeId: n.id };
-            result.groupImages.push(ref);
-            result.orderedRefs.push(ref);
-          }
-          if (item.type === "ai-image" && item.generatedImage) {
-            const ref = { image: item.generatedImage, assetId: item.generatedAssetId || "", fileName: item.fileName, mime: item.mime, _x: n.x, _nodeId: n.id };
-            result.groupImages.push(ref);
-            result.orderedRefs.push(ref);
-          }
+          if (item.type === "image" && item.image) result.groupImages.push(imageRef({ ...n, fileName: item.fileName, mime: item.mime }, item.image, item.assetId));
+          if (item.type === "ai-image" && item.generatedImage) result.groupImages.push(imageRef({ ...n, fileName: item.fileName, mime: item.mime }, item.generatedImage, item.generatedAssetId));
         }
       }
-      // 文件夹多任务 (images)
       if (n.images && n.images.length) {
-        for (const gImg of n.images) {
-          const ref = {
-            image: gImg.image,
-            assetId: gImg.assetId || "",
-            fileName: gImg.fileName,
-            mime: gImg.mime,
-            _x: n.x,
-            _nodeId: n.id,
-          };
-          result.groupImages.push(ref);
-          result.orderedRefs.push(ref);
-        }
+        for (const gImg of n.images) result.groupImages.push(imageRef({ ...n, fileName: gImg.fileName, mime: gImg.mime }, gImg.image, gImg.assetId));
+      }
+      return [];
+    }
+    // 图片节点等:自身图片加入每条经过它的分支
+    const own = n.type === "image" && n.image ? [imageRef(n, n.image, n.imageAssetId)] : [];
+    const edges = incoming.get(id) || [];
+    const branches = [];
+    for (const edge of edges) {
+      for (const branch of visit(edge.from.node, nextVisited)) branches.push(branch);
+    }
+    if (!branches.length) return own.length ? [own] : [];
+    return branches.map(branch => [...branch, ...own]);
+  }
+
+  const branchLists = [];
+  for (const edge of incoming.get(nodeId) || []) {
+    for (const branch of visit(edge.from.node, new Set([nodeId]))) branchLists.push(branch);
+  }
+  if (keepCombined) {
+    // 合并输入模式:全部上游打平为单个分支并按节点去重(与旧行为一致)
+    const flat = [];
+    const seenRefs = new Set();
+    for (const branch of branchLists) {
+      for (const ref of branch) {
+        const key = ref._nodeId || ref.assetId || ref.image;
+        if (key && seenRefs.has(key)) continue;
+        if (key) seenRefs.add(key);
+        flat.push(ref);
       }
     }
-    const incomingEdges = incoming.get(id) || [];
-    incomingEdges.forEach(e => visit(e.from.node));
+    branchLists.length = 0;
+    if (flat.length) branchLists.push(flat);
   }
-  (incoming.get(nodeId) || []).forEach(e => visit(e.from.node));
-  result.images.sort((a, b) => (a._x || 0) - (b._x || 0));
-  result.orderedRefs.sort((a, b) => (a._x || 0) - (b._x || 0));
+  result.branches = branchLists.map(branch => branch.slice().sort((a, b) => (a._x || 0) - (b._x || 0)));
+  result.images = result.branches[0] || [];
+  result.orderedRefs = result.branches[0] || [];
   return result;
 }
 
@@ -2372,9 +2664,48 @@ function markNodeAssetIssue(node, message) {
   renderNodes();
 }
 
+// agtoken 同步接口的返回结果暂存表：submitGeneration 返回伪任务号，pollTask 取走后即删
+const agtokenSyncResults = new Map();
+let agtokenSyncSeq = 0;
+
+async function submitAgtokenGeneration(prompt, imageUrls, node) {
+  const entry = modelCatalogEntry(node._model);
+  const payload = {
+    model: node._model,
+    prompt: prompt || "generate an image",
+    n: entry?.quality && isImage25ExtModel(node._model) ? Math.max(1, Math.min(4, Number(node._count) || 1)) : 1,
+    size: String(node._resolution || "1k").toLowerCase(),
+    response_format: "url",
+  };
+  if (node._size && node._size !== "auto") payload.aspect_ratio = node._size;
+  if (entry?.quality && node._quality) payload.quality = node._quality;
+  if (imageUrls.length) payload.images = await Promise.all(imageUrls.map(materializeReferenceImage));
+
+  const endpoint = imageUrls.length ? "/api/agtoken/edits" : "/api/agtoken/generate";
+  const resp = await apiFetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CanvasFlow-Api-Key": activeApiKey() || "" },
+    body: JSON.stringify(desktop ? payload : { ...payload, _apiKey: activeApiKey() }),
+  });
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message || "agtoken 生成失败");
+  const urls = (Array.isArray(data.data) ? data.data : [])
+    .map(item => {
+      if (item?.url) return item.url;
+      if (item?.b64_json) return item.b64_json.startsWith("data:") ? item.b64_json : `data:image/png;base64,${item.b64_json}`;
+      return "";
+    })
+    .filter(Boolean);
+  if (!urls.length) throw new Error("agtoken 生成完成但无图片结果");
+  const token = `agtoken-sync-${++agtokenSyncSeq}`;
+  agtokenSyncResults.set(token, urls);
+  return token;
+}
+
 async function submitGeneration(prompt, imageUrls, node) {
   if (!prompt && !imageUrls.length) throw new Error("需要提示词或参考图");
   normalizeAiNodeSettings(node);
+  if (activeApiType() === "agtoken") return submitAgtokenGeneration(prompt, imageUrls, node);
   const extVersion = image25ExtVersion(node._model);
   const payload = {
     model: extVersion ? "gpt-image-2.5-ext" : node._model,
@@ -2408,6 +2739,14 @@ payload.quality = node._quality || "medium";
 }
 
 async function pollTask(taskId, onProgress = null, returnAllImages = false) {
+  if (typeof taskId === "string" && taskId.startsWith("agtoken-sync-")) {
+    const urls = agtokenSyncResults.get(taskId);
+    agtokenSyncResults.delete(taskId);
+    if (!urls) throw new Error("同步生成结果已失效，请重新生成");
+    if (onProgress) onProgress(100, "completed");
+    if (!urls.length) throw new Error("任务完成但无图片结果");
+    return returnAllImages ? urls : urls[0];
+  }
   const maxAttempts = 360;
   let lastErr = null;
   for (let i = 0; i < maxAttempts; i++) {
@@ -2459,6 +2798,7 @@ async function pollTask(taskId, onProgress = null, returnAllImages = false) {
 }
 
 async function fetchImageAsBase64(url) {
+  if (typeof url === "string" && url.startsWith("data:image/")) return url;
   const maxAttempts = 3;
   const retryDelayMs = 2000;
   let lastError = "";
@@ -2898,7 +3238,7 @@ function pumpAiTaskQueue() {
 }
 
 async function enqueueScreenshotTasks(message) {
-  if (!state.settings.apiKey) {
+  if (!activeApiKey()) {
     toast("请先在设置中填写并保存 API Key");
     if (window.chrome?.webview) window.chrome.webview.postMessage({
       type: "screenshot:task-update", requestId: message.requestId || "", taskId: "",
@@ -3023,7 +3363,6 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
   const imagesPerRequest = isImage25ExtModel(generationSettings._model) ? Math.max(1, Math.min(4, Number(generationSettings._count) || 1)) : 1;
   const prompt = upstream.texts.join("，");
   const groupImages = upstream.groupImages || [];
-  const groupImageSet = new Set(groupImages);
   const taskSources = groupImages.length ? groupImages : [null];
   const page = currentPage();
   const existingResultCount = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id).length;
@@ -3038,8 +3377,9 @@ function buildAiQueueTasks(node, upstream, resultMode, runId) {
     prompt,
     regularImages: upstream.images.map(image => ({ ...image })),
     groupImage: groupImage ? { ...groupImage } : null,
-    orderedImages: (upstream.orderedRefs || [])
-      .filter(image => !groupImageSet.has(image) || image === groupImage)
+    orderedImages: (groupImage ? [...(upstream.orderedRefs || []), groupImage] : (upstream.orderedRefs || []))
+      .slice()
+      .sort((a, b) => (a._x || 0) - (b._x || 0))
       .map(image => ({ ...image })),
     groupIndex: groupImage ? index : -1,
     referenceName: groupImage?.fileName || upstream.images[0]?.fileName || "生成结果",
@@ -3070,11 +3410,27 @@ function enqueueAiNode(nodeId, resultMode = "node-preview") {
     }
     refreshAiPrompt(id);
     const upstream = collectUpstreamForAI(id);
-    if (!upstream.texts.length && !upstream.images.length && !upstream.groupImages.length) continue;
+    const branches = upstream.branches?.length ? upstream.branches : [[]];
+    const hasInputs = upstream.texts.length || upstream.groupImages.length || branches.some(branch => branch.length);
+    if (!hasInputs) continue;
     const runId = `run-${Date.now()}-${aiTaskQueue.nextId}`;
     node._queueRunId = runId;
-    const tasks = buildAiQueueTasks(node, upstream, resultMode, runId);
-    if (resultMode === "node-preview" && !upstream.groupImages.length) {
+    // 图片扇入(经汇聚节点或直连多条图片线)时按支线拆任务;多任务结果各自生成图片节点
+    const effectiveResultMode = branches.length > 1 ? "image-node" : resultMode;
+    const generationSettings = queuedGenerationSettings(node);
+    const imagesPerRequest = isImage25ExtModel(generationSettings._model) ? Math.max(1, Math.min(4, Number(generationSettings._count) || 1)) : 1;
+    const existingResultCount = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id).length;
+    const baseLabel = node.seq ? `AI #${node.seq}` : "AI 绘图";
+    const tasks = [];
+    for (const branchRefs of branches) {
+      tasks.push(...buildAiQueueTasks(node, { ...upstream, images: branchRefs, orderedRefs: branchRefs }, effectiveResultMode, runId));
+    }
+    tasks.forEach((task, index) => {
+      task.resultOrder = existingResultCount + index * imagesPerRequest;
+      task.resultCount = existingResultCount + tasks.length * imagesPerRequest;
+      task.label = `${baseLabel}${tasks.length > 1 ? ` · ${index + 1}/${tasks.length}` : ""}`;
+    });
+    if (effectiveResultMode === "node-preview") {
       node.generatedImage = null;
       delete node.generatedAssetId;
       node.outputPath = "";
@@ -3095,7 +3451,7 @@ function enqueueAiNode(nodeId, resultMode = "node-preview") {
 async function generateAiImage(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "ai-image") return;
-  if (!state.settings.apiKey) {
+  if (!activeApiKey()) {
     toast("请先在设置中填入 API Key");
     return;
   }
@@ -3429,16 +3785,46 @@ function portPoint(node, side) {
   };
 }
 
-function edgePath(a, b) {
+function edgeGeometry(a, b) {
   const p1 = portPoint(a, "out");
   const p2 = portPoint(b, "in");
   if (state.settings.smoothEdges) {
     const dx = Math.abs(p2.x - p1.x) * 0.5;
-    return `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`;
+    return { type: "cubic", p1, c1: { x: p1.x + dx, y: p1.y }, c2: { x: p2.x - dx, y: p2.y }, p2 };
   }
   const gap = 60;
   const mid = p2.x > p1.x + gap ? (p1.x + p2.x) / 2 : Math.max(p1.x + gap, p2.x - gap);
-  return `M ${p1.x} ${p1.y} L ${mid} ${p1.y} L ${mid} ${p2.y} L ${p2.x} ${p2.y}`;
+  return { type: "polyline", points: [p1, { x: mid, y: p1.y }, { x: mid, y: p2.y }, p2] };
+}
+
+function edgePath(a, b) {
+  const g = edgeGeometry(a, b);
+  if (g.type === "cubic") return `M ${g.p1.x} ${g.p1.y} C ${g.c1.x} ${g.c1.y}, ${g.c2.x} ${g.c2.y}, ${g.p2.x} ${g.p2.y}`;
+  return g.points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
+}
+
+function edgeSamplePoints(a, b) {
+  const g = edgeGeometry(a, b);
+  if (g.type === "polyline") return g.points;
+  const points = [];
+  const steps = 32;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const mt = 1 - t;
+    points.push({
+      x: mt * mt * mt * g.p1.x + 3 * mt * mt * t * g.c1.x + 3 * mt * t * t * g.c2.x + t * t * t * g.p2.x,
+      y: mt * mt * mt * g.p1.y + 3 * mt * mt * t * g.c1.y + 3 * mt * t * t * g.c2.y + t * t * t * g.p2.y,
+    });
+  }
+  return points;
+}
+
+function segmentsIntersect(p1, p2, p3, p4) {
+  const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+  if (!d) return false;
+  const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+  const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 }
 
 function render() {
@@ -3648,6 +4034,10 @@ function projectPanelPageRow(page) {
     ev.dataTransfer.setData("text/canvasflow-page", page.id);
     ev.dataTransfer.effectAllowed = "move";
   });
+  for (const node of pasted) {
+    if (map.has(node.aiSourceNodeId)) node.aiSourceNodeId = map.get(node.aiSourceNodeId);
+    if (map.has(node.angleSourceNodeId)) node.angleSourceNodeId = map.get(node.angleSourceNodeId);
+  }
   row.addEventListener("dragend", () => {
     document.querySelectorAll(".drop-above, .drop-below").forEach(el => el.classList.remove("drop-above", "drop-below"));
   });
@@ -4086,7 +4476,12 @@ function nodeTemplate(node) {
   } else if (node.type === "screenshot-input") {
     normalizeAiNodeSettings(node);
     node._count = Math.max(1, Math.min(4, Number(node._count) || 1));
-    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model"><option value="gpt-image-2" ${node._model === "gpt-image-2" ? "selected" : ""}>GPT Image 2</option><option value="gpt-image-2.5-flare" ${node._model === "gpt-image-2.5-flare" ? "selected" : ""}>GPT Image 2.5 Flare（快速）</option><option value="gpt-image-2.5-sunburst" ${node._model === "gpt-image-2.5-sunburst" ? "selected" : ""}>GPT Image 2.5 Sunburst（质量）</option><option value="gemini-3.1-flash-image-preview" ${node._model === "gemini-3.1-flash-image-preview" ? "selected" : ""}>Gemini 3.1 Flash</option></select></label><label>分辨率<select data-role="screenshot-resolution">${["1k","2k","4k"].map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("")}</select></label><label class="${modelSupportsQuality(node._model) ? "" : "hidden"}">画质<select data-role="screenshot-quality">${["low","medium","high"].map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>比例<select data-role="screenshot-size">${["1:1","auto","3:2","2:3","4:3","3:4","16:9","9:16"].map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
+    const entry = modelCatalogEntry(node._model) || catalogModels()[0];
+    const models = catalogModels().map(model => `<option value="${model.id}" ${node._model === model.id ? "selected" : ""}>${model.label}</option>`).join("");
+    const resolutions = entry.resolutions.map(v => `<option value="${v}" ${node._resolution === v ? "selected" : ""}>${v.toUpperCase()}</option>`).join("");
+    const qualities = entry.qualities.filter(v => v !== "auto").map(v => `<option value="${v}" ${node._quality === v ? "selected" : ""}>${v}</option>`).join("");
+    const sizes = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"].filter(v => entry.sizes.includes(v)).map(v => `<option value="${v}" ${node._size === v ? "selected" : ""}>${v}</option>`).join("");
+    body = `<div class="screenshot-node-summary">${escapeHtml(screenshotNodeSummary(node))}</div><div class="node-hover-controls"><div class="ai-node-settings"><label>模型<select data-role="screenshot-model">${models}</select></label><label>分辨率<select data-role="screenshot-resolution">${resolutions}</select></label><label class="${entry.quality ? "" : "hidden"}">画质<select data-role="screenshot-quality">${qualities}</select></label><label>比例<select data-role="screenshot-size">${sizes}</select></label><label>生成数量<select data-role="screenshot-count">${[1,2,3,4].map(v => `<option value="${v}" ${node._count === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div></div>`;
   } else {
     body = `<div class="output-label">图片${num}</div>`;
   }
@@ -4148,6 +4543,67 @@ function renderEdges() {
     path.setAttribute("d", edgePath(draftSource, draftTarget));
     els.edges.appendChild(path);
   }
+}
+
+function strokeSmoothPath(points) {
+  if (points.length < 3) return `M ${points.map(p => `${p.x} ${p.y}`).join(" L ")}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const mx = (points[i].x + points[i + 1].x) / 2;
+    const my = (points[i].y + points[i + 1].y) / 2;
+    d += ` Q ${points[i].x} ${points[i].y}, ${mx} ${my}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+}
+
+function renderCutStroke() {
+  const svg = els.gestureStroke;
+  svg.innerHTML = "";
+  if (!cutStroke || cutStroke.points.length < 2) return;
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("class", "cut-stroke-line");
+  path.setAttribute("d", strokeSmoothPath(cutStroke.points));
+  svg.appendChild(path);
+}
+
+function applyCutStroke(points) {
+  if (points.length < 2) return;
+  const hitEdges = [];
+  for (const e of state.edges) {
+    const a = findNode(e.from.node);
+    const b = findNode(e.to.node);
+    if (!a || !b) continue;
+    const samples = edgeSamplePoints(a, b);
+    outer: for (let i = 0; i < samples.length - 1; i++) {
+      for (let j = 0; j < points.length - 1; j++) {
+        if (segmentsIntersect(samples[i], samples[i + 1], points[j], points[j + 1])) {
+          hitEdges.push(e);
+          break outer;
+        }
+      }
+    }
+  }
+  if (!hitEdges.length) return;
+  const ids = new Set(hitEdges.map(e => e.id));
+  const chainPairs = [];
+  for (const e1 of hitEdges) {
+    for (const e2 of hitEdges) {
+      if (e1 !== e2 && e1.to.node === e2.from.node && e1.from.node !== e2.to.node) chainPairs.push([e1, e2]);
+    }
+  }
+  state.edges = state.edges.filter(e => !ids.has(e.id));
+  let bridged = 0;
+  for (const [e1, e2] of chainPairs) {
+    if (state.edges.some(e => e.from.node === e1.from.node && e.to.node === e2.to.node)) continue;
+    state.edges.push({ id: uid("e"), from: { node: e1.from.node, port: "out" }, to: { node: e2.to.node, port: "in" }, label: "" });
+    bridged++;
+  }
+  pushHistory();
+  render();
+  toast(bridged ? `已切断 ${ids.size} 条连线，两端节点已重新连接` : `已切断 ${ids.size} 条连线`);
+  console.log("[划线切线] 手势完成", { cut: ids.size, bridged });
 }
 
 function renderMinimap() {
@@ -4220,27 +4676,42 @@ function centerViewOnContent() {
 }
 
 function tidyNodes() {
+  const scope = state.selected.size ? state.nodes.filter(n => state.selected.has(n.id)) : state.nodes;
+  if (!scope.length) return toast("没有需要整理的节点");
+  const scopeSet = new Set(scope.map(n => n.id));
+  const edges = state.edges.filter(e => scopeSet.has(e.from.node) && scopeSet.has(e.to.node));
+  // 局部整理时保持选区原中心不动；全量整理时把结果放到当前视口中央，避免内容跑到一侧。
+  // 选区中心必须在布局改位前记录，否则拿到的已是新位置。
+  const isPartial = state.selected.size > 0 && scope.length !== state.nodes.length;
+  let targetCenter;
+  if (isPartial) {
+    const xs = scope.map(n => n.x), ys = scope.map(n => n.y);
+    const xe = scope.map(n => n.x + n.w), ye = scope.map(n => n.y + n.h);
+    targetCenter = { x: (Math.min(...xs) + Math.max(...xe)) / 2, y: (Math.min(...ys) + Math.max(...ye)) / 2 };
+  } else {
+    targetCenter = visibleWorldCenter();
+  }
+
   const depths = new Map();
   const visit = (nodeId, stack = new Set()) => {
     if (depths.has(nodeId)) return depths.get(nodeId);
     if (stack.has(nodeId)) return 0;
     stack.add(nodeId);
-    const incoming = state.edges.filter(e => e.to.node === nodeId);
+    const incoming = edges.filter(e => e.to.node === nodeId);
     const depth = incoming.length ? Math.max(...incoming.map(e => visit(e.from.node, stack) + 1)) : 0;
     stack.delete(nodeId);
     depths.set(nodeId, depth);
     return depth;
   };
-  state.nodes.forEach(n => visit(n.id));
-  const neighbors = new Map(state.nodes.map(node => [node.id, new Set()]));
-  state.edges.forEach(edge => {
-    if (!neighbors.has(edge.from.node) || !neighbors.has(edge.to.node)) return;
-    neighbors.get(edge.from.node).add(edge.to.node);
-    neighbors.get(edge.to.node).add(edge.from.node);
+  scope.forEach(n => visit(n.id));
+  const neighbors = new Map(scope.map(node => [node.id, new Set()]));
+  edges.forEach(edge => {
+    neighbors.get(edge.from.node)?.add(edge.to.node);
+    neighbors.get(edge.to.node)?.add(edge.from.node);
   });
   const components = [];
   const seen = new Set();
-  state.nodes
+  scope
     .slice()
     .sort((a, b) => a.created - b.created)
     .forEach(start => {
@@ -4261,7 +4732,7 @@ function tidyNodes() {
       components.push(component);
     });
 
-  let nextGroupY = 80;
+  let nextGroupY = 0;
   components.forEach(component => {
     const rowsByDepth = new Map();
     component.forEach(node => {
@@ -4273,17 +4744,24 @@ function tidyNodes() {
     rowsByDepth.forEach((nodes, depth) => {
       let branchY = nextGroupY;
       nodes.sort((a, b) => a.created - b.created).forEach(node => {
-        node.x = snap(80 + depth * 330);
-        node.y = snap(branchY);
+        node.x = depth * 330;
+        node.y = branchY;
         branchY = node.y + node.h + 40;
         groupBottom = Math.max(groupBottom, node.y + node.h);
       });
     });
-    nextGroupY = snap(groupBottom + 80);
+    nextGroupY = groupBottom + 80;
   });
+
+  const bx = Math.min(...scope.map(n => n.x)), by = Math.min(...scope.map(n => n.y));
+  const bx2 = Math.max(...scope.map(n => n.x + n.w)), by2 = Math.max(...scope.map(n => n.y + n.h));
+  const dx = snap(targetCenter.x - (bx + bx2) / 2);
+  const dy = snap(targetCenter.y - (by + by2) / 2);
+  scope.forEach(n => { n.x = snap(n.x + dx); n.y = snap(n.y + dy); });
+
   pushHistory();
   render();
-  toast("已整理节点");
+  toast(isPartial ? `已整理选中的 ${scope.length} 个节点` : "已整理节点");
 }
 
 function autoAddAiNodes() {
@@ -4406,6 +4884,11 @@ els.viewport.addEventListener("mousedown", ev => {
   hideMenu();
   els.projectMenu.classList.add("hidden");
   lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
+  if (altDown && ev.button === 0 && !ev.target.closest(".minimap-panel") && !ev.target.closest("textarea,button,input,select,[contenteditable='true']")) {
+    ev.preventDefault();
+    cutStroke = { points: [screenToWorld(ev.clientX, ev.clientY)] };
+    return;
+  }
   if (ev.target.closest(".edge-hit")) return; // 点击连线不做任何操作，交给 dblclick / contextmenu
   const port = ev.target.closest(".port");
   const nodeEl = ev.target.closest(".node");
@@ -4459,6 +4942,16 @@ els.viewport.addEventListener("mousedown", ev => {
 window.addEventListener("mousemove", ev => {
   lastPointerClient = { x: ev.clientX, y: ev.clientY };
   if (ev.target.closest?.("#viewport")) lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
+  if (cutStroke) {
+    const p = screenToWorld(ev.clientX, ev.clientY);
+    const pts = cutStroke.points;
+    const last = pts[pts.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) > 4 / state.view.scale) {
+      pts.push(p);
+      renderCutStroke();
+    }
+    return;
+  }
   if (connectDraft) {
     connectDraft.end = screenToWorld(ev.clientX, ev.clientY);
     scheduleInteractiveRender({ edges: true });
@@ -4504,6 +4997,13 @@ window.addEventListener("mousemove", ev => {
 });
 
 window.addEventListener("mouseup", ev => {
+  if (cutStroke) {
+    const stroke = cutStroke;
+    cutStroke = null;
+    renderCutStroke();
+    applyCutStroke(stroke.points);
+    return;
+  }
   if (connectDraft) {
     const targetNode = findNearbyInputNode(ev.clientX, ev.clientY);
     if (targetNode) addEdge(connectDraft.from, targetNode.id);
@@ -5680,23 +6180,25 @@ async function resolveNodeImageDataUrl(node) {
   return "";
 }
 
-async function extractGenerationKeywords(node) {
-  if (!node) return;
+async function readEmbeddedGenerationPrompt(node) {
+  if (!node) return "";
   const dataUrl = await resolveNodeImageDataUrl(node);
-  if (!dataUrl) {
-    toast("没有可提取的图片：该节点上没有图片内容，也没有可读取的素材文件；请先生成或导入图片再提取");
-    return;
-  }
+  if (!dataUrl) return "";
   const meta = readGenerationMetadataFromPng(dataUrl) || {};
-  console.debug("[关键词提取] 读取结果", {
+  const prompt = String(meta.prompt || "").trim();
+  console.debug("[关键词提取] 元数据检测结果", {
     nodeId: node.id,
     metaKeys: Object.keys(meta),
-    hasEmbeddedPrompt: Boolean(meta.prompt),
-    hasNodePrompt: Boolean(node.generationPrompt),
+    hasEmbeddedPrompt: Boolean(prompt),
   });
-  const prompt = String(meta.prompt || node.generationPrompt || "").trim();
+  return prompt;
+}
+
+async function extractGenerationKeywords(node, detectedPrompt = "") {
+  if (!node) return;
+  const prompt = String(detectedPrompt || await readEmbeddedGenerationPrompt(node)).trim();
   if (!prompt) {
-    toast("没有找到生成关键词：该图片没有嵌入的生成信息，节点上也没有备用记录；通常是图片被重新编码或来自其他软件，可重新生成后再试");
+    toast("没有找到生成关键词：该图片没有嵌入生成信息；通常是图片被重新编码或来自其他软件，可重新生成后再试");
     return;
   }
   const textNode = addNode("text", node.x + NODE_WIDTH + 40, node.y, false);
@@ -5709,7 +6211,7 @@ async function extractGenerationKeywords(node) {
   toast("已提取生成关键词并创建文字节点");
 }
 
-els.viewport.addEventListener("contextmenu", ev => {
+els.viewport.addEventListener("contextmenu", async ev => {
   ev.preventDefault();
   const nodeEl = ev.target.closest(".node");
   const p = screenToWorld(ev.clientX, ev.clientY);
@@ -5717,10 +6219,13 @@ els.viewport.addEventListener("contextmenu", ev => {
     const id = nodeEl.dataset.id;
     if (!state.selected.has(id)) state.selected = new Set([id]);
     const selectedNode = findNode(id);
+    const supportsEmbeddedPrompt = selectedNode?.type === "image" || selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image";
+    const embeddedPrompt = supportsEmbeddedPrompt ? await readEmbeddedGenerationPrompt(selectedNode) : "";
     if (isMindmapMode()) {
       const mindmapItems = [
-        ...((selectedNode?.type === "text" || selectedNode?.type === "image") ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-        ...(selectedNode?.type === "image" ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode)]] : []),
+        ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image") ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
+        ...(state.selected.size > 1 ? [["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()]] : []),
+        ...(embeddedPrompt ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode, embeddedPrompt)]] : []),
         ...(state.selected.size > 1 ? [["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()]] : []),
         ...(selectedNode?.type === "mind-group" ? [["进入编组", () => enterMindmapGroup(id)], ["重命名编组", () => renameMindmapGroup(id)], ["解散编组", () => ungroupMindmapNode(id)]] : []),
         ["断开连接", () => disconnectEdges(state.selected)],
@@ -5740,8 +6245,9 @@ els.viewport.addEventListener("contextmenu", ev => {
       ["切换启用/停用", () => toggleDisabled(state.selected)],
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
-      ...((selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && selectedNode.generatedImage)) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-      ...((selectedNode?.type === "image" || selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode)]] : []),
+      ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
+      ...(state.selected.size > 1 ? [["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()]] : []),
+      ...(embeddedPrompt ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode, embeddedPrompt)]] : []),
       ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
@@ -5768,13 +6274,14 @@ els.viewport.addEventListener("contextmenu", ev => {
     if (isMindmapMode()) {
       const items = [];
       if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
-      items.push(["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()], ["断开连接", () => disconnectEdges(state.selected)], ["批量删除", () => deleteNodes(state.selected)]);
+      items.push(["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()], ["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()], ["断开连接", () => disconnectEdges(state.selected)], ["批量删除", () => deleteNodes(state.selected)]);
       showMenu(ev.clientX, ev.clientY, items);
       return;
     }
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     items.push(
+      ["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()],
       ["多任务", () => groupSelection()],
       ["依次连接", () => connectSelectionInSequence()],
       ["AI绘图", () => {
@@ -5796,6 +6303,7 @@ els.viewport.addEventListener("contextmenu", ev => {
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     const textTemplates = libraryItems("text");
     const imageTemplates = libraryItems("image");
+    const multiTemplates = libraryItems("multi");
     if (isMindmapMode()) {
       items.push(
         ["添加文字节点", () => addNode("text", p.x, p.y)],
@@ -5807,6 +6315,7 @@ els.viewport.addEventListener("contextmenu", ev => {
         ["自定义节点", [
           ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
           ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
+          ["自定义多个节点", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
         ]],
         ["节点对齐", () => tidyNodes()],
       );
@@ -5820,6 +6329,7 @@ els.viewport.addEventListener("contextmenu", ev => {
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
+        ["自定义多个节点", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
       ]],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
       ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
@@ -5903,6 +6413,11 @@ function hideMenu() {
 }
 
 window.addEventListener("keydown", ev => {
+  if (ev.key === "Alt") {
+    altDown = true;
+    if (!ev.target.matches?.("textarea,input,select,[contenteditable='true']")) ev.preventDefault();
+    return;
+  }
   if (lightboxPainting && (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") {
     ev.preventDefault();
     undoLightboxPaint();
@@ -5927,7 +6442,13 @@ window.addEventListener("keydown", ev => {
 });
 
 window.addEventListener("keyup", ev => {
+  if (ev.key === "Alt") altDown = false;
   if (ev.code === "Space") spaceDown = false;
+});
+
+window.addEventListener("blur", () => {
+  altDown = false;
+  spaceDown = false;
 });
 
 els.viewport.addEventListener("pointerdown", ev => {
@@ -6237,7 +6758,10 @@ function renamePage() {
 function persistPages() {
   const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion }));
   for (const page of snapshot.pages || []) {
-    if (page.data?.settings) page.data.settings.apiKey = "";
+    if (page.data?.settings) {
+      page.data.settings.apiKey = "";
+      page.data.settings.agtokenApiKey = "";
+    }
     delete page._history;
     delete page._future;
   }
@@ -6265,7 +6789,10 @@ async function persistDesktopStateNow() {
 function desktopStateSnapshot() {
   const snapshot = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, nextPageNum: state.nextPageNum, uiLanguage, onboardingSeenVersion, updatedAt: Date.now() }));
   for (const page of snapshot.pages || []) {
-    if (page.data?.settings) page.data.settings.apiKey = "";
+    if (page.data?.settings) {
+      page.data.settings.apiKey = "";
+      page.data.settings.agtokenApiKey = "";
+    }
     delete page._history;
     delete page._future;
   }
@@ -6276,7 +6803,10 @@ function autoBackupContent() {
   saveCurrentPage();
   const data = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId, globalLibrary }));
   for (const page of data.pages || []) {
-    if (page.data?.settings) page.data.settings.apiKey = "";
+    if (page.data?.settings) {
+      page.data.settings.apiKey = "";
+      page.data.settings.agtokenApiKey = "";
+    }
     delete page._history;
     delete page._future;
   }
@@ -7185,8 +7715,21 @@ if (els.languageSelect) {
 if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
 if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
 
+function populateDefaultModelOptions() {
+  if (!els.defaultImageModelSelect) return;
+  const catalog = activeCatalog();
+  els.defaultImageModelSelect.innerHTML = catalogModels()
+    .map(model => `<option value="${model.id}">${model.label}</option>`)
+    .join("");
+  if (!catalog.models.some(model => model.id === state.settings.defaultImageModel)) {
+    console.warn("[默认绘图模型] 当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
+    state.settings.defaultImageModel = catalog.defaultModel;
+  }
+  els.defaultImageModelSelect.value = state.settings.defaultImageModel;
+}
+
 function applyApiTypeSettingsUi() {
-  const apiType = "apimart";
+  const apiType = activeApiType();
   state.settings.apiType = apiType;
   if (els.apiTypeSelect) els.apiTypeSelect.value = apiType;
   if (els.apimartApiInfo) els.apimartApiInfo.classList.toggle("hidden", apiType !== "apimart");
@@ -7194,6 +7737,8 @@ function applyApiTypeSettingsUi() {
   if (els.customApiSettings) els.customApiSettings.classList.toggle("hidden", apiType !== "custom");
   if (els.customApiBaseUrlInput) els.customApiBaseUrlInput.value = state.settings.customApiBaseUrl || "";
   if (els.customApiHeadersInput) els.customApiHeadersInput.value = state.settings.customApiHeaders || "";
+  if (els.apiKeyInput) els.apiKeyInput.value = activeApiKey();
+  populateDefaultModelOptions();
   const card = els.apiSettingsCard;
   if (card) card.dataset.apiType = apiType;
   console.info("[API类型] 当前类型：", apiType);
@@ -7214,7 +7759,8 @@ function parseCustomApiHeaders(raw) {
 }
 
 els.apiTypeSelect.onchange = () => {
-  state.settings.apiType = els.apiTypeSelect.value;
+  state.settings.apiType = els.apiTypeSelect.value === "agtoken" ? "agtoken" : "apimart";
+  console.info("[API类型] 切换为", state.settings.apiType);
   applyApiTypeSettingsUi();
   pushHistory();
 };
@@ -7231,8 +7777,14 @@ els.customApiHeadersInput.onchange = () => {
 };
 
 els.apiKeyInput.onchange = () => {
-  state.settings.apiKey = els.apiKeyInput.value.trim();
-  if (desktop) desktop.saveApiKey(state.settings.apiKey).then(result => { if (result.warning) toast(result.warning); });
+  setActiveApiKey(els.apiKeyInput.value.trim());
+  if (desktop) desktop.saveApiKey(activeApiKey(), activeApiType()).then(result => { if (result.warning) toast(result.warning); });
+  pushHistory();
+};
+
+els.defaultImageModelSelect.onchange = () => {
+  state.settings.defaultImageModel = els.defaultImageModelSelect.value;
+  console.info("[默认绘图模型] 已更新", { model: state.settings.defaultImageModel });
   pushHistory();
 };
 
@@ -7246,9 +7798,10 @@ els.verifyKeyBtn.onclick = async () => {
   let invalid = false;
   let lastStatus = 0;
   let lastError = null;
+  const verifyEndpoint = activeApiType() === "agtoken" ? "/api/agtoken/models" : "/api/models";
   for (let attempt = 1; attempt <= 3 && !verified && !invalid; attempt++) {
     try {
-      const resp = await apiFetch("/api/models", { headers: { "X-CanvasFlow-Api-Key": key } });
+      const resp = await apiFetch(verifyEndpoint, { headers: { "X-CanvasFlow-Api-Key": key } });
       lastStatus = resp.status;
       verified = resp.status === 200;
       invalid = resp.status === 401 || resp.status === 403;
@@ -7330,9 +7883,9 @@ async function applyWebUpdate() {
 els.balanceRefreshBtn.onclick = fetchBalance;
 
 els.saveKeyBtn.onclick = async () => {
-  state.settings.apiKey = els.apiKeyInput.value.trim();
+  setActiveApiKey(els.apiKeyInput.value.trim());
   if (desktop) {
-    const result = await desktop.saveApiKey(state.settings.apiKey);
+    const result = await desktop.saveApiKey(activeApiKey(), activeApiType());
     if (result.warning) toast(result.warning);
   }
   saveCurrentPage();
@@ -7345,11 +7898,16 @@ els.saveKeyBtn.onclick = async () => {
 els.clearKeyBtn.onclick = async () => {
   els.apiKeyInput.value = "";
   state.settings.apiKey = "";
-  if (desktop) await desktop.saveApiKey("");
+  state.settings.agtokenApiKey = "";
+  if (desktop) {
+    await desktop.saveApiKey("", "apimart");
+    await desktop.saveApiKey("", "agtoken");
+  }
   // Clear API key from all pages' saved settings
   state.pages.forEach(page => {
     if (page.data && page.data.settings) {
       page.data.settings.apiKey = "";
+      page.data.settings.agtokenApiKey = "";
     }
   });
   saveCurrentPage();
@@ -7465,8 +8023,8 @@ async function importLibraryFile(name, content) {
     const pages = Array.isArray(data.pages) ? data.pages : [{ id: "json", name: name.replace(/\.(?:cflow|json)$/i, ""), data }];
     const sources = pages.map(page => ({ id: page.id, name: page.name || "未命名项目", library: normalizeLibrary(page.data?.customLibrary || page.customLibrary) }));
     const importedGlobalLibrary = normalizeLibrary(data.globalLibrary);
-    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length || importedGlobalLibrary.variableDefinitions.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
-    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length || source.library.variableDefinitions.length)) return toast("该文件中没有可导入的图文或变量");
+    if (importedGlobalLibrary.textTemplates.length || importedGlobalLibrary.imageMaterials.length || importedGlobalLibrary.multiNodeTemplates.length || importedGlobalLibrary.variableDefinitions.length) sources.unshift({ id: "global", name: "素材库", library: importedGlobalLibrary });
+    if (!sources.some(source => source.library.textTemplates.length || source.library.imageMaterials.length || source.library.multiNodeTemplates.length || source.library.variableDefinitions.length)) return toast("该文件中没有可导入的图文、多个节点或变量");
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
 }
@@ -7646,10 +8204,20 @@ async function embedLibraryImages(data) {
     for (const item of library.imageMaterials || []) {
       if (!item.fileName) { failures.push(item.name); continue; }
       try {
-        const resp = await fetch("/download/images/" + encodeURIComponent(item.fileName));
+        const resp = await fetch(customMaterialImageUrl(item.fileName));
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         item.data = stripDataUrl(await blobToBase64(await resp.blob()));
       } catch (e) { failures.push(item.name); console.error("[保存] 自定义图片读取失败", item.name, e); }
+    }
+    for (const template of library.multiNodeTemplates || []) {
+      for (const image of template.imageFiles || []) {
+        if (!image.fileName) { failures.push(`${template.name} / 图片`); continue; }
+        try {
+          const resp = await fetch(customMaterialImageUrl(image.fileName));
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          image.data = stripDataUrl(await blobToBase64(await resp.blob()));
+        } catch (e) { failures.push(`${template.name} / ${image.fileName}`); console.error("[保存] 多节点模板图片读取失败", template.name, image.fileName, e); }
+      }
     }
   }
   return failures;
@@ -7668,8 +8236,19 @@ async function restoreLibrariesFromJson(data) {
         item.fileName = result.fileName; delete item.data;
       } catch (e) { console.error("[加载] 项目自定义图片恢复失败", item.name, e); }
     }
+    for (const template of library.multiNodeTemplates) {
+      for (const image of template.imageFiles || []) {
+        if (!image.data) continue;
+        try {
+          const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: image.fileName || "template.png", data: stripDataUrl(image.data) }) });
+          const result = await resp.json(); if (!result.success) throw new Error(result.error || "恢复失败");
+          image.fileName = result.fileName; delete image.data;
+        } catch (e) { console.error("[加载] 项目多节点模板图片恢复失败", template.name, e); }
+      }
+    }
     importedGlobal.textTemplates.push(...library.textTemplates);
     importedGlobal.imageMaterials.push(...library.imageMaterials);
+    importedGlobal.multiNodeTemplates.push(...library.multiNodeTemplates);
     importedGlobal.variableDefinitions.push(...library.variableDefinitions);
     if (page.data) {
       page.data.customLibrary = emptyLibrary();
@@ -7691,6 +8270,19 @@ async function restoreLibrariesFromJson(data) {
       }
       item.name = uniqueTemplateName("image", item.name, globalLibrary); delete item.data; globalLibrary.imageMaterials.push(item);
     } catch (e) { console.error("[加载] 全局自定义图片恢复失败", item.name, e); }
+  }
+  for (const template of importedGlobal.multiNodeTemplates) {
+    try {
+      if (globalLibrary.multiNodeTemplates.some(existing => existing.id === template.id)) continue;
+      for (const image of template.imageFiles || []) {
+        if (!image.data) continue;
+        const resp = await apiFetch("/api/custom-material", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: image.fileName || "template.png", data: stripDataUrl(image.data) }) });
+        const result = await resp.json(); if (!result.success) throw new Error(result.error || "恢复失败");
+        image.fileName = result.fileName; delete image.data;
+      }
+      template.name = uniqueMultiNodeTemplateName(template.name, globalLibrary);
+      globalLibrary.multiNodeTemplates.push(normalizeMultiNodeTemplate(template));
+    } catch (e) { console.error("[加载] 全局多节点模板恢复失败", template.name, e); }
   }
   for (const item of importedGlobal.variableDefinitions) {
     if (globalLibrary.variableDefinitions.some(existing => existing.id === item.id)) continue;
@@ -8103,12 +8695,13 @@ function openExecuteDialog() {
   aiNodes.sort((a, b) => a.x - b.x || a.y - b.y);
   aiNodes.forEach((node, i) => { node.seq = i + 1; });
 
-  // 统计总任务数（多任务图片展开）
+  // 统计总任务数（图片扇入按支线拆分 × 组批量展开）
   let totalTasks = 0;
   aiNodes.forEach(node => {
     const up = collectUpstreamForAI(node.id);
-    if (up.groupImages.length > 0) totalTasks += up.groupImages.length;
-    else if (up.texts.length || up.images.length) totalTasks++;
+    if (up.texts.length || up.groupImages.length || (up.branches || []).some(branch => branch.length)) {
+      totalTasks += (up.branches.length || 1) * (up.groupImages.length || 1);
+    }
   });
 
   els.executeTitle.textContent = `共 ${totalTasks} 个任务（${aiNodes.length} 个节点）· 双击标题放大`;
@@ -8118,7 +8711,7 @@ function openExecuteDialog() {
   aiNodes.forEach(node => {
     const upstream = collectUpstreamForAI(node.id);
     const refImages = upstream.orderedRefs.slice(0, 8);
-    const taskCount = upstream.groupImages.length || 1;
+    const taskCount = (upstream.branches?.length || 1) * (upstream.groupImages.length || 1);
     let imgsHtml = "";
     if (refImages.length) {
       imgsHtml = refImages.map(img => `<img src="${img.image}" alt="">`).join("");
@@ -8149,7 +8742,7 @@ function closeExecuteDialog() {
 }
 
 async function executeAllAiNodes() {
-  if (!state.settings.apiKey) {
+  if (!activeApiKey()) {
     toast("请先在设置中填入 API Key");
     return;
   }
@@ -8405,6 +8998,7 @@ async function init() {
     try {
       const secret = await desktop.getApiKey();
       state.settings.apiKey = secret.apiKey || "";
+      state.settings.agtokenApiKey = secret.agtokenApiKey || "";
     } catch (error) { console.error("[安全存储] API Key 读取失败", error); }
     await flushDesktopAssetMigration();
   }
@@ -8412,6 +9006,7 @@ async function init() {
   state.future = [];
   updateUndoRedo();
   applySettings();
+  applyApiTypeSettingsUi();
   render();
   setUiLanguage(uiLanguage);
   const uiObserver = new MutationObserver(changes => {

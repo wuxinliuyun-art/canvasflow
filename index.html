@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260823-variable-node">
+  <link rel="stylesheet" href="styles.css?v=20260929-cutgesture2">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -48,6 +48,7 @@
       <div id="world" class="world">
         <svg id="edges" class="edges"></svg>
         <div id="nodes" class="nodes"></div>
+        <svg id="gestureStroke" class="gesture-stroke"></svg>
         <div id="selectionBox" class="selection-box hidden"></div>
       </div>
       <div class="minimap-panel">
@@ -130,8 +131,8 @@
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
-        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
-        <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
+        <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button><button class="asset-type-btn" data-asset-tab="multi">自定义多个节点</button></div>
         <section class="asset-pane" data-asset-pane="text">
           <div class="asset-pane-head"><div><h3>自定义文字</h3><p>保存可重复使用的完整多行文字。</p></div><button id="newCustomTextBtn" class="primary">＋ 新建文字</button></div>
           <div id="customTextsList" class="custom-materials-list"></div>
@@ -149,6 +150,10 @@
             <div class="custom-template-options"><div class="asset-editor-actions"><button id="customImageCancelBtn">取消</button><button id="customMaterialAddBtn" class="primary">添加图片素材</button></div></div>
           </div>
         </section>
+        <section class="asset-pane hidden" data-asset-pane="multi">
+          <div class="asset-pane-head"><div><h3>自定义多个节点</h3><p>在画布中多选节点后右键保存，同时保留节点布局和内部连线。</p></div></div>
+          <div id="multiNodeTemplatesList" class="custom-materials-list"></div>
+        </section>
       </div>
 
       <div class="tab-page hidden" data-tab="variables">
@@ -162,14 +167,25 @@
       </div>
 
       <div class="tab-page hidden" data-tab="ai">
-        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置 API Key；模型和画面参数在每个 AI 绘图节点中单独设置。</p></div>
+        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置新建节点的默认模型和 API Key；画面参数在每个 AI 绘图节点中单独设置。</p></div>
+        <section class="settings-card">
+          <label for="defaultImageModelSelect">默认绘图模型
+            <select id="defaultImageModelSelect" aria-describedby="defaultImageModelHint">
+              <option value="gpt-image-2">GPT Image 2</option>
+              <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare（快速）</option>
+              <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst（质量）</option>
+              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
+            </select>
+          </label>
+          <span id="defaultImageModelHint" class="api-url-hint">仅影响之后新建的 AI 绘图节点，不会修改已有节点。</span>
+        </section>
         <section id="apiSettingsCard" class="settings-card api-settings-card">
         <div class="ai-section-head">API</div>
 
         <label>API 类型
-          <div class="api-type-fixed" aria-label="当前 API 类型">APIMart（内置代理）</div>
-          <select id="apiTypeSelect" class="hidden" aria-hidden="true" tabindex="-1">
+          <select id="apiTypeSelect">
             <option value="apimart">APIMart（内置代理）</option>
+            <option value="agtoken">AGToken（agtoken.vip · 同步直连）</option>
           </select>
         </label>
 
@@ -196,8 +212,9 @@
         </div>
 
         <div id="agtokenApiInfo" class="api-provider-info hidden">
-          <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果）</span>
-          <span class="api-url-hint">模型：gpt-image-2.5（仅 1K）/ -flare / -sunburst（1K / 2K / 4K）；质量 low / medium / high</span>
+          <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果，生成可能需要数分钟）</span>
+          <span class="api-url-hint">模型：gpt-image-2.5 / -flare / -sunburst / gpt-image-2 / nano-banana-2 / nano-banana-pro；Flare 与 Sunburst 质量支持 low / medium / high / xhigh / max</span>
+          <span class="api-url-hint">API Key 与 APIMart 相互独立，切换类型后请分别填写。</span>
         </div>
 
         <div id="customApiSettings" class="hidden">
@@ -234,7 +251,7 @@
 
     <div id="shortcutPopover" class="shortcut-popover hidden">
       <div class="shortcut-popover-head"><div><span>Keyboard</span><strong>快捷键说明</strong></div><button id="shortcutPopoverClose" title="关闭">×</button></div>
-    <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + S</b><span>保存项目 .cflow</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C / X</b><span>复制或剪切选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点创建为编组或多任务</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
+    <div class="shortcut-list"><div class="shortcut-row"><b>Delete</b><span>删除选中节点和相关连线</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Z</b><span>撤销</span></div><div class="shortcut-row"><b>Ctrl / Cmd + Y</b><span>重做</span></div><div class="shortcut-row"><b>Ctrl / Cmd + S</b><span>保存项目 .cflow</span></div><div class="shortcut-row"><b>Ctrl / Cmd + C / X</b><span>复制或剪切选中节点</span></div><div class="shortcut-row"><b>Ctrl / Cmd + V</b><span>粘贴节点、文字或图片</span></div><div class="shortcut-row"><b>Ctrl / Cmd + G</b><span>将选中节点创建为编组或多任务</span></div><div class="shortcut-row"><b>Shift + 点击</b><span>多选节点</span></div><div class="shortcut-row"><b>Space + 拖拽</b><span>平移画布</span></div><div class="shortcut-row"><b>Alt + 拖拽</b><span>划线切断连线；同时划中两条连线时自动桥接两端节点</span></div><div class="shortcut-row"><b>鼠标滚轮</b><span>缩放画布</span></div></div>
     </div>
 
     <div id="contextMenu" class="context-menu hidden"></div>
@@ -360,8 +377,9 @@
     </div>
   </div>
 
-  <script src="canvas-runtime.js?v=20260811-dotnet-runtime"></script>
+  <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
+  <script src="canvas-runtime.js?v=20260929-agtoken"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20260823-variable-node"></script>
+  <script src="app.js?v=20260929-tidycenter1"></script>
 </body>
 </html>

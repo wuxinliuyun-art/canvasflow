@@ -11,7 +11,7 @@ namespace CanvasFlow.Desktop;
 
 internal sealed class WebUpdateManager
 {
-    private static readonly string[] RequiredFiles = ["index.html", "app.js", "styles.css", "canvas-runtime.js"];
+    private static readonly string[] RequiredFiles = ["index.html", "app.js", "styles.css", "canvas-runtime.js", "model-catalog.js"];
     private readonly string _bundledRoot;
     private readonly string _updateRoot;
     private readonly string _versionsRoot;
@@ -42,10 +42,15 @@ internal sealed class WebUpdateManager
         var activeFailedBeforeReady = !string.IsNullOrWhiteSpace(pointer?.PendingVersion)
             && string.Equals(pointer.PendingVersion, pointer.ActiveVersion, StringComparison.OrdinalIgnoreCase);
         if (activeFailedBeforeReady) _log($"[界面热更新] {pointer!.ActiveVersion} 上次未完成启动确认，回退到 {pointer.PreviousVersion}。", true);
-        var candidates = activeFailedBeforeReady
+        // 热更新界面必须比宿主 EXE 新才启用：覆盖安装新版后，旧版残留的热更新界面一律回退随包界面
+        var candidates = (activeFailedBeforeReady
             ? new[] { pointer?.PreviousVersion }
-            : new[] { pointer?.ActiveVersion, pointer?.PreviousVersion };
-        foreach (var version in candidates.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct())
+            : new[] { pointer?.ActiveVersion, pointer?.PreviousVersion })
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct()
+            .Where(value => IsNewerVersion(value!, _hostVersion))
+            .ToArray();
+        foreach (var version in candidates)
         {
             var candidate = VersionDirectory(version!);
             try

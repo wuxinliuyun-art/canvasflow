@@ -79,7 +79,7 @@ function exportBrowseTarget(token, relativePath = "") {
 
 var staticCache = {};
 (function() {
-  var files = ["index.html", "canvas-runtime.js", "app.js", "styles.css"];
+  var files = ["index.html", "model-catalog.js", "canvas-runtime.js", "app.js", "styles.css"];
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     try {
@@ -98,6 +98,11 @@ const API_BASE_URLS = [
   "https://api.aishuch.com",
   "https://api.apimart.ai",
 ];
+
+// agtoken（https://agtoken.vip）：OpenAI 兼容、同步返回结果，单上游无镜像。
+// 与 APIMart 的异步任务格式彼此独立，不做任何请求/响应格式转换。
+const AGTOKEN_BASE_URL = "https://agtoken.vip";
+const AGTOKEN_TIMEOUT_MS = 600000;
 
 // --- 自动清理旧进程（解决启动闪退 / 端口占用） ---
 function readBody(req, maxBytes = 128 * 1024 * 1024) {
@@ -208,7 +213,7 @@ async function latestReleaseInfo() {
   return releaseCache;
 }
 
-function proxyRequest(method, targetUrl, headers, body) {
+function proxyRequest(method, targetUrl, headers, body, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(targetUrl);
     const options = {
@@ -232,7 +237,7 @@ function proxyRequest(method, targetUrl, headers, body) {
     });
 
     proxyReq.on("error", reject);
-    proxyReq.setTimeout(120000, () => { proxyReq.destroy(); reject(new Error("timeout")); });
+    proxyReq.setTimeout(timeoutMs, () => { proxyReq.destroy(); reject(new Error("timeout")); });
 
     if (body) proxyReq.write(body);
     proxyReq.end();
@@ -300,7 +305,10 @@ async function requestHandler(req, res) {
     try {
       const body = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
       if (!body || !Array.isArray(body.pages)) throw new Error("项目状态格式无效");
-      for (const page of body.pages) if (page && page.data && page.data.settings) page.data.settings.apiKey = "";
+      for (const page of body.pages) if (page && page.data && page.data.settings) {
+        page.data.settings.apiKey = "";
+        page.data.settings.agtokenApiKey = "";
+      }
       atomicWriteFile(path.join(dataRoot, "data", "app-state.json"), JSON.stringify(body, null, 2));
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true }));
@@ -412,7 +420,7 @@ async function requestHandler(req, res) {
   if (pathname === "/api/custom-library" && req.method === "GET") {
     try {
       const libraryPath = path.join(dataRoot, "data", "custom-library.json");
-      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"variableDefinitions":[],"builtinDefaultsInitialized":false}';
+      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"multiNodeTemplates":[],"variableDefinitions":[],"builtinDefaultsInitialized":false}';
       JSON.parse(content);
       res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
       res.end(content);
@@ -430,6 +438,7 @@ async function requestHandler(req, res) {
       const library = JSON.parse(body.toString("utf-8"));
       if (!Array.isArray(library.textTemplates) || !Array.isArray(library.imageMaterials)) throw new Error("素材库格式不正确");
       if (!Array.isArray(library.variableDefinitions)) library.variableDefinitions = [];
+      if (!Array.isArray(library.multiNodeTemplates)) library.multiNodeTemplates = [];
       const dataDir = path.join(dataRoot, "data");
       if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
       const libraryPath = path.join(dataDir, "custom-library.json");
@@ -437,7 +446,7 @@ async function requestHandler(req, res) {
       fs.writeFileSync(tempPath, JSON.stringify(library, null, 2), "utf-8");
       fs.copyFileSync(tempPath, libraryPath);
       fs.unlinkSync(tempPath);
-      console.log(`[Library] saved: texts=${library.textTemplates.length} images=${library.imageMaterials.length} variables=${library.variableDefinitions.length}`);
+      console.log(`[Library] saved: texts=${library.textTemplates.length} images=${library.imageMaterials.length} multiNodes=${library.multiNodeTemplates.length} variables=${library.variableDefinitions.length}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true }));
     } catch (err) {
@@ -563,6 +572,72 @@ async function requestHandler(req, res) {
     } catch (err) {
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { code: 502, message: "代理请求失败: " + err.message } }));
+    }
+    return;
+  }
+
+  // agtoken 透传路由（与 APIMart 路由并列，请求格式互不干涉）
+  if (pathname === "/api/agtoken/generate" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey() || "";
+      delete payload._apiKey;
+      const { status, body: resBody } = await proxyRequest(
+        "POST",
+        AGTOKEN_BASE_URL + "/v1/images/generations",
+        { Authorization: `Bearer ${apiKey}` },
+        JSON.stringify(payload),
+        AGTOKEN_TIMEOUT_MS
+      );
+      console.log(`[AGToken] /v1/images/generations -> ${status}`);
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "agtoken 请求失败: " + err.message } }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/agtoken/edits" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey() || "";
+      delete payload._apiKey;
+      const { status, body: resBody } = await proxyRequest(
+        "POST",
+        AGTOKEN_BASE_URL + "/v1/images/edits",
+        { Authorization: `Bearer ${apiKey}` },
+        JSON.stringify(payload),
+        AGTOKEN_TIMEOUT_MS
+      );
+      console.log(`[AGToken] /v1/images/edits -> ${status}`);
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "agtoken 请求失败: " + err.message } }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/agtoken/models" && req.method === "GET") {
+    try {
+      const apiKey = requestApiKey();
+      const { status, body: resBody } = await proxyRequest(
+        "GET",
+        AGTOKEN_BASE_URL + "/v1/models",
+        { Authorization: `Bearer ${apiKey}` },
+        null,
+        30000
+      );
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "agtoken 请求失败: " + err.message } }));
     }
     return;
   }
@@ -706,7 +781,7 @@ async function requestHandler(req, res) {
   console.log(`[Static] root=${root}, pathname=${pathname}`);
   if (staticCache[pathname]) {
     var ext = path.extname(pathname);
-    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
+    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream", "Cache-Control": "no-cache" });
     res.end(staticCache[pathname]);
     return;
   }
@@ -732,10 +807,10 @@ async function requestHandler(req, res) {
             res.end("Not found");
             return;
           }
-          console.log(`[Static] dataRoot hit: ${altFile}`);
-          const ext2 = path.extname(altFile);
-          res.writeHead(200, { "Content-Type": mime[ext2] || "application/octet-stream" });
-          res.end(data2);
+      console.log(`[Static] dataRoot hit: ${altFile}`);
+      const ext2 = path.extname(altFile);
+      res.writeHead(200, { "Content-Type": mime[ext2] || "application/octet-stream", "Cache-Control": "no-cache" });
+      res.end(data2);
         });
         return;
       }
@@ -746,7 +821,7 @@ async function requestHandler(req, res) {
     }
     console.log(`[Static] root hit: ${file}`);
     const ext = path.extname(file);
-    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream" });
+    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream", "Cache-Control": "no-cache" });
     res.end(data);
   });
 }

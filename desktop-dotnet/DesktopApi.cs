@@ -14,6 +14,7 @@ internal sealed record DesktopApiResponse(int Status, string Body, string Conten
 internal sealed class DesktopApi
 {
     private const int MaxBodyCharacters = 180 * 1024 * 1024;
+    private const string AgtokenBaseUrl = "https://agtoken.vip";
     private static readonly string[] ApiBaseUrls = [
         "https://api.apib.ai", "https://api.aiuxu.com", "https://api.aishuch.com", "https://api.apimart.ai"
     ];
@@ -25,6 +26,7 @@ internal sealed class DesktopApi
     private readonly Action<string, bool> _log;
     private readonly Func<string> _getApiKey;
     private readonly HttpClient _http;
+    private readonly HttpClient _agtokenHttp;
     private readonly string _version;
     private readonly WebUpdateManager _webUpdateManager;
     private JsonObject? _releaseCache;
@@ -41,6 +43,12 @@ internal sealed class DesktopApi
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
+        // agtoken 为同步接口，官方建议超时上限 600 秒
+        _agtokenHttp = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.All
+        }) { Timeout = TimeSpan.FromSeconds(600) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.6");
         _version = ReadVersion();
     }
@@ -71,6 +79,7 @@ internal sealed class DesktopApi
     }
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
+        or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
         || path.StartsWith("/api/task/", StringComparison.Ordinal);
 
     private async Task<DesktopApiResponse> HandleNetworkAsync(string method, Uri requestUri, string body, string apiKey, CancellationToken cancellationToken)
@@ -94,6 +103,15 @@ internal sealed class DesktopApi
             }
             if (method == "GET" && path == "/api/models") return await ProxyApiAsync(HttpMethod.Get, "/v1/models", null, cancellationToken, apiKey);
             if (method == "GET" && path == "/api/balance") return await ProxyApiAsync(HttpMethod.Get, "/v1/balance", null, cancellationToken, apiKey);
+            if (method == "POST" && path is "/api/agtoken/generate" or "/api/agtoken/edits")
+            {
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("生成参数为空");
+                var payloadKey = payload.TryGetPropertyValue("_apiKey", out var keyNode) ? keyNode?.GetValue<string>() ?? "" : "";
+                payload.Remove("_apiKey");
+                var upstreamPath = path == "/api/agtoken/generate" ? "/v1/images/generations" : "/v1/images/edits";
+                return await ProxyAgtokenAsync(HttpMethod.Post, upstreamPath, payload.ToJsonString(), string.IsNullOrWhiteSpace(payloadKey) ? apiKey : payloadKey, cancellationToken);
+            }
+            if (method == "GET" && path == "/api/agtoken/models") return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/models", null, apiKey, cancellationToken);
             return Json(405, new { error = "请求方法不受支持" });
         }
         catch (Exception error)
@@ -134,6 +152,25 @@ internal sealed class DesktopApi
         }
         if (lastRetryableResponse is not null) return lastRetryableResponse;
         throw lastError ?? new HttpRequestException("所有API地址均不可达");
+    }
+
+    // agtoken 与 APIMart 请求格式彼此独立：单上游、不回退 APIMart Key、600 秒超时
+    private async Task<DesktopApiResponse> ProxyAgtokenAsync(HttpMethod method, string apiPath, string? body, string apiKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(method, AgtokenBaseUrl + apiPath);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _log($"[AGToken代理] {apiPath} -> {(int)response.StatusCode}", false);
+            return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        {
+            throw new HttpRequestException($"agtoken 接口请求失败：{error.Message}");
+        }
     }
 
     private async Task<DesktopApiResponse> DownloadImageAsync(string body, CancellationToken cancellationToken)
@@ -327,7 +364,11 @@ internal sealed class DesktopApi
         var stateNode = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("项目状态为空");
         if (stateNode["pages"] is not JsonArray pages) throw new InvalidDataException("项目状态格式无效");
         foreach (var page in pages.OfType<JsonObject>())
-            if (page["data"]?["settings"] is JsonObject settings) settings["apiKey"] = "";
+            if (page["data"]?["settings"] is JsonObject settings)
+            {
+                settings["apiKey"] = "";
+                settings["agtokenApiKey"] = "";
+            }
         AtomicWrite(filePath, stateNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return Json(200, new { success = true });
     }
@@ -337,7 +378,7 @@ internal sealed class DesktopApi
         var filePath = Path.Combine(_root, "data", "custom-library.json");
         if (method == "GET")
         {
-            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[],\"variableDefinitions\":[],\"builtinDefaultsInitialized\":false}";
+            var content = File.Exists(filePath) ? File.ReadAllText(filePath, Encoding.UTF8) : "{\"textTemplates\":[],\"imageMaterials\":[],\"multiNodeTemplates\":[],\"variableDefinitions\":[],\"builtinDefaultsInitialized\":false}";
             JsonNode.Parse(content);
             return new DesktopApiResponse(200, content);
         }
@@ -347,8 +388,10 @@ internal sealed class DesktopApi
             throw new InvalidDataException("素材库格式不正确");
         var variables = library["variableDefinitions"] as JsonArray ?? [];
         library["variableDefinitions"] = variables;
+        var multiNodes = library["multiNodeTemplates"] as JsonArray ?? [];
+        library["multiNodeTemplates"] = multiNodes;
         AtomicWrite(filePath, library.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        _log($"[素材库] 已保存：文字={texts.Count}，图片={images.Count}，变量={variables.Count}", false);
+        _log($"[素材库] 已保存：文字={texts.Count}，图片={images.Count}，多节点={multiNodes.Count}，变量={variables.Count}", false);
         return Json(200, new { success = true });
     }
 

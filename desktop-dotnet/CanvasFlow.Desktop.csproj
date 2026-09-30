@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\index.html" Link="index.html" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\model-catalog.js" Link="model-catalog.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\app.js" Link="app.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\canvas-runtime.js" Link="canvas-runtime.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\mindmap-module.js" Link="modules\mindmap-module.js" CopyToPublishDirectory="PreserveNewest" />

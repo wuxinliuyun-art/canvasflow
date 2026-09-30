@@ -4,6 +4,7 @@
     "/api/runtime-paths", "/api/app-state", "/api/custom-library", "/api/auto-backup",
     "/api/save-json", "/api/save-project", "/api/save-images", "/api/custom-material", "/api/save-export-files",
     "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
+    "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
   ]);
 
   async function apiFetch(input, options = {}) {
