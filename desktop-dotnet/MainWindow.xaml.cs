@@ -82,6 +82,7 @@ public partial class MainWindow : Window
           storeImage: (dataUrl, fileName, mime, category = "originals") => invoke("desktop:store-image", { dataUrl, fileName, mime, category }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
+          openAssetLocation: assetId => invoke("desktop:open-asset-location", { assetId: String(assetId || "") }),
           chooseOutputFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || "") }),
           chooseProjectFolder: currentPath => invoke("desktop:choose-output-folder", { currentPath: String(currentPath || ""), purpose: "project" }),
           chooseLibraryFile: currentPath => invoke("desktop:choose-library-file", { currentPath: String(currentPath || "") }, 60000),
@@ -303,6 +304,11 @@ public partial class MainWindow : Window
                     else if (type.GetString() == "desktop:open-file-location")
                     {
                         try { PostRpcResult(root, OpenFileLocation(root)); }
+                        catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:open-asset-location")
+                    {
+                        try { PostRpcResult(root, OpenAssetLocation(root)); }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
                     }
                     else if (type.GetString() == "desktop:choose-output-folder")
@@ -650,12 +656,29 @@ public partial class MainWindow : Window
     {
         var requestedPath = request.TryGetProperty("filePath", out var pathElement) ? pathElement.GetString() ?? "" : "";
         if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("图片没有可用的本地文件路径");
-        var fullPath = Path.GetFullPath(requestedPath);
-        if (!File.Exists(fullPath)) throw new FileNotFoundException("生成图片文件不存在，可能已被移动或删除", fullPath);
+        return OpenDirectoryOf(requestedPath, "生成图片");
+    }
+
+    private object OpenAssetLocation(JsonElement request)
+    {
+        var assetId = request.TryGetProperty("assetId", out var idElement) ? idElement.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(assetId)) throw new ArgumentException("图片没有可用的素材编号");
+        AssetRecord asset;
+        lock (_assetLock)
+        {
+            if (!_assets.TryGetValue(assetId, out asset!)) throw new FileNotFoundException("素材不存在，可能已被移动或删除");
+        }
+        return OpenDirectoryOf(SafeAssetPath(asset.RelativePath), "图片素材");
+    }
+
+    private object OpenDirectoryOf(string filePath, string label)
+    {
+        var fullPath = Path.GetFullPath(filePath);
+        if (!File.Exists(fullPath)) throw new FileNotFoundException($"{label}文件不存在，可能已被移动或删除", fullPath);
         var directory = Path.GetDirectoryName(fullPath);
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) throw new DirectoryNotFoundException("生成图片所在文件夹不存在");
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) throw new DirectoryNotFoundException($"{label}所在文件夹不存在");
         Process.Start(new ProcessStartInfo { FileName = directory, UseShellExecute = true });
-        Log($"[生成结果] 已请求打开所在文件夹：{directory}", false);
+        Log($"[{label}] 已请求打开所在文件夹：{directory}", false);
         return new { opened = true, path = fullPath, directory };
     }
 

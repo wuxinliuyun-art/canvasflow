@@ -6,6 +6,8 @@ const IMAGE_NODE_HEIGHT = 316;
 const IMAGE_NODE_VERTICAL_STEP = IMAGE_NODE_HEIGHT + 40;
 const AI_NODE_HEIGHT = 300;
 const ANGLE_NODE_HEIGHT = 430;
+const TOOL_NODE_HEIGHT = 250;
+const DEFAULT_EXTENSION_SERVICE_URL = "http://127.0.0.1:8788";
 const GROUP_NODE_HEIGHT = 244;
 const SCREENSHOT_NODE_HEIGHT = 250;
 const CONNECT_SNAP_RADIUS = 38;
@@ -64,10 +66,26 @@ const DEFAULT_TEXT_TEMPLATES = [
 const UI_EN = {
   "调整界面语言、画布与工作流体验": "Tune the interface, canvas, and workflow experience",
   "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
+  "拓展": "Extensions", "拓展节点": "Extension Node", "扩展服务": "Extension Service",
+  "导出方式": "Export Mode", "导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）": "Pack exports into a ZIP download (off = save files individually to the export folder)",
+  "服务地址": "Service URL", "刷新拓展": "Refresh Extensions", "拓展列表": "Extension List",
+  "执行": "Run", "运行中…": "Running…",
+  "拓展文件夹里的工具会自动接入画布，作为拓展节点使用。": "Tools in the extensions folder automatically appear as canvas nodes.",
+  "服务未启动时，请到拓展文件夹双击 扩展服务.bat 启动；刷新按钮会重新检索拓展文件夹。": "If the service is not running, double-click 扩展服务.bat in the extensions folder; Refresh rescans the folder.",
+  "拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。": "Drag to reorder — the order applies to the canvas right-click Extensions menu; disabled extensions are hidden from the menu.",
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
+  "v2.7.0 更新说明": "v2.7.0 Release Notes",
+  "新增 AGToken（agtoken.vip）API 支持，没有网络加速器也不影响注册会员": "Added AGToken (agtoken.vip) API support — register and use it without a network accelerator",
+  "修复有时点击 AI 生图没反应的问题": "Fixed AI image generation sometimes not responding to clicks",
+  "同一个节点接多条线时，将被视为多个任务分别生成": "A node connected to multiple lines is now treated as separate generation tasks",
+  "新交互：按住 Alt 画线可切断连线；同时和两条线相交，会把这个节点隔离出去": "New gesture: hold Alt and draw to cut connections; crossing two lines isolates the node between them",
+  "模型设置支持自定义默认 AI 生图模型": "Model settings now include a default AI image model",
+  "优化整理节点体验，防止整理后失焦": "Improved node tidying to prevent losing focus afterwards",
+  "新增自定义组件：多个节点可作为模板保存复用": "New Custom Components: save multiple nodes as reusable templates",
+  "APIMart 新增 Nano Banana Pro 模型": "Added the Nano Banana Pro model on APIMart",
   "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
   "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
   "反转左右关键词": "Reverse left/right prompt directions", "仅交换自动关键词中的左、右，不镜像图片": "Only swaps left and right in the automatic prompt; the image is not mirrored",
@@ -86,6 +104,7 @@ const UI_EN = {
   "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
   "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping", "平滑连线": "Smooth edges",
   "图片节点按上传图片比例自动调整": "Auto-fit image nodes to uploaded image ratio", "隐藏节点名称": "Hide node titles",
+  "图片重叠时打开图片编辑": "Open image editor when images overlap",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
   "复制路径": "Copy Path", "查看导出文件": "View Exported Files",
@@ -167,14 +186,14 @@ const UI_EN = {
   "当前项目还没有保存，确定要离开吗？": "This project has not been saved. Are you sure you want to leave?",
   "画布上没有可执行的 AI 绘图节点": "There are no runnable AI image nodes on the canvas", "双击标题栏可最大化窗口": "Double-click the title bar to maximize",
   "无参考图": "No reference image", "(无文字输入)": "(no text input)", "单图": "Single image",
-  "自定义文字": "Custom Text", "自定义图片": "Custom Images", "自定义多个节点": "Custom Node Sets",
+  "自定义文字": "Custom Text", "自定义图片": "Custom Images", "自定义组件": "Custom Components",
   "添加常用图片，或在图片节点上右键收藏。支持项目独立和全局共用。": "Add reusable images or save one from an image node. Assets can be project-only or global.",
   "模板名称（如：产品摄影）": "Template name (e.g. product photography)", "输入需要重复使用的完整文字": "Enter the complete reusable text",
   "边框颜色": "Border color", "添加文字模板": "Add Text Template", "添加图片素材": "Add Image Asset",
   "从 JSON 导入素材": "Import Assets from JSON",
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
-  "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image", "保存为自定义多个节点": "Save as Custom Node Set",
+  "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image", "保存为自定义组件": "Save as Custom Component",
   "提取生成所用关键词": "Extract Generation Keywords",
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
@@ -300,7 +319,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: true, exportInputs: false, customMaterials: [] },
+  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: false, exportInputs: false, customMaterials: [] },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -491,7 +510,9 @@ const els = {
   smoothEdges: $("smoothEdgesToggle"),
   autoFitImageNodes: $("autoFitImageNodesToggle"),
   hideNodeTitles: $("hideNodeTitlesToggle"),
+  editOnOverlap: $("editOnOverlapToggle"),
   projectFolder: $("projectFolderInput"),
+  zipExportToggle: $("zipExportToggle"),
   chooseProjectFolderBtn: $("chooseProjectFolderBtn"),
   openProjectFolderBtn: $("openProjectFolderBtn"),
   copyProjectPathBtn: $("copyProjectPathBtn"),
@@ -591,6 +612,11 @@ const els = {
   newVariableDefinitionBtn: $("newVariableDefinitionBtn"),
   variableDefinitionSaveBtn: $("variableDefinitionSaveBtn"),
   variableDefinitionCancelBtn: $("variableDefinitionCancelBtn"),
+  extensionServiceUrl: $("extensionServiceUrl"),
+  extensionServiceStatus: $("extensionServiceStatus"),
+  extensionRefreshBtn: $("extensionRefreshBtn"),
+  extensionOpenFolderBtn: $("extensionOpenFolderBtn"),
+  extensionList: $("extensionList"),
   customTextCancelBtn: $("customTextCancelBtn"),
   customImageCancelBtn: $("customImageCancelBtn"),
   shortcutHelpBtn: $("shortcutHelpBtn"),
@@ -742,7 +768,7 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: true, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, editOnOverlap: true, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
   if (!activeCatalog().models.some(model => model.id === state.settings.defaultImageModel)) {
     console.warn("[默认绘图模型] 存档值在当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
     state.settings.defaultImageModel = activeCatalog().defaultModel;
@@ -868,6 +894,8 @@ function syncSettingsPanel() {
   els.smoothEdges.checked = state.settings.smoothEdges === true;
   els.autoFitImageNodes.checked = state.settings.autoFitImageNodes !== false;
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
+  els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
+  els.zipExportToggle.checked = state.settings.zipExport === true;
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
   state.settings.projectFolderLabel = resolvedProjectFolderLabel(state.settings.projectFolderLabel) || runtimeProjectFolder;
   els.projectFolder.textContent = state.settings.projectFolderLabel;
@@ -1383,6 +1411,7 @@ function nodeHeightForType(type) {
   return type === "ai-image" ? AI_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
+      : type === "tool-node" ? TOOL_NODE_HEIGHT
       : type === "image" ? IMAGE_NODE_HEIGHT
         : type === "folder" ? GROUP_NODE_HEIGHT
           : type === "mind-group" ? NODE_HEIGHT
@@ -1463,7 +1492,7 @@ function variableNodeOutput(node) {
 
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const width = NODE_WIDTH;
-  const height = nodeHeightForType(type);
+  const height = placementOptions.height || nodeHeightForType(type);
   const position = placementOptions.avoidOverlap === false
     ? { x: snap(x), y: snap(y) }
     : findFreeNodePosition(x, y, width, height, placementOptions);
@@ -1611,8 +1640,8 @@ async function captureMultiTemplateImages(nodes, imageFiles) {
 
 async function saveSelectionAsMultiNodeTemplate() {
   const selectedIds = new Set([...state.selected].filter(id => !!findNode(id)));
-  if (selectedIds.size < 2) return toast("至少选中 2 个节点才能保存为自定义多个节点");
-  const name = prompt("自定义多个节点名称", `多节点模板 ${globalLibrary.multiNodeTemplates.length + 1}`);
+  if (selectedIds.size < 2) return toast("至少选中 2 个节点才能保存为自定义组件");
+  const name = prompt("自定义组件名称", `多节点模板 ${globalLibrary.multiNodeTemplates.length + 1}`);
   if (name === null || !name.trim()) return;
   const nodes = state.nodes.filter(node => selectedIds.has(node.id)).map(node => JSON.parse(JSON.stringify(node)));
   const edges = state.edges.filter(edge => selectedIds.has(edge.from.node) && selectedIds.has(edge.to.node)).map(edge => JSON.parse(JSON.stringify(edge)));
@@ -2099,6 +2128,310 @@ function catalogModels() {
   return activeCatalog().models.filter(model => !model.hidden);
 }
 
+// ---- 拓展（扩展服务 + 拓展节点）----
+// 拓展 = 拓展文件夹里遵守《拓展脚本规范.md》的文件夹工具，由扩展服务扫描并通过
+// HTTP 暴露；画布里表现为 tool-node，执行时把上游图片发给服务、结果回画布。
+
+function extensionSettings() {
+  let cfg = state.settings.extensions;
+  if (!cfg || typeof cfg !== "object") cfg = state.settings.extensions = {};
+  if (typeof cfg.serviceUrl !== "string" || !cfg.serviceUrl.trim()) cfg.serviceUrl = DEFAULT_EXTENSION_SERVICE_URL;
+  if (!Array.isArray(cfg.order)) cfg.order = [];
+  if (!Array.isArray(cfg.disabled)) cfg.disabled = [];
+  return cfg;
+}
+
+const toolExtensionCache = { list: [], invalid: [], at: 0, online: false, baseDir: "" };
+
+async function fetchToolExtensions(refresh = false) {
+  const cfg = extensionSettings();
+  const base = cfg.serviceUrl.replace(/\/+$/, "");
+  try {
+    const resp = await fetch(refresh ? `${base}/api/extensions/refresh` : `${base}/api/extensions`, {
+      method: refresh ? "POST" : "GET",
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "服务响应异常");
+    toolExtensionCache.list = Array.isArray(data.extensions) ? data.extensions : [];
+    toolExtensionCache.invalid = Array.isArray(data.invalid) ? data.invalid : [];
+    toolExtensionCache.baseDir = String(data.baseDir || "");
+    toolExtensionCache.online = true;
+  } catch (error) {
+    console.warn("[拓展] 扩展服务不可达", { serviceUrl: base, message: error.message });
+    toolExtensionCache.online = false;
+    if (!refresh) toolExtensionCache.list = [];
+  } finally {
+    toolExtensionCache.at = Date.now();
+  }
+  return toolExtensionCache.list;
+}
+
+function enabledToolExtensions() {
+  const cfg = extensionSettings();
+  const order = new Map(cfg.order.map((id, index) => [id, index]));
+  return toolExtensionCache.list
+    .filter(ext => ext && ext.id && !cfg.disabled.includes(ext.id))
+    .sort((a, b) =>
+      (order.has(a.id) ? order.get(a.id) : 9999) - (order.has(b.id) ? order.get(b.id) : 9999)
+      || String(a.name || a.id).localeCompare(String(b.name || b.id), "zh"));
+}
+
+function toolNodeHeightFor(params) {
+  // 描述 + 合并开关行 + 参数行(双列) + 状态行预留 + 执行按钮；紧凑型，避免节点过高占用画布
+  return 144 + Math.ceil((params.length || 0) / 2) * 34 + 30;
+}
+
+function addToolNode(ext, x = 160, y = 120) {
+  const params = Array.isArray(ext.params) ? ext.params : [];
+  const node = addNode("tool-node", x, y, false, { height: toolNodeHeightFor(params) });
+  node.toolMeta = {
+    id: ext.id,
+    name: ext.name || ext.id,
+    description: ext.description || "",
+    output: ext.output || "images",
+    params,
+    timeout: ext.timeout || 600,
+  };
+  node.toolName = node.toolMeta.name;
+  node.toolValues = {};
+  for (const param of node.toolMeta.params) node.toolValues[param.key] = param.default;
+  node.toolStatus = null;
+  node.keepCombinedInputs = true; // 默认：所有连线图片合并为 input/
+  pushHistory();
+  render();
+  return node;
+}
+
+function toolMimeFromName(name) {
+  const ext = String(name || "").split(".").pop().toLowerCase();
+  return ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+}
+
+function toolNodeBody(node) {
+  const meta = node.toolMeta;
+  if (!meta) return `<div class="tool-node-desc">拓展信息缺失，请删除后从右键菜单重新添加。</div>`;
+  const controls = (meta.params || []).map(param => {
+    const value = node.toolValues?.[param.key] ?? param.default;
+    const label = `<span class="tool-param-label">${escapeHtml(param.label || param.key)}</span>`;
+    const attrs = `data-role="tool-param" data-key="${escapeHtml(param.key)}"`;
+    if (param.type === "toggle") {
+      return `<label class="tool-param"><label class="tool-param-toggle"><input type="checkbox" ${attrs} data-param-type="toggle" ${value ? "checked" : ""}></label>${label}</label>`;
+    }
+    if (param.type === "select") {
+      const options = (param.options || []).map(option => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("");
+      return `<label class="tool-param">${label}<select ${attrs} data-param-type="select">${options}</select></label>`;
+    }
+    if (param.type === "text") {
+      return `<label class="tool-param">${label}<input type="text" ${attrs} data-param-type="text" value="${escapeHtml(String(value ?? ""))}"></label>`;
+    }
+    const bounds = `${param.min != null ? ` min="${param.min}"` : ""}${param.max != null ? ` max="${param.max}"` : ""}`;
+    return `<label class="tool-param">${label}<input type="number" ${attrs} data-param-type="slider" value="${Number(value) || 0}"${bounds}></label>`;
+  }).join("");
+  const status = node.toolStatus
+    ? `<div class="tool-node-status tool-status-${node.toolStatus.state}">${escapeHtml(node.toolStatus.message || "")}</div>`
+    : "";
+  const mergeToggle = `<label class="tool-param tool-merge-row" title="开启：所有连线的图片（含文件夹/多任务）合并进 input/；关闭：只取第一条连线"><input type="checkbox" data-role="tool-merge" ${node.keepCombinedInputs !== false ? "checked" : ""}><span>合并全部连线为输入</span></label>`;
+  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div>${mergeToggle}<div class="tool-node-params">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
+}
+
+async function runToolNode(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "tool-node" || node.toolRunning) return;
+  if (!node.toolMeta) { toast("拓展信息缺失，请删除后重新添加"); return; }
+  node.toolRunning = true;
+  node.toolStatus = { state: "running", message: "收集输入图片…" };
+  renderNodes();
+  try {
+    const collected = collectUpstreamForAI(nodeId, buildIncomingIndex());
+    // 默认「合并全部连线为输入」：扇入的多条线全部打平（组节点图片一并纳入），
+    // 去重后一起写入 input/；关闭开关则只取第一条连线（与 AI 节点单分支语义一致）。
+    let refs;
+    if (node.keepCombinedInputs !== false) {
+      const seen = new Set();
+      refs = [];
+      for (const branch of [...collected.branches, ...(collected.groupImages.length ? [collected.groupImages] : [])]) {
+        for (const ref of branch) {
+          // 组节点多张图共用同一节点 id，去重键优先用素材/内容标识
+          const key = ref.assetId || ref.image || ref._nodeId;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          refs.push(ref);
+        }
+      }
+    } else {
+      refs = collected.images;
+    }
+    if (!refs.length) throw new Error("没有输入图片：请先连接图片节点");
+    // 输入顺序：按来源节点画布纵坐标从上到下（同高按 x 从左到右），pptx 等拓展的页序随之可预期
+    refs.sort((a, b) => (a._y ?? a.y ?? 0) - (b._y ?? b.y ?? 0) || (a._x ?? a.x ?? 0) - (b._x ?? b.x ?? 0));
+    const payloadImages = [];
+    for (let index = 0; index < refs.length; index++) {
+      const ref = refs[index];
+      node.toolStatus = { state: "running", message: `读取图片 ${index + 1}/${refs.length}…` };
+      renderNodes();
+      const url = await materializeReferenceImage(ref);
+      if (!url) throw new Error(`无法读取图片：${ref.fileName || "未命名图片"}`);
+      const dataUrl = await fetchImageAsBase64(url);
+      const comma = dataUrl.indexOf(",");
+      payloadImages.push({ name: ref.fileName || `input-${index + 1}.png`, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl });
+    }
+    const cfg = extensionSettings();
+    const base = cfg.serviceUrl.replace(/\/+$/, "");
+    node.toolStatus = { state: "running", message: "拓展运行中…（可能需要数分钟）" };
+    renderNodes();
+    const resp = await fetch(`${base}/api/extensions/${encodeURIComponent(node.toolMeta.id)}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: payloadImages, params: node.toolValues || {} }),
+    });
+    const data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
+    if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
+
+    let seq = 0;
+    for (const image of data.images || []) {
+      seq++;
+      const mime = toolMimeFromName(image.name);
+      const imgNode = addNode("image", node.x + NODE_WIDTH + 40, node.y + (seq - 1) * IMAGE_NODE_VERTICAL_STEP, false);
+      imgNode.image = `data:${mime};base64,${image.data}`;
+      imgNode.fileName = image.name || `tool_${seq}.png`;
+      imgNode.mime = mime;
+      imgNode.toolSourceNodeId = node.id;
+      await externalizeImageField(imgNode, "image", "imageAssetId", imgNode.fileName);
+    }
+    let savedPaths = [];
+    if ((data.files || []).length) {
+      // 直接走服务器落盘到 export/拓展输出/，不走 saveFiles（其 zipExport 默认分支会把文件打包成 zip 下载到浏览器下载目录，用户找不到）
+      const baseFolder = state.settings.exportFolderLabel || "export";
+      const resp2 = await apiFetch("/api/save-export-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folderName: "拓展输出",
+          baseFolder,
+          files: (data.files || []).map(file => ({ name: file.name, data: file.data })),
+        }),
+      });
+      const result2 = await resp2.json();
+      if (result2.error) throw new Error(result2.error);
+      savedPaths = (result2.files || []).map(p => String(p));
+      if (!savedPaths.length) {
+        const baseDir = baseFolder === "export" ? (runtimeExportFolder || "export") : baseFolder;
+        savedPaths = (data.files || []).map(file => `${baseDir}/拓展输出/${file.name}`);
+      }
+    }
+    node.toolOutputFiles = savedPaths;
+    node.toolStatus = {
+      state: "done",
+      message: (data.files || []).length
+        ? `完成（${data.duration ?? "?"} 秒）：${savedPaths.join("，")}`
+        : `完成（${data.duration ?? "?"} 秒）`,
+    };
+    pushHistory();
+    render();
+    const parts = [];
+    if ((data.images || []).length) parts.push(`${data.images.length} 张图片`);
+    if ((data.files || []).length) parts.push(`${data.files.length} 个文件`);
+    toast(`拓展「${node.toolMeta.name}」完成：${parts.join("、") || "无输出"}`);
+    if (savedPaths.length) toast(`文件已保存：${savedPaths.join("，")}`);
+  } catch (error) {
+    node.toolStatus = { state: "failed", message: error.message || String(error) };
+    render();
+    toast("拓展执行失败: " + (error.message || error));
+  } finally {
+    node.toolRunning = false;
+    renderNodes();
+  }
+}
+
+let _extensionRenderToken = 0;
+
+async function renderExtensionsPage(refresh = false) {
+  const token = ++_extensionRenderToken;
+  const cfg = extensionSettings();
+  els.extensionServiceUrl.value = cfg.serviceUrl;
+  els.extensionServiceStatus.title = "检测中…";
+  els.extensionServiceStatus.className = "extension-service-dot pending";
+  els.extensionList.innerHTML = `<div class="extension-empty">检测中…</div>`;
+  const list = await fetchToolExtensions(refresh);
+  if (token !== _extensionRenderToken) return;
+  if (!toolExtensionCache.online) {
+    els.extensionServiceStatus.title = "扩展服务未启动：请到拓展文件夹双击 扩展服务.bat";
+    els.extensionServiceStatus.className = "extension-service-dot offline";
+    els.extensionList.innerHTML = `<div class="extension-empty">未检测到扩展服务</div>`;
+    return;
+  }
+  const invalidCount = (toolExtensionCache.invalid || []).length;
+  els.extensionServiceStatus.title = `扩展服务在线：${list.length} 个拓展${invalidCount ? `，${invalidCount} 个无效拓展` : ""}`;
+  els.extensionServiceStatus.className = "extension-service-dot online";
+  renderExtensionList(list);
+}
+
+function orderIndexOf(order, id) {
+  const index = order.indexOf(id);
+  return index === -1 ? 9999 : index;
+}
+
+function renderExtensionList(list) {
+  const cfg = extensionSettings();
+  const ordered = [...list].sort((a, b) =>
+    orderIndexOf(cfg.order, a.id) - orderIndexOf(cfg.order, b.id)
+    || String(a.name || a.id).localeCompare(String(b.name || b.id), "zh"));
+  if (!ordered.length) {
+    els.extensionList.innerHTML = `<div class="extension-empty">拓展文件夹中没有可用拓展</div>`;
+    return;
+  }
+  els.extensionList.innerHTML = ordered.map(ext => {
+    const enabled = !cfg.disabled.includes(ext.id);
+    return `<div class="extension-item" data-ext-id="${escapeHtml(ext.id)}"${enabled ? "" : " data-disabled=\"1\""}>
+      <span class="extension-drag-handle" title="拖动排序"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg></span>
+      <div class="extension-item-info" title="${escapeHtml(ext.description || "")}"><div class="extension-item-text"><strong>${escapeHtml(ext.name || ext.id)}</strong>${ext.version ? `<span class="extension-item-ver">v${escapeHtml(ext.version)}</span>` : ""}<span class="extension-item-desc">${escapeHtml(ext.description || "")}</span></div></div>
+      <span class="extension-toggle"><input type="checkbox" data-ext-toggle="${escapeHtml(ext.id)}" ${enabled ? "checked" : ""} title="启用后出现在画布右键“拓展”菜单"><span>启用</span></span>
+    </div>`;
+  }).join("");
+
+  let dragId = null;
+  els.extensionList.querySelectorAll(".extension-item").forEach(row => {
+    const id = row.dataset.extId;
+    const handle = row.querySelector(".extension-drag-handle");
+    handle.addEventListener("pointerdown", () => { row.draggable = true; });
+    handle.addEventListener("pointerup", () => { row.draggable = false; });
+    row.addEventListener("dragstart", ev => {
+      dragId = id;
+      row.classList.add("dragging");
+      ev.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", () => {
+      dragId = null;
+      row.classList.remove("dragging");
+      row.draggable = false;
+      const newOrder = [...els.extensionList.querySelectorAll(".extension-item")].map(item => item.dataset.extId);
+      const current = extensionSettings();
+      if (newOrder.join("|") !== current.order.join("|")) {
+        current.order = newOrder;
+        pushHistory();
+      }
+    });
+    row.addEventListener("dragover", ev => {
+      if (!dragId || id === dragId) return;
+      ev.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const before = ev.clientY < rect.top + rect.height / 2;
+      const dragging = els.extensionList.querySelector(".extension-item.dragging");
+      if (dragging && dragging !== row) {
+        els.extensionList.insertBefore(dragging, before ? row : row.nextSibling);
+      }
+    });
+    row.querySelector("input[data-ext-toggle]").addEventListener("change", ev => {
+      const current = extensionSettings();
+      current.disabled = current.disabled.filter(value => value !== id);
+      if (!ev.target.checked) current.disabled.push(id);
+      row.toggleAttribute("data-disabled", !ev.target.checked);
+      pushHistory();
+    });
+  });
+  els.extensionList.addEventListener("dragover", ev => ev.preventDefault());
+}
+
 function activeApiKey() {
   return activeApiType() === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
 }
@@ -2119,7 +2452,7 @@ function uniqueMultiNodeTemplateName(desired, library = globalLibrary) {
 function renameMultiNodeTemplate(id) {
   const loc = templateLocation("multi", id); if (!loc) return;
   const item = loc.library[loc.key][loc.index];
-  const name = prompt("自定义多个节点名称", item.name || "多节点模板");
+  const name = prompt("自定义组件名称", item.name || "多节点模板");
   if (name === null || !name.trim()) return;
   const desired = name.trim();
   const otherNames = new Set(globalLibrary.multiNodeTemplates.filter(template => template.id !== id).map(template => template.name));
@@ -2495,7 +2828,7 @@ function collectUpstreamForAI(nodeId, incoming) {
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
-    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _nodeId: n.id };
+    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _y: n.y, _nodeId: n.id };
   }
 
   // 深度优先展开上游,返回该子图的分支列表;每个分支是路径上的图片引用数组。
@@ -4388,9 +4721,9 @@ function syncSelectedNodeClasses() {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
-  const outPort = (node.type === "output" || node.type === "screenshot-input") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
+  const outPort = (node.type === "output" || node.type === "screenshot-input" || node.type === "tool-node") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
     body = `<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
@@ -4471,6 +4804,8 @@ function nodeTemplate(node) {
       </div>`;
   } else if (node.type === "ai-image") {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
+  } else if (node.type === "tool-node") {
+    body = toolNodeBody(node);
   } else if (node.type === "angle-image") {
     body = angleImageBody(node);
   } else if (node.type === "screenshot-input") {
@@ -4873,6 +5208,14 @@ function nodeImageReference(node) {
   return null;
 }
 
+function imageNodeOverlapsOthers(node) {
+  return state.nodes.some(other => {
+    if (!other || other.id === node.id || !nodeImageReference(other)) return false;
+    return Math.min(node.x + node.w, other.x + other.w) > Math.max(node.x, other.x)
+      && Math.min(node.y + node.h, other.y + other.h) > Math.max(node.y, other.y);
+  });
+}
+
 function clearCompositeHover() {
   const hadReadyState = compositeHoverReady;
   compositeHoverTargetId = "";
@@ -5209,6 +5552,19 @@ els.nodes.addEventListener("change", ev => {
     pushHistory();
     return;
   }
+  if (node.type === "tool-node") {
+    if (role === "tool-param") {
+      node.toolValues = node.toolValues || {};
+      node.toolValues[ev.target.dataset.key] = ev.target.dataset.paramType === "toggle" ? ev.target.checked : ev.target.value;
+      pushHistory();
+      return;
+    }
+    if (role === "tool-merge") {
+      node.keepCombinedInputs = ev.target.checked;
+      pushHistory();
+    }
+    return;
+  }
   if (node.type !== "ai-image") return;
   if (role === "ai-model") {
     node._model = ev.target.value;
@@ -5241,6 +5597,7 @@ els.nodes.addEventListener("click", ev => {
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
+  if (actionRole === "tool-run") runToolNode(node.id);
   if (actionRole === "variable-add-row") {
     normalizeVariableNode(node);
     node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
@@ -5317,6 +5674,7 @@ els.nodes.addEventListener("dblclick", async ev => {
     if (!nodeEl) return;
     const node = findNode(nodeEl.dataset.id);
     if (!node) return;
+    if (state.settings.editOnOverlap === false && nodeImageReference(node) && imageNodeOverlapsOthers(node)) return;
     if (node.type === "mind-group") {
       enterMindmapGroup(node.id);
     } else if ((node.type === "group" || node.type === "folder") && node.images && node.images.length) {
@@ -6195,6 +6553,33 @@ async function openGeneratedFileLocation(node) {
   }
 }
 
+async function openImageNodeLocation(node) {
+  const assetId = String(node?.imageAssetId || "").trim();
+  if (!assetId) return toast("该图片没有可用的本地素材文件");
+  try {
+    if (!window.canvasflowDesktop?.openAssetLocation) throw new Error("当前运行方式不支持打开文件夹");
+    await window.canvasflowDesktop.openAssetLocation(assetId);
+    toast("已打开图片所在文件夹");
+  } catch (error) {
+    console.warn("[图片节点] 打开所在文件夹失败", { assetId, message: error.message });
+    toast("无法打开所在文件夹：" + (error.message || "可能被系统或杀毒软件拦截"));
+  }
+}
+
+async function openToolNodeFileLocation(node) {
+  const outputPath = (Array.isArray(node?.toolOutputFiles) ? node.toolOutputFiles : []).map(p => String(p).trim()).find(Boolean);
+  if (!outputPath) return toast("该拓展节点没有可用的输出文件；先执行一次产出文件后再试");
+  try {
+    if (!window.canvasflowDesktop?.openFileLocation) throw new Error("当前运行方式不支持打开文件夹");
+    await window.canvasflowDesktop.openFileLocation(outputPath);
+    toast("已打开文件所在文件夹");
+  } catch (error) {
+    console.warn("[拓展节点] 打开文件所在文件夹失败", { outputPath, message: error.message });
+    try { await copyTextValue(outputPath); } catch (_) { /* 保留原始错误提示 */ }
+    toast("无法打开文件所在文件夹：可能被系统或杀毒软件拦截；已复制完整路径，请粘贴到资源管理器地址栏");
+  }
+}
+
 async function resolveNodeImageDataUrl(node) {
   const assetId = node.generatedAssetId || node.imageAssetId || "";
   // 优先读素材仓库的原始完整图：节点上的内嵌图是 canvas 缩略图，重编码会丢失PNG元数据
@@ -6261,7 +6646,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
     if (isMindmapMode()) {
       const mindmapItems = [
         ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image") ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-        ...(state.selected.size > 1 ? [["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()]] : []),
+        ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
         ...(embeddedPrompt ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode, embeddedPrompt)]] : []),
         ...(state.selected.size > 1 ? [["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()]] : []),
         ...(selectedNode?.type === "mind-group" ? [["进入编组", () => enterMindmapGroup(id)], ["重命名编组", () => renameMindmapGroup(id)], ["解散编组", () => ungroupMindmapNode(id)]] : []),
@@ -6282,8 +6667,10 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ["切换启用/停用", () => toggleDisabled(state.selected)],
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
+      ...(selectedNode?.type === "tool-node" && (selectedNode?.toolOutputFiles || []).length ? [["打开文件所在文件夹", () => openToolNodeFileLocation(selectedNode)]] : []),
+      ...(selectedNode?.type === "image" && selectedNode?.imageAssetId && window.canvasflowDesktop?.openAssetLocation ? [["打开所在文件夹", () => openImageNodeLocation(selectedNode)]] : []),
       ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-      ...(state.selected.size > 1 ? [["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()]] : []),
+      ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
       ...(embeddedPrompt ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode, embeddedPrompt)]] : []),
       ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
@@ -6309,14 +6696,14 @@ els.viewport.addEventListener("contextmenu", async ev => {
     if (isMindmapMode()) {
       const items = [];
       if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
-      items.push(["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()], ["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()], ["断开连接", () => disconnectEdges(state.selected)], ["批量删除", () => deleteNodes(state.selected)]);
+      items.push(["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()], ["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()], ["断开连接", () => disconnectEdges(state.selected)], ["批量删除", () => deleteNodes(state.selected)]);
       showMenu(ev.clientX, ev.clientY, items);
       return;
     }
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     items.push(
-      ["保存为自定义多个节点", () => saveSelectionAsMultiNodeTemplate()],
+      ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
       ["多任务", () => groupSelection()],
       ["依次连接", () => connectSelectionInSequence()],
       ["AI绘图", () => {
@@ -6350,7 +6737,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
         ["自定义节点", [
           ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
           ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
-          ["自定义多个节点", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
+          ["自定义组件", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
         ]],
         ["节点对齐", () => tidyNodes()],
       );
@@ -6364,8 +6751,9 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
-        ["自定义多个节点", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
+        ["自定义组件", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
       ]],
+      ["拓展", toolMenuItems(p)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
       ["角度变化", () => addAngleImageNode(p.x, p.y, [])],
       ["添加截图功能节点", () => addNode("screenshot-input", p.x, p.y)],
@@ -6374,6 +6762,17 @@ els.viewport.addEventListener("contextmenu", async ev => {
     showMenu(ev.clientX, ev.clientY, items);
   }
 });
+
+function toolMenuItems(p) {
+  if (Date.now() - toolExtensionCache.at > 30000) {
+    fetchToolExtensions().then(() => renderNodes());
+  }
+  const items = enabledToolExtensions().map(ext => [ext.name || ext.id, () => addToolNode(ext, p.x, p.y)]);
+  if (!items.length) {
+    return [["拓展服务未启动或暂无拓展", null]];
+  }
+  return items;
+}
 
 function showMenu(x, y, items) {
   els.contextMenu.innerHTML = "";
@@ -7059,6 +7458,7 @@ function switchSettingsTab(name) {
   for (var j = 0; j < pages.length; j++) {
     pages[j].classList.toggle("hidden", pages[j].getAttribute("data-tab") !== name);
   }
+  if (name === "extensions") renderExtensionsPage();
 }
 
 const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, layoutFrame: 0 };
@@ -7714,6 +8114,11 @@ els.hideNodeTitles.onchange = () => {
   pushHistory();
 };
 
+els.editOnOverlap.onchange = () => {
+  state.settings.editOnOverlap = els.editOnOverlap.checked;
+  pushHistory();
+};
+
 // screenshot panel trigger removed
 
 const openScreenshotToolBtn = $("openScreenshotToolBtn");
@@ -7809,6 +8214,37 @@ els.customApiBaseUrlInput.onchange = () => {
 els.customApiHeadersInput.onchange = () => {
   state.settings.customApiHeaders = els.customApiHeadersInput.value;
   pushHistory();
+};
+
+els.zipExportToggle.onchange = () => {
+  state.settings.zipExport = els.zipExportToggle.checked;
+  pushHistory();
+};
+
+els.extensionServiceUrl.onchange = () => {
+  const cfg = extensionSettings();
+  cfg.serviceUrl = els.extensionServiceUrl.value.trim().replace(/\/+$/, "") || DEFAULT_EXTENSION_SERVICE_URL;
+  els.extensionServiceUrl.value = cfg.serviceUrl;
+  pushHistory();
+  renderExtensionsPage();
+};
+
+els.extensionRefreshBtn.onclick = () => renderExtensionsPage(true);
+
+els.extensionOpenFolderBtn.onclick = async () => {
+  const dir = toolExtensionCache.baseDir || extensionSettings().extensionsFolder || "";
+  if (!dir) return toast("暂不知道拓展文件夹位置：请先启动扩展服务再试");
+  try {
+    if (window.canvasflowDesktop?.openOutputFolder) {
+      await window.canvasflowDesktop.openOutputFolder(dir);
+    } else {
+      await copyTextValue(dir);
+      toast(`浏览器运行方式无法直接打开文件夹，已复制路径：${dir}`);
+    }
+  } catch (error) {
+    try { await copyTextValue(dir); } catch (_) { /* 保留原始错误提示 */ }
+    toast("打开拓展文件夹失败：可能被系统或杀毒软件拦截；已复制完整路径");
+  }
 };
 
 els.apiKeyInput.onchange = () => {
@@ -8993,6 +9429,7 @@ document.addEventListener("keydown", ev => {
 
 async function init() {
   await loadGlobalLibraryFromDisk();
+  fetchToolExtensions();
   try {
     const resp = await apiFetch("/api/runtime-paths", { cache: "no-store" });
     const data = await resp.json();

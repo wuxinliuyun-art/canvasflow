@@ -16,6 +16,18 @@ if errorlevel 1 exit /b 1
 
 for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"
 
+rem -- Preset extension: ship only image-to-pptx with 2.7.0; the large upscale one is distributed separately
+set "EXT_SOURCE=%PROJECT_ROOT%..\ÍØÕ¹"
+set "EXT_PRESETS=%PUBLISH_DIR%\extensions-presets"
+if exist "%EXT_PRESETS%" rmdir /s /q "%EXT_PRESETS%"
+if exist "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" (
+  mkdir "%EXT_PRESETS%" 2>nul
+  xcopy "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" "%EXT_PRESETS%\Í¼Æ¬ÖÃÈëpptx\" /e /i /y >nul
+  echo Preset extension copied: image-to-pptx
+) else (
+  echo [warn] preset extension not found: %EXT_SOURCE%\image-to-pptx-dir
+)
+
 echo.
 echo CanvasFlow publish folder:
 echo %PUBLISH_DIR%

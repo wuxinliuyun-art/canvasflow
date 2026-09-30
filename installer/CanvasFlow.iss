@@ -28,6 +28,8 @@ SetupIconFile=..\assets\canvasflow.ico
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
+; -- 预制拓展（2.7.0：图片置入PPTX）。发布前由 build-dotnet.cmd 从 ..\..\拓展 拷入 PublishDir\extensions-presets
+Source: "{#PublishDir}\extensions-presets\*"; DestDir: "{app}\拓展"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 
 [InstallDelete]
 Type: files; Name: "{app}\*.dll"
@@ -72,6 +74,7 @@ begin
 end;
 
 [Dirs]
+Name: "{app}\拓展"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\data"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\download"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\export"; Permissions: users-modify; Flags: uninsneveruninstall

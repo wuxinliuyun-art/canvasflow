@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260929-cutgesture2">
+  <link rel="stylesheet" href="styles.css?v=20260931-ordery">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -104,6 +104,7 @@
           <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="variables"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h4M5 12h4M5 18h4M12 6h7M12 12h7M12 18h7"/></svg></span><span>变量库</span></button>
+          <button class="settings-tab-btn" data-tab="extensions"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 4.6L19 9l-4.8 1.4L12 15l-2.2-4.6L5 9l4.8-1.4L12 3zM19 15l1.1 2.3L22 18l-1.9.7L19 21l-1.1-2.3L16 18l1.9-.7L19 15z"/></svg></span><span>拓展</span></button>
           <button class="settings-tab-btn" data-tab="export"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h16v10.5H4zM4 8.5 7 5h5l2 3.5M12 12v5M9.5 14.5 12 17l2.5-2.5"/></svg></span><span>保存</span></button>
         </nav>
         <div class="settings-content">
@@ -119,6 +120,7 @@
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
           <label class="check-row"><input id="autoFitImageNodesToggle" type="checkbox" checked><span>图片节点按上传图片比例自动调整</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
+          <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
         </section>
         <section class="settings-card onboarding-settings-card">
           <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
@@ -127,12 +129,25 @@
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
+          <div class="update-notes">
+            <div class="update-notes-title">v2.7.0 更新说明</div>
+            <ul>
+              <li>新增 AGToken（agtoken.vip）API 支持，没有网络加速器也不影响注册会员</li>
+              <li>修复有时点击 AI 生图没反应的问题</li>
+              <li>同一个节点接多条线时，将被视为多个任务分别生成</li>
+              <li>新交互：按住 Alt 画线可切断连线；同时和两条线相交，会把这个节点隔离出去</li>
+              <li>模型设置支持自定义默认 AI 生图模型</li>
+              <li>优化整理节点体验，防止整理后失焦</li>
+              <li>新增自定义组件：多个节点可作为模板保存复用</li>
+              <li>APIMart 新增 Nano Banana Pro 模型</li>
+            </ul>
+          </div>
         </section>
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
         <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
-        <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button><button class="asset-type-btn" data-asset-tab="multi">自定义多个节点</button></div>
+        <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button><button class="asset-type-btn" data-asset-tab="multi">自定义组件</button></div>
         <section class="asset-pane" data-asset-pane="text">
           <div class="asset-pane-head"><div><h3>自定义文字</h3><p>保存可重复使用的完整多行文字。</p></div><button id="newCustomTextBtn" class="primary">＋ 新建文字</button></div>
           <div id="customTextsList" class="custom-materials-list"></div>
@@ -151,7 +166,7 @@
           </div>
         </section>
         <section class="asset-pane hidden" data-asset-pane="multi">
-          <div class="asset-pane-head"><div><h3>自定义多个节点</h3><p>在画布中多选节点后右键保存，同时保留节点布局和内部连线。</p></div></div>
+          <div class="asset-pane-head"><div><h3>自定义组件</h3><p>在画布中多选节点后右键保存，同时保留节点布局和内部连线。</p></div></div>
           <div id="multiNodeTemplatesList" class="custom-materials-list"></div>
         </section>
       </div>
@@ -163,6 +178,21 @@
           <label>变量名<input id="variableDefinitionName" type="text" placeholder="例如：产品"></label>
           <label>可选值（每行一个）<textarea id="variableDefinitionOptions" rows="7" placeholder=""></textarea></label>
           <div class="asset-editor-actions"><button id="variableDefinitionCancelBtn" type="button">取消</button><button id="variableDefinitionSaveBtn" class="primary" type="button">保存变量</button></div>
+        </section>
+      </div>
+
+      <div class="tab-page hidden" data-tab="extensions">
+        <div class="settings-page-head settings-page-head-row"><div><h2>拓展 <span id="extensionServiceStatus" class="extension-service-dot" title="检测中…"></span></h2><p>拓展文件夹里的工具会自动接入画布，作为拓展节点使用。</p></div><div class="extension-head-actions">
+          <button id="extensionOpenFolderBtn" type="button" class="icon-btn extension-icon-btn" title="打开拓展文件夹" aria-label="打开拓展文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4.2l2 2.5H19a1.5 1.5 0 0 1 1.5 1.6l-.7 8.4A1.5 1.5 0 0 1 18.3 19H5.7a1.5 1.5 0 0 1-1.5-1.4l-.7-11Z"/></svg></button>
+          <button id="extensionRefreshBtn" type="button" class="icon-btn extension-icon-btn" title="刷新拓展（重新检索拓展文件夹）" aria-label="刷新拓展"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg></button>
+        </div></div>
+        <section class="settings-card">
+          <label>服务地址<input id="extensionServiceUrl" type="text" placeholder="http://127.0.0.1:8788"></label>
+          <p class="setting-desc">服务未启动时，请到拓展文件夹双击 扩展服务.bat 启动；刷新按钮会重新检索拓展文件夹。</p>
+        </section>
+        <section class="settings-card">
+          <p class="setting-desc">拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。</p>
+          <div id="extensionList" class="extension-list"></div>
         </section>
       </div>
 
@@ -212,8 +242,7 @@
         </div>
 
         <div id="agtokenApiInfo" class="api-provider-info hidden">
-          <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果，生成可能需要数分钟）</span>
-          <span class="api-url-hint">模型：gpt-image-2.5 / -flare / -sunburst / gpt-image-2 / nano-banana-2 / nano-banana-pro；Flare 与 Sunburst 质量支持 low / medium / high / xhigh / max</span>
+          <span class="api-url-hint">接口地址：https://agtoken.vip（OpenAI 兼容，同步返回结果）</span>
           <span class="api-url-hint">API Key 与 APIMart 相互独立，切换类型后请分别填写。</span>
           <div class="api-provider-actions">
             <a class="api-register-link" href="https://agtoken.vip/register" target="_blank" rel="noopener noreferrer">注册获取 API Key ↗</a>
@@ -245,6 +274,7 @@
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>保存</h2><p>选择项目文件的默认保存位置。</p></div>
+        <section class="settings-card"><h3>导出方式</h3><label class="check-row"><input id="zipExportToggle" type="checkbox"><span>导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）</span></label><p class="setting-desc">关闭后，导出的图片和拓展输出的 pptx 等文件会直接出现在导出文件夹里，不再打包下载。</p></section>
         <section class="settings-card"><h3>项目文件夹</h3><p class="setting-desc">“保存项目”会在这里生成 .cflow 文件。素材库只在保存时勾选后另行备份。</p><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
       </div>
 
@@ -383,6 +413,6 @@
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
   <script src="canvas-runtime.js?v=20260929-agtoken"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20260930-tidyrow3"></script>
+  <script src="app.js?v=20260931-ordery"></script>
 </body>
 </html>
