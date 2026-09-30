@@ -132,15 +132,17 @@
           <div class="update-notes">
             <div class="update-notes-title">v2.7.0 更新说明</div>
             <ul>
-              <li>本版更新了内核：请下载新版安装包覆盖安装后使用（项目与设置会保留）</li>
-              <li>新增 AGToken（agtoken.vip）API 支持，没有网络加速器也不影响注册会员</li>
+              <li>加 AGtoken 的 API 支持，绘图软件没有网络加速器也不影响注册会员</li>
               <li>修复有时点击 AI 生图没反应的问题</li>
-              <li>同一个节点接多条线时，将被视为多个任务分别生成</li>
-              <li>新交互：按住 Alt 画线可切断连线；同时和两条线相交，会把这个节点隔离出去</li>
-              <li>模型设置支持自定义默认 AI 生图模型</li>
+              <li>同一个节点接两个线，将被视为两个任务</li>
+              <li>新交互：按住 Alt 画线可切断连线；如果同时和两条线相交，会把这个节点隔离出去</li>
+              <li>模型里增加设置，可以设置默认 AI 生图模型</li>
               <li>优化整理节点体验，防止整理后失焦</li>
-              <li>新增自定义组件：多个节点可作为模板保存复用</li>
-              <li>APIMart 新增 Nano Banana Pro 模型</li>
+              <li>加入自定义组件功能，将多个节点作为模板保存</li>
+              <li>新增 Nano Banana Pro 模型</li>
+              <li>增加拓展系统，允许将符合规则的 py 作为节点载入；预制拓展「图片置入PPTX」</li>
+              <li>整理节点：整理后不再失焦，同链节点按行对齐更整齐</li>
+              <li>本版更新了内核：请下载新版安装包覆盖安装后使用（项目与设置会保留）</li>
             </ul>
           </div>
         </section>
@@ -414,6 +416,6 @@
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
   <script src="canvas-runtime.js?v=20260929-agtoken"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261001-notes"></script>
+  <script src="app.js?v=20261001-notes3"></script>
 </body>
 </html>
