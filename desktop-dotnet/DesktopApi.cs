@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -342,6 +343,9 @@ internal sealed class DesktopApi
             if (method == "POST" && path == "/api/save-images") return SaveImages(body);
             if (path == "/api/custom-material") return HandleCustomMaterial(method, body);
             if (method == "POST" && path == "/api/save-export-files") return SaveExportFiles(body);
+            if (method == "GET" && path == "/api/extensions") return ListExtensions();
+            if (method == "POST" && path == "/api/extensions/refresh") return ListExtensions();
+            if (method == "POST" && path.StartsWith("/api/extensions/", StringComparison.Ordinal) && path.EndsWith("/run", StringComparison.Ordinal)) return RunExtension(path, body);
             return Json(404, new { error = "桌面接口不存在" });
         }
         catch (JsonException error) { return Json(400, new { error = $"JSON格式不正确：{error.Message}" }); }
@@ -535,6 +539,173 @@ internal sealed class DesktopApi
         var temporary = filePath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
         File.WriteAllText(temporary, content, Encoding.UTF8);
         File.Move(temporary, filePath, true);
+    }
+
+    // ---- 拓展（内置扩展服务）----
+    // 拓展文件夹固定在程序目录旁边（安装版 {安装目录}\拓展，源码版 仓库上级\拓展）。
+    // 桌面端直接承担原 扩展服务.bat 的扫描与执行职责，页面经 apiFetch 调用，无需手动启动服务；
+    // 调用约定遵循《拓展脚本规范》：清空 input/ 写入图片 → 以拓展目录为工作目录运行入口脚本 → 收集 output/。
+
+    private string ExtensionsFolder => Path.GetFullPath(Path.Combine(_root, "..", "拓展"));
+
+    private DesktopApiResponse ListExtensions()
+    {
+        var extensions = new JsonArray();
+        var invalid = new JsonArray();
+        var folder = ExtensionsFolder;
+        if (Directory.Exists(folder))
+        {
+            foreach (var dir in Directory.EnumerateDirectories(folder).OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            {
+                try { extensions.Add(ReadExtensionManifest(dir)); }
+                catch (Exception error)
+                {
+                    invalid.Add(new JsonObject { ["id"] = Path.GetFileName(dir), ["name"] = Path.GetFileName(dir), ["error"] = error.Message });
+                }
+            }
+        }
+        return Json(200, new { ok = true, extensions, invalid, baseDir = Directory.Exists(folder) ? folder : "" });
+    }
+
+    private JsonObject ReadExtensionManifest(string directory)
+    {
+        var manifestPath = Path.Combine(directory, "扩展.json");
+        if (!File.Exists(manifestPath)) throw new InvalidDataException("缺少 扩展.json");
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath, Encoding.UTF8))?.AsObject() ?? throw new InvalidDataException("扩展.json 为空");
+        var id = manifest["id"]?.ToString() ?? throw new InvalidDataException("缺少 id");
+        if (string.IsNullOrWhiteSpace(id)) throw new InvalidDataException("id 为空");
+        var entry = SafeLeafName(manifest["entry"]?.ToString() ?? throw new InvalidDataException("缺少 entry"));
+        if (!File.Exists(Path.Combine(directory, entry))) throw new InvalidDataException($"缺少入口文件 {entry}");
+        return new JsonObject
+        {
+            ["id"] = id,
+            ["name"] = manifest["name"]?.ToString() ?? id,
+            ["description"] = manifest["description"]?.ToString() ?? "",
+            ["entry"] = entry,
+            ["input"] = manifest["input"]?.ToString() ?? "images",
+            ["output"] = manifest["output"]?.ToString() ?? "images",
+            ["params"] = (manifest["params"] as JsonArray ?? new JsonArray()).DeepClone(),
+            ["columns"] = manifest["columns"] is JsonNode columnsNode && columnsNode.GetValue<int>() == 2 ? 2 : 1,
+            ["timeout"] = manifest["timeout"] is JsonNode timeoutNode && timeoutNode.GetValue<int>() > 0 ? timeoutNode.GetValue<int>() : 600,
+        };
+    }
+
+    private string? FindExtensionDirectory(string id)
+    {
+        var folder = ExtensionsFolder;
+        if (!Directory.Exists(folder)) return null;
+        foreach (var dir in Directory.EnumerateDirectories(folder))
+        {
+            try
+            {
+                if (string.Equals(ReadExtensionManifest(dir)["id"]?.ToString(), id, StringComparison.OrdinalIgnoreCase)) return dir;
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private DesktopApiResponse RunExtension(string path, string body)
+    {
+        // 路由形如 /api/extensions/{id}/run
+        var id = Uri.UnescapeDataString(path.Split('/')[3]);
+        var directory = FindExtensionDirectory(id) ?? throw new InvalidDataException($"找不到拓展 {id}，请刷新拓展列表");
+        var manifest = ReadExtensionManifest(directory);
+        var entry = manifest["entry"]!.ToString();
+        var outputMode = manifest["output"]!.ToString();
+        var timeoutSeconds = manifest["timeout"]!.GetValue<int>();
+        var request = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("请求内容为空");
+        var inputImages = request["images"] as JsonArray ?? throw new InvalidDataException("请求缺少 images");
+
+        var inputDirectory = Path.Combine(directory, "input");
+        Directory.CreateDirectory(inputDirectory);
+        foreach (var stale in Directory.EnumerateFiles(inputDirectory)) File.Delete(stale);
+        foreach (var image in inputImages.OfType<JsonObject>())
+        {
+            var name = SafeLeafName(image["name"]?.ToString());
+            var data = image["data"]?.ToString() ?? throw new InvalidDataException($"图片 {name} 缺少数据");
+            File.WriteAllBytes(Path.Combine(inputDirectory, name), Convert.FromBase64String(data));
+        }
+        AtomicWrite(Path.Combine(directory, "params.json"), (request["params"] as JsonObject ?? new JsonObject()).ToJsonString());
+
+        var outputDirectory = Path.Combine(directory, "output");
+        if (Directory.Exists(outputDirectory)) Directory.Delete(outputDirectory, true);
+        var stopwatch = Stopwatch.StartNew();
+        var (pythonFile, pythonPrefix) = ResolvePython();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = pythonFile,
+            Arguments = $"{pythonPrefix}\"{entry}\"",
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        _log($"[拓展] 运行 {id}（{inputImages.Count} 张输入）", false);
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动 Python 进程");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(timeoutSeconds * 1000))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"拓展执行超过 {timeoutSeconds} 秒，已终止");
+        }
+        if (process.ExitCode != 0)
+        {
+            var detail = TailText(stderrTask.GetAwaiter().GetResult(), 500);
+            throw new InvalidOperationException($"拓展脚本失败（退出码 {process.ExitCode}）：{detail}");
+        }
+        var images = new JsonArray();
+        var files = new JsonArray();
+        if (Directory.Exists(outputDirectory))
+        {
+            foreach (var file in Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            {
+                var payload = new JsonObject
+                {
+                    ["name"] = Path.GetRelativePath(outputDirectory, file).Replace('\\', '/'),
+                    ["data"] = Convert.ToBase64String(File.ReadAllBytes(file)),
+                };
+                if (string.Equals(outputMode, "images", StringComparison.OrdinalIgnoreCase)) images.Add(payload); else files.Add(payload);
+            }
+        }
+        _log($"[拓展] {id} 完成：{images.Count + files.Count} 个输出，用时 {stopwatch.Elapsed.TotalSeconds:0.0} 秒", false);
+        return Json(200, new { ok = true, images, files, duration = Math.Round(stopwatch.Elapsed.TotalSeconds, 1) });
+    }
+
+    private static (string FileName, string ArgumentsPrefix) ResolvePython()
+    {
+        foreach (var candidate in new[] { ("python", ""), ("python3", ""), ("py", "-3 ") })
+        {
+            try
+            {
+                using var probe = Process.Start(new ProcessStartInfo
+                {
+                    FileName = candidate.Item1,
+                    Arguments = "--version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                });
+                if (probe is null) continue;
+                probe.StandardOutput.ReadToEnd();
+                if (!probe.WaitForExit(10000)) { try { probe.Kill(); } catch { } continue; }
+                if (probe.ExitCode == 0) return candidate;
+            }
+            catch { }
+        }
+        throw new InvalidOperationException("没有找到 Python，请安装 Python 3 并加入 PATH 后重试");
+    }
+
+    private static string TailText(string? value, int maxLength)
+    {
+        var text = (value ?? "").Trim();
+        if (text.Length <= maxLength) return text;
+        return "…" + text[^maxLength..];
     }
 
     private static DesktopApiResponse Json(int status, object value) =>

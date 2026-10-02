@@ -2753,7 +2753,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .settings select:focus,
 .settings #exportFolderInput:focus { border-color: var(--selected); box-shadow: 0 0 0 3px color-mix(in srgb, var(--selected) 12%, transparent); }
 .settings .check-row { min-height: 58px; margin: 0; border-bottom: 1px solid var(--panel-2); }
-.asset-type-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 18px; padding: 4px; border-radius: 13px; background: color-mix(in srgb, var(--bg) 72%, var(--panel)); }
+.asset-type-tabs { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 18px; padding: 4px; border-radius: 13px; background: color-mix(in srgb, var(--bg) 72%, var(--panel)); }
 .asset-type-btn { border-radius: 10px; }
 .asset-type-btn.active { background: color-mix(in srgb, var(--text) 12%, transparent); box-shadow: none; }
 .custom-materials-list { gap: 0; }
@@ -3085,9 +3085,21 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 /* ---- 拓展节点 ---- */
 .tool-node-desc { margin: 0 0 5px; color: var(--muted); font-size: 10px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tool-node-params { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; }
+.tool-node-params { display: grid; grid-template-columns: 1fr; gap: 4px 6px; }
+.tool-node-params.cols-2 { grid-template-columns: 1fr 1fr; }
 .tool-param { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; min-width: 0; }
-.tool-param-label { flex: 0 0 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-param.stacked { flex-direction: column; align-items: stretch; gap: 3px; }
+.tool-param.stacked .tool-param-label { max-width: none; }
+.tool-param.stacked input, .tool-param.stacked select {
+  flex: 0 0 auto; width: 100%; height: 32px; padding: 0 8px;
+  border: 1px solid var(--panel-2); border-radius: 6px;
+  color: var(--text); background: var(--panel-solid);
+  font-size: 12px; outline: none;
+}
+
+.tool-param-label { flex: 0 0 auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-node-params.cols-2 .tool-param-label { max-width: 42%; }
+.tool-node-params.cols-2 .tool-param.stacked .tool-param-label { max-width: none; }
 .tool-param input, .tool-param select { flex: 1; min-width: 0; height: 26px; padding: 0 6px; border: 1px solid var(--panel-2); border-radius: 6px; color: var(--text); background: var(--panel-solid); font-size: 11px; outline: none; }
 .tool-param-toggle { flex: 0 0 auto; display: inline-flex; cursor: pointer; }
 .tool-param-toggle input { flex: 0 0 auto; width: 15px; height: 15px; padding: 0; }

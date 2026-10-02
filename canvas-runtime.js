@@ -5,12 +5,13 @@
     "/api/save-json", "/api/save-project", "/api/save-images", "/api/custom-material", "/api/save-export-files",
     "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
     "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
+    "/api/extensions", "/api/extensions/refresh",
   ]);
 
   async function apiFetch(input, options = {}) {
     const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
     const url = new URL(rawUrl, location.href);
-    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/"))) {
+    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/") || url.pathname.startsWith("/api/extensions/"))) {
       const headers = new Headers(options.headers || {});
       const result = await desktop.apiRequest(url.pathname + url.search, {
         method: options.method || "GET",

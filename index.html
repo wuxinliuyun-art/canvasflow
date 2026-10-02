@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20260931-ordery">
+  <link rel="stylesheet" href="styles.css?v=20261002-tpai32">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -149,7 +149,7 @@
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
-        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="exportLibraryJsonBtn">导出素材</button><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
         <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button><button class="asset-type-btn" data-asset-tab="multi">自定义组件</button></div>
         <section class="asset-pane" data-asset-pane="text">
           <div class="asset-pane-head"><div><h3>自定义文字</h3><p>保存可重复使用的完整多行文字。</p></div><button id="newCustomTextBtn" class="primary">＋ 新建文字</button></div>
@@ -191,7 +191,7 @@
         </div></div>
         <section class="settings-card">
           <label>服务地址<input id="extensionServiceUrl" type="text" placeholder="http://127.0.0.1:8788"></label>
-          <p class="setting-desc">服务未启动时，请到拓展文件夹双击 扩展服务.bat 启动；刷新按钮会重新检索拓展文件夹。</p>
+          <p class="setting-desc">桌面版已内置拓展服务，刷新按钮会重新检索拓展文件夹；仅服务器运行模式需要手动双击拓展文件夹里的 扩展服务.bat。</p>
         </section>
         <section class="settings-card">
           <p class="setting-desc">拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。</p>
@@ -414,8 +414,8 @@
   </div>
 
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
-  <script src="canvas-runtime.js?v=20260929-agtoken"></script>
+  <script src="canvas-runtime.js?v=20261002-extsvc"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261001-notes3"></script>
+  <script src="app.js?v=20261002-exthint"></script>
 </body>
 </html>

@@ -71,7 +71,7 @@ const UI_EN = {
   "服务地址": "Service URL", "刷新拓展": "Refresh Extensions", "拓展列表": "Extension List",
   "执行": "Run", "运行中…": "Running…",
   "拓展文件夹里的工具会自动接入画布，作为拓展节点使用。": "Tools in the extensions folder automatically appear as canvas nodes.",
-  "服务未启动时，请到拓展文件夹双击 扩展服务.bat 启动；刷新按钮会重新检索拓展文件夹。": "If the service is not running, double-click 扩展服务.bat in the extensions folder; Refresh rescans the folder.",
+  "桌面版已内置拓展服务，刷新按钮会重新检索拓展文件夹；仅服务器运行模式需要手动双击拓展文件夹里的 扩展服务.bat。": "The desktop app has a built-in extension service; Refresh rescans the extensions folder. Only server mode needs 扩展服务.bat started manually.",
   "拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。": "Drag to reorder — the order applies to the canvas right-click Extensions menu; disabled extensions are hidden from the menu.",
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
@@ -198,13 +198,13 @@ const UI_EN = {
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整界面语言与画布操作习惯。": "Adjust interface language and canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text, images, and node sets for every project; created nodes are independent copies.",
-  "导入素材": "Import Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
+  "导入素材": "Import Assets", "导出素材": "Export Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
   "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量节点。": "Define global variables and single-choice values for variable nodes.",
   "＋ 新建变量": "+ New Variable", "变量名": "Variable Name", "可选值（每行一个）": "Choices (one per line)", "保存变量": "Save Variable",
   "变量节点": "Variable Node", "添加变量节点": "Add Variable Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
   "＋ 添加一行": "+ Add Row", "请先在设置 → 变量库中创建变量": "Create a variable in Settings → Variable Library first",
-  "项目文件夹": "Project Folder", "修改位置": "Change Folder", "同时备份素材库": "Also back up the asset library",
+  "项目文件夹": "Project Folder", "修改位置": "Change Folder",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.", "在画布中多选节点后右键保存，同时保留节点布局和内部连线。": "Select multiple nodes on the canvas, then right-click to save their layout and internal connections.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets", "双击放大预览": "Double-click to enlarge", "当前素材预览": "Current asset preview",
@@ -625,6 +625,7 @@ const els = {
   importLibraryProjectBtn: $("importLibraryProjectBtn"),
   importLibraryJsonBtn: $("importLibraryJsonBtn"),
   importLibraryJsonInput: $("importLibraryJsonInput"),
+  exportLibraryJsonBtn: $("exportLibraryJsonBtn"),
   libraryImportDialog: $("libraryImportDialog"),
   libraryImportSource: $("libraryImportSource"),
   libraryImportItems: $("libraryImportItems"),
@@ -2147,10 +2148,17 @@ async function fetchToolExtensions(refresh = false) {
   const cfg = extensionSettings();
   const base = cfg.serviceUrl.replace(/\/+$/, "");
   try {
-    const resp = await fetch(refresh ? `${base}/api/extensions/refresh` : `${base}/api/extensions`, {
-      method: refresh ? "POST" : "GET",
-    });
-    const data = await resp.json();
+    let data;
+    if (desktop?.apiRequest) {
+      // 桌面版：扩展服务内置在桌面端，无需外部服务
+      const resp = await apiFetch(refresh ? "/api/extensions/refresh" : "/api/extensions", { method: refresh ? "POST" : "GET" });
+      data = await resp.json();
+    } else {
+      const resp = await fetch(refresh ? `${base}/api/extensions/refresh` : `${base}/api/extensions`, {
+        method: refresh ? "POST" : "GET",
+      });
+      data = await resp.json();
+    }
     if (!data.ok) throw new Error(data.error || "服务响应异常");
     toolExtensionCache.list = Array.isArray(data.extensions) ? data.extensions : [];
     toolExtensionCache.invalid = Array.isArray(data.invalid) ? data.invalid : [];
@@ -2176,20 +2184,28 @@ function enabledToolExtensions() {
       || String(a.name || a.id).localeCompare(String(b.name || b.id), "zh"));
 }
 
-function toolNodeHeightFor(params) {
-  // 描述 + 合并开关行 + 参数行(双列) + 状态行预留 + 执行按钮；紧凑型，避免节点过高占用画布
-  return 144 + Math.ceil((params.length || 0) / 2) * 34 + 30;
+function toolNodeHeightFor(params, columns = 1) {
+  // 描述 + 合并开关行 + 参数区（文本/下拉/滑块为"标签在上"的高行，开关为矮行）+ 状态行预留 + 执行按钮
+  const list = params || [];
+  const boxCount = list.filter(param => param.type !== "toggle").length;
+  const toggleCount = list.length - boxCount;
+  if (columns === 2) {
+    const rows = Math.ceil(list.length / 2);
+    return 144 + rows * (boxCount ? 54 : 30) + 30;
+  }
+  return 144 + boxCount * 54 + toggleCount * 30 + 30;
 }
 
 function addToolNode(ext, x = 160, y = 120) {
   const params = Array.isArray(ext.params) ? ext.params : [];
-  const node = addNode("tool-node", x, y, false, { height: toolNodeHeightFor(params) });
+  const node = addNode("tool-node", x, y, false, { height: toolNodeHeightFor(params, ext.columns) });
   node.toolMeta = {
     id: ext.id,
     name: ext.name || ext.id,
     description: ext.description || "",
     output: ext.output || "images",
     params,
+    columns: ext.columns === 2 ? 2 : 1,
     timeout: ext.timeout || 600,
   };
   node.toolName = node.toolMeta.name;
@@ -2215,23 +2231,24 @@ function toolNodeBody(node) {
     const label = `<span class="tool-param-label">${escapeHtml(param.label || param.key)}</span>`;
     const attrs = `data-role="tool-param" data-key="${escapeHtml(param.key)}"`;
     if (param.type === "toggle") {
-      return `<label class="tool-param"><label class="tool-param-toggle"><input type="checkbox" ${attrs} data-param-type="toggle" ${value ? "checked" : ""}></label>${label}</label>`;
+      // 开关：参数名称在前，选项在后
+      return `<label class="tool-param">${label}<label class="tool-param-toggle"><input type="checkbox" ${attrs} data-param-type="toggle" ${value ? "checked" : ""}></label></label>`;
     }
     if (param.type === "select") {
       const options = (param.options || []).map(option => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("");
-      return `<label class="tool-param">${label}<select ${attrs} data-param-type="select">${options}</select></label>`;
+      return `<label class="tool-param stacked">${label}<select ${attrs} data-param-type="select">${options}</select></label>`;
     }
     if (param.type === "text") {
-      return `<label class="tool-param">${label}<input type="text" ${attrs} data-param-type="text" value="${escapeHtml(String(value ?? ""))}"></label>`;
+      return `<label class="tool-param stacked">${label}<input type="text" ${attrs} data-param-type="text" value="${escapeHtml(String(value ?? ""))}"></label>`;
     }
     const bounds = `${param.min != null ? ` min="${param.min}"` : ""}${param.max != null ? ` max="${param.max}"` : ""}`;
-    return `<label class="tool-param">${label}<input type="number" ${attrs} data-param-type="slider" value="${Number(value) || 0}"${bounds}></label>`;
+    return `<label class="tool-param stacked">${label}<input type="number" ${attrs} data-param-type="slider" value="${Number(value) || 0}"${bounds}></label>`;
   }).join("");
   const status = node.toolStatus
     ? `<div class="tool-node-status tool-status-${node.toolStatus.state}">${escapeHtml(node.toolStatus.message || "")}</div>`
     : "";
   const mergeToggle = `<label class="tool-param tool-merge-row" title="开启：所有连线的图片（含文件夹/多任务）合并进 input/；关闭：只取第一条连线"><input type="checkbox" data-role="tool-merge" ${node.keepCombinedInputs !== false ? "checked" : ""}><span>合并全部连线为输入</span></label>`;
-  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div>${mergeToggle}<div class="tool-node-params">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
+  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div>${mergeToggle}<div class="tool-node-params${meta.columns === 2 ? " cols-2" : ""}">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
 }
 
 async function runToolNode(nodeId) {
@@ -2273,17 +2290,24 @@ async function runToolNode(nodeId) {
       if (!url) throw new Error(`无法读取图片：${ref.fileName || "未命名图片"}`);
       const dataUrl = await fetchImageAsBase64(url);
       const comma = dataUrl.indexOf(",");
-      payloadImages.push({ name: ref.fileName || `input-${index + 1}.png`, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl });
+      const extFromName = String(ref.fileName || "").split(".").pop().toLowerCase();
+      const ext = ["jpg", "jpeg", "png", "webp"].includes(extFromName)
+        ? extFromName
+        : ref.mime === "image/jpeg" ? "jpg" : ref.mime === "image/webp" ? "webp" : "png";
+      // 工具脚本按文件名排序读取 input/，用三位序号命名让页序严格等于画布自上而下的节点顺序
+      payloadImages.push({ name: `${String(index + 1).padStart(3, "0")}.${ext}`, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl });
     }
     const cfg = extensionSettings();
     const base = cfg.serviceUrl.replace(/\/+$/, "");
     node.toolStatus = { state: "running", message: "拓展运行中…（可能需要数分钟）" };
     renderNodes();
-    const resp = await fetch(`${base}/api/extensions/${encodeURIComponent(node.toolMeta.id)}/run`, {
+    const runUrl = `/api/extensions/${encodeURIComponent(node.toolMeta.id)}/run`;
+    const runInit = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ images: payloadImages, params: node.toolValues || {} }),
-    });
+    };
+    const resp = desktop?.apiRequest ? await apiFetch(runUrl, runInit) : await fetch(`${base}${runUrl}`, runInit);
     const data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
     if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
 
@@ -2355,7 +2379,9 @@ async function renderExtensionsPage(refresh = false) {
   const list = await fetchToolExtensions(refresh);
   if (token !== _extensionRenderToken) return;
   if (!toolExtensionCache.online) {
-    els.extensionServiceStatus.title = "扩展服务未启动：请到拓展文件夹双击 扩展服务.bat";
+    els.extensionServiceStatus.title = desktop?.apiRequest
+      ? "桌面端拓展服务异常：请重启 CanvasFlow 后重试"
+      : "扩展服务未启动：请到拓展文件夹双击 扩展服务.bat";
     els.extensionServiceStatus.className = "extension-service-dot offline";
     els.extensionList.innerHTML = `<div class="extension-empty">未检测到扩展服务</div>`;
     return;
@@ -8499,6 +8525,19 @@ async function importLibraryFile(name, content) {
     openLibraryImport(sources);
   } catch (e) { console.error("[导入] 素材 JSON 解析失败", e); toast("导入失败：JSON 格式不正确"); }
 }
+els.exportLibraryJsonBtn.onclick = async () => {
+  try {
+    const library = JSON.parse(JSON.stringify(globalLibrary));
+    const payload = { canvasflowVersion: 1, type: "library", savedAt: new Date().toISOString(), library };
+    const failures = await embedLibraryImages({ globalLibrary: payload.library });
+    if (failures.length) throw new Error(`${failures.length} 个图片素材无法读取`);
+    const saved = await writeCflowFile("CanvasFlow素材库.cflow", payload);
+    toast(`素材库已导出：${saved.path || "CanvasFlow素材库.cflow"}`);
+  } catch (error) {
+    console.error("[素材库] 导出失败", error);
+    toast(`导出失败：${error.message || "无法写入文件"}`);
+  }
+};
 els.importLibraryJsonBtn.onclick = async () => {
   if (!desktop?.chooseLibraryFile) return els.importLibraryJsonInput.click();
   try {
@@ -8602,17 +8641,23 @@ async function materializeNodeAssetsForPortableSave(nodes) {
   }
 }
 
-function confirmProjectSave() {
-  return new Promise(resolve => {
-    const overlay = document.createElement("div");
-    overlay.className = "canvas-confirm-backdrop";
-    overlay.innerHTML = `<section class="canvas-confirm-panel project-save-panel" role="dialog" aria-modal="true"><h3>保存项目</h3><p>项目将保存为一个可迁移的 .cflow 文件。</p><label class="project-save-library-option"><input type="checkbox" data-save-library> 同时备份素材库</label><small>勾选后会额外生成“CanvasFlow素材库.cflow”，不会把素材库混入项目文件。</small><div class="canvas-confirm-actions"><button data-dialog-cancel>取消</button><button class="primary" data-dialog-confirm>保存</button></div></section>`;
-    const finish = value => { overlay.remove(); resolve(value); };
-    overlay.querySelector("[data-dialog-cancel]").onclick = () => finish(null);
-    overlay.querySelector("[data-dialog-confirm]").onclick = () => finish(overlay.querySelector("[data-save-library]").checked);
-    overlay.addEventListener("mousedown", event => { if (event.target === overlay) finish(null); });
-    document.body.appendChild(overlay);
-  });
+async function saveJson() {
+  try {
+    saveCurrentPage();
+    normalizeGroups();
+    const project = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId }));
+    for (const page of project.pages || []) { delete page._history; delete page._future; }
+    for (const page of project.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
+    const payload = { canvasflowVersion: 1, type: "project", savedAt: new Date().toISOString(), project };
+    const name = `${safeName(currentPage()?.name || "canvas")}.cflow`;
+    const saved = await writeCflowFile(name, payload);
+    console.info("[项目保存] 已写入", { path: saved.path || name, pages: project.pages?.length || 0 });
+    state.dirty = false;
+    toast("项目已保存");
+  } catch (error) {
+    console.error("[项目保存] 失败", error);
+    toast(`保存失败：${error.message || "文件夹权限不足或内容无法读取"}；请检查保存位置后重试`);
+  }
 }
 
 async function writeCflowFile(name, payload) {
@@ -8637,35 +8682,6 @@ async function writeCflowFile(name, payload) {
   }
   downloadBlob(blob, name);
   return { path: name };
-}
-
-async function saveJson() {
-  const backupLibrary = await confirmProjectSave();
-  if (backupLibrary === null) return;
-  try {
-    saveCurrentPage();
-    normalizeGroups();
-    const project = JSON.parse(JSON.stringify({ pages: state.pages, groups: state.groups, activePageId: state.activePageId }));
-    for (const page of project.pages || []) { delete page._history; delete page._future; }
-    for (const page of project.pages || []) await materializeNodeAssetsForPortableSave(page.data?.nodes || []);
-    const payload = { canvasflowVersion: 1, type: "project", savedAt: new Date().toISOString(), project };
-    const name = `${safeName(currentPage()?.name || "canvas")}.cflow`;
-    const saved = await writeCflowFile(name, payload);
-    console.info("[项目保存] 已写入", { path: saved.path || name, pages: project.pages?.length || 0 });
-    if (backupLibrary) {
-      const library = JSON.parse(JSON.stringify(globalLibrary));
-      const libraryPayload = { canvasflowVersion: 1, type: "library", savedAt: new Date().toISOString(), library };
-      const failures = await embedLibraryImages({ globalLibrary: libraryPayload.library });
-      if (failures.length) throw new Error(`${failures.length} 个图片素材无法读取`);
-      const librarySaved = await writeCflowFile("CanvasFlow素材库.cflow", libraryPayload);
-      console.info("[素材库备份] 已写入", { path: librarySaved.path || "CanvasFlow素材库.cflow" });
-    }
-    state.dirty = false;
-    toast(backupLibrary ? "项目和素材库备份已保存" : "项目已保存");
-  } catch (error) {
-    console.error("[项目保存] 失败", error);
-    toast(`保存失败：${error.message || "文件夹权限不足或内容无法读取"}；请检查保存位置后重试`);
-  }
 }
 
 async function embedLibraryImages(data) {

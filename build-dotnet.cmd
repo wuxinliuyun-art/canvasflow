@@ -23,6 +23,7 @@ if exist "%EXT_PRESETS%" rmdir /s /q "%EXT_PRESETS%"
 if exist "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" (
   mkdir "%EXT_PRESETS%" 2>nul
   xcopy "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" "%EXT_PRESETS%\Í¼Æ¬ÖÃÈëpptx\" /e /i /y >nul
+  copy /y "%PROJECT_ROOT%ÍØÕ¹½Å±¾¹æ·¶.md" "%EXT_PRESETS%\ÍØÕ¹½Å±¾¹æ·¶.md" >nul 2>&1
   echo Preset extension copied: image-to-pptx
 ) else (
   echo [warn] preset extension not found: %EXT_SOURCE%\image-to-pptx-dir
