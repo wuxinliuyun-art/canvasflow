@@ -7,6 +7,8 @@ namespace CanvasFlow.Desktop;
 public partial class App : System.Windows.Application
 {
     private Mutex? _mutex;
+    private bool _ownsMutex;
+    private EventWaitHandle? _activateEvent;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -29,19 +31,53 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
         _mutex = new Mutex(true, "Local\\CanvasFlow.Desktop.Net8", out var first);
+        _ownsMutex = first;
         if (!first)
         {
-            System.Windows.MessageBox.Show("CanvasFlow 已经在运行。\n\n可能原因：现有窗口被最小化。\n建议办法：返回现有窗口继续操作。", "CanvasFlow");
+            // 已有实例在运行：发激活信号让现有窗口到前台，不再弹窗打扰
+            try
+            {
+                using var activate = System.Threading.EventWaitHandle.OpenExisting("Local\\CanvasFlow.Desktop.Activate");
+                activate.Set();
+            }
+            catch (System.Threading.WaitHandleCannotBeOpenedException) { }
             Shutdown();
             return;
         }
+        StartActivationListener();
         base.OnStartup(e);
         new MainWindow().Show();
     }
 
+    private void StartActivationListener()
+    {
+        _activateEvent = new EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, "Local\\CanvasFlow.Desktop.Activate", out _);
+        var listener = new Thread(() =>
+        {
+            while (_activateEvent.WaitOne())
+            {
+                Dispatcher.Invoke(ShowExistingWindow);
+            }
+        })
+        { IsBackground = true };
+        listener.Start();
+    }
+
+    private void ShowExistingWindow()
+    {
+        var window = System.Windows.Application.Current?.MainWindow;
+        if (window is null) return;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Show();
+        window.Activate();
+        window.Topmost = true;
+        window.Topmost = false;
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
-        _mutex?.ReleaseMutex();
+        _activateEvent?.Dispose();
+        if (_ownsMutex) _mutex?.ReleaseMutex();
         _mutex?.Dispose();
         base.OnExit(e);
     }
