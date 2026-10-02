@@ -80,6 +80,20 @@
 - 实现：绘图模型列表、画质档、分辨率档统一由 `model-catalog.js` 声明式目录驱动；增删模型只改该文件并发布 `CanvasFlow-Web.zip` 界面热更新，不需要重发 EXE。API Key 按 `apiType` 分槽保存（`settings.apiKey` / `settings.agtokenApiKey`，桌面端 secrets.json v2 双槽），所有落盘路径（localStorage、/api/app-state、自动备份）必须同时剥离两个 key。
 - 避免：不得在 agtoken 分支复用 APIMart 的 ext 映射、任务轮询或 apimart 的 key；节点模型切换 API 类型后不属于当前目录时必须回退当前类型默认模型；静态资源响应必须带 `Cache-Control: no-cache`，且改动前端文件时同步递增 index.html 中的 `?v=` 版本号，否则界面热更新会被浏览器启发式缓存吞掉。
 
+### 覆盖安装后启动报 WebView2 0x80070003
+
+- 现象：覆盖安装 2.7.0 后每次启动弹“WebView2初始化失败……系统找不到指定的路径。(0x80070003)”；WebView2 Runtime 与用户数据目录都正常，反常点是 msedgewebview2 浏览器进程已随启动创建且存活。
+- 原因：`EnsureCoreWebView2Async` 成功之后的 `SetVirtualHostNameToFolderMapping("canvasflow-data.local", {数据根}\download\images, …)` 在目标目录不存在时抛 `ERROR_PATH_NOT_FOUND (0x80070003)`；该目录只在用户存过图片后才生成，全新/覆盖安装后不存在，导致安装版必然启动失败，浏览器进程变成孤儿残留。
+- 解决：映射虚拟主机前必须 `Directory.CreateDirectory` 目标目录（初始化建目录清单中加入 `download\images`）；对已安装机器补建 `{安装目录}\app\download\images` 即可原地恢复，无需重装。
+- 避免：所有 `SetVirtualHostNameToFolderMapping` 的目标目录一律先创建再映射；启动失败的错误提示应包含实际失败的步骤与路径，不能笼统归因于“Runtime缺失/目录无权限”；判断 WebView2 初始化失败点时，先查浏览器进程树是否已创建（`Get-CimInstance` 查 msedgewebview2 命令行里的 `--user-data-dir`），进程已存在说明失败在 `EnsureCoreWebView2Async` 之后的步骤。
+
+### 异步全量重渲染吞掉节点按钮的第一次点击
+
+- 现象：AI 绘图节点“生成/重新生成”偶发第一次点击无反应，第二次才触发；任务运行期间或刚生成完成后的 1.8 秒内更明显。
+- 原因：`renderNodes()` 曾整体清空重建节点 DOM，进度轮询（约每秒一次）、任务完成后的进度条清理、图片加载适配都会在随机时机触发；按压期间按钮元素被替换后，浏览器把 click 派发到父容器，委托处理器按 `data-role` 匹配不到按钮而静默返回。全局 `button:active { transform: scale(.98) }` 还会让贴近边缘的点击在松开时落到缩小后的按钮外。
+- 解决：`renderNodes()` 按节点复用未变化的 DOM 元素（className 与模板标记都一致时仅更新几何样式）；进度条完成清理改为就地移除元素与状态类；`:active` 按压反馈改为透明度；`enqueueAiNode` 在单节点点击路径上对空上游给出提示。
+- 避免：新增异步渲染路径时不得整体清空 `#nodes` 重建；进度、状态类等局部变化必须就地更新；按钮按压反馈不得使用改变命中区域的 transform；委托点击处理统一用 `closest("[data-role]")` 解析动作。
+
 
 
 ## 中长期规划 / TODO

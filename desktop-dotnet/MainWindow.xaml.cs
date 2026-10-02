@@ -208,6 +208,7 @@ public partial class MainWindow : Window
             var paths = FindApplicationPaths();
             _root = paths.DataRoot;
             foreach (var name in new[] { "data", "download", "export" }) Directory.CreateDirectory(Path.Combine(_root, name));
+            Directory.CreateDirectory(Path.Combine(_root, "download", "images")); // canvasflow-data.local 虚拟主机映射的目标目录必须先存在，否则启动抛 0x80070003
             var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
             _contentRoot = _webUpdateManager.ResolveContentRoot();
