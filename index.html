@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261002-tpai32">
+  <link rel="stylesheet" href="styles.css?v=20261003-redownload">
 </head>
 <body>
   <div id="app" class="app theme-light">
@@ -45,6 +45,22 @@
     </div>
 
     <main id="viewport" class="viewport" tabindex="0">
+      <svg id="viewportPattern" class="viewport-pattern" aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id="vpPatternGrid" class="vp-grid-pattern" patternUnits="userSpaceOnUse" x="120" y="90" width="20" height="20">
+            <path class="vp-grid-line" d="M0 0.5H20M0.5 0V20" fill="none" stroke-width="1"></path>
+          </pattern>
+          <pattern id="vpPatternCross" class="vp-cross-pattern" patternUnits="userSpaceOnUse" x="100" y="70" width="80" height="80">
+            <path class="vp-cross-line" d="M0 40H80M40 0V80" fill="none" stroke-width="1"></path>
+            <path class="vp-cross-mark" d="M34.4 40H45.6M40 34.4V45.6" fill="none" stroke-width="1.5" stroke-linecap="round"></path>
+          </pattern>
+          <pattern id="vpPatternDots" class="vp-dots-pattern" patternUnits="userSpaceOnUse" x="110" y="80" width="40" height="40">
+            <circle class="vp-dot" cx="20" cy="20" r="1"></circle>
+          </pattern>
+        </defs>
+        <rect class="vp-pattern-base" x="0" y="0" width="100%" height="100%" fill="url(#vpPatternGrid)"></rect>
+        <rect class="vp-pattern-marks" x="0" y="0" width="100%" height="100%" fill="url(#vpPatternCross)"></rect>
+      </svg>
       <div id="world" class="world">
         <svg id="edges" class="edges"></svg>
         <div id="nodes" class="nodes"></div>
@@ -100,6 +116,7 @@
       <div class="settings-layout">
         <nav class="settings-side-nav" aria-label="设置分类">
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
+          <button class="settings-tab-btn" data-tab="appearance"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6.5A2.5 2.5 0 0 0 21 9.5 9 9 0 0 0 12 3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg></span><span>外观</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
           <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
@@ -114,14 +131,15 @@
           <h3>界面与画布</h3>
           <div class="settings-field-grid">
             <label>界面语言<select id="languageSelect"><option value="zh-CN">简体中文</option><option value="en">English</option></select></label>
-            <label>网格对齐距离<input id="gridSizeInput" type="number" min="1" max="200" value="20"></label>
+            <label>网格对齐距离<input id="gridSizeInput" type="number" min="10" max="200" value="40"></label>
           </div>
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
-          <label class="check-row"><input id="autoFitImageNodesToggle" type="checkbox" checked><span>图片节点按上传图片比例自动调整</span></label>
+          <label class="check-row"><input id="autoAlignToggle" type="checkbox" checked><span>创建节点或连线时自动对齐</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
           <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
         </section>
+        
         <section class="settings-card onboarding-settings-card">
           <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
         </section>
@@ -129,27 +147,19 @@
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
-          <div class="update-notes">
-            <div class="update-notes-title">v2.7.0 更新说明</div>
+          <details class="update-notes">
+            <summary class="update-notes-title">v2.7.1 更新说明</summary>
             <ul>
-              <li>加 AGtoken 的 API 支持，绘图软件没有网络加速器也不影响注册会员</li>
-              <li>修复有时点击 AI 生图没反应的问题</li>
-              <li>同一个节点接两个线，将被视为两个任务</li>
-              <li>新交互：按住 Alt 画线可切断连线；如果同时和两条线相交，会把这个节点隔离出去</li>
-              <li>模型里增加设置，可以设置默认 AI 生图模型</li>
-              <li>优化整理节点体验，防止整理后失焦</li>
-              <li>加入自定义组件功能，将多个节点作为模板保存</li>
-              <li>新增 Nano Banana Pro 模型</li>
-              <li>增加拓展系统，允许将符合规则的 py 作为节点载入；预制拓展「图片置入PPTX」</li>
-              <li>整理节点：整理后不再失焦，同链节点按行对齐更整齐</li>
-              <li>本版更新了内核：请下载新版安装包覆盖安装后使用（项目与设置会保留）</li>
+              <li>生图任务完成后若图片下载失败（网络/代理波动），节点上会保留「重新下载结果」按钮，24小时内可免费取回，无需重新生成</li>
+              <li>下载失败与生成失败的提示分开显示，明确说明任务已完成、仅下载环节失败</li>
+              <li>桌面端网络错误日志记录完整内层原因，便于排查代理/SSL问题</li>
             </ul>
-          </div>
+          </details>
         </section>
       </div>
 
       <div class="tab-page hidden" data-tab="assets">
-        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="exportLibraryJsonBtn">导出素材</button><button id="importLibraryJsonBtn">导入素材</button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>素材库</h2><p>保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。</p></div><div class="custom-library-actions"><button id="exportLibraryJsonBtn" class="library-icon-btn" title="导出素材" aria-label="导出素材"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button><button id="importLibraryJsonBtn" class="library-icon-btn" title="导入素材" aria-label="导入素材"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5V6A2.5 2.5 0 0 1 6 3.5h4l2 2h6A2.5 2.5 0 0 1 20.5 8v1"/><path d="M4 9.5h16.5l-2.2 8.2a2.5 2.5 0 0 1-2.4 1.8H6.1a2.5 2.5 0 0 1-2.4-3.1L4 9.5Z"/></svg></button><input id="importLibraryJsonInput" type="file" accept=".cflow,.json,application/json" hidden></div></div>
         <div class="asset-type-tabs"><button class="asset-type-btn active" data-asset-tab="text">自定义文字</button><button class="asset-type-btn" data-asset-tab="image">自定义图片</button><button class="asset-type-btn" data-asset-tab="multi">自定义组件</button></div>
         <section class="asset-pane" data-asset-pane="text">
           <div class="asset-pane-head"><div><h3>自定义文字</h3><p>保存可重复使用的完整多行文字。</p></div><button id="newCustomTextBtn" class="primary">＋ 新建文字</button></div>
@@ -196,6 +206,35 @@
         <section class="settings-card">
           <p class="setting-desc">拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。</p>
           <div id="extensionList" class="extension-list"></div>
+        </section>
+        <section class="settings-card" id="cepPanelCard">
+          <h3>Photoshop 联动面板（demo）</h3>
+          <p class="setting-desc">把随包的 CEP 面板安装到当前用户扩展目录（%APPDATA%\Adobe\CEP\extensions\CanvasFlowPanel），并写入 HKCU 注册表开启 CEP 调试模式（未签名面板必需，安全软件可能提示一次）。安装后重启 Photoshop，在 窗口 &gt; 扩展（功能）&gt; CanvasFlow 面板 打开。</p>
+          <div class="cep-panel-actions">
+            <button id="cepInstallBtn" type="button" class="primary">安装 / 更新面板</button>
+            <button id="cepUninstallBtn" type="button">移除面板</button>
+          </div>
+          <p id="cepStatusLine" class="setting-desc" hidden></p>
+        </section>
+      </div>
+
+      <div class="tab-page hidden" data-tab="appearance">
+        <div class="settings-page-head"><h2>外观</h2><p>切换深色或浅色主题，自定义界面颜色，按当前主题（暗色/浅色）分别保存，实时生效。</p></div>
+        <section class="settings-card">
+          <h3>主题</h3>
+          <label class="check-row"><input id="darkThemeToggle" type="checkbox"><span>深色主题</span></label>
+        </section>
+        <section class="settings-card ui-colors-card">
+          <h3>界面颜色</h3>
+          <div class="ui-color-rows">
+            <div class="ui-color-row ui-color-canvas-row"><span>画布背景样式</span><select id="canvasBgSelect"><option value="grid">网格线</option><option value="cross">网格 + 十字焦点</option><option value="dots">点状</option></select></div>
+            <label class="ui-color-row"><span>画布底色</span><input type="color" id="uiColorBg" value="#000000"><button type="button" class="ui-color-alt" data-ui-color-alt="bg" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="bg">默认</button></label>
+            <label class="ui-color-row"><span>网格线</span><input type="color" id="uiColorGrid" value="#ffffff"><button type="button" class="ui-color-alt" data-ui-color-alt="grid" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="grid">默认</button></label>
+            <label class="ui-color-row"><span>面板底色</span><input type="color" id="uiColorPanel" value="#131316"><button type="button" class="ui-color-alt" data-ui-color-alt="panel" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="panel">默认</button></label>
+            <label class="ui-color-row"><span>节点内控件</span><input type="color" id="uiColorNodeControl" value="#1c1c21"><button type="button" class="ui-color-alt" data-ui-color-alt="nodeControl" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="nodeControl">默认</button></label>
+            <label class="ui-color-row"><span>主按钮</span><input type="color" id="uiColorAccent" value="#f4f4f5"><button type="button" class="ui-color-alt" data-ui-color-alt="accent" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="accent">默认</button></label>
+          </div>
+          <div class="ui-color-actions"><button type="button" id="uiColorResetAll">全部恢复默认</button></div>
         </section>
       </div>
 
@@ -268,22 +307,23 @@
       <div class="tab-page hidden" data-tab="screenshot">
         <div class="settings-page-head"><h2>截图工具</h2><p>截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。</p></div>
         <section class="settings-card">
-          <h3>原生截图窗口</h3>
-          <p class="setting-desc">窗口可置顶、折叠和收起预览。关闭窗口只会隐藏，不会退出 CanvasFlow。</p>
           <button id="openScreenshotToolBtn" class="primary" type="button">打开截图窗口</button>
-          <p class="setting-desc">截图任务会进入现有任务队列，结果保存到 export/ai_generated，不会自动添加到画布。</p>
         </section>
       </div>
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>保存</h2><p>选择项目文件的默认保存位置。</p></div>
-        <section class="settings-card"><h3>导出方式</h3><label class="check-row"><input id="zipExportToggle" type="checkbox"><span>导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）</span></label><p class="setting-desc">关闭后，导出的图片和拓展输出的 pptx 等文件会直接出现在导出文件夹里，不再打包下载。</p></section>
-        <section class="settings-card"><h3>项目文件夹</h3><p class="setting-desc">“保存项目”会在这里生成 .cflow 文件。素材库只在保存时勾选后另行备份。</p><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
+        <section class="settings-card"><h3>导出方式</h3><label class="check-row"><input id="zipExportToggle" type="checkbox"><span>导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）</span></label></section>
+        <section class="settings-card"><h3>项目文件夹</h3><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
       </div>
 
         </div>
       </div>
-    </aside>
+      <div id="uiColorPopover" class="ui-color-popover hidden">
+      <div class="ui-color-popover-swatches"></div>
+      <div class="ui-color-popover-custom"><input type="text" id="uiColorHex" maxlength="7" placeholder="#1c1c21"><button type="button" id="uiColorHexApply">应用</button></div>
+    </div>
+  </aside>
 
     <div id="shortcutPopover" class="shortcut-popover hidden">
       <div class="shortcut-popover-head"><div><span>Keyboard</span><strong>快捷键说明</strong></div><button id="shortcutPopoverClose" title="关闭">×</button></div>
@@ -414,8 +454,8 @@
   </div>
 
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
-  <script src="canvas-runtime.js?v=20261002-extsvc"></script>
+  <script src="canvas-runtime.js?v=20261003-cep"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261002-exthint"></script>
+  <script src="app.js?v=20261003-redownload"></script>
 </body>
 </html>

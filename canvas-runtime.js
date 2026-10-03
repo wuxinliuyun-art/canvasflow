@@ -6,6 +6,7 @@
     "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
     "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
     "/api/extensions", "/api/extensions/refresh",
+    "/api/cep/status", "/api/cep/install", "/api/cep/uninstall",
   ]);
 
   async function apiFetch(input, options = {}) {

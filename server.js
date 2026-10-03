@@ -78,19 +78,21 @@ function exportBrowseTarget(token, relativePath = "") {
 }
 
 var staticCache = {};
-(function() {
-  var files = ["index.html", "model-catalog.js", "canvas-runtime.js", "app.js", "styles.css"];
-  for (var i = 0; i < files.length; i++) {
-    var f = files[i];
-    try {
-      var filePath = __dirname + "/" + f;
-      staticCache["/" + f] = fs.readFileSync(filePath, "utf-8");
-    } catch(e) {
-      console.log("[Static] cannot load " + f + ": " + e.message + ", path=" + __dirname);
-    }
+// 开发服务器必须服务磁盘最新内容：启动时快照进内存会让"改了代码刷新无效"
+// （实例启动得越早，吐的文件越旧）。按 mtime 惰性加载：没变走内存，变了立即重读。
+function readStaticFile(pathname) {
+  var filePath = __dirname + pathname;
+  try {
+    var mtime = fs.statSync(filePath).mtimeMs;
+    var entry = staticCache[pathname];
+    if (entry && entry.mtime === mtime) return entry.content;
+    var content = fs.readFileSync(filePath, "utf-8");
+    staticCache[pathname] = { mtime: mtime, content: content };
+    return content;
+  } catch (e) {
+    return null;
   }
-  console.log("[Static] preloaded " + Object.keys(staticCache).length + "/" + files.length + " files");
-})();
+}
 
 const API_BASE_URLS = [
   "https://api.apib.ai",
@@ -685,6 +687,7 @@ async function requestHandler(req, res) {
   }
 
   if (pathname === "/api/models" && req.method === "GET") {
+    res.setHeader("Access-Control-Allow-Origin", "*"); // CF_PANEL_PROBE
     try {
       const apiKey = requestApiKey();
       const { status, body: resBody } = await tryProxyRequest(
@@ -779,10 +782,11 @@ async function requestHandler(req, res) {
   // Static file serving (优先内存缓存)
   if (pathname === "/") pathname = "/index.html";
   console.log(`[Static] root=${root}, pathname=${pathname}`);
-  if (staticCache[pathname]) {
+  var staticContent = readStaticFile(pathname);
+  if (staticContent !== null) {
     var ext = path.extname(pathname);
-    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream", "Cache-Control": "no-cache" });
-    res.end(staticCache[pathname]);
+    res.writeHead(200, { "Content-Type": mime[ext] || "application/octet-stream", "Cache-Control": pathname === "/index.html" ? "no-store" : "no-cache" });
+    res.end(staticContent);
     return;
   }
   // 回退到磁盘读取（download/images 等非缓存文件）
@@ -826,6 +830,19 @@ async function requestHandler(req, res) {
   });
 }
 
+// CEP 面板发现文件：面板读取 %APPDATA%\CanvasFlowBridge\bridge.json 定位本服务；
+// 桌面版写同一文件（各写各的端口，后启动者生效，面板会探测确认）。
+function writeBridgeDiscovery(port) {
+  try {
+    const os = require("os");
+    const appData = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+    const folder = path.join(appData, "CanvasFlowBridge");
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, "bridge.json"), JSON.stringify({ port, pid: process.pid, source: "server" }));
+  } catch (error) {
+    console.warn(`[Start] 写入面板发现文件失败：${error.message}`);
+  }
+}
 function startCanvasFlowServer(options = {}) {
   configureRuntime(options);
   const server = http.createServer(requestHandler);
@@ -846,6 +863,7 @@ function startCanvasFlowServer(options = {}) {
         const address = server.address();
         const activePort = address && typeof address === "object" ? address.port : candidate;
         const url = `http://127.0.0.1:${activePort}/`;
+        writeBridgeDiscovery(activePort);
         console.log(`[Start] CanvasFlow server: ${url}`);
         resolve({ server, port: activePort, url, dataRoot, close: () => new Promise(done => server.close(done)) });
       };

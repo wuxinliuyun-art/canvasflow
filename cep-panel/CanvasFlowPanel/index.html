@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CanvasFlow 面板</title>
+<style>
+  /* 面板运行在 Photoshop 里，不加载 CanvasFlow 的 styles.css；这里自带深色配色 */
+  :root {
+    --bg: #2b2b2e;
+    --card: #343438;
+    --line: #4a4a50;
+    --text: #e8e8ea;
+    --muted: #9a9aa2;
+    --accent: #4f7cff;
+    --ok: #4cc38a;
+    --err: #f0787a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 13px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif; }
+  body { padding: 12px; }
+  h1 { margin: 0 0 2px; font-size: 14px; }
+  .doc-line { margin: 0 0 10px; color: var(--muted); font-size: 12px; min-height: 18px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 10px; padding: 8px 10px; }
+  legend { color: var(--muted); font-size: 12px; padding: 0 4px; cursor: pointer; }
+  label { display: block; margin: 6px 0 2px; color: var(--muted); font-size: 12px; }
+  input[type="text"], input[type="password"], select, textarea {
+    width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--card); color: var(--text); font-size: 13px;
+  }
+  textarea { resize: vertical; min-height: 72px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--text); font-size: 12px; }
+  .check input { margin: 0; }
+  #generateBtn {
+    width: 100%; margin-top: 10px; padding: 8px 0; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 14px; cursor: pointer;
+  }
+  #generateBtn:disabled { opacity: .5; cursor: default; }
+  #progressWrap { margin-top: 10px; }
+  #progressTrack { height: 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); overflow: hidden; }
+  #progressBar { height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+  #progressText { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+  #log { margin: 10px 0 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--card); min-height: 60px; max-height: 180px; overflow-y: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  #log .ok { color: var(--ok); }
+  #log .err { color: var(--err); }
+  #log .muted { color: var(--muted); }
+  #preview { display: block; margin: 10px auto 0; max-width: 100%; max-height: 200px; border: 1px solid var(--line); border-radius: 6px; }
+  #preview[hidden] { display: none; }
+  .hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>CanvasFlow 面板 <span style="color:var(--muted);font-weight:normal;font-size:12px">demo</span></h1>
+  <p class="doc-line" id="docLine">正在连接 Photoshop…</p>
+
+  <fieldset>
+    <legend>生成通道与接口设置</legend>
+    <label for="channel">生成通道</label>
+    <select id="channel">
+      <option value="auto">自动（画布优先，画布没开时直连）</option>
+      <option value="canvas">仅画布（两套 API 都可用）</option>
+      <option value="direct">直连 agtoken（不经过画布）</option>
+    </select>
+    <label for="canvasUrl">画布地址（可选，自动发现失败时填写）</label>
+    <input type="text" id="canvasUrl" placeholder="http://127.0.0.1:5173" autocomplete="off">
+    <label for="apiKey">API Key（桌面版画布开启时可留空）</label>
+    <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+    <div class="row2">
+      <div>
+        <label for="model">模型</label>
+        <select id="model"></select>
+      </div>
+      <div>
+        <label for="size">输出档位</label>
+        <select id="size">
+          <option value="1k">1K</option>
+          <option value="2k">2K</option>
+          <option value="4k">4K</option>
+        </select>
+      </div>
+    </div>
+    <label for="quality">画质</label>
+    <select id="quality"></select>
+    <label for="upcompress">上传压缩（导出给上游的图，越小越快）</label>
+    <select id="upcompress">
+      <option value="jpeg1536">快（JPEG · 长边 1536）</option>
+      <option value="jpeg1024">更快（JPEG · 长边 1024）</option>
+      <option value="png0">高清（PNG · 原始尺寸）</option>
+    </select>
+  </fieldset>
+
+  <label for="prompt">提示词</label>
+  <textarea id="prompt" placeholder="例如：把选区里的天空换成黄昏晚霞"></textarea>
+  <label class="check"><input type="checkbox" id="sendMask" checked>有选区时发送蒙版（选区 = 重绘区域；若上游报错可关闭）</label>
+  <label for="selMode">选区标记方式</label>
+  <select id="selMode">
+    <option value="red">红色标记（推荐：整图+红色半透明选区，兼容所有上游）</option>
+    <option value="mask">蒙版（mask 字段，需上游支持）</option>
+  </select>
+  <p class="hint" style="margin-top:4px">有选区时回贴结果按选区本地剪裁（选区外保持原图像素）。红色标记模式会在发送时给提示词追加一条隐藏指令（不显示在输入框），告诉模型重新生成红色区域。</p>
+
+  <button id="generateBtn" type="button">生成并回贴到 PS</button>
+
+  <div id="progressWrap" hidden>
+    <div id="progressTrack"><div id="progressBar"></div></div>
+    <p id="progressText">准备中…</p>
+  </div>
+
+  <div id="log"></div>
+  <img id="preview" alt="生成结果预览" hidden>
+
+  <p class="hint">流程：导出当前文档（可选选区蒙版）→ agtoken /v1/images/edits → 结果作为新图层贴回。结果尺寸与文档不一致时会等比缩放居中。</p>
+
+  <script src="js/csinterface-lite.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

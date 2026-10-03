@@ -31,6 +31,23 @@
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="ToggleBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ToggleBorder" Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="ToggleBorder" Property="Background" Value="{DynamicResource PrimaryButtonBrush}"/><Setter Property="Foreground" Value="{DynamicResource PrimaryButtonTextBrush}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="ToggleBorder" Property="Opacity" Value="0.78"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="AdvancedHeaderToggleStyle" TargetType="ToggleButton">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Padding" Value="4,2"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+        <Border x:Name="HeaderBorder" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <ContentPresenter Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Path x:Name="Chevron" Grid.Column="1" Width="9" Height="5" Margin="0,0,2,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Data="M 0 0 L 9 0 L 4.5 5 Z"><Path.RenderTransform><ScaleTransform ScaleY="-1"/></Path.RenderTransform></Path>
+          </Grid>
+        </Border>
+        <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderBorder" Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/></Trigger><Trigger Property="IsChecked" Value="False"><Setter TargetName="Chevron" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleY="1"/></Setter.Value></Setter></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style TargetType="ComboBox">
       <Setter Property="Height" Value="28"/><Setter Property="Margin" Value="0,3,0,7"/><Setter Property="Padding" Value="7,1"/><Setter Property="HorizontalAlignment" Value="Left"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
@@ -56,17 +73,15 @@
     <TextBlock x:Name="RegionStatus" Grid.Row="0" Margin="2,0,0,8" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" Text="截图区域属于截图面板当前所在的显示器"/>
 
     <Grid Grid.Row="1" Margin="0,0,0,10">
-      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition x:Name="ParametersButtonColumn"/><ColumnDefinition Width="40"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
       <Button x:Name="CaptureButton" Grid.Column="0" Content="截图" Click="CaptureButton_Click"/>
       <Button x:Name="SendButton" Grid.Column="1" Background="{DynamicResource PrimaryButtonBrush}" Foreground="{DynamicResource PrimaryButtonTextBrush}" Content="发送任务" Click="SendButton_Click"/>
-      <Button x:Name="ParametersToggleButton" Grid.Column="2" Content="显示参数" Click="ParametersToggleButton_Click"/>
-      <ToggleButton x:Name="TopmostToggle" Grid.Column="3" Width="36" Height="36" Margin="0,0,4,0" Style="{StaticResource HeaderToggleButtonStyle}" ToolTip="置顶窗口" Checked="TopmostToggle_Changed" Unchecked="TopmostToggle_Changed"><Viewbox Width="15" Height="15"><Canvas Width="24" Height="24"><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M8 4h8M9 4l1 6-3 3h10l-3-3 1-6M12 13v7"/></Canvas></Viewbox></ToggleButton>
-      <Button x:Name="CollapseButton" Grid.Column="4" Width="36" Height="36" Margin="0" Padding="0" Content="−" FontSize="16" ToolTip="折叠或展开" Click="CollapseButton_Click"/>
+      <ToggleButton x:Name="TopmostToggle" Grid.Column="2" Width="36" Height="36" Margin="0" Style="{StaticResource HeaderToggleButtonStyle}" ToolTip="置顶窗口" Checked="TopmostToggle_Changed" Unchecked="TopmostToggle_Changed"><Viewbox Width="15" Height="15"><Canvas Width="24" Height="24"><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M8 4h8M9 4l1 6-3 3h10l-3-3 1-6M12 13v7"/></Canvas></Viewbox></ToggleButton>
     </Grid>
 
     <StackPanel Grid.Row="2">
       <CheckBox x:Name="UseCanvasNodeToggle" Margin="2,0,0,8" Content="使用画布节点输入" Checked="UseCanvasNodeToggle_Changed" Unchecked="UseCanvasNodeToggle_Changed"/>
-      <CheckBox x:Name="AutoCaptureToggle" Margin="2,0,0,8" Content="发送前自动使用已保存区域重新截图" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed"/>
+      <CheckBox x:Name="AutoCaptureToggle" Margin="2,0,0,8" Content="使用上次截图区域" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed"/>
       <Border x:Name="CanvasNodePanel" Visibility="Collapsed" Padding="10" Margin="0,0,0,10" CornerRadius="10" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <StackPanel><TextBlock Margin="0,0,0,4" Text="截图功能节点"/><ComboBox x:Name="CanvasNodeCombo" Width="Auto" HorizontalAlignment="Stretch" SelectedValuePath="Id" SelectionChanged="CanvasNodeCombo_SelectionChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBlock x:Name="CanvasNodeSummary" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/></StackPanel>
       </Border>
@@ -74,18 +89,21 @@
 
     <Border x:Name="AdvancedPanel" Grid.Row="3" Padding="12" Margin="0,0,0,10" CornerRadius="10" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
       <StackPanel>
-        <TextBlock Text="默认提示词"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox x:Name="PromptCombo" Grid.Column="0" MinWidth="150" HorizontalAlignment="Stretch" SelectedValuePath="Id" SelectionChanged="PromptCombo_SelectionChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Grid.Column="1" MinHeight="28" Height="28" Margin="6,3,0,7" Padding="10,2" Content="刷新" Click="RefreshPromptsButton_Click"/><Button x:Name="SavePromptButton" Grid.Column="2" MinHeight="28" Height="28" Margin="6,3,0,7" Padding="10,2" Content="保存提示词" Click="SavePromptButton_Click"/></Grid>
-        <TextBlock Margin="0,0,0,5" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Text="可在模板基础上继续编辑，本窗口会记住修改内容"/>
-        <TextBox x:Name="PromptTextBox" MinHeight="88" MaxHeight="150" Margin="0,0,0,7" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" TextChanged="PromptTextBox_TextChanged"/>
-        <StackPanel>
+        <ToggleButton x:Name="AdvancedToggle" Style="{StaticResource AdvancedHeaderToggleStyle}" Checked="AdvancedToggle_Changed" Unchecked="AdvancedToggle_Changed"><TextBlock Text="提示词与参数" FontWeight="SemiBold"/></ToggleButton>
+        <StackPanel x:Name="AdvancedBody" Margin="0,10,0,0">
+          <TextBlock Text="默认提示词"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox x:Name="PromptCombo" Grid.Column="0" MinWidth="150" HorizontalAlignment="Stretch" SelectedValuePath="Id" SelectionChanged="PromptCombo_SelectionChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Grid.Column="1" MinHeight="28" Height="28" Margin="6,3,0,7" Padding="10,2" Content="刷新" Click="RefreshPromptsButton_Click"/><Button x:Name="SavePromptButton" Grid.Column="2" MinHeight="28" Height="28" Margin="6,3,0,7" Padding="10,2" Content="保存提示词" Click="SavePromptButton_Click"/></Grid>
+          <TextBlock Margin="0,0,0,5" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Text="可在模板基础上继续编辑，本窗口会记住修改内容"/>
+          <TextBox x:Name="PromptTextBox" MinHeight="88" MaxHeight="150" Margin="0,0,0,7" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" TextChanged="PromptTextBox_TextChanged"/>
           <StackPanel>
-            <WrapPanel>
-              <StackPanel Width="176" Margin="0,0,12,0"><TextBlock Text="模型"/><ComboBox x:Name="ModelCombo" Width="166" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="gpt-image-2">GPT Image 2</ComboBoxItem><ComboBoxItem Tag="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</ComboBoxItem></ComboBox></StackPanel>
-              <StackPanel Width="92" Margin="0,0,12,0"><TextBlock Text="分辨率"/><ComboBox x:Name="ResolutionCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1k">1K</ComboBoxItem><ComboBoxItem Tag="2k">2K</ComboBoxItem><ComboBoxItem Tag="4k">4K</ComboBoxItem></ComboBox></StackPanel>
-              <StackPanel x:Name="QualityField" Width="92"><TextBlock Text="画质"/><ComboBox x:Name="QualityCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="low">low</ComboBoxItem><ComboBoxItem Tag="medium">medium</ComboBoxItem><ComboBoxItem Tag="high">high</ComboBoxItem></ComboBox></StackPanel>
-              <StackPanel Width="92" Margin="0,0,12,0"><TextBlock Text="比例"/><ComboBox x:Name="RatioCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1:1">1:1</ComboBoxItem><ComboBoxItem Tag="auto">auto</ComboBoxItem><ComboBoxItem Tag="3:2">3:2</ComboBoxItem><ComboBoxItem Tag="2:3">2:3</ComboBoxItem><ComboBoxItem Tag="4:3">4:3</ComboBoxItem><ComboBoxItem Tag="3:4">3:4</ComboBoxItem><ComboBoxItem Tag="5:4">5:4</ComboBoxItem><ComboBoxItem Tag="4:5">4:5</ComboBoxItem><ComboBoxItem Tag="16:9">16:9</ComboBoxItem><ComboBoxItem Tag="9:16">9:16</ComboBoxItem><ComboBoxItem Tag="2:1">2:1</ComboBoxItem><ComboBoxItem Tag="1:2">1:2</ComboBoxItem><ComboBoxItem Tag="3:1">3:1</ComboBoxItem><ComboBoxItem Tag="1:3">1:3</ComboBoxItem><ComboBoxItem Tag="21:9">21:9</ComboBoxItem><ComboBoxItem Tag="9:21">9:21</ComboBoxItem></ComboBox></StackPanel>
-              <StackPanel Width="92"><TextBlock Text="生成数量"/><ComboBox x:Name="CountCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1">1</ComboBoxItem><ComboBoxItem Tag="2">2</ComboBoxItem><ComboBoxItem Tag="3">3</ComboBoxItem><ComboBoxItem Tag="4">4</ComboBoxItem></ComboBox></StackPanel>
-            </WrapPanel>
+            <StackPanel>
+              <WrapPanel>
+                <StackPanel Width="176" Margin="0,0,12,0"><TextBlock Text="模型"/><ComboBox x:Name="ModelCombo" Width="166" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="gpt-image-2">GPT Image 2</ComboBoxItem><ComboBoxItem Tag="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</ComboBoxItem></ComboBox></StackPanel>
+                <StackPanel Width="92" Margin="0,0,12,0"><TextBlock Text="分辨率"/><ComboBox x:Name="ResolutionCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1k">1K</ComboBoxItem><ComboBoxItem Tag="2k">2K</ComboBoxItem><ComboBoxItem Tag="4k">4K</ComboBoxItem></ComboBox></StackPanel>
+                <StackPanel x:Name="QualityField" Width="92"><TextBlock Text="画质"/><ComboBox x:Name="QualityCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="low">low</ComboBoxItem><ComboBoxItem Tag="medium">medium</ComboBoxItem><ComboBoxItem Tag="high">high</ComboBoxItem></ComboBox></StackPanel>
+                <StackPanel Width="92" Margin="0,0,12,0"><TextBlock Text="比例"/><ComboBox x:Name="RatioCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1:1">1:1</ComboBoxItem><ComboBoxItem Tag="auto">auto</ComboBoxItem><ComboBoxItem Tag="3:2">3:2</ComboBoxItem><ComboBoxItem Tag="2:3">2:3</ComboBoxItem><ComboBoxItem Tag="4:3">4:3</ComboBoxItem><ComboBoxItem Tag="3:4">3:4</ComboBoxItem><ComboBoxItem Tag="5:4">5:4</ComboBoxItem><ComboBoxItem Tag="4:5">4:5</ComboBoxItem><ComboBoxItem Tag="16:9">16:9</ComboBoxItem><ComboBoxItem Tag="9:16">9:16</ComboBoxItem><ComboBoxItem Tag="2:1">2:1</ComboBoxItem><ComboBoxItem Tag="1:2">1:2</ComboBoxItem><ComboBoxItem Tag="3:1">3:1</ComboBoxItem><ComboBoxItem Tag="1:3">1:3</ComboBoxItem><ComboBoxItem Tag="21:9">21:9</ComboBoxItem><ComboBoxItem Tag="9:21">9:21</ComboBoxItem></ComboBox></StackPanel>
+                <StackPanel Width="92"><TextBlock Text="生成数量"/><ComboBox x:Name="CountCombo" Width="82" SelectionChanged="SettingsControl_Changed"><ComboBoxItem Tag="1">1</ComboBoxItem><ComboBoxItem Tag="2">2</ComboBoxItem><ComboBoxItem Tag="3">3</ComboBoxItem><ComboBoxItem Tag="4">4</ComboBoxItem></ComboBox></StackPanel>
+              </WrapPanel>
+            </StackPanel>
           </StackPanel>
         </StackPanel>
       </StackPanel>

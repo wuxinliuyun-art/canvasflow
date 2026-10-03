@@ -77,15 +77,10 @@ const UI_EN = {
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
-  "v2.7.0 更新说明": "v2.7.0 Release Notes",
-  "新增 AGToken（agtoken.vip）API 支持，没有网络加速器也不影响注册会员": "Added AGToken (agtoken.vip) API support — register and use it without a network accelerator",
-  "修复有时点击 AI 生图没反应的问题": "Fixed AI image generation sometimes not responding to clicks",
-  "同一个节点接多条线时，将被视为多个任务分别生成": "A node connected to multiple lines is now treated as separate generation tasks",
-  "新交互：按住 Alt 画线可切断连线；同时和两条线相交，会把这个节点隔离出去": "New gesture: hold Alt and draw to cut connections; crossing two lines isolates the node between them",
-  "模型设置支持自定义默认 AI 生图模型": "Model settings now include a default AI image model",
-  "优化整理节点体验，防止整理后失焦": "Improved node tidying to prevent losing focus afterwards",
-  "新增自定义组件：多个节点可作为模板保存复用": "New Custom Components: save multiple nodes as reusable templates",
-  "APIMart 新增 Nano Banana Pro 模型": "Added the Nano Banana Pro model on APIMart",
+  "v2.7.1 更新说明": "v2.7.1 Release Notes",
+  "生图任务完成后若图片下载失败（网络/代理波动），节点上会保留「重新下载结果」按钮，24小时内可免费取回，无需重新生成": "When a finished image can't be downloaded due to network hiccups, the node keeps a 'Redownload result' button — recover it free within 24 hours instead of regenerating",
+  "下载失败与生成失败的提示分开显示，明确说明任务已完成、仅下载环节失败": "Download failures are now reported separately from generation failures, making clear the task finished and only the download step failed",
+  "桌面端网络错误日志记录完整内层原因，便于排查代理/SSL问题": "Desktop network error logs now include full inner-exception details to ease proxy/SSL troubleshooting",
   "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
   "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
   "反转左右关键词": "Reverse left/right prompt directions", "仅交换自动关键词中的左、右，不镜像图片": "Only swaps left and right in the automatic prompt; the image is not mirrored",
@@ -103,7 +98,7 @@ const UI_EN = {
   "上传图片": "Upload Image", "创建节点": "Create Node", "创建": "Create", "关闭": "Close",
   "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
   "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping", "平滑连线": "Smooth edges",
-  "图片节点按上传图片比例自动调整": "Auto-fit image nodes to uploaded image ratio", "隐藏节点名称": "Hide node titles",
+  "创建节点或连线时自动对齐": "Auto-align when creating nodes or edges", "隐藏节点名称": "Hide node titles",
   "图片重叠时打开图片编辑": "Open image editor when images overlap",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
@@ -219,8 +214,8 @@ const UI_EN = {
   "打开生成图片所在文件夹": "Open Generated Image Folder", "复制生成图片路径": "Copy Generated Image Path",
   "帮助与引导": "Help & Tour", "重新查看项目、底部操作区、右上工具和 API Key 设置说明。": "Review the project area, bottom controls, top-right tools, and API Key setup.", "查看新手引导": "View Getting Started Tour",
   "截图工具": "Capture Tool", "截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。": "Capture a fixed screen region and send it to AI with a saved prompt.",
-  "原生截图窗口": "Native Capture Window", "窗口可置顶、折叠和收起预览。关闭窗口只会隐藏，不会退出 CanvasFlow。": "Keep the window on top, collapse it, or hide previews. Closing it only hides the tool.",
-  "打开截图窗口": "Open Capture Window", "截图任务会进入现有任务队列，结果保存到 export/ai_generated，不会自动添加到画布。": "Capture jobs use the existing task queue. Results are saved to export/ai_generated and are not added to the canvas automatically."
+  "打开截图窗口": "Open Capture Window",
+  "画布背景": "Canvas Background", "网格线": "Grid Lines", "网格 + 十字焦点": "Grid + Cross Focus", "点状": "Dots"
 };
 
 let uiLanguage = (() => {
@@ -319,7 +314,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: false, exportInputs: false, customMaterials: [] },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: false, exportInputs: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -506,9 +501,10 @@ const els = {
   minimap: $("minimap"),
   settings: $("settingsPanel"),
   gridSize: $("gridSizeInput"),
+  canvasBg: $("canvasBgSelect"),
   snap: $("snapToggle"),
   smoothEdges: $("smoothEdgesToggle"),
-  autoFitImageNodes: $("autoFitImageNodesToggle"),
+  autoAlign: $("autoAlignToggle"),
   hideNodeTitles: $("hideNodeTitlesToggle"),
   editOnOverlap: $("editOnOverlapToggle"),
   projectFolder: $("projectFolderInput"),
@@ -617,6 +613,10 @@ const els = {
   extensionRefreshBtn: $("extensionRefreshBtn"),
   extensionOpenFolderBtn: $("extensionOpenFolderBtn"),
   extensionList: $("extensionList"),
+  cepPanelCard: $("cepPanelCard"),
+  cepInstallBtn: $("cepInstallBtn"),
+  cepUninstallBtn: $("cepUninstallBtn"),
+  cepStatusLine: $("cepStatusLine"),
   customTextCancelBtn: $("customTextCancelBtn"),
   customImageCancelBtn: $("customImageCancelBtn"),
   shortcutHelpBtn: $("shortcutHelpBtn"),
@@ -769,7 +769,12 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 20, snap: true, smoothEdges: true, autoFitImageNodes: true, hideNodeTitles: false, editOnOverlap: true, theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, customMaterials: [], ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "light", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  if (!state.settings._gridStepMigrated) {
+    if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
+    state.settings._gridStepMigrated = true;
+  }
+  state.settings.gridSize = Math.min(200, Math.max(10, Math.round(Number(state.settings.gridSize) || 40)));
   if (!activeCatalog().models.some(model => model.id === state.settings.defaultImageModel)) {
     console.warn("[默认绘图模型] 存档值在当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
     state.settings.defaultImageModel = activeCatalog().defaultModel;
@@ -869,9 +874,65 @@ function updateUndoRedo() {
   if (redoBtn) redoBtn.disabled = state.future.length === 0;
 }
 
+// ===== UI 自定义颜色(暗色/浅色主题各自独立保存与应用) =====
+const UI_COLOR_FIELDS = [
+  { key: "bg",           label: "画布底色",   cssVar: "--canvas-bg",    darkDefault: "#000000", lightDefault: "#f4f5f6" },
+  { key: "grid",         label: "网格线",     cssVar: "--canvas-grid",  darkDefault: "#8a8f99", lightDefault: "#3c4046" },
+  { key: "panel",        label: "面板底色",   cssVar: "--panel-solid",  darkDefault: "#131316", lightDefault: "#ffffff" },
+  { key: "nodeControl",  label: "节点内控件", cssVar: "--node-control", darkDefault: "#1c1c21", lightDefault: "#f2f2f5" },
+  { key: "accent",       label: "主按钮",     cssVar: "--accent",       darkDefault: "#f4f4f5", lightDefault: "#27292d" },
+];
+function uiColorsActiveMap() {
+  // 兼容旧结构(顶层平铺 = 暗色):迁移为 { dark, light }
+  const raw = state.settings.uiColors;
+  if (raw && !raw.dark && !raw.light && Object.keys(raw).length) {
+    state.settings.uiColors = { dark: { ...raw }, light: {} };
+  }
+  if (!state.settings.uiColors || typeof state.settings.uiColors !== "object") state.settings.uiColors = {};
+  if (!state.settings.uiColors.dark) state.settings.uiColors.dark = {};
+  if (!state.settings.uiColors.light) state.settings.uiColors.light = {};
+  return state.settings.uiColors[state.settings.theme === "dark" ? "dark" : "light"] || {};
+}
+function uiColorAccentInk(accentHex) {
+  // 主按钮改色时按亮度反算墨色(浅底配黑字、深底配白字)
+  if (!accentHex) return;
+  const n = parseInt(accentHex.slice(1), 16);
+  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+  els.app.style.setProperty("--accent-ink", lum > 140 ? "#0c0c0e" : "#f4f4f5");
+}
+function applyUiColors() {
+  const app = els.app;
+  if (!app) return;
+  UI_COLOR_FIELDS.forEach(f => {
+    app.style.removeProperty(f.cssVar);
+    if (f.key === "grid") {
+      app.style.removeProperty("--canvas-cross");
+      app.style.removeProperty("--canvas-dot");
+    }
+  });
+  app.style.removeProperty("--accent-ink");
+  const uc = uiColorsActiveMap();
+  UI_COLOR_FIELDS.forEach(f => {
+    const v = uc[f.key];
+    if (v && /^#[0-9a-f]{6}$/i.test(v)) {
+      app.style.setProperty(f.cssVar, v);
+      // 网格线一项统一驱动三种网格样式(线格/十字/点阵)
+      if (f.key === "grid") {
+        app.style.setProperty("--canvas-cross", v);
+        app.style.setProperty("--canvas-dot", v);
+      }
+      if (f.key === "accent") uiColorAccentInk(v);
+    }
+  });
+}
+
 function applySettings() {
   els.app.className = `app theme-${state.settings.theme} mode-${isMindmapMode() ? "mindmap" : "ai"}${state.settings.hideNodeTitles ? " hide-node-titles" : ""}`;
   document.documentElement.style.colorScheme = state.settings.theme;
+  applyUiColors();
+  if (!["grid", "cross", "dots"].includes(state.settings.canvasBackground)) state.settings.canvasBackground = "grid";
+  els.viewport.classList.toggle("bg-cross", state.settings.canvasBackground === "cross");
+  els.viewport.classList.toggle("bg-dots", state.settings.canvasBackground === "dots");
   if (window.chrome?.webview && lastDesktopTheme !== state.settings.theme) {
     try {
       window.chrome.webview.postMessage({ type: "theme-change", theme: state.settings.theme });
@@ -885,18 +946,23 @@ function applySettings() {
   $("themeBtn").innerHTML = state.settings.theme === "light"
     ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
     : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+  const darkThemeToggle = $("darkThemeToggle");
+  if (darkThemeToggle) darkThemeToggle.checked = state.settings.theme === "dark";
 }
 
 // screenshot settings UI removed
 
 function syncSettingsPanel() {
   els.gridSize.value = state.settings.gridSize;
+  els.canvasBg.value = state.settings.canvasBackground || "grid";
   els.snap.checked = state.settings.snap;
   els.smoothEdges.checked = state.settings.smoothEdges === true;
-  els.autoFitImageNodes.checked = state.settings.autoFitImageNodes !== false;
+  els.autoAlign.checked = state.settings.autoAlign !== false;
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
   els.zipExportToggle.checked = state.settings.zipExport === true;
+  const darkThemeToggle = $("darkThemeToggle");
+  if (darkThemeToggle) darkThemeToggle.checked = state.settings.theme === "dark";
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
   state.settings.projectFolderLabel = resolvedProjectFolderLabel(state.settings.projectFolderLabel) || runtimeProjectFolder;
   els.projectFolder.textContent = state.settings.projectFolderLabel;
@@ -1320,8 +1386,32 @@ function fileToDataUrl(file) {
 
 function updateViewportGrid() {
   const size = Math.max(4, state.settings.gridSize * state.view.scale);
-  els.viewport.style.backgroundSize = `${size}px ${size}px`;
-  els.viewport.style.backgroundPosition = `${state.view.x}px ${state.view.y}px`;
+  const half = size / 2;
+  const grid = document.getElementById("vpPatternGrid");
+  const cross = document.getElementById("vpPatternCross");
+  const dots = document.getElementById("vpPatternDots");
+  if (!grid || !cross || !dots) return;
+  // 十字模式：只保留十字所在的大格（4 格一格），十字落在大格交点；点状：每 2 格一个点
+  const crossSpan = size * 4;
+  const dotsSpan = size * 2;
+  for (const [pattern, span] of [[grid, size], [cross, crossSpan], [dots, dotsSpan]]) {
+    pattern.setAttribute("width", span);
+    pattern.setAttribute("height", span);
+  }
+  grid.setAttribute("x", state.view.x);
+  grid.setAttribute("y", state.view.y);
+  cross.setAttribute("x", state.view.x - crossSpan / 2);
+  cross.setAttribute("y", state.view.y - crossSpan / 2);
+  dots.setAttribute("x", state.view.x - dotsSpan / 2);
+  dots.setAttribute("y", state.view.y - dotsSpan / 2);
+  const arm = Math.min(Math.max(size * .28, 4.5), 8);
+  cross.querySelector(".vp-cross-mark").setAttribute("d", `M${(crossSpan / 2 - arm).toFixed(2)} ${(crossSpan / 2).toFixed(2)}H${(crossSpan / 2 + arm).toFixed(2)}M${(crossSpan / 2).toFixed(2)} ${(crossSpan / 2 - arm).toFixed(2)}V${(crossSpan / 2 + arm).toFixed(2)}`);
+  cross.querySelector(".vp-cross-line").setAttribute("d", `M0 ${(crossSpan / 2).toFixed(2)}H${crossSpan.toFixed(2)}M${(crossSpan / 2).toFixed(2)} 0V${crossSpan.toFixed(2)}`);
+  grid.querySelector(".vp-grid-line").setAttribute("d", `M0 0.5H${size.toFixed(2)}M0.5 0V${size.toFixed(2)}`);
+  const dot = dots.querySelector("circle");
+  dot.setAttribute("cx", dotsSpan / 2);
+  dot.setAttribute("cy", dotsSpan / 2);
+  dot.setAttribute("r", Math.min(Math.max(size * .05, .9), 2).toFixed(2));
 }
 
 function setProgress(value, label = "正在导出") {
@@ -1404,6 +1494,56 @@ function currentPasteAnchor() {
 
 function snap(v) {
   return state.settings.snap ? Math.round(v / state.settings.gridSize) * state.settings.gridSize : v;
+}
+
+// 自动对齐：把新节点贴齐附近节点的边/中心（屏幕距离容差，缩放越小容差越大）
+function autoAlignPosition(x, y, w, h) {
+  const tol = Math.max(4, 9 / state.view.scale);
+  let bestX = null, bestXD = tol;
+  let bestY = null, bestYD = tol;
+  for (const other of state.nodes) {
+    for (const guide of [other.x, other.x + other.w / 2, other.x + other.w]) {
+      for (const mine of [x, x + w / 2, x + w]) {
+        const d = Math.abs(guide - mine);
+        if (d < bestXD) { bestXD = d; bestX = x + (guide - mine); }
+      }
+    }
+    for (const guide of [other.y, other.y + other.h / 2, other.y + other.h]) {
+      for (const mine of [y, y + h / 2, y + h]) {
+        const d = Math.abs(guide - mine);
+        if (d < bestYD) { bestYD = d; bestY = y + (guide - mine); }
+      }
+    }
+  }
+  return { x: snap(bestX ?? x), y: snap(bestY ?? y) };
+}
+
+// 自动对齐：连线时按串联/并联规则排布目标节点
+// 串联(源节点唯一的输出)：目标排在源节点正右侧,行中心对齐
+// 并联(源节点多路输出)：所有输出目标纵向一列、等间距,整列与源节点垂直居中
+function autoAlignEdgeTarget(fromNode, toNode) {
+  if (!fromNode || !toNode) return;
+  const COL_GAP = 80, ROW_GAP = 40;
+  const targets = [...new Set(state.edges.filter(e => e.from.node === fromNode.id).map(e => e.to.node))]
+    .map(findNode).filter(Boolean);
+  if (!targets.includes(toNode)) targets.push(toNode);
+  if (targets.length <= 1) {
+    toNode.x = snap(fromNode.x + fromNode.w + COL_GAP);
+    // 吸附"源中心"而不是最终 y:奇数高度节点才不会偏移半格
+    toNode.y = snap(fromNode.y + fromNode.h / 2) - toNode.h / 2;
+    return;
+  }
+  const colX = snap(fromNode.x + fromNode.w + COL_GAP);
+  targets.forEach(node => { node.x = colX; });
+  // 按中心 y 排序,保持既有分支的上下相对位置,新节点落在哪就插在哪
+  targets.sort((a, b) => (a.y + a.h / 2) - (b.y + b.h / 2));
+  const totalH = targets.reduce((sum, n) => sum + n.h, 0) + ROW_GAP * (targets.length - 1);
+  // 纵向坐标不做网格吸附:吸附会破坏等间距和整列居中(见 AGENTS.md 整理节点教训)
+  let cursor = fromNode.y + fromNode.h / 2 - totalH / 2;
+  targets.forEach(node => {
+    node.y = cursor;
+    cursor += node.h + ROW_GAP;
+  });
 }
 
 const NODE_PLACEMENT_GAP = 24;
@@ -1494,9 +1634,12 @@ function variableNodeOutput(node) {
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const width = NODE_WIDTH;
   const height = placementOptions.height || nodeHeightForType(type);
-  const position = placementOptions.avoidOverlap === false
+  let position = placementOptions.avoidOverlap === false
     ? { x: snap(x), y: snap(y) }
     : findFreeNodePosition(x, y, width, height, placementOptions);
+  if (commit && placementOptions.autoAlign !== false && state.settings.autoAlign !== false) {
+    position = autoAlignPosition(position.x, position.y, width, height);
+  }
   const node = {
     id: uid("n"),
     type,
@@ -2062,6 +2205,10 @@ function addEdge(fromNode, toNode) {
     replacedAngleInputs = before - state.edges.length;
   }
   state.edges.push({ id: uid("e"), from: { node: fromNode, port: "out" }, to: { node: toNode, port: "in" }, label: "" });
+  if (state.settings.autoAlign !== false) {
+    const source = findNode(fromNode);
+    autoAlignEdgeTarget(source, target);
+  }
   if (target.type === "angle-image") {
     console.log("[角度变化] 输入连线已更新", { nodeId: toNode, sourceNodeId: fromNode, replaced: replacedAngleInputs });
   }
@@ -2376,6 +2523,7 @@ async function renderExtensionsPage(refresh = false) {
   els.extensionServiceStatus.title = "检测中…";
   els.extensionServiceStatus.className = "extension-service-dot pending";
   els.extensionList.innerHTML = `<div class="extension-empty">检测中…</div>`;
+  refreshCepPanelStatus();
   const list = await fetchToolExtensions(refresh);
   if (token !== _extensionRenderToken) return;
   if (!toolExtensionCache.online) {
@@ -2664,19 +2812,37 @@ function imageAspectStyle(node) {
   return Number.isFinite(ratio) && ratio > 0 ? ` style="aspect-ratio:${ratio}"` : "";
 }
 
+function aiPendingDownloadButton(node) {
+  const count = node._pendingResults?.items?.length || 0;
+  if (!count || node.generating || node._redownloadBusy) return "";
+  const label = count > 1 ? `重新下载结果（${count} 张未下载）` : "重新下载结果";
+  return `<button type="button" class="ai-redownload-btn" data-role="ai-redownload" title="有 ${count} 张已生成结果下载失败，点击重新下载（结果链接约24小时内有效）">${label}</button>`;
+}
+
 function aiImageBody(node) {
   const controls = aiNodeControls(node);
   if (node.generating) {
     return `<div class="ai-preview is-empty"><div class="ai-generating"><div class="ai-spinner"></div>生成中...</div></div>
       <div class="node-hover-controls">${controls}</div>`;
   }
+  const redownloadButton = aiPendingDownloadButton(node);
   if (node.generatedImage) {
     return `<div class="image-preview" title="双击放大预览"${imageAspectStyle(node)}><img src="${node.generatedImage}" alt="" draggable="false"></div>
+      ${redownloadButton ? `<div class="ai-pending-download">${redownloadButton}</div>` : ""}
       <div class="node-hover-controls">
         <div class="ai-actions">
           <button data-role="ai-generate" class="ai-generate-btn">重新生成</button>
           <button data-role="clear-image">清除</button>
         </div>${controls}
+      </div>`;
+  }
+  if (redownloadButton) {
+    return `<div class="ai-preview is-empty ai-pending-download"><span>结果已生成，下载失败</span>${redownloadButton}</div>
+      <div class="node-hover-controls">
+        <div class="ai-actions">
+          <button data-role="ai-generate" class="ai-generate-btn">生成</button>
+        </div>
+        ${controls}
       </div>`;
   }
   return `<div class="ai-preview is-empty">等待生成结果</div>
@@ -2738,7 +2904,12 @@ async function generateAngleImage(nodeId) {
     }
     node._aiProgress = { status: "downloading", label: "正在下载", percent: 96, error: "" };
     renderNodes();
-    const generatedImage = await fetchImageAsBase64(imageUrl);
+    let generatedImage;
+    try {
+      generatedImage = await fetchImageAsBase64(imageUrl);
+    } catch (downloadError) {
+      throw new Error(`任务已完成，但结果图片下载失败（${downloadError.message}）。请检查网络或代理后重新生成`);
+    }
     node.generationPrompt = node.prompt || "";
     const taggedImage = embedGenerationMetadata(generatedImage, generationMetadataFor(node.generationPrompt, currentPage()?.name || "项目", node.taskId));
     const outputTask = {
@@ -3470,6 +3641,77 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
   render();
 }
 
+// 生成成功但下载失败时，把结果链接暂存到节点上，供“重新下载结果”取回（结果链接约24小时有效）
+function recordNodePendingResults(node, task, urls) {
+  if (!node || node.type !== "ai-image" || !Array.isArray(urls)) return;
+  const list = urls.filter(Boolean);
+  if (!list.length) return;
+  const pending = node._pendingResults && Array.isArray(node._pendingResults.items) ? node._pendingResults : { items: [] };
+  for (const url of list) {
+    if (pending.items.some(item => item.url === url)) continue;
+    pending.items.push({ url, prompt: task.prompt || "", taskId: task.taskId || "", at: Date.now() });
+  }
+  if (pending.items.length > 16) pending.items.splice(0, pending.items.length - 16);
+  node._pendingResults = pending;
+}
+
+function clearNodePendingResults(node, task) {
+  const pending = node?._pendingResults;
+  if (!pending?.items?.length) return;
+  pending.items = pending.items.filter(item => !task?.taskId || item.taskId !== task.taskId);
+  if (!pending.items.length) delete node._pendingResults;
+}
+
+async function redownloadAiResults(nodeId) {
+  const node = findNode(nodeId);
+  const items = (node?._pendingResults?.items || []).slice();
+  if (!node || !items.length || node.generating || node._redownloadBusy) return;
+  node._redownloadBusy = true;
+  setAiNodeProgress(node, "downloading", "正在重新下载结果", 8);
+  let recovered = 0;
+  let firstToNode = !node.generatedImage;
+  const failedItems = [];
+  for (let i = 0; i < items.length; i++) {
+    setAiNodeProgress(node, "downloading", `正在重新下载结果 ${i + 1}/${items.length}`, 8 + Math.round(((i + 1) / items.length) * 84));
+    try {
+      const dataUrl = await fetchImageAsBase64(items[i].url);
+      const task = {
+        id: `q${aiTaskQueue.nextId++}`,
+        nodeId: node.id,
+        projectName: currentPage()?.name || "项目",
+        exportFolder: state.settings.exportFolderLabel || "export",
+        referenceName: "重新下载结果",
+        prompt: items[i].prompt || "",
+        groupIndex: -1,
+        resultMode: firstToNode ? "node-preview" : "image-node",
+        resultOrder: state.nodes.filter(n => n.type === "image" && n.aiSourceNodeId === node.id).length,
+        resultCount: 1,
+      };
+      firstToNode = false;
+      await applyQueuedResult(task, node, dataUrl);
+      recovered++;
+    } catch (error) {
+      failedItems.push(items[i]);
+      console.error("[生成结果] 重新下载失败", { url: items[i].url, message: error.message });
+    }
+  }
+  delete node._redownloadBusy;
+  if (failedItems.length) node._pendingResults = { items: failedItems };
+  else delete node._pendingResults;
+  if (recovered) {
+    setAiNodeProgress(node, "done", `已取回 ${recovered} 张结果`, 100);
+    clearAiNodeProgressSoon(node);
+    setProgress(100, "AI生成完成");
+    hideProgressSoon();
+    toast(failedItems.length ? `已取回 ${recovered} 张，仍有 ${failedItems.length} 张下载失败，可稍后重试` : `已取回 ${recovered} 张生成结果`);
+  } else {
+    setAiNodeProgress(node, "failed", "重新下载失败", null, "图片下载仍失败，请检查网络或代理后重试；结果链接约24小时内有效");
+    toast("重新下载失败，请检查网络或代理后重试");
+  }
+  pushHistory();
+  render();
+}
+
 function notifyScreenshotTask(task, error = "") {
   if (task.source !== "screenshot" || !window.chrome?.webview) return;
   window.chrome.webview.postMessage({
@@ -3544,7 +3786,15 @@ async function runQueuedAiTask(task) {
     : Math.max(Number(task.resultCount) || 0, baseOrder + externalResultCount);
   task.outputPaths = [];
   for (let index = 0; index < urls.length; index++) {
-    const dataUrl = await fetchImageAsBase64(urls[index]);
+    let dataUrl;
+    try {
+      dataUrl = await fetchImageAsBase64(urls[index]);
+    } catch (downloadError) {
+      // 任务在服务端已生成并计费，把未下载的结果链接暂存到节点，避免网络抖动导致整单损失
+      recordNodePendingResults(node, task, urls.slice(index));
+      console.error("[生成结果] 下载失败，已在节点保留重新下载入口", { taskId: task.id, nodeId: node?.id || "", url: urls[index], message: downloadError.message });
+      throw new Error(`任务已完成，但结果图片下载失败（${downloadError.message}）。已生成的结果链接约24小时内有效，可在节点上点击“重新下载结果”取回`);
+    }
     if (task.source === "screenshot") {
       await applyScreenshotQueuedResult(task, dataUrl);
       if (task.outputPath) task.outputPaths.push(task.outputPath);
@@ -3567,6 +3817,7 @@ async function runQueuedAiTask(task) {
     if (resultTask.outputPath) task.outputPaths.push(resultTask.outputPath);
   }
   task.outputPath = task.outputPaths[0] || task.outputPath || "";
+  clearNodePendingResults(node, task);
   task.status = "done";
   task.progress = 100;
   notifyScreenshotTask(task);
@@ -3794,6 +4045,7 @@ function enqueueAiNode(nodeId, resultMode = "node-preview") {
       delete node.generatedAssetId;
       node.outputPath = "";
     }
+    delete node._pendingResults;
     aiTaskQueue.items.push(...tasks);
     added += tasks.length;
     refreshQueuedNodeProgress(id);
@@ -4265,6 +4517,7 @@ function scheduleViewPersistence() {
 
 function applyView() {
   els.world.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.scale})`;
+  updateViewportGrid();
 }
 
 function projectModeName(mode) {
@@ -4277,6 +4530,22 @@ function projectButtonMarkup(page) {
 }
 
 const UNGROUPED_GROUP_ID = "__ungrouped__";
+
+// 悬停预览：临时把画布切换到悬停的项目；peek 记录原始页面，离开面板时切回
+let projectPeek = null;
+
+function peekProjectPage(target) {
+  if (!target || target.id === state.activePageId) return;
+  if (hasUnsettledAiQueueTasks()) return; // 队列有任务时 switchPage 会被拦截，这里静默跳过
+  if (!projectPeek) projectPeek = { originalId: state.activePageId };
+  switchPage(target.id);
+}
+
+function endProjectPeek(revert) {
+  const peek = projectPeek;
+  projectPeek = null;
+  if (peek && revert && peek.originalId !== state.activePageId) switchPage(peek.originalId);
+}
 
 function normalizeGroups(rawGroups = null) {
   if (rawGroups !== null) state.groups = Array.isArray(rawGroups) ? rawGroups : [];
@@ -4310,6 +4579,7 @@ function renderPageTabs() {
   if (menu.classList.contains("hidden")) return;
   normalizeGroups();
   menu.innerHTML = "";
+
   const head = document.createElement("div");
   head.className = "project-panel-head";
   const title = document.createElement("span");
@@ -4332,13 +4602,38 @@ function renderPageTabs() {
   menu.appendChild(projectPanelGroupSection({ id: UNGROUPED_GROUP_ID, name: "未分组" }));
   const footer = document.createElement("div");
   footer.className = "project-panel-footer";
-  footer.textContent = "点击切换项目";
+  footer.textContent = "点击切换项目 · 悬停 0.5 秒预览";
   menu.appendChild(footer);
+
+  let previewTimer = null;
+  let pendingPreviewId = null;
+  const clearPreviewTimer = () => { if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; } pendingPreviewId = null; };
+  menu.addEventListener("mouseover", ev => {
+    const row = ev.target.closest(".project-panel-row");
+    if (!row || row.dataset.pageId === state.activePageId) { clearPreviewTimer(); return; }
+    if (row.dataset.pageId === pendingPreviewId) return;
+    clearPreviewTimer();
+    pendingPreviewId = row.dataset.pageId;
+    const target = state.pages.find(item => item.id === row.dataset.pageId);
+    if (!target) { clearPreviewTimer(); return; }
+    // 悬停 0.5 秒临时把后面的画布切换成该项目；移开鼠标恢复，点击则正式切换
+    previewTimer = setTimeout(() => {
+      previewTimer = null;
+      pendingPreviewId = null;
+      peekProjectPage(target);
+    }, 500);
+  });
+  menu.addEventListener("mouseleave", () => {
+    clearPreviewTimer();
+    endProjectPeek(true);
+  });
 }
 
 function projectPanelVisiblePages(groupId) {
   return state.pages.filter(page => projectGroupId(page) === groupId && (page.mode !== "mindmap" || mindmapFeatureEnabled()));
 }
+
+
 
 function projectPanelIconBtn(className, title, svgPath, onclick) {
   const btn = document.createElement("button");
@@ -4361,9 +4656,9 @@ function projectPanelPageRow(page) {
   btn.type = "button";
   btn.className = page.id === state.activePageId ? "active" : "";
   btn.innerHTML = projectButtonMarkup(page);
-  btn.title = page.name + " · " + projectModeName(page.mode) + "（双击重命名）";
   btn.onclick = () => {
     if (page.id !== state.activePageId) switchPage(page.id);
+    projectPeek = null; // 点击 = 正式切换，悬停预览结束
     els.projectMenu.classList.add("hidden");
   };
   btn.ondblclick = ev => {
@@ -4393,10 +4688,6 @@ function projectPanelPageRow(page) {
     ev.dataTransfer.setData("text/canvasflow-page", page.id);
     ev.dataTransfer.effectAllowed = "move";
   });
-  for (const node of pasted) {
-    if (map.has(node.aiSourceNodeId)) node.aiSourceNodeId = map.get(node.aiSourceNodeId);
-    if (map.has(node.angleSourceNodeId)) node.angleSourceNodeId = map.get(node.angleSourceNodeId);
-  }
   row.addEventListener("dragend", () => {
     document.querySelectorAll(".drop-above, .drop-below").forEach(el => el.classList.remove("drop-above", "drop-below"));
   });
@@ -4456,10 +4747,17 @@ function projectPanelGroupSection(group) {
   const section = document.createElement("div");
   section.className = "project-panel-group";
   section.dataset.groupId = group.id;
+  const activePage = currentPage();
+  if (activePage && projectGroupId(activePage) === group.id) section.classList.add("current-group");
 
   const head = document.createElement("div");
   head.className = "project-panel-group-head";
   if (!isUngrouped) head.draggable = true;
+
+  const icon = document.createElement("span");
+  icon.className = "project-panel-group-icon";
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+  head.appendChild(icon);
 
   const name = document.createElement("span");
   name.className = "project-panel-group-name";
@@ -5621,6 +5919,7 @@ els.nodes.addEventListener("click", ev => {
   if (ev.target.dataset.role === "upload") { uploadImage(node); delete node._assetIssue; }
   if (ev.target.dataset.role === "upload-group") uploadGroupImages(node);
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
+  if (actionRole === "ai-redownload") redownloadAiResults(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
   if (actionRole === "tool-run") runToolNode(node.id);
@@ -5643,6 +5942,7 @@ els.nodes.addEventListener("click", ev => {
       node.generatedImage = null;
       delete node.generatedAssetId;
       node.taskId = null;
+      delete node._pendingResults;
     } else {
       node.image = null;
       delete node.imageAssetId;
@@ -5797,7 +6097,6 @@ function fileToDataUrl(file) {
 
 function fitImageNodeToNaturalSize(node, imageElement) {
   if (!node || (node.type !== "image" && node.type !== "ai-image")) return false;
-  if (node.type === "image" && state.settings.autoFitImageNodes === false) return false;
   const naturalWidth = Number(imageElement?.naturalWidth) || 0;
   const naturalHeight = Number(imageElement?.naturalHeight) || 0;
   if (!naturalWidth || !naturalHeight) return false;
@@ -7431,12 +7730,102 @@ els.projectModeDialog.addEventListener("click", event => {
 $("saveJsonBtn").onclick = saveJson;
 $("loadJsonBtn").onclick = () => els.loadJson.click();
 $("autoOutputBtn").onclick = autoAddAiNodes;
-$("themeBtn").onclick = () => {
-  state.settings.theme = state.settings.theme === "light" ? "dark" : "light";
+// ===== UI 颜色设置事件 =====
+function syncUiColorInputs() {
+  const uc = uiColorsActiveMap();
+  UI_COLOR_FIELDS.forEach(f => {
+    const input = $("uiColor" + f.key.charAt(0).toUpperCase() + f.key.slice(1));
+    if (!input) return;
+    const v = uc[f.key];
+    const fallback = state.settings.theme === "dark" ? f.darkDefault : f.lightDefault;
+    input.value = v && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+    input.disabled = false;
+  });
+}
+UI_COLOR_FIELDS.forEach(f => {
+  const input = $("uiColor" + f.key.charAt(0).toUpperCase() + f.key.slice(1));
+  if (!input) return;
+  input.addEventListener("input", () => {
+    const map = uiColorsActiveMap();
+    map[f.key] = input.value;
+    applyUiColors();
+    pushHistory();
+  });
+  const reset = document.querySelector(`[data-ui-color="${f.key}"]`);
+  if (reset) reset.onclick = () => {
+    const map = uiColorsActiveMap();
+    delete map[f.key];
+    applyUiColors();
+    syncUiColorInputs();
+    pushHistory();
+  };
+});
+// ===== 快捷色板(原生取色器不可用/失灵时的备用路径) =====
+const UI_COLOR_PRESETS = ["#000000", "#1c1c21", "#131316", "#2a2b2f", "#f4f4f5", "#78aaff", "#22c55e", "#f59e0b", "#ff3b30", "#e91e63", "#9c27b0", "#00bcd4"];
+let uiColorPopoverTarget = null;
+function uiColorApplyKey(key, value) {
+  const map = uiColorsActiveMap();
+  map[key] = value;
+  applyUiColors();
+  syncUiColorInputs();
+  pushHistory();
+}
+document.querySelectorAll("[data-ui-color-alt]").forEach(btn => {
+  btn.onclick = ev => {
+    ev.stopPropagation();
+    uiColorPopoverTarget = btn.getAttribute("data-ui-color-alt");
+    const pop = $("uiColorPopover");
+    const sw = pop.querySelector(".ui-color-popover-swatches");
+    sw.innerHTML = "";
+    UI_COLOR_PRESETS.forEach(color => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.style.background = color;
+      b.title = color;
+      b.onclick = () => {
+        uiColorApplyKey(uiColorPopoverTarget, color);
+        pop.classList.add("hidden");
+      };
+      sw.appendChild(b);
+    });
+    $("uiColorHex").value = "";
+    const r = btn.getBoundingClientRect();
+    pop.classList.remove("hidden");
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 200)) + "px";
+    pop.style.top = Math.min(r.bottom + 6, window.innerHeight - 140) + "px";
+  };
+});
+$("uiColorHexApply").onclick = () => {
+  const v = ($("uiColorHex").value || "").trim();
+  if (!/^#[0-9a-f]{6}$/i.test(v) || !uiColorPopoverTarget) return toast("请输入 # 开头的 6 位十六进制颜色");
+  uiColorApplyKey(uiColorPopoverTarget, v);
+  $("uiColorPopover").classList.add("hidden");
+};
+document.addEventListener("click", ev => {
+  const pop = $("uiColorPopover");
+  if (!pop || pop.classList.contains("hidden")) return;
+  if (ev.target.closest("#uiColorPopover") || ev.target.closest("[data-ui-color-alt]")) return;
+  pop.classList.add("hidden");
+});
+const uiColorResetAll = $("uiColorResetAll");
+if (uiColorResetAll) uiColorResetAll.onclick = () => {
+  const which = state.settings.theme === "dark" ? "dark" : "light";
+  state.settings.uiColors = state.settings.uiColors || {};
+  state.settings.uiColors[which] = {};
+  applyUiColors();
+  syncUiColorInputs();
+  pushHistory();
+};
+function setAppTheme(theme) {
+  if (state.settings.theme === theme) return;
+  state.settings.theme = theme;
   pushHistory();
   render();
+  if (!els.settings.classList.contains("hidden")) syncUiColorInputs();
   scheduleOnboardingLayout();
-};
+}
+$("themeBtn").onclick = () => setAppTheme(state.settings.theme === "light" ? "dark" : "light");
+$("darkThemeToggle").onchange = () => setAppTheme($("darkThemeToggle").checked ? "dark" : "light");
 const SIDEBAR_PAIR_MIN_WIDTH = 1800;
 
 function syncSidebarLayoutClasses() {
@@ -7485,6 +7874,7 @@ function switchSettingsTab(name) {
     pages[j].classList.toggle("hidden", pages[j].getAttribute("data-tab") !== name);
   }
   if (name === "extensions") renderExtensionsPage();
+  if (name === "appearance") syncUiColorInputs();
 }
 
 const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, layoutFrame: 0 };
@@ -7750,16 +8140,22 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && !els.projectModeDialog.classList.contains("hidden")) closeProjectModeDialog();
 });
 els.projectNameBtn.onclick = () => {
+  const hiding = !els.projectMenu.classList.contains("hidden");
+  if (hiding) endProjectPeek(true); // 收起面板时取消悬停预览，恢复原项目
   els.projectMenu.classList.toggle("hidden");
   renderPageTabs();
 };
 document.addEventListener("mousedown", ev => {
   if (els.projectMenu.classList.contains("hidden")) return;
   if (els.projectMenu.contains(ev.target) || els.projectNameBtn.contains(ev.target)) return;
+  endProjectPeek(true);
   els.projectMenu.classList.add("hidden");
 });
 document.addEventListener("keydown", ev => {
-  if (ev.key === "Escape" && !els.projectMenu.classList.contains("hidden")) els.projectMenu.classList.add("hidden");
+  if (ev.key === "Escape" && !els.projectMenu.classList.contains("hidden")) {
+    endProjectPeek(true);
+    els.projectMenu.classList.add("hidden");
+  }
 });
 els.projectNameBtn.ondblclick = ev => {
   ev.preventDefault();
@@ -8116,6 +8512,12 @@ els.composerFolderInput.onchange = () => {
   els.composerFolderInput.value = "";
 };
 
+els.canvasBg.onchange = () => {
+  state.settings.canvasBackground = els.canvasBg.value;
+  pushHistory();
+  applySettings();
+};
+
 els.snap.onchange = () => {
   state.settings.snap = els.snap.checked;
   pushHistory();
@@ -8128,10 +8530,9 @@ els.smoothEdges.onchange = () => {
   render();
 };
 
-els.autoFitImageNodes.onchange = () => {
-  state.settings.autoFitImageNodes = els.autoFitImageNodes.checked;
+els.autoAlign.onchange = () => {
+  state.settings.autoAlign = els.autoAlign.checked;
   pushHistory();
-  render();
 };
 
 els.hideNodeTitles.onchange = () => {
@@ -8162,9 +8563,10 @@ if (openScreenshotToolBtn) openScreenshotToolBtn.onclick = async () => {
 };
 
 els.gridSize.onchange = () => {
-  state.settings.gridSize = Math.max(1, Number(els.gridSize.value) || 20);
+  state.settings.gridSize = Math.min(200, Math.max(10, Math.round(Number(els.gridSize.value) || 40)));
   pushHistory();
   applySettings();
+  syncSettingsPanel();
 };
 
 if (els.languageSelect) {
@@ -8272,6 +8674,63 @@ els.extensionOpenFolderBtn.onclick = async () => {
     toast("打开拓展文件夹失败：可能被系统或杀毒软件拦截；已复制完整路径");
   }
 };
+
+// ---- Photoshop CEP 面板（demo）：仅桌面版提供一键安装，走 DesktopApi 的 /api/cep/* 路由 ----
+function describeCepStatus(status) {
+  if (!status.sourceExists) return "未找到随包面板文件（cep-panel/CanvasFlowPanel）：安装版需重新打包，源码版请检查仓库目录。";
+  if (!status.installed) return `面板未安装。安装目标：${status.installFolder}`;
+  if (status.needsUpdate) return `已安装 v${status.installedVersion}，随包新版本 v${status.sourceVersion}，点击“安装 / 更新面板”覆盖更新。`;
+  return `已安装 v${status.installedVersion}（与随包版本一致）。安装目录：${status.installFolder}`;
+}
+
+async function refreshCepPanelStatus() {
+  if (!els.cepStatusLine) return;
+  if (!desktop) {
+    els.cepStatusLine.textContent = "仅 CanvasFlow 桌面版支持一键安装；服务器模式请按 cep-panel/README.md 手动安装。";
+    els.cepStatusLine.hidden = false;
+    els.cepInstallBtn.disabled = true;
+    els.cepUninstallBtn.disabled = true;
+    return;
+  }
+  try {
+    const resp = await apiFetch("/api/cep/status");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    els.cepStatusLine.textContent = describeCepStatus(await resp.json());
+  } catch (error) {
+    els.cepStatusLine.textContent = "面板状态获取失败：" + error.message;
+  }
+  els.cepStatusLine.hidden = false;
+}
+
+async function cepPanelAction(path, confirmText, doneText) {
+  if (!confirm(confirmText)) return;
+  els.cepInstallBtn.disabled = true;
+  els.cepUninstallBtn.disabled = true;
+  try {
+    const resp = await apiFetch(path, { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(typeof data.error === "string" ? data.error : (data.error?.message || "HTTP " + resp.status));
+    toast(doneText);
+  } catch (error) {
+    toast("操作失败：" + error.message);
+  } finally {
+    els.cepInstallBtn.disabled = false;
+    els.cepUninstallBtn.disabled = false;
+    refreshCepPanelStatus();
+  }
+}
+
+els.cepInstallBtn.onclick = () => cepPanelAction(
+  "/api/cep/install",
+  "将把 Photoshop CEP 面板安装到当前用户扩展目录（%APPDATA%\\Adobe\\CEP\\extensions\\CanvasFlowPanel），并写入 HKCU 注册表开启 CEP 调试模式（未签名面板必需）。安全软件可能提示一次。继续安装？",
+  "CEP 面板已安装：重启 Photoshop 后，在 窗口 > 扩展 > CanvasFlow 面板 打开"
+);
+
+els.cepUninstallBtn.onclick = () => cepPanelAction(
+  "/api/cep/uninstall",
+  "移除已安装的 CanvasFlow 面板目录？（不影响其他扩展，也不关闭 CEP 调试模式开关）",
+  "已移除 Photoshop 面板，重启 Photoshop 后生效"
+);
 
 els.apiKeyInput.onchange = () => {
   setActiveApiKey(els.apiKeyInput.value.trim());
@@ -9494,6 +9953,7 @@ async function init() {
   state.future = [];
   updateUndoRedo();
   applySettings();
+  syncUiColorInputs();
   applyApiTypeSettingsUi();
   render();
   setUiLanguage(uiLanguage);

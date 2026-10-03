@@ -26,6 +26,7 @@ public partial class ScreenshotToolWindow : Window
     private bool _loading = true;
     private bool _allowClose;
     private bool _darkTheme;
+    private bool _normalizingSnapWidth;
     private int _resultIndex = -1;
     private readonly List<ScreenshotCanvasNodeOption> _canvasNodes = [];
 
@@ -185,11 +186,15 @@ public partial class ScreenshotToolWindow : Window
             Left = savedLeft;
             Top = savedTop;
         }
-        SetCollapsed(_settings.IsCollapsed);
+        if (_settings.WindowWidth is double savedWidth && double.IsFinite(savedWidth) && savedWidth >= MinWidth)
+            Width = savedWidth;
+        if (_settings.WindowHeight is double savedHeight && double.IsFinite(savedHeight) && savedHeight >= MinHeight)
+            Height = savedHeight;
         _settings.PreviewVisible = true;
         PreviewPanel.Visibility = Visibility.Visible;
         SetPreviewMode(_settings.PreviewMode);
-        SetParametersVisible(_settings.ParametersVisible);
+        AdvancedToggle.IsChecked = _settings.ParametersVisible;
+        AdvancedBody.Visibility = _settings.ParametersVisible ? Visibility.Visible : Visibility.Collapsed;
         UpdateCanvasInputMode();
     }
 
@@ -363,7 +368,7 @@ public partial class ScreenshotToolWindow : Window
         if (_settings.AutoCaptureBeforeSend && !await CaptureLatestAsync()) return;
         if (!File.Exists(_latestCapturePath))
         {
-            SetStatus("没有可发送的截图。可能原因：尚未截图。建议：先点击“截图”或开启发送前自动截图。", true);
+            SetStatus("没有可发送的截图。可能原因：尚未截图。建议：先点击“截图”，或开启“使用上次截图区域”。", true);
             return;
         }
         if (!_settings.UseCanvasNodeInput && PromptCombo.SelectedItem is not PromptTemplate)
@@ -409,13 +414,7 @@ public partial class ScreenshotToolWindow : Window
         }
     }
 
-    private void CollapseButton_Click(object sender, RoutedEventArgs e) => SetCollapsed(!_settings.IsCollapsed);
-    private void ParametersToggleButton_Click(object sender, RoutedEventArgs e)
-    {
-        var show = !_settings.ParametersVisible;
-        if (show && _settings.IsCollapsed) SetCollapsed(false);
-        SetParametersVisible(show);
-    }
+    private void AdvancedToggle_Changed(object sender, RoutedEventArgs e) => SetParametersExpanded(AdvancedToggle.IsChecked == true);
 
     private void UseCanvasNodeToggle_Changed(object sender, RoutedEventArgs e)
     {
@@ -436,10 +435,8 @@ public partial class ScreenshotToolWindow : Window
     private void UpdateCanvasInputMode()
     {
         var enabled = _settings.UseCanvasNodeInput;
-        CanvasNodePanel.Visibility = enabled && !_settings.IsCollapsed ? Visibility.Visible : Visibility.Collapsed;
-        ParametersToggleButton.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
-        ParametersButtonColumn.Width = enabled ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        AdvancedPanel.Visibility = !enabled && _settings.ParametersVisible && !_settings.IsCollapsed ? Visibility.Visible : Visibility.Collapsed;
+        CanvasNodePanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
         UpdateCanvasNodeSummary();
     }
 
@@ -461,24 +458,10 @@ public partial class ScreenshotToolWindow : Window
         if (!_loading) SaveSettings();
     }
 
-    private void SetCollapsed(bool value)
-    {
-        _settings.IsCollapsed = value;
-        CanvasNodePanel.Visibility = !value && _settings.UseCanvasNodeInput ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = !value && !_settings.UseCanvasNodeInput && _settings.ParametersVisible ? Visibility.Visible : Visibility.Collapsed;
-        CollapseButton.Content = value ? "+" : "−";
-        MinHeight = value ? 390 : 500;
-        Height = value ? 390 : (_settings.ParametersVisible ? Math.Max(Height, 720) : 500);
-        if (!_loading) SaveSettings();
-    }
-
-    private void SetParametersVisible(bool value)
+    private void SetParametersExpanded(bool value)
     {
         _settings.ParametersVisible = value;
-        AdvancedPanel.Visibility = value && !_settings.IsCollapsed && !_settings.UseCanvasNodeInput ? Visibility.Visible : Visibility.Collapsed;
-        ParametersToggleButton.Content = value ? "隐藏参数" : "显示参数";
-        if (!_settings.IsCollapsed) Height = value ? Math.Max(Height, 720) : 500;
-        UpdateLayout();
+        AdvancedBody.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
         if (!_loading) SaveSettings();
     }
 
@@ -602,9 +585,38 @@ public partial class ScreenshotToolWindow : Window
     {
         if (_loading || !IsVisible || WindowState != WindowState.Normal || Left <= -10000 || Top <= -10000) return;
         if (!IsWindowPositionVisible()) return;
+        TryCollapseSideSnapWidth();
         _settings.WindowLeft = Left;
         _settings.WindowTop = Top;
+        _settings.WindowWidth = Width;
+        _settings.WindowHeight = Height;
         SaveSettings();
+    }
+
+    // Windows 贴边分屏会把窗口拉成约半屏宽；面板吸附到显示器左右边缘时收窄到最小宽度，并锚定贴边一侧
+    private void TryCollapseSideSnapWidth()
+    {
+        if (_normalizingSnapWidth) return;
+        if (PresentationSource.FromVisual(this) is null) return;
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+        var screen = System.Windows.Forms.Screen.FromHandle(handle);
+        if (screen is null) return;
+        var area = screen.WorkingArea;
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        var tolerance = 10 * dpi.DpiScaleX; // 贴边判定容差：Win10 吸附窗口的隐形缩放边框会悬出工作区约 8 物理像素
+        var workWidthDips = area.Width / dpi.DpiScaleX;
+        if (Width < workWidthDips * 0.4) return; // 40% 以下视为普通拖放，不干预；半屏分屏约 50% 一定命中
+        var flushRight = Math.Abs((Left + Width) * dpi.DpiScaleX - area.Right) <= tolerance;
+        var flushLeft = Math.Abs(Left * dpi.DpiScaleX - area.Left) <= tolerance;
+        if (!flushRight && !flushLeft) return;
+        _normalizingSnapWidth = true;
+        try
+        {
+            Width = MinWidth;
+            Left = flushRight ? area.Right / dpi.DpiScaleX - MinWidth : area.Left / dpi.DpiScaleX;
+        }
+        finally { _normalizingSnapWidth = false; }
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

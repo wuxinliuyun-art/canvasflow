@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ExtensionManifest ExtensionBundleId="com.canvasflow.panel"
+                   ExtensionBundleName="CanvasFlow Panel"
+                   ExtensionBundleVersion="0.2.3"
+                   Version="7.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="com.canvasflow.panel.main" Version="0.2.3" />
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- Photoshop 2021 (22.x) 及以上；PHXS=Extended / PHSP=Standard -->
+      <Host Name="PHXS" Version="[22.0,99.9]" />
+      <Host Name="PHSP" Version="[22.0,99.9]" />
+    </HostList>
+    <LocaleList>
+      <Locale Code="All" />
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="9.0" />
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.canvasflow.panel.main">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./jsx/host.jsx</ScriptPath>
+          <CEFCommandLine>
+            <Parameter>--allow-file-access</Parameter>
+            <Parameter>--allow-file-access-from-files</Parameter>
+            <!-- 面板直接 fetch https://agtoken.vip，未签名开发面板需要关闭同源限制 -->
+            <Parameter>--disable-web-security</Parameter>
+            <!-- Node 上下文：用于临时目录、二进制文件读写 -->
+            <Parameter>--enable-nodejs</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>CanvasFlow 面板</Menu>
+          <Geometry>
+            <Size>
+              <Height>600</Height>
+              <Width>400</Width>
+            </Size>
+            <MinSize>
+              <Height>420</Height>
+              <Width>320</Width>
+            </MinSize>
+            <MaxSize>
+              <Height>2000</Height>
+              <Width>2000</Width>
+            </MaxSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

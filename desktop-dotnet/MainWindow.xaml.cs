@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _shutdown = new();
     private DesktopApi? _desktopApi;
     private WebUpdateManager? _webUpdateManager;
+    private DesktopBridge? _desktopBridge;
     private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _root;
@@ -212,7 +213,15 @@ public partial class MainWindow : Window
             var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
             _contentRoot = _webUpdateManager.ResolveContentRoot();
-            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager);
+            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager, () => ReadApiKey("agtoken"));
+            // CEP 面板桥：画布开着时，Photoshop 面板经 localhost 桥复用画布的 API 与已保存的 key
+            _desktopBridge = new DesktopBridge(_desktopApi, Log);
+            try { _desktopBridge.Start(); }
+            catch (Exception bridgeError)
+            {
+                Log($"[桥接] CEP 面板桥启动失败，面板将走直连模式。详细信息：{bridgeError.Message}", true);
+                _desktopBridge = null;
+            }
             var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
             await InitializeWebViewAsync(_shutdown.Token);
@@ -254,6 +263,16 @@ public partial class MainWindow : Window
             await CanvasView.EnsureCoreWebView2Async(_webViewEnvironment);
             CanvasView.PreviewKeyDown += CanvasView_PreviewKeyDown;
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot!, CoreWebView2HostResourceAccessKind.DenyCors);
+            // index.html 永远不缓存：虚拟主机映射不带 Cache-Control，会被 WebView2 启发式缓存吞掉更新
+            CanvasView.CoreWebView2.AddWebResourceRequestedFilter("https://canvasflow.local/index.html*", CoreWebView2WebResourceContext.Document);
+            CanvasView.CoreWebView2.WebResourceRequested += (_, args) =>
+            {
+                if (!args.Request.Uri.StartsWith(CanvasUrl, StringComparison.OrdinalIgnoreCase)) return;
+                var indexPath = Path.Combine(_contentRoot ?? AppContext.BaseDirectory, "index.html");
+                if (!File.Exists(indexPath)) return;
+                var stream = File.Open(indexPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                args.Response = _webViewEnvironment?.CreateWebResourceResponse(stream, 200, "OK", "Content-Type: text/html; charset=utf-8\nCache-Control: no-cache");
+            };
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-data.local", Path.Combine(_root!, "download", "images"), CoreWebView2HostResourceAccessKind.Allow);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
@@ -359,7 +378,7 @@ public partial class MainWindow : Window
                                 await Task.Delay(350);
                                 if (CanvasView.CoreWebView2 is null) return;
                                 CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot, CoreWebView2HostResourceAccessKind.DenyCors);
-                                CanvasView.CoreWebView2.Navigate(CanvasUrl + $"?web={Uri.EscapeDataString(_webUpdateManager.ActiveVersion)}");
+                                CanvasView.CoreWebView2.Navigate(CanvasNavigationUrl());
                             });
                         }
                         catch (Exception updateError) { PostRpcResult(root, error: updateError.Message); }
@@ -870,6 +889,15 @@ public partial class MainWindow : Window
     }
 
 
+    private string CanvasNavigationUrl()
+    {
+        // index.html 修改时间戳参与 URL：界面文件一更新，导航地址就变化，绕开 WebView2 启发式缓存
+        var version = Uri.EscapeDataString(_webUpdateManager?.ActiveVersion ?? "");
+        var indexPath = Path.Combine(_contentRoot ?? AppContext.BaseDirectory, "index.html");
+        var stamp = File.Exists(indexPath) ? File.GetLastWriteTimeUtc(indexPath).Ticks : 0;
+        return $"{CanvasUrl}?web={version}&t={stamp}";
+    }
+
     private void NavigateCanvas()
     {
         var navigationTimer = Stopwatch.StartNew();
@@ -894,7 +922,7 @@ public partial class MainWindow : Window
                 Log($"[错误] 画布加载失败：{e.WebErrorStatus}", true);
             }
         };
-        CanvasView.Source = new Uri(CanvasUrl);
+        CanvasView.Source = new Uri(CanvasNavigationUrl());
     }
 
     private void OpenScreenshotTool()
@@ -985,6 +1013,7 @@ public partial class MainWindow : Window
 
         Hide();
         _screenshotToolWindow?.ShutdownWindow();
+        _desktopBridge?.Dispose();
         _shutdown.Cancel();
         _shutdownComplete = true;
         Environment.Exit(0);

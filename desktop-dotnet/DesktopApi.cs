@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 namespace CanvasFlow.Desktop;
 
@@ -26,6 +27,7 @@ internal sealed class DesktopApi
     private readonly string _root;
     private readonly Action<string, bool> _log;
     private readonly Func<string> _getApiKey;
+    private readonly Func<string> _getAgtokenKey;
     private readonly HttpClient _http;
     private readonly HttpClient _agtokenHttp;
     private readonly string _version;
@@ -33,11 +35,12 @@ internal sealed class DesktopApi
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
         _getApiKey = getApiKey;
+        _getAgtokenKey = getAgtokenKey ?? (() => "");
         _webUpdateManager = webUpdateManager;
         _http = new HttpClient(new HttpClientHandler
         {
@@ -50,8 +53,8 @@ internal sealed class DesktopApi
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(600) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("CanvasFlow/2.6.6");
         _version = ReadVersion();
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"CanvasFlow/{_version}");
     }
 
     public async Task<object> ApplyLatestWebUpdateAsync(CancellationToken cancellationToken)
@@ -110,16 +113,36 @@ internal sealed class DesktopApi
                 var payloadKey = payload.TryGetPropertyValue("_apiKey", out var keyNode) ? keyNode?.GetValue<string>() ?? "" : "";
                 payload.Remove("_apiKey");
                 var upstreamPath = path == "/api/agtoken/generate" ? "/v1/images/generations" : "/v1/images/edits";
-                return await ProxyAgtokenAsync(HttpMethod.Post, upstreamPath, payload.ToJsonString(), string.IsNullOrWhiteSpace(payloadKey) ? apiKey : payloadKey, cancellationToken);
+                var upstreamKey = string.IsNullOrWhiteSpace(payloadKey) ? apiKey : payloadKey;
+                // CEP 面板桥请求可能不带 key：回落到桌面端已保存的 agtoken key
+                if (string.IsNullOrWhiteSpace(upstreamKey)) upstreamKey = _getAgtokenKey();
+                return await ProxyAgtokenAsync(HttpMethod.Post, upstreamPath, payload.ToJsonString(), upstreamKey, cancellationToken);
             }
-            if (method == "GET" && path == "/api/agtoken/models") return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/models", null, apiKey, cancellationToken);
+            if (method == "GET" && path == "/api/agtoken/models")
+            {
+                var fallbackKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
+                return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/models", null, fallbackKey, cancellationToken);
+            }
             return Json(405, new { error = "请求方法不受支持" });
         }
         catch (Exception error)
         {
-            _log($"[联网接口] 请求失败：{method} {requestUri.AbsolutePath}。详细信息：{error.Message}", true);
-            return Json(502, new { error = new { code = 502, message = "联网请求失败: " + error.Message } });
+            _log($"[联网接口] 请求失败：{method} {requestUri.AbsolutePath}。详细信息：{DescribeException(error)}", true);
+            return Json(502, new { error = new { code = 502, message = "联网请求失败: " + DescribeException(error) } });
         }
+    }
+
+    // SSL/代理类失败的真实原因通常在内层异常（如握手被重置、超时），只记外层 Message 会得到无用的 "see inner exception"
+    private static string DescribeException(Exception error)
+    {
+        var messages = new List<string>();
+        for (var current = (Exception?)error; current is not null; current = current.InnerException)
+        {
+            var message = current.Message?.Trim() ?? "";
+            if (message.Length > 0 && (messages.Count == 0 || !string.Equals(messages[^1], message, StringComparison.Ordinal)))
+                messages.Add(message);
+        }
+        return messages.Count > 0 ? string.Join(" ← ", messages) : error.GetType().Name;
     }
 
     private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken, string apiKey = "")
@@ -346,6 +369,9 @@ internal sealed class DesktopApi
             if (method == "GET" && path == "/api/extensions") return ListExtensions();
             if (method == "POST" && path == "/api/extensions/refresh") return ListExtensions();
             if (method == "POST" && path.StartsWith("/api/extensions/", StringComparison.Ordinal) && path.EndsWith("/run", StringComparison.Ordinal)) return RunExtension(path, body);
+            if (method == "GET" && path == "/api/cep/status") return CepPanelStatus();
+            if (method == "POST" && path == "/api/cep/install") return InstallCepPanel();
+            if (method == "POST" && path == "/api/cep/uninstall") return UninstallCepPanel();
             return Json(404, new { error = "桌面接口不存在" });
         }
         catch (JsonException error) { return Json(400, new { error = $"JSON格式不正确：{error.Message}" }); }
@@ -706,6 +732,99 @@ internal sealed class DesktopApi
         var text = (value ?? "").Trim();
         if (text.Length <= maxLength) return text;
         return "…" + text[^maxLength..];
+    }
+
+    // ---- Photoshop CEP 面板（demo）----
+    // 面板源文件随包分发：源码版 {数据根}\cep-panel\CanvasFlowPanel，安装版 csproj 复制到 {安装目录}\app\cep-panel。
+    // 安装 = 拷贝到 %APPDATA%\Adobe\CEP\extensions\CanvasFlowPanel + HKCU 写 CSXS PlayerDebugMode（未签名面板必需）。
+    // 只在用户点击安装按钮时执行：不自动补装、不写 HKLM、不调用脚本进程、不删除用户的其他扩展。
+
+    private string ResolveCepPanelSourceFolder()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(_root, "cep-panel", "CanvasFlowPanel"),
+            Path.Combine(_root, "app", "cep-panel", "CanvasFlowPanel"),
+        };
+        return candidates.FirstOrDefault(Directory.Exists) ?? candidates[0];
+    }
+
+    private static string CepPanelInstallFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Adobe", "CEP", "extensions", "CanvasFlowPanel");
+
+    private const string CepVersionMarker = "installed-version.txt";
+
+    private static string? ReadCepManifestVersion(string folder)
+    {
+        var manifestPath = Path.Combine(folder, "CSXS", "manifest.xml");
+        if (!File.Exists(manifestPath)) return null;
+        var match = Regex.Match(File.ReadAllText(manifestPath, Encoding.UTF8), "ExtensionBundleVersion=\"([^\"]+)\"");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private DesktopApiResponse CepPanelStatus()
+    {
+        var sourceFolder = ResolveCepPanelSourceFolder();
+        var sourceVersion = ReadCepManifestVersion(sourceFolder);
+        var installedVersion = "";
+        var markerPath = Path.Combine(CepPanelInstallFolder, CepVersionMarker);
+        if (File.Exists(markerPath)) installedVersion = File.ReadAllText(markerPath, Encoding.UTF8).Trim();
+        if (string.IsNullOrWhiteSpace(installedVersion))
+            installedVersion = ReadCepManifestVersion(CepPanelInstallFolder) ?? "";
+        var installed = Directory.Exists(CepPanelInstallFolder) && !string.IsNullOrWhiteSpace(installedVersion);
+        return Json(200, new
+        {
+            sourceExists = sourceVersion is not null,
+            sourceVersion = sourceVersion ?? "",
+            sourceFolder,
+            installed,
+            installedVersion,
+            needsUpdate = installed && sourceVersion is not null && installedVersion != sourceVersion,
+            installFolder = CepPanelInstallFolder,
+        });
+    }
+
+    private DesktopApiResponse InstallCepPanel()
+    {
+        var sourceFolder = ResolveCepPanelSourceFolder();
+        var sourceVersion = ReadCepManifestVersion(sourceFolder)
+            ?? throw new InvalidDataException($"找不到面板源文件 {sourceFolder}\\CSXS\\manifest.xml（安装版需携带 cep-panel 目录，源码版请检查仓库）");
+        if (Directory.Exists(CepPanelInstallFolder)) Directory.Delete(CepPanelInstallFolder, true);
+        CopyDirectory(sourceFolder, CepPanelInstallFolder);
+        File.WriteAllText(Path.Combine(CepPanelInstallFolder, CepVersionMarker), sourceVersion, Encoding.UTF8);
+        EnableCepDebugMode();
+        _log($"[CEP面板] 已安装 v{sourceVersion} 到 {CepPanelInstallFolder}，并开启 CSXS PlayerDebugMode", false);
+        return Json(200, new { ok = true, version = sourceVersion, installFolder = CepPanelInstallFolder });
+    }
+
+    private DesktopApiResponse UninstallCepPanel()
+    {
+        if (Directory.Exists(CepPanelInstallFolder)) Directory.Delete(CepPanelInstallFolder, true);
+        // PlayerDebugMode 不回收：用户可能有其他未签名扩展依赖它
+        _log("[CEP面板] 已移除安装目录（保留 CEP 调试模式开关）", false);
+        return Json(200, new { ok = true });
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        var prefix = Path.GetFullPath(target).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.GetFullPath(Path.Combine(target, Path.GetRelativePath(source, file)));
+            if (!destination.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("面板文件路径越界");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, true);
+        }
+    }
+
+    private static void EnableCepDebugMode()
+    {
+        // PS 2021~2025 分别依赖 CSXS.9~CSXS.12，全部写 1；只设值不删键
+        foreach (var version in new[] { "9", "10", "11", "12" })
+        {
+            using var key = Registry.CurrentUser.CreateSubKey($"Software\\Adobe\\CSXS.{version}");
+            key.SetValue("PlayerDebugMode", "1", RegistryValueKind.String);
+        }
     }
 
     private static DesktopApiResponse Json(int status, object value) =>
