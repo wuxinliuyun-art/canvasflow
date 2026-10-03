@@ -148,11 +148,19 @@
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <details class="update-notes">
-            <summary class="update-notes-title">v2.7.1 更新说明</summary>
+            <summary class="update-notes-title">v2.7.0 更新说明</summary>
             <ul>
-              <li>生图任务完成后若图片下载失败（网络/代理波动），节点上会保留「重新下载结果」按钮，24小时内可免费取回，无需重新生成</li>
-              <li>下载失败与生成失败的提示分开显示，明确说明任务已完成、仅下载环节失败</li>
-              <li>桌面端网络错误日志记录完整内层原因，便于排查代理/SSL问题</li>
+              <li>加 AGtoken 的 API 支持，绘图软件没有网络加速器也不影响注册会员</li>
+              <li>修复有时点击 AI 生图没反应的问题</li>
+              <li>同一个节点接两个线，将被视为两个任务</li>
+              <li>新交互：按住 Alt 画线可切断连线；如果同时和两条线相交，会把这个节点隔离出去</li>
+              <li>模型里增加设置，可以设置默认 AI 生图模型</li>
+              <li>优化整理节点体验，防止整理后失焦</li>
+              <li>加入自定义组件功能，将多个节点作为模板保存</li>
+              <li>新增 Nano Banana Pro 模型</li>
+              <li>增加拓展系统，允许将符合规则的 py 作为节点载入；预制拓展「图片置入PPTX」</li>
+              <li>整理节点：整理后不再失焦，同链节点按行对齐更整齐</li>
+              <li>本版更新了内核：请下载新版安装包覆盖安装后使用（项目与设置会保留）</li>
             </ul>
           </details>
         </section>

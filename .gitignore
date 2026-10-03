@@ -18,3 +18,4 @@ desktop-dotnet/obj/
 background-removal-worker/bin/
 background-removal-worker/obj/
 .codex-build/
+release/
