@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-redownload">
+  <link rel="stylesheet" href="styles.css?v=20261007-ctxalign">
 </head>
 <body>
-  <div id="app" class="app theme-light">
+  <div id="app" class="app theme-dark">
     <header class="topbar">
       <div class="project-shell">
         <button id="projectNameBtn" class="project-name-btn" title="单击切换项目，双击重命名">未命名项目</button>
@@ -148,19 +148,19 @@
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <details class="update-notes">
-            <summary class="update-notes-title">v2.7.0 更新说明</summary>
+            <summary class="update-notes-title">v2.7.1 更新说明</summary>
             <ul>
-              <li>加 AGtoken 的 API 支持，绘图软件没有网络加速器也不影响注册会员</li>
-              <li>修复有时点击 AI 生图没反应的问题</li>
-              <li>同一个节点接两个线，将被视为两个任务</li>
-              <li>新交互：按住 Alt 画线可切断连线；如果同时和两条线相交，会把这个节点隔离出去</li>
-              <li>模型里增加设置，可以设置默认 AI 生图模型</li>
-              <li>优化整理节点体验，防止整理后失焦</li>
-              <li>加入自定义组件功能，将多个节点作为模板保存</li>
-              <li>新增 Nano Banana Pro 模型</li>
-              <li>增加拓展系统，允许将符合规则的 py 作为节点载入；预制拓展「图片置入PPTX」</li>
-              <li>整理节点：整理后不再失焦，同链节点按行对齐更整齐</li>
-              <li>本版更新了内核：请下载新版安装包覆盖安装后使用（项目与设置会保留）</li>
+              <li>新增 Photoshop 互传：图片节点右键「在 PS 中编辑」，PS 面板一键把当前文档合并或单图层回传为画布图片节点（设置 → 拓展 中安装面板、指定 Photoshop 路径）</li>
+              <li>内置自定义组件「重新渲染」：风格参考图加产品图，一键生成精修电商效果图</li>
+              <li>图片标注新增箭头、方框工具；灯箱编辑工具栏重做，双击图片直接进入编辑</li>
+              <li>「生成张数」1–4 对所有 AI 绘图模型开放，其他模型自动拆成多个任务</li>
+              <li>修复中文输入法下重命名项目/分组打第一个字就中断、输入框回车上屏候选词误创建节点的问题</li>
+              <li>修复 AI 任务并发提交被上游拒绝且不留任务记录的问题（启动错峰 500ms）</li>
+              <li>修复同一节点接多条线时文字互相串扰的问题，现在按线拆分任务</li>
+              <li>橡皮擦显示实际大小的圆形光标，各工具分别记忆笔刷大小；灯箱「取消」/Esc 直接关闭</li>
+              <li>透明 PNG 显示棋盘格背景；新项目默认深色主题</li>
+              <li>服务器运行模式：修复图片文件被损坏、素材库读取失败、畸形请求导致服务崩溃的问题</li>
+              <li>本版更新了内核：请下载完整安装包覆盖安装后使用（项目与设置会保留）</li>
             </ul>
           </details>
         </section>
@@ -216,10 +216,11 @@
           <div id="extensionList" class="extension-list"></div>
         </section>
         <section class="settings-card" id="cepPanelCard">
-          <h3>Photoshop 联动面板（demo）</h3>
-          <p class="setting-desc">把随包的 CEP 面板安装到当前用户扩展目录（%APPDATA%\Adobe\CEP\extensions\CanvasFlowPanel），并写入 HKCU 注册表开启 CEP 调试模式（未签名面板必需，安全软件可能提示一次）。安装后重启 Photoshop，在 窗口 &gt; 扩展（功能）&gt; CanvasFlow 面板 打开。</p>
+          <h3>Photoshop 互传</h3>
+          <label>Photoshop 主程序路径（photoshop.exe）<input id="psPathInput" type="text" placeholder="例如 C:\Program Files\Adobe\Adobe Photoshop 2024\photoshop.exe"></label>
           <div class="cep-panel-actions">
-            <button id="cepInstallBtn" type="button" class="primary">安装 / 更新面板</button>
+            <button id="psPathBrowseBtn" type="button">浏览选择…</button>
+            <button id="cepInstallBtn" type="button" class="primary">安装 / 更新 PS 面板</button>
             <button id="cepUninstallBtn" type="button">移除面板</button>
           </div>
           <p id="cepStatusLine" class="setting-desc" hidden></p>
@@ -409,26 +410,25 @@
     <div class="lightbox-bg"></div>
     <img id="lightboxImg" class="lightbox-img" alt="">
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
+    <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="镜像图片">
-      <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片">↔</button>
-      <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片">↕</button>
+      <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
+      <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.8 4.4 12 10l4.2-5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7.8 19.6 12 14l4.2 5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
     </div>
     <div id="lightboxPaintToolbar" class="lightbox-paint-toolbar hidden">
       <div id="lightboxMainTools" class="lightbox-toolbar-section lightbox-main-tools" role="group" aria-label="图片编辑">
         <button id="lightboxInsertBtn" type="button">置入</button>
-        <button id="lightboxRetouchBtn" type="button">涂改</button>
-      </div>
-      <div id="lightboxRetouchTools" class="lightbox-toolbar-section lightbox-paint-tools hidden" role="group" aria-label="涂改工具">
-        <button id="lightboxRetouchBack" type="button">返回</button>
-        <button id="lightboxPaintBrush" class="active" type="button">画笔</button>
-        <button id="lightboxPaintEraser" type="button">橡皮擦</button>
+        <button id="lightboxPaintBrush" class="active lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
+        <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
+        <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
+        <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
           <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
         </div>
       </div>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
-      <button id="lightboxPaintUndo" class="hidden" type="button" disabled>撤销</button>
+      <button id="lightboxPaintUndo" type="button" disabled>撤销</button>
       <div class="lightbox-toolbar-actions">
         <button id="lightboxPaintCancel">取消</button>
         <button id="lightboxPaintConfirm" class="primary">确认并生成节点</button>
@@ -464,6 +464,6 @@
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
   <script src="canvas-runtime.js?v=20261003-cep"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261003-redownload"></script>
+  <script src="app.js?v=20261007-builtin-rerender"></script>
 </body>
 </html>

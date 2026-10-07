@@ -28,6 +28,7 @@ internal sealed class DesktopApi
     private readonly Action<string, bool> _log;
     private readonly Func<string> _getApiKey;
     private readonly Func<string> _getAgtokenKey;
+    private readonly Func<string> _getContentRoot;
     private readonly HttpClient _http;
     private readonly HttpClient _agtokenHttp;
     private readonly string _version;
@@ -35,12 +36,14 @@ internal sealed class DesktopApi
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
         _getApiKey = getApiKey;
         _getAgtokenKey = getAgtokenKey ?? (() => "");
+        // 界面热更新会把 cep-panel 面板源文件带进内容根，安装面板时必须优先取内容根里的版本
+        _getContentRoot = getContentRoot ?? (() => "");
         _webUpdateManager = webUpdateManager;
         _http = new HttpClient(new HttpClientHandler
         {
@@ -372,6 +375,7 @@ internal sealed class DesktopApi
             if (method == "GET" && path == "/api/cep/status") return CepPanelStatus();
             if (method == "POST" && path == "/api/cep/install") return InstallCepPanel();
             if (method == "POST" && path == "/api/cep/uninstall") return UninstallCepPanel();
+            if (method == "GET" && path == "/api/ps/pending") return Json(200, new { data = Array.Empty<object>() }); // CEP 面板探测口（桌面版回传走桥接回调，队列恒为空）
             return Json(404, new { error = "桌面接口不存在" });
         }
         catch (JsonException error) { return Json(400, new { error = $"JSON格式不正确：{error.Message}" }); }
@@ -741,12 +745,12 @@ internal sealed class DesktopApi
 
     private string ResolveCepPanelSourceFolder()
     {
-        var candidates = new[]
-        {
-            Path.Combine(_root, "cep-panel", "CanvasFlowPanel"),
-            Path.Combine(_root, "app", "cep-panel", "CanvasFlowPanel"),
-        };
-        return candidates.FirstOrDefault(Directory.Exists) ?? candidates[0];
+        var candidates = new List<string>();
+        var contentRoot = _getContentRoot();
+        if (!string.IsNullOrWhiteSpace(contentRoot)) candidates.Add(Path.Combine(contentRoot, "cep-panel", "CanvasFlowPanel"));
+        candidates.Add(Path.Combine(_root, "cep-panel", "CanvasFlowPanel"));
+        candidates.Add(Path.Combine(_root, "app", "cep-panel", "CanvasFlowPanel"));
+        return candidates.FirstOrDefault(Directory.Exists) ?? candidates[^1];
     }
 
     private static string CepPanelInstallFolder =>

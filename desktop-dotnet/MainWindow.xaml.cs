@@ -101,6 +101,10 @@ public partial class MainWindow : Window
           }, 600000),
           onSaveRequest: callback => { if (typeof callback === "function") saveHandlers.push(callback); },
           completeSave: result => window.chrome.webview.postMessage({ type: "desktop:save-complete", ...(result || {}) }),
+          getPsPath: () => invoke("desktop:get-ps-path"),
+          savePsPath: path => invoke("desktop:save-ps-path", { path: String(path || "") }),
+          choosePsExe: () => invoke("desktop:choose-ps-exe", {}, 60000),
+          launchInPs: (filePath, fileName, assetId) => invoke("desktop:open-in-ps", { filePath: String(filePath || ""), fileName: String(fileName || ""), assetId: String(assetId || "") }, 60000),
         };
       })();
       """;
@@ -213,9 +217,9 @@ public partial class MainWindow : Window
             var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
             _contentRoot = _webUpdateManager.ResolveContentRoot();
-            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager, () => ReadApiKey("agtoken"));
+            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager, () => ReadApiKey("agtoken"), () => _contentRoot ?? "");
             // CEP 面板桥：画布开着时，Photoshop 面板经 localhost 桥复用画布的 API 与已保存的 key
-            _desktopBridge = new DesktopBridge(_desktopApi, Log);
+            _desktopBridge = new DesktopBridge(_desktopApi, Log, (name, dataUrl) => PostPsReturnImage(name, dataUrl));
             try { _desktopBridge.Start(); }
             catch (Exception bridgeError)
             {
@@ -355,6 +359,32 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, CopyImageToClipboard(root)); }
                         catch (Exception copyError) { PostRpcResult(root, error: copyError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:get-ps-path")
+                    {
+                        PostRpcResult(root, new { path = ReadPsPath() });
+                    }
+                    else if (type.GetString() == "desktop:save-ps-path")
+                    {
+                        var psPath = root.TryGetProperty("path", out var psElement) ? psElement.GetString() ?? "" : "";
+                        try
+                        {
+                            Directory.CreateDirectory(Path.Combine(_root!, "data"));
+                            File.WriteAllText(PsPathFilePath, psPath.Trim(), Encoding.UTF8);
+                            Log($"[PS互传] 已保存 Photoshop 路径：{psPath.Trim()}", false);
+                            PostRpcResult(root, new { saved = true });
+                        }
+                        catch (Exception psSaveError) { PostRpcResult(root, error: psSaveError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:choose-ps-exe")
+                    {
+                        try { PostRpcResult(root, ChoosePsExe()); }
+                        catch (Exception psChooseError) { PostRpcResult(root, error: psChooseError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:open-in-ps")
+                    {
+                        try { PostRpcResult(root, OpenInPhotoshop(root)); }
+                        catch (Exception psOpenError) { PostRpcResult(root, error: psOpenError.Message); }
                     }
                     else if (type.GetString() == "desktop:open-screenshot-window")
                     {
@@ -804,6 +834,92 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
         Log($"[生成文件夹] 已请求打开：{fullPath}", false);
         return new { opened = true, path = fullPath };
+    }
+
+    // ---- Photoshop 互传：图片节点右键“在 PS 中编辑” + PS 面板回传注入画布 ----
+    // PS 路径只存本机数据目录（data\ps-path.txt），不自动探测注册表；
+    // 启动 PS 是用户点击右键菜单触发的 UseShellExecute 直启，与“打开所在文件夹”同级。
+
+    private string PsPathFilePath => Path.Combine(_root!, "data", "ps-path.txt");
+
+    private string ReadPsPath()
+    {
+        try { return File.Exists(PsPathFilePath) ? File.ReadAllText(PsPathFilePath, Encoding.UTF8).Trim() : ""; }
+        catch { return ""; }
+    }
+
+    private object ChoosePsExe()
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择 Photoshop 主程序（photoshop.exe）",
+            Filter = "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (picker.ShowDialog(this) != true) return new { path = "" };
+        Directory.CreateDirectory(Path.Combine(_root!, "data"));
+        File.WriteAllText(PsPathFilePath, picker.FileName, Encoding.UTF8);
+        Log($"[PS互传] 已选择 Photoshop 路径：{picker.FileName}", false);
+        return new { path = picker.FileName };
+    }
+
+    private object OpenInPhotoshop(JsonElement request)
+    {
+        var filePath = request.TryGetProperty("filePath", out var fileElement) ? fileElement.GetString() ?? "" : "";
+        var fileName = request.TryGetProperty("fileName", out var nameElement) ? nameElement.GetString() ?? "" : "";
+        var assetId = request.TryGetProperty("assetId", out var assetElement) ? assetElement.GetString() ?? "" : "";
+        // 桌面版素材按内容寻址存放在 data\assets\{originals|generated}\{sha}.png，
+        // 文件名与节点 fileName 无关，必须经素材索引解析真实路径。
+        if (string.IsNullOrWhiteSpace(filePath) && !string.IsNullOrWhiteSpace(assetId))
+        {
+            lock (_assetLock)
+            {
+                if (_assets.TryGetValue(assetId, out var asset) && asset is not null)
+                {
+                    filePath = SafeAssetPath(asset.RelativePath);
+                    fileName = asset.FileName;
+                }
+            }
+        }
+        var resolved = string.IsNullOrWhiteSpace(filePath)
+            ? Path.Combine(_root!, "download", "images", Path.GetFileName(string.IsNullOrWhiteSpace(fileName) ? "unnamed.png" : fileName))
+            : filePath;
+        if (string.IsNullOrWhiteSpace(resolved) || !File.Exists(resolved)) throw new FileNotFoundException($"找不到图片文件：{resolved}");
+        var psPath = ReadPsPath();
+        if (string.IsNullOrWhiteSpace(psPath) || !File.Exists(psPath))
+            throw new InvalidOperationException("尚未选择 Photoshop 主程序：请到 设置 → 拓展 → Photoshop 互传 中浏览选择 photoshop.exe");
+        Log($"[PS互传] 已请求在 Photoshop 中打开：{resolved}", false);
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = psPath,
+            Arguments = $"\"{resolved}\"",
+            UseShellExecute = true,
+        });
+        return new { launched = true, path = resolved };
+    }
+
+    private void PostPsReturnImage(string? name, string dataUrl)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            try
+            {
+                if (CanvasView.CoreWebView2 is null || !_canvasReady) throw new InvalidOperationException("画布页面尚未就绪");
+                CanvasView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+                {
+                    type = "desktop:paste",
+                    kind = "image",
+                    dataUrl,
+                    mime = "image/png",
+                    name = string.IsNullOrWhiteSpace(name) ? $"ps_{DateTimeOffset.UtcNow:yyyyMMdd_HHmmss}.png" : name,
+                }));
+                Log($"[PS互传] 已把 Photoshop 回传的图片注入画布：{name}", false);
+            }
+            catch (Exception error)
+            {
+                Log($"[PS互传] 注入画布失败：{error.Message}", true);
+            }
+        });
     }
 
     private object CopyImageToClipboard(JsonElement request)

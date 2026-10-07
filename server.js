@@ -13,6 +13,9 @@ const RELEASES_API = "https://api.github.com/repos/wuxinliuyun-art/canvasflow/re
 const RELEASES_LATEST = "https://github.com/wuxinliuyun-art/canvasflow/releases/latest";
 let releaseCache = null;
 let releaseCacheAt = 0;
+// PS 互传：面板把合并后的文档回传到 /api/ps/return-image 入队，
+// 画布页面轮询 /api/ps/pending 领回并创建图片节点（桌面版走桥接直注入页面，不经此队列）。
+const psReturnQueue = [];
 const mime = {
   ".html": "text/html;charset=utf-8",
   ".css": "text/css;charset=utf-8",
@@ -52,7 +55,8 @@ function atomicWriteFile(filePath, content) {
 }
 
 function readJsonFile(filePath, fallback = {}) {
-  try { return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : fallback; }
+  // 容忍 UTF-8 BOM：外部编辑器/脚本写出的 JSON 可能带 BOM，直接 parse 会失败
+  try { return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8").replace(/^\uFEFF/, "")) : fallback; }
   catch (error) { console.warn(`[Data] cannot read ${filePath}: ${error.message}`); return fallback; }
 }
 function loadConfig() {
@@ -78,11 +82,15 @@ function exportBrowseTarget(token, relativePath = "") {
 }
 
 var staticCache = {};
+// 内存缓存只服务文本类文件；图片等二进制按 utf-8 读入再回写会损坏字节流（U+FFFD 置换），
+// 必须交给磁盘读取分支以 Buffer 返回。新增二进制随包资源时不要放宽这份白名单。
+var TEXT_STATIC_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".xml", ".map", ".webmanifest"]);
 // 开发服务器必须服务磁盘最新内容：启动时快照进内存会让"改了代码刷新无效"
 // （实例启动得越早，吐的文件越旧）。按 mtime 惰性加载：没变走内存，变了立即重读。
 function readStaticFile(pathname) {
-  var filePath = __dirname + pathname;
   try {
+    if (!TEXT_STATIC_EXTENSIONS.has(path.extname(pathname).toLowerCase())) return null;
+    var filePath = __dirname + pathname;
     var mtime = fs.statSync(filePath).mtimeMs;
     var entry = staticCache[pathname];
     if (entry && entry.mtime === mtime) return entry.content;
@@ -287,7 +295,15 @@ async function requestHandler(req, res) {
     }
   }
   const parsedUrl = new URL(req.url, "http://localhost");
-  let pathname = decodeURIComponent(parsedUrl.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(parsedUrl.pathname);
+  } catch (e) {
+    // 畸形百分号编码的请求不能让整个进程崩溃，返回 400 即可
+    res.writeHead(400, { "Content-Type": "text/plain;charset=utf-8" });
+    res.end("Bad request: malformed URL encoding");
+    return;
+  }
   const requestApiKey = () => String(req.headers["x-canvasflow-api-key"] || parsedUrl.searchParams.get("apiKey") || secretProvider() || "");
 
   if (pathname === "/api/runtime-paths" && req.method === "GET") {
@@ -422,9 +438,9 @@ async function requestHandler(req, res) {
   if (pathname === "/api/custom-library" && req.method === "GET") {
     try {
       const libraryPath = path.join(dataRoot, "data", "custom-library.json");
-      const content = fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"multiNodeTemplates":[],"variableDefinitions":[],"builtinDefaultsInitialized":false}';
+      const content = (fs.existsSync(libraryPath) ? fs.readFileSync(libraryPath, "utf-8") : '{"textTemplates":[],"imageMaterials":[],"multiNodeTemplates":[],"variableDefinitions":[],"builtinDefaultsInitialized":false}').replace(/^\uFEFF/, "");
       JSON.parse(content);
-      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
+      res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
       res.end(content);
     } catch (err) {
       console.error("[Library] read failed", err);
@@ -578,6 +594,29 @@ async function requestHandler(req, res) {
     return;
   }
 
+  if (pathname === "/api/ps/return-image" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 128 * 1024 * 1024);
+      const payload = JSON.parse(body.toString());
+      const data = String(payload.data || "");
+      if (!data.startsWith("data:image/")) throw new Error("回传内容不是图片");
+      psReturnQueue.push({ name: String(payload.name || ""), data, at: Date.now() });
+      if (psReturnQueue.length > 20) psReturnQueue.shift();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: err.message } }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/ps/pending" && req.method === "GET") {
+    const items = psReturnQueue.splice(0, psReturnQueue.length);
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ data: items }));
+    return;
+  }
   // agtoken 透传路由（与 APIMart 路由并列，请求格式互不干涉）
   if (pathname === "/api/agtoken/generate" && req.method === "POST") {
     try {

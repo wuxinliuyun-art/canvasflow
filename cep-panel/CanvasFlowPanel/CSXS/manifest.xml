@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <ExtensionManifest ExtensionBundleId="com.canvasflow.panel"
                    ExtensionBundleName="CanvasFlow Panel"
-                   ExtensionBundleVersion="0.2.3"
+                   ExtensionBundleVersion="0.3.6"
                    Version="7.0"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.canvasflow.panel.main" Version="0.2.3" />
+    <Extension Id="com.canvasflow.panel.main" Version="0.3.6" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -40,15 +40,15 @@
         </Lifecycle>
         <UI>
           <Type>Panel</Type>
-          <Menu>CanvasFlow 面板</Menu>
+          <Menu>CanvasFlow 互传</Menu>
           <Geometry>
             <Size>
-              <Height>600</Height>
-              <Width>400</Width>
+              <Height>560</Height>
+              <Width>320</Width>
             </Size>
             <MinSize>
-              <Height>420</Height>
-              <Width>320</Width>
+              <Height>400</Height>
+              <Width>256</Width>
             </MinSize>
             <MaxSize>
               <Height>2000</Height>

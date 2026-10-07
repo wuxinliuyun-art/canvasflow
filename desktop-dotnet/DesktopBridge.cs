@@ -16,16 +16,19 @@ internal sealed class DesktopBridge : IDisposable
 {
     private readonly DesktopApi _api;
     private readonly Action<string, bool> _log;
+    private readonly Action<string?, string>? _onImageReturned;
     private readonly HttpListener _listener = new();
     private readonly string _token;
     private CancellationTokenSource? _cancellation;
+    private System.Threading.Timer? _discoveryHeartbeat;
 
     public int Port { get; }
 
-    public DesktopBridge(DesktopApi api, Action<string, bool> log)
+    public DesktopBridge(DesktopApi api, Action<string, bool> log, Action<string?, string>? onImageReturned = null)
     {
         _api = api;
         _log = log;
+        _onImageReturned = onImageReturned;
         _token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
         Port = FindFreePort();
         _listener.Prefixes.Add($"http://localhost:{Port}/");
@@ -36,6 +39,8 @@ internal sealed class DesktopBridge : IDisposable
         _cancellation = new CancellationTokenSource();
         _listener.Start();
         WriteDiscoveryFile();
+        // 心跳重写发现文件：被误删（如清理脚本）后 30 秒内自愈，PS 面板始终能找回桥端口
+        _discoveryHeartbeat = new System.Threading.Timer(_ => { try { WriteDiscoveryFile(); } catch { } }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         _ = Task.Run(AcceptLoopAsync);
         _log($"[桥接] CEP 面板桥已启动：http://localhost:{Port}/", false);
     }
@@ -43,6 +48,7 @@ internal sealed class DesktopBridge : IDisposable
     public void Dispose()
     {
         try { _cancellation?.Cancel(); } catch { }
+        try { _discoveryHeartbeat?.Dispose(); } catch { }
         try { _listener.Close(); } catch { }
         try { File.Delete(BridgeFilePath); } catch { }
     }
@@ -70,7 +76,8 @@ internal sealed class DesktopBridge : IDisposable
             pid = Environment.ProcessId,
             source = "desktop",
         });
-        File.WriteAllText(BridgeFilePath, payload, Encoding.UTF8);
+        // 不带 BOM：PS 面板的 Node JSON.parse 不接受 BOM
+        File.WriteAllText(BridgeFilePath, payload, new UTF8Encoding(false));
     }
 
     private async Task AcceptLoopAsync()
@@ -94,6 +101,24 @@ internal sealed class DesktopBridge : IDisposable
             if (!string.Equals(tokenHeader, _token, StringComparison.Ordinal))
             {
                 await WriteJsonAsync(response, 401, "{\"error\":\"bridge token mismatch\"}");
+                return;
+            }
+            // PS 面板回传：不走 DesktopApi，直接回调宿主注入画布页面（desktop:paste 消息）
+            if (request.HttpMethod == "POST" && request.Url!.AbsolutePath == "/api/ps/return-image" && _onImageReturned is not null)
+            {
+                string returnBody;
+                using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
+                {
+                    returnBody = await reader.ReadToEndAsync();
+                }
+                using (var document = JsonDocument.Parse(returnBody))
+                {
+                    var name = document.RootElement.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
+                    var data = document.RootElement.TryGetProperty("data", out var dataElement) ? dataElement.GetString() ?? "" : "";
+                    if (!data.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("回传内容不是图片");
+                    _onImageReturned(name, data);
+                }
+                await WriteJsonAsync(response, 200, "{\"ok\":true}");
                 return;
             }
             string body;
