@@ -11,6 +11,8 @@ const DEFAULT_EXTENSION_SERVICE_URL = "http://127.0.0.1:8788";
 const GROUP_NODE_HEIGHT = 244;
 const SCREENSHOT_NODE_HEIGHT = 250;
 const CONNECT_SNAP_RADIUS = 38;
+const EDGE_DROP_DWELL_MS = 500;
+const NODE_RELEASE_HOLD_MS = 500;
 const STORAGE_KEY = "webimage.pages.v2";
 const { desktop, apiFetch } = window.CanvasFlowRuntime;
 const featureModules = window.CanvasFlowModules || {};
@@ -64,7 +66,7 @@ const DEFAULT_TEXT_TEMPLATES = [
 // BUILTIN_MULTI_NODE_SEED_VERSION 递增才会向已有用户补发新组件；
 // 用户删除过的内置组件记录在 builtinMultiNodeRemovedIds，不随种子版本升级复活。
 // imageFiles[].src 指向应用目录 builtin-templates/ 下的随包图片，注入时复制到数据目录。
-const BUILTIN_MULTI_NODE_SEED_VERSION = 1;
+const BUILTIN_MULTI_NODE_SEED_VERSION = 2;
 const DEFAULT_MULTI_NODE_TEMPLATES = [
   {
     id: "builtin_multi_rerender_v1",
@@ -84,6 +86,28 @@ const DEFAULT_MULTI_NODE_TEMPLATES = [
     imageFiles: [
       { id: "img_builtin_rerender_style", fileName: "builtin-rerender-style.jpg", mime: "image/jpeg", src: "builtin-templates/rerender-style.jpg" },
       { id: "img_builtin_rerender_product", fileName: "builtin-rerender-product.png", mime: "image/png", src: "builtin-templates/rerender-product.png" },
+    ],
+  },
+  {
+    id: "builtin_multi_marker_sketch_v1",
+    name: "马克笔草图上色",
+    revision: 1,
+    nodes: [
+      { id: "n1", type: "text", x: -520, y: 740, w: 240, h: 172, text: "将第二张图线稿图完善细节生成效果图，将第一张图仅作为风格和质感参考（不含颜色），适当优化线稿细节，允许细节处适当发散" },
+      { id: "n2", type: "text", x: -200, y: 740, w: 240, h: 172, text: "头盔主体用黑色塑料，点缀白色塑料" },
+      { id: "n3", type: "image", x: 120, y: 740, w: 240, h: 240, fileName: "builtin-marker-style.png", mime: "image/png", templateImageId: "img_builtin_marker_style", _previewAspect: 1 },
+      { id: "n4", type: "image", x: 440, y: 680, w: 240, h: 384, fileName: "builtin-marker-lineart.png", mime: "image/png", templateImageId: "img_builtin_marker_lineart", _previewAspect: 0.625 },
+      { id: "n5", type: "ai-image", x: 760, y: 680, w: 240, h: 409, prompt: "将第二张图线稿图完善细节生成效果图，将第一张图仅作为风格和质感参考（不含颜色），适当优化线稿细节，允许细节处适当发散，头盔主体用黑色塑料，点缀白色塑料", _model: "gpt-image-2.5-flare", _resolution: "1k", _size: "1:1", _quality: "medium", _count: 1 },
+    ],
+    edges: [
+      { id: "e1", from: { node: "n1", port: "out" }, to: { node: "n2", port: "in" }, label: "" },
+      { id: "e2", from: { node: "n2", port: "out" }, to: { node: "n3", port: "in" }, label: "" },
+      { id: "e3", from: { node: "n3", port: "out" }, to: { node: "n4", port: "in" }, label: "" },
+      { id: "e4", from: { node: "n4", port: "out" }, to: { node: "n5", port: "in" }, label: "" },
+    ],
+    imageFiles: [
+      { id: "img_builtin_marker_style", fileName: "builtin-marker-style.png", mime: "image/png", src: "builtin-templates/builtin-marker-style.png" },
+      { id: "img_builtin_marker_lineart", fileName: "builtin-marker-lineart.png", mime: "image/png", src: "builtin-templates/builtin-marker-lineart.png" },
     ],
   },
 ];
@@ -747,6 +771,13 @@ const els = {
 let drag = null;
 let compositeHoverTargetId = "";
 let compositeHoverReady = false;
+let edgeDropTargetId = "";
+let edgeDropPoint = null;
+let edgeDropArmed = false;
+let edgeDwellTimer = 0;
+let nodeReleaseTargetId = "";
+let nodeReleaseBridged = false;
+let nodeHoldTimer = 0;
 let connectDraft = null;
 let selectionDraft = null;
 let spaceDown = false;
@@ -2302,6 +2333,30 @@ function removeEdge(id) {
   render();
 }
 
+function insertNodeIntoEdge(edgeId, nodeId) {
+  const edge = state.edges.find(item => item.id === edgeId);
+  const node = findNode(nodeId);
+  if (!edge || !edgeInsertableNode(node)) return false;
+  const fromNode = findNode(edge.from.node);
+  const toNode = findNode(edge.to.node);
+  if (!fromNode || !toNode) return false;
+  if (state.edges.some(item => item.id !== edgeId && item.from.node === fromNode.id && item.to.node === nodeId)
+    || state.edges.some(item => item.id !== edgeId && item.from.node === nodeId && item.to.node === toNode.id)) {
+    toast("插入失败：节点与连线两端已存在相同连线");
+    return false;
+  }
+  state.edges = state.edges.filter(item => item.id !== edgeId);
+  if (node.type === "angle-image") state.edges = state.edges.filter(item => item.to.node !== nodeId);
+  if (toNode.type === "angle-image") state.edges = state.edges.filter(item => item.to.node !== toNode.id);
+  state.edges.push({ id: uid("e"), from: { node: fromNode.id, port: "out" }, to: { node: nodeId, port: "in" }, label: edge.label || "" });
+  state.edges.push({ id: uid("e"), from: { node: nodeId, port: "out" }, to: { node: toNode.id, port: "in" }, label: "" });
+  pushHistory();
+  render();
+  toast("已将节点插入连线，自动连接两端");
+  console.log("[连线插入] 节点已接入原连线两端", { previous: `${fromNode.id} -> ${toNode.id}`, inserted: nodeId });
+  return true;
+}
+
 function renameEdge(id) {
   const edge = state.edges.find(item => item.id === id);
   if (!edge) return;
@@ -3109,6 +3164,7 @@ function collectUpstreamForAI(nodeId, incoming) {
   // 深度优先展开上游,返回该子图的分支列表;每个分支是 { texts, images }。
   // 一个节点同时接多条线(扇入)时按线拆分支:图片线携带路径上的图片,
   // 文字/变量线携带该线文字;每条线独立成任务,与汇聚节点自身图片融合。
+  // 文字/变量节点沿所在支线向上游透传(串联文字按路径顺序合并);只有 AI/角度节点是语义边界。
   function visit(id, pathVisited) {
     if (pathVisited.has(id)) return [];
     const nextVisited = new Set(pathVisited);
@@ -3120,12 +3176,19 @@ function collectUpstreamForAI(nodeId, incoming) {
       if (n.generatedImage) return [{ texts: [], images: [imageRef(n, n.generatedImage, n.generatedAssetId)] }];
       return [];
     }
-    if (n.type === "text") {
-      return n.text && n.text.trim() ? [{ texts: [n.text.trim()], images: [] }] : [];
-    }
-    if (n.type === "variable") {
-      const output = variableNodeOutput(n);
-      return output ? [{ texts: [output], images: [] }] : [];
+    if (n.type === "text" || n.type === "variable") {
+      // 串联组合:文字/变量节点继续向上游收集,线内文字按路径顺序合并,自身文字排最下游
+      const ownText = n.type === "text" ? String(n.text || "").trim() : String(variableNodeOutput(n) || "").trim();
+      const edges = incoming.get(id) || [];
+      const upBranches = [];
+      for (const edge of edges) {
+        for (const branch of visit(edge.from.node, nextVisited)) upBranches.push(branch);
+      }
+      if (!upBranches.length) return ownText ? [{ texts: [ownText], images: [] }] : [];
+      return upBranches.map(branch => ({
+        texts: ownText ? [...branch.texts, ownText] : branch.texts,
+        images: branch.images,
+      }));
     }
     if (n.type === "group") {
       // 组节点维持现有批量语义:全部条目进 groupImages/groupTexts,由任务构建按组拆任务
@@ -5155,7 +5218,7 @@ function renderNodes(options = {}) {
     const div = document.createElement("div");
     const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
     const variableInvalid = node.type === "variable" && (normalizeVariableNode(node), node.variableRows.some(row => resolvedVariableRow(row).invalid));
-    div.className = `node ${node.type} ${progressClass} ${variableInvalid ? "variable-invalid" : ""} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""}`;
+    div.className = `node ${node.type} ${progressClass} ${variableInvalid ? "variable-invalid" : ""} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""} ${nodeReleaseTargetId === node.id ? (nodeReleaseBridged ? "edge-release-armed edge-release-bridge" : "edge-release-armed") : ""}`;
     div.dataset.id = node.id;
     div.draggable = false;
     div.style.left = `${node.x}px`;
@@ -5336,8 +5399,7 @@ function renderEdges() {
     const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
     hit.setAttribute("class", "edge-hit");
     hit.setAttribute("d", d);
-    hit.dataset.edgeId = e.id;
-    hit.addEventListener("dblclick", ev => {
+    hit.dataset.edgeId = e.id;    hit.addEventListener("dblclick", ev => {
       ev.stopPropagation();
       if (isMindmapMode()) renameEdge(e.id);
       else removeEdge(e.id);
@@ -5350,7 +5412,12 @@ function renderEdges() {
         : [["取消连线", () => removeEdge(e.id)]]);
     });
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("class", "edge");
+    const dropReady = edgeDropArmed && e.id === edgeDropTargetId;
+    const releaseReady = nodeReleaseTargetId && (e.from.node === nodeReleaseTargetId || e.to.node === nodeReleaseTargetId);
+    let edgeClass = "edge";
+    if (dropReady) edgeClass += " edge-drop-ready";
+    if (releaseReady) edgeClass += " edge-release-ready";
+    path.setAttribute("class", edgeClass);
     path.setAttribute("d", d);
     els.edges.appendChild(hit);
     els.edges.appendChild(path);
@@ -5745,8 +5812,122 @@ function updateCompositeHover(dragState) {
   scheduleInteractiveRender({ nodes: true });
 }
 
+function edgeInsertableNode(node) {
+  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "tool-node";
+}
+
+function edgeHitPoints(a, b) {
+  const g = edgeGeometry(a, b);
+  if (g.type !== "polyline") return edgeSamplePoints(a, b);
+  const points = [];
+  for (let i = 0; i < g.points.length - 1; i++) {
+    const p = g.points[i];
+    const q = g.points[i + 1];
+    const steps = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / 16));
+    for (let s = 0; s < steps; s++) points.push({ x: p.x + (q.x - p.x) * s / steps, y: p.y + (q.y - p.y) * s / steps });
+  }
+  points.push(g.points[g.points.length - 1]);
+  return points;
+}
+
+function setEdgeDropNodeHint(nodeId) {
+  els.nodes.querySelectorAll(".node.edge-drop-armed").forEach(element => {
+    if (element.dataset.id !== nodeId) element.classList.remove("edge-drop-armed");
+  });
+  if (!nodeId) return;
+  els.nodes.querySelector(`.node[data-id="${CSS.escape(nodeId)}"]`)?.classList.add("edge-drop-armed");
+}
+
+function clearEdgeDropHover() {
+  if (edgeDwellTimer) {
+    window.clearTimeout(edgeDwellTimer);
+    edgeDwellTimer = 0;
+  }
+  edgeDropArmed = false;
+  setEdgeDropNodeHint("");
+  if (!edgeDropTargetId) return;
+  edgeDropTargetId = "";
+  edgeDropPoint = null;
+  scheduleInteractiveRender({ edges: true });
+}
+
+function armEdgeDropTarget() {
+  edgeDwellTimer = 0;
+  edgeDropArmed = true;
+  setEdgeDropNodeHint(drag?.original[0]?.id || "");
+  scheduleInteractiveRender({ edges: true });
+}
+
+function updateEdgeDropHover(dragState) {
+  if (!dragState?.moved || dragState.original.length !== 1 || compositeHoverReady) return clearEdgeDropHover();
+  const source = findNode(dragState.original[0].id);
+  if (!edgeInsertableNode(source)) return clearEdgeDropHover();
+  const margin = 10;
+  const centerX = source.x + source.w / 2;
+  const centerY = source.y + source.h / 2;
+  let bestEdgeId = "";
+  let bestPoint = null;
+  let bestDistance = Infinity;
+  for (const edge of state.edges) {
+    if (edge.from.node === source.id || edge.to.node === source.id) continue;
+    const a = findNode(edge.from.node);
+    const b = findNode(edge.to.node);
+    if (!a || !b) continue;
+    for (const p of edgeHitPoints(a, b)) {
+      if (p.x < source.x - margin || p.x > source.x + source.w + margin || p.y < source.y - margin || p.y > source.y + source.h + margin) continue;
+      const distance = Math.hypot(p.x - centerX, p.y - centerY);
+      if (distance < bestDistance) { bestDistance = distance; bestEdgeId = edge.id; bestPoint = p; }
+    }
+  }
+  if (bestEdgeId !== edgeDropTargetId) {
+    if (edgeDwellTimer) {
+      window.clearTimeout(edgeDwellTimer);
+      edgeDwellTimer = 0;
+    }
+    edgeDropTargetId = bestEdgeId;
+    edgeDropPoint = bestPoint;
+    edgeDropArmed = false;
+    setEdgeDropNodeHint("");
+    if (bestEdgeId) edgeDwellTimer = window.setTimeout(armEdgeDropTarget, EDGE_DROP_DWELL_MS);
+    scheduleInteractiveRender({ edges: true });
+  } else if (bestEdgeId) {
+    edgeDropPoint = bestPoint;
+  }
+}
+
+function armNodeRelease() {
+  nodeHoldTimer = 0;
+  if (!drag || drag.type !== "nodes" || drag.moved || drag.original.length !== 1) return;
+  const nodeId = drag.original[0].id;
+  const ins = state.edges.filter(e => e.to.node === nodeId);
+  const outs = state.edges.filter(e => e.from.node === nodeId);
+  if (!ins.length && !outs.length) return;
+  nodeReleaseTargetId = nodeId;
+  nodeReleaseBridged = ins.length > 0 && outs.length > 0;
+  const element = els.nodes.querySelector(`.node[data-id="${CSS.escape(nodeId)}"]`);
+  element?.classList.add("edge-release-armed");
+  element?.classList.toggle("edge-release-bridge", nodeReleaseBridged);
+  scheduleInteractiveRender({ edges: true });
+}
+
+function clearNodeRelease() {
+  if (nodeHoldTimer) {
+    window.clearTimeout(nodeHoldTimer);
+    nodeHoldTimer = 0;
+  }
+  if (!nodeReleaseTargetId) return;
+  nodeReleaseTargetId = "";
+  nodeReleaseBridged = false;
+  els.nodes.querySelectorAll(".node.edge-release-armed").forEach(element => {
+    element.classList.remove("edge-release-armed");
+    element.classList.remove("edge-release-bridge");
+  });
+  scheduleInteractiveRender({ edges: true });
+}
+
 els.viewport.addEventListener("wheel", ev => {
   ev.preventDefault();
+  clearNodeRelease();
   const before = screenToWorld(ev.clientX, ev.clientY);
   const factor = ev.deltaY < 0 ? 1.08 : .92;
   state.view.scale = Math.max(.25, Math.min(2.5, state.view.scale * factor));
@@ -5800,6 +5981,8 @@ els.viewport.addEventListener("mousedown", ev => {
     drag = { type: "nodes", start, moved: false, original: state.nodes.filter(n => state.selected.has(n.id)).map(n => ({ id: n.id, x: n.x, y: n.y })) };
     // Keep the preview element alive so a real mouse double-click can reach it.
     // Rebuilding the node here would discard the first click's DOM target.
+    clearNodeRelease();
+    nodeHoldTimer = window.setTimeout(armNodeRelease, NODE_RELEASE_HOLD_MS);
     syncSelectedNodeClasses();
     return;
   }
@@ -5852,12 +6035,14 @@ window.addEventListener("mousemove", ev => {
     const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) < 3 / state.view.scale) return;
     drag.moved = true;
+    clearNodeRelease();
     for (const item of drag.original) {
       const n = findNode(item.id);
       n.x = snap(item.x + dx);
       n.y = snap(item.y + dy);
     }
     updateCompositeHover(drag);
+    updateEdgeDropHover(drag);
     scheduleInteractiveRender({ nodes: true, edges: true, minimap: true });
   } else if (drag?.type === "pan") {
     state.view.x = drag.vx + ev.clientX - drag.sx;
@@ -5898,12 +6083,44 @@ window.addEventListener("mouseup", ev => {
       compositeRequest = { source, target };
       render();
     }
-  } else if (drag?.type === "nodes") pushHistory();
+  } else if (drag?.type === "nodes") {
+    if (nodeReleaseTargetId) {
+      const nodeId = nodeReleaseTargetId;
+      const removed = state.edges.filter(e => e.from.node === nodeId || e.to.node === nodeId);
+      const ins = removed.filter(e => e.to.node === nodeId);
+      const outs = removed.filter(e => e.from.node === nodeId);
+      clearNodeRelease();
+      if (removed.length) {
+        // 隔离语义与 Alt 划线切线一致:被切断的 入边×出边 链路重新桥接,跳过自环与重复
+        state.edges = state.edges.filter(e => !removed.includes(e));
+        let bridged = 0;
+        for (const e1 of ins) {
+          for (const e2 of outs) {
+            if (e1.from.node === e2.to.node) continue;
+            if (state.edges.some(e => e.from.node === e1.from.node && e.to.node === e2.to.node)) continue;
+            state.edges.push({ id: uid("e"), from: { node: e1.from.node, port: "out" }, to: { node: e2.to.node, port: "in" }, label: "" });
+            bridged++;
+          }
+        }
+        pushHistory();
+        render();
+        console.log("[长按隔离] 节点已从连线中隔离", { nodeId, removed: removed.length, bridged });
+        toast(bridged ? `已隔离节点，前后连线已接通（断开 ${removed.length} 条）` : `已解除该节点的 ${removed.length} 条连线`);
+      }
+    } else {
+      const dropEdgeId = edgeDropArmed ? edgeDropTargetId : "";
+      const draggedNodeId = drag.original[0]?.id;
+      clearEdgeDropHover();
+      if (!(dropEdgeId && draggedNodeId && insertNodeIntoEdge(dropEdgeId, draggedNodeId))) pushHistory();
+    }
+  }
   if (drag?.type === "pan") {
     saveCurrentPage();
     persistPages();
   }
   clearCompositeHover();
+  clearEdgeDropHover();
+  clearNodeRelease();
   drag = null;
   if (compositeRequest) {
     console.log("[节点叠放合成] 已触发编辑", { baseNodeId: compositeRequest.target.id, placedNodeId: compositeRequest.source.id });

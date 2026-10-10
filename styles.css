@@ -518,6 +518,40 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   stroke-width: 4;
 }
 
+.edge.edge-drop-ready {
+  stroke: var(--drop-indicator);
+  stroke-width: 4;
+}
+
+.edge.edge-release-ready {
+  stroke: var(--danger);
+  stroke-width: 4;
+}
+
+.node.edge-drop-armed,
+.node.edge-release-armed { z-index: 30; }
+.node.edge-drop-armed::after { content: "松开插入连线"; }
+.node.edge-release-armed::after { content: "松开解除连线"; }
+.node.edge-release-bridge::after { content: "松开隔离节点"; }
+.node.edge-drop-armed::after,
+.node.edge-release-armed::after {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
+  border-radius: 10px;
+  background: var(--panel-solid);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
 .node {
   position: absolute;
   width: 240px;

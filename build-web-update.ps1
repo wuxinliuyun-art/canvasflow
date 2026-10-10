@@ -36,6 +36,8 @@ $files = @(
     "modules/mindmap-module.js",
     "builtin-templates/rerender-style.jpg",
     "builtin-templates/rerender-product.png",
+    "builtin-templates/builtin-marker-style.png",
+    "builtin-templates/builtin-marker-lineart.png",
     "cep-panel/CanvasFlowPanel/CSXS/manifest.xml",
     "cep-panel/CanvasFlowPanel/index.html",
     "cep-panel/CanvasFlowPanel/js/csinterface-lite.js",
