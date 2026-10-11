@@ -119,6 +119,7 @@ const UI_EN = {
   "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
   "拓展": "Extensions", "拓展节点": "Extension Node", "扩展服务": "Extension Service",
   "导出方式": "Export Mode", "导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）": "Pack exports into a ZIP download (off = save files individually to the export folder)",
+  "生成图片保存": "Generated Image Saving", "以项目名称创建文件夹导出（生成图片保存到 ai_generated\\项目名\\ 子文件夹）": "Create a per-project export folder (generated images are saved to ai_generated\\<project name>\\)",
   "服务地址": "Service URL", "刷新拓展": "Refresh Extensions", "拓展列表": "Extension List",
   "执行": "Run", "运行中…": "Running…",
   "拓展文件夹里的工具会自动接入画布，作为拓展节点使用。": "Tools in the extensions folder automatically appear as canvas nodes.",
@@ -128,6 +129,13 @@ const UI_EN = {
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
+  "v2.7.3 更新说明": "v2.7.3 Release Notes",
+  "新增交互·增加节点：长按节点，放置到连线上，松手接入连线": "New gestures · Add a node: hold a node, place it onto a connection, release to insert it into the line",
+  "新增交互·删减节点：长按节点不动，松手隔离该节点（前后连线自动接通）": "New gestures · Remove a node: hold a node without moving it, release to isolate it (its upstream and downstream connections are rejoined)",
+  "新增「以项目名称创建文件夹导出」开关，生成图片自动按项目名归档保存": "New \"export into per-project folders\" toggle — generated images are archived automatically under a folder named after the project",
+  "AI 绘图设置新增默认分辨率、默认比例，并与默认模型一起移到 API 设置下方": "AI image settings add default resolution and aspect ratio, moved together with the default model below the API settings",
+  "任务运行中可直接新建、切换项目，完成后结果自动落回原项目": "Create and switch projects while tasks are running; finished results are delivered back to their own project",
+  "任务队列显示任务所属项目": "The task queue now shows which project each task belongs to",
   "v2.7.1 更新说明": "v2.7.1 Release Notes",
   "新增 AGToken（agtoken.vip）API 支持，没有网络加速器也不影响注册会员": "Added AGToken (agtoken.vip) API support — register and use it without a network accelerator",
   "修复有时点击 AI 生图没反应的问题": "Fixed AI image generation sometimes not responding to clicks",
@@ -259,8 +267,11 @@ const UI_EN = {
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.", "在画布中多选节点后右键保存，同时保留节点布局和内部连线。": "Select multiple nodes on the canvas, then right-click to save their layout and internal connections.",
   "＋ 新建文字": "+ New Text", "＋ 新建图片": "+ New Image", "AI 绘图": "AI Image", "自定义节点": "Custom Nodes", "暂无素材": "No assets", "双击放大预览": "Double-click to enlarge", "当前素材预览": "Current asset preview",
-  "配置新建节点的默认模型和 API Key；画面参数在每个 AI 绘图节点中单独设置。": "Configure the default model for new nodes and the API key; set image options separately in each AI Image node.",
+  "配置 API 连接与新建节点的默认模型、分辨率和比例；画面参数在每个 AI 绘图节点中单独设置。": "Configure the API connection and the default model, resolution, and aspect ratio for new nodes; set image options separately in each AI Image node.",
   "默认绘图模型": "Default image model",
+  "默认分辨率": "Default resolution",
+  "默认比例": "Default aspect ratio",
+  "该项目仍有未完成任务，请等任务完成或先取消再删除": "This project still has unfinished tasks — wait for them to finish or cancel them before deleting",
   "仅影响之后新建的 AI 绘图节点，不会修改已有节点。": "Only affects AI Image nodes created later; existing nodes are unchanged.",
   "文件导出": "File Export", "同时导出输入素材（关键词和参考图）": "Also export inputs (prompts and reference images)",
   "默认只导出 AI 生成结果；输入素材会与生成结果分开放置，不包含项目 JSON。": "By default, export only AI results. Inputs are stored separately and project JSON is never included."
@@ -310,7 +321,9 @@ function translateEnglishString(source) {
     [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
     [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"],
     [/^自定义文字：(.+)$/, "Custom Text: $1"], [/^自定义图片：(.+)$/, "Custom Image: $1"],
-    [/^当前图片：(.+)（可选择新图片替换）$/, "Current image: $1 (choose a new image to replace it)"],
+    [/^其他项目仍有 (\d+) 个任务运行中，完成后结果会自动落回原项目$/, "$1 task(s) still running in other projects — results will be delivered back to their projects when done"],
+  [/^结果已落回项目「(.+)」$/, "Results delivered back to project \"$1\""],
+  [/^当前图片：(.+)（可选择新图片替换）$/, "Current image: $1 (choose a new image to replace it)"],
     [/^文字：(.+)$/, "Text: $1"], [/^图片：(.+)$/, "Image: $1"]
   ];
   for (const [pattern, replacement] of rules) if (pattern.test(source)) return source.replace(pattern, replacement);
@@ -370,7 +383,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", zipExport: false, exportInputs: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -607,6 +620,7 @@ const els = {
   editOnOverlap: $("editOnOverlapToggle"),
   projectFolder: $("projectFolderInput"),
   zipExportToggle: $("zipExportToggle"),
+  projectExportFolderToggle: $("projectExportFolderToggle"),
   chooseProjectFolderBtn: $("chooseProjectFolderBtn"),
   openProjectFolderBtn: $("openProjectFolderBtn"),
   copyProjectPathBtn: $("copyProjectPathBtn"),
@@ -633,6 +647,8 @@ const els = {
   folderImportConfirmBtn: $("folderImportConfirmBtn"),
   apiKeyInput: $("apiKeyInput"),
   defaultImageModelSelect: $("defaultImageModelSelect"),
+  defaultResolutionSelect: $("defaultResolutionSelect"),
+  defaultSizeSelect: $("defaultSizeSelect"),
   aiGenerateBtn: $("aiGenerateBtn"),
   verifyKeyBtn: $("verifyKeyBtn"),
   saveKeyBtn: $("saveKeyBtn"),
@@ -876,7 +892,7 @@ function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
@@ -1068,6 +1084,7 @@ function syncSettingsPanel() {
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
   els.zipExportToggle.checked = state.settings.zipExport === true;
+  if (els.projectExportFolderToggle) els.projectExportFolderToggle.checked = state.settings.projectExportFolder === true;
   const darkThemeToggle = $("darkThemeToggle");
   if (darkThemeToggle) darkThemeToggle.checked = state.settings.theme === "dark";
   state.settings.exportFolderLabel = resolvedExportFolderLabel(state.settings.exportFolderLabel);
@@ -1741,16 +1758,8 @@ function variableNodeOutput(node) {
   return node.variableRows.map(resolvedVariableRow).filter(row => row.variableName && row.valueLabel).map(row => `${row.valueLabel}${row.variableName}`).join("，");
 }
 
-function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
-  const width = NODE_WIDTH;
-  const height = placementOptions.height || nodeHeightForType(type);
-  let position = placementOptions.avoidOverlap === false
-    ? { x: snap(x), y: snap(y) }
-    : findFreeNodePosition(x, y, width, height, placementOptions);
-  if (commit && placementOptions.autoAlign !== false && state.settings.autoAlign !== false) {
-    position = autoAlignPosition(position.x, position.y, width, height);
-  }
-  const node = {
+function buildNodeObject(type, position, width, height) {
+  return {
     id: uid("n"),
     type,
     x: position.x,
@@ -1773,8 +1782,8 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     angleZoom: type === "angle-image" ? 1 : undefined,
     angleReverseDirection: type === "angle-image" ? false : undefined,
     _model: type === "angle-image" ? "gemini-3.1-flash-image-preview" : type === "ai-image" ? (state.settings.defaultImageModel || "gpt-image-2.5-flare") : undefined,
-    _resolution: type === "angle-image" ? "1k" : undefined,
-    _size: type === "angle-image" ? "1:1" : undefined,
+    _resolution: type === "angle-image" ? "1k" : type === "ai-image" ? (state.settings.defaultResolution || "1k") : undefined,
+    _size: type === "angle-image" ? "1:1" : type === "ai-image" ? (state.settings.defaultSize || "1:1") : undefined,
     _count: (type === "ai-image" || type === "screenshot-input") ? 1 : undefined,
     images: (type === "group" || type === "folder") ? [] : undefined,
     items: null,
@@ -1785,12 +1794,31 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
   };
+}
+
+function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
+  const width = NODE_WIDTH;
+  const height = placementOptions.height || nodeHeightForType(type);
+  let position = placementOptions.avoidOverlap === false
+    ? { x: snap(x), y: snap(y) }
+    : findFreeNodePosition(x, y, width, height, placementOptions);
+  if (commit && placementOptions.autoAlign !== false && state.settings.autoAlign !== false) {
+    position = autoAlignPosition(position.x, position.y, width, height);
+  }
+  const node = buildNodeObject(type, position, width, height);
   state.nodes.push(node);
   state.selected = new Set([node.id]);
   if (commit) {
     pushHistory();
     render();
   }
+  return node;
+}
+
+// 离页落位专用:把结果节点直接写进非激活项目的 page.data(深克隆副本),不渲染、不选中、不进当前页历史
+function addNodeToPageData(page, type, x, y) {
+  const node = buildNodeObject(type, { x: snap(x), y: snap(y) }, NODE_WIDTH, nodeHeightForType(type));
+  page.data.nodes.push(node);
   return node;
 }
 
@@ -3437,10 +3465,11 @@ async function pollTask(taskId, onProgress = null, returnAllImages = false) {
     if (!urls.length) throw new Error("任务完成但无图片结果");
     return returnAllImages ? urls : urls[0];
   }
-  const maxAttempts = 360;
+  // 3 秒一轮、120 次 ≈ 6 分钟总超时（沿用原 1s×360 的超时预算，仅降低查询频率）
+  const maxAttempts = 120;
   let lastErr = null;
   for (let i = 0; i < maxAttempts; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 1000));
+    if (i > 0) await new Promise(r => setTimeout(r, 3000));
     let data;
     try {
       const resp = await apiFetch(`/api/task/${encodeURIComponent(taskId)}`, {
@@ -3539,8 +3568,17 @@ function taskQueueForNode(nodeId) {
   return aiTaskQueue.items.filter(task => task.nodeId === nodeId);
 }
 
-function hasUnsettledAiQueueTasks() {
-  return aiTaskQueue.items.some(task => !queueTaskIsSettled(task));
+// 任务可能属于非激活项目(切换已放开):按 pageId 找回所属页与页内节点
+function taskTargetPage(task) {
+  return state.pages.find(page => page.id === task.pageId) || null;
+}
+
+function nodeFromPageData(page, nodeId) {
+  return (page?.data?.nodes || []).find(node => node.id === nodeId) || null;
+}
+
+function countForeignUnsettledTasks() {
+  return aiTaskQueue.items.filter(task => !queueTaskIsSettled(task) && task.pageId && task.pageId !== state.activePageId).length;
 }
 
 function refreshQueuedNodeProgress(nodeId) {
@@ -3582,7 +3620,7 @@ function renderTaskQueue() {
       <div class="task-queue-copy">
         <div class="task-queue-title"><span>${escapeHtml(task.label)}</span><span class="task-queue-status">${queueTaskStatusText(task)}</span></div>
         <div class="task-queue-prompt">${escapeHtml(task.prompt || translateUiString("(无文字输入)"))}</div>
-        <div class="task-queue-meta">${escapeHtml(task.model)} · ${escapeHtml(task.resolution)} · ${escapeHtml(task.size)}</div>
+        <div class="task-queue-meta">${escapeHtml(task.projectName ? `${task.projectName} · ` : "")}${escapeHtml(task.model)} · ${escapeHtml(task.resolution)} · ${escapeHtml(task.size)}</div>
         <div class="task-queue-mini-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
       </div>
       <div class="task-queue-actions">${pauseButton}${orderButtons}</div>
@@ -3750,12 +3788,19 @@ function generationMetadataFor(prompt, projectName, taskId) {
   };
 }
 
+// 勾选"以项目名称创建文件夹导出"时,生成图片保存到 ai_generated/项目名/ 子文件夹(保存接口支持文件名带子目录并自动建目录)
+function projectExportFileName(fileName, projectName) {
+  if (!state.settings.projectExportFolder) return fileName;
+  const folder = safeName(projectName || "项目").slice(0, 36) || "项目";
+  return `${folder}/${fileName}`;
+}
+
 async function saveGeneratedOutput(dataUrl, task, node) {
   const fileName = generatedResultFileName(task, node, dataUrl);
   const response = await apiFetch("/api/save-export-files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folderName: "ai_generated", baseFolder: task.exportFolder || "export", files: [{ name: fileName, data: dataUrl }] }),
+    body: JSON.stringify({ folderName: "ai_generated", baseFolder: task.exportFolder || "export", files: [{ name: projectExportFileName(fileName, task.projectName), data: dataUrl }] }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
@@ -3773,6 +3818,12 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     console.error("[生成结果] 输出文件保存失败", { taskId: task.id, nodeId: node.id, message: error.message });
   }
   const fileName = saved?.fileName || generatedResultFileName(task, node, dataUrl);
+  // 离页落位:任务所属项目不是当前页时,直接写回该项目的 page.data(节点按 id 重新解析,新节点不进当前画布)
+  const targetPage = taskTargetPage(task);
+  const offPage = targetPage && targetPage.id !== state.activePageId ? targetPage : null;
+  if (offPage) {
+    node = nodeFromPageData(offPage, task.nodeId) || node;
+  }
   if (task.resultMode === "node-preview") {
     node.generatedImage = dataUrl;
     delete node.generatedAssetId;
@@ -3786,7 +3837,9 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     const resultIndex = Math.max(0, Number(task.resultOrder) || 0);
     const column = resultIndex % columns;
     const row = Math.floor(resultIndex / columns);
-    const resultNode = addNode("image", node.x + NODE_WIDTH + 40 + column * (NODE_WIDTH + 40), node.y + row * IMAGE_NODE_VERTICAL_STEP, false);
+    const resultNode = offPage
+      ? addNodeToPageData(offPage, "image", node.x + NODE_WIDTH + 40 + column * (NODE_WIDTH + 40), node.y + row * IMAGE_NODE_VERTICAL_STEP)
+      : addNode("image", node.x + NODE_WIDTH + 40 + column * (NODE_WIDTH + 40), node.y + row * IMAGE_NODE_VERTICAL_STEP, false);
     resultNode.image = dataUrl;
     resultNode.fileName = fileName;
     resultNode.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
@@ -3795,7 +3848,7 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     resultNode.aiBatchIndex = task.groupIndex >= 0 ? task.groupIndex : null;
     resultNode.outputPath = saved?.outputPath || "";
     task.resultNodeId = resultNode.id;
-    render();
+    if (!offPage) render();
     try {
       await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
     } catch (error) {
@@ -3803,8 +3856,13 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
       console.error("[生成结果] 素材仓库写入失败，保留画布结果", { taskId: task.id, resultNodeId: resultNode.id, message: error.message });
     }
   }
-  pushHistory();
-  render();
+  if (offPage) {
+    // 离页变更直接持久化(page.data 已改写),不进当前页的撤销历史
+    markDirty();
+  } else {
+    pushHistory();
+    render();
+  }
 }
 
 // 生成成功但下载失败时，把结果链接暂存到节点上，供“重新下载结果”取回（结果链接约24小时有效）
@@ -3844,6 +3902,7 @@ async function redownloadAiResults(nodeId) {
       const task = {
         id: `q${aiTaskQueue.nextId++}`,
         nodeId: node.id,
+        pageId: state.activePageId,
         projectName: currentPage()?.name || "项目",
         exportFolder: state.settings.exportFolderLabel || "export",
         referenceName: "重新下载结果",
@@ -3902,7 +3961,8 @@ async function applyScreenshotQueuedResult(task, dataUrl) {
 }
 
 async function runQueuedAiTask(task) {
-  const node = findNode(task.nodeId);
+  // 切换项目已放开:任务节点可能不在当前页,按 pageId 从页数据兜底解析
+  let node = findNode(task.nodeId) || nodeFromPageData(taskTargetPage(task), task.nodeId);
   if (!node && task.source !== "screenshot") throw new Error("对应的 AI 绘图节点已被删除");
   task.status = "slot-waiting";
   refreshQueuedNodeProgress(task.nodeId);
@@ -3940,6 +4000,15 @@ async function runQueuedAiTask(task) {
   renderTaskQueue();
   notifyScreenshotTask(task);
   const urls = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
+  // 落位前重新解析节点:任务运行期间用户可能切走又切回,页数据深克隆会让原对象脱离页面数据
+  if (task.pageId && task.pageId !== state.activePageId) {
+    node = nodeFromPageData(taskTargetPage(task), task.nodeId) || node;
+    // 离页节点没人清理进度状态,切回时会卡"生成中",这里直接清掉(同节点其余任务的进度回调会重建)
+    if (node) {
+      node.generating = false;
+      delete node._aiProgress;
+    }
+  }
   const expectedCount = isImage25ExtModel(task.generationSettings?._model)
     ? Math.max(1, Math.min(4, Number(task.generationSettings?._count) || 1))
     : 1;
@@ -3988,6 +4057,10 @@ async function runQueuedAiTask(task) {
   task.status = "done";
   task.progress = 100;
   notifyScreenshotTask(task);
+  const landedPage = taskTargetPage(task);
+  if (landedPage && landedPage.id !== state.activePageId && task.source !== "screenshot") {
+    toast(`结果已落回项目「${landedPage.name || "未命名"}」`);
+  }
 }
 
 function runQueuedTask(task) {
@@ -4320,7 +4393,7 @@ async function generateSingle(node, upstream) {
     apiFetch("/api/save-export-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: node.fileName, data: taggedBase64 }] }),
+      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: projectExportFileName(node.fileName, currentPage()?.name || "项目"), data: taggedBase64 }] }),
     }).catch(() => {});
     setAiNodeProgress(node, "done", "生成完成", 100);
     clearAiNodeProgressSoon(node);
@@ -4755,7 +4828,7 @@ let projectPanelEditingName = false;
 function peekProjectPage(target) {
   if (projectPanelEditingName) return;
   if (!target || target.id === state.activePageId) return;
-  if (hasUnsettledAiQueueTasks()) return; // 队列有任务时 switchPage 会被拦截，这里静默跳过
+  // 切换已放开,悬停预览不再受任务队列限制
   if (!projectPeek) projectPeek = { originalId: state.activePageId };
   switchPage(target.id);
 }
@@ -7926,13 +7999,12 @@ function createNewPage(mode = "ai", groupId = null) {
   markDirty();
   render();
   toast(mode === "mindmap" ? "已新建思维导图项目" : "已新建 AI 绘图项目");
+  const foreign = countForeignUnsettledTasks();
+  if (foreign) toast(`其他项目仍有 ${foreign} 个任务运行中，完成后结果会自动落回原项目`);
 }
 
 function newPage(groupId = null) {
-  if (hasUnsettledAiQueueTasks()) {
-    toast("任务队列仍有待处理任务，请完成或删除等待任务后再新建项目");
-    return;
-  }
+  // 任务不再阻止新建项目:运行中的任务完成后自动落回原项目(pageId 定位)
   if (!mindmapFeatureEnabled()) {
     createNewPage("ai", groupId);
     return;
@@ -7947,8 +8019,9 @@ function closeProjectModeDialog() {
 }
 
 function deletePage(id) {
-  if (hasUnsettledAiQueueTasks()) {
-    toast("任务队列仍有待处理任务，请完成或删除等待任务后再删除项目");
+  // 只拦要删的那个项目自己的任务;其他项目的任务照常运行并落回各自项目
+  if (aiTaskQueue.items.some(task => task.pageId === id && !queueTaskIsSettled(task))) {
+    toast("该项目仍有未完成任务，请等任务完成或先取消再删除");
     return;
   }
   const visiblePages = state.pages.filter(page => page.mode !== "mindmap" || mindmapFeatureEnabled());
@@ -7978,10 +8051,7 @@ function deletePage(id) {
 
 function switchPage(id) {
   if (id === state.activePageId) return;
-  if (hasUnsettledAiQueueTasks()) {
-    toast("任务队列仍有待处理任务，请完成或删除等待任务后再切换项目");
-    return;
-  }
+  // 任务运行中允许切换:非激活页的任务完成后由 pageId 定位落回原项目
   const targetPage = state.pages.find(page => page.id === id);
   if (!targetPage || (targetPage.mode === "mindmap" && !mindmapFeatureEnabled())) return;
   saveCurrentPage();
@@ -9087,6 +9157,24 @@ function populateDefaultModelOptions() {
     state.settings.defaultImageModel = catalog.defaultModel;
   }
   els.defaultImageModelSelect.value = state.settings.defaultImageModel;
+  syncDefaultParameterOptions();
+}
+
+// 默认分辨率/比例跟随默认绘图模型:选项取该模型在当前 API 类型目录下的档位,存档值无效时回退首档
+function syncDefaultParameterOptions() {
+  if (!els.defaultResolutionSelect && !els.defaultSizeSelect) return;
+  const catalog = activeCatalog();
+  const entry = modelCatalogEntry(state.settings.defaultImageModel) || catalog.models.find(model => !model.hidden) || catalog.models[0];
+  if (els.defaultResolutionSelect) {
+    els.defaultResolutionSelect.innerHTML = entry.resolutions.map(value => `<option value="${value}">${value.toUpperCase()}</option>`).join("");
+    if (!entry.resolutions.includes(state.settings.defaultResolution)) state.settings.defaultResolution = entry.resolutions[0];
+    els.defaultResolutionSelect.value = state.settings.defaultResolution;
+  }
+  if (els.defaultSizeSelect) {
+    els.defaultSizeSelect.innerHTML = entry.sizes.map(value => `<option value="${value}">${value}</option>`).join("");
+    if (!entry.sizes.includes(state.settings.defaultSize)) state.settings.defaultSize = entry.sizes[0];
+    els.defaultSizeSelect.value = state.settings.defaultSize;
+  }
 }
 
 function applyApiTypeSettingsUi() {
@@ -9139,6 +9227,11 @@ els.customApiHeadersInput.onchange = () => {
 
 els.zipExportToggle.onchange = () => {
   state.settings.zipExport = els.zipExportToggle.checked;
+  pushHistory();
+};
+
+els.projectExportFolderToggle.onchange = () => {
+  state.settings.projectExportFolder = els.projectExportFolderToggle.checked;
   pushHistory();
 };
 
@@ -9290,7 +9383,18 @@ els.apiKeyInput.onchange = () => {
 
 els.defaultImageModelSelect.onchange = () => {
   state.settings.defaultImageModel = els.defaultImageModelSelect.value;
+  syncDefaultParameterOptions();
   console.info("[默认绘图模型] 已更新", { model: state.settings.defaultImageModel });
+  pushHistory();
+};
+
+els.defaultResolutionSelect.onchange = () => {
+  state.settings.defaultResolution = els.defaultResolutionSelect.value;
+  pushHistory();
+};
+
+els.defaultSizeSelect.onchange = () => {
+  state.settings.defaultSize = els.defaultSizeSelect.value;
   pushHistory();
 };
 

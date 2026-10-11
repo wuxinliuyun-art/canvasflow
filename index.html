@@ -139,6 +139,11 @@
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
           <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
         </section>
+
+        <section class="settings-card">
+          <h3>生成图片保存</h3>
+          <label class="check-row"><input id="projectExportFolderToggle" type="checkbox"><span>以项目名称创建文件夹导出（生成图片保存到 ai_generated\项目名\ 子文件夹）</span></label>
+        </section>
         
         <section class="settings-card onboarding-settings-card">
           <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
@@ -148,19 +153,14 @@
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <details class="update-notes">
-            <summary class="update-notes-title">v2.7.1 更新说明</summary>
+            <summary class="update-notes-title">v2.7.3 更新说明</summary>
             <ul>
-              <li>新增 Photoshop 互传：图片节点右键「在 PS 中编辑」，PS 面板一键把当前文档合并或单图层回传为画布图片节点（设置 → 拓展 中安装面板、指定 Photoshop 路径）</li>
-              <li>内置自定义组件「重新渲染」：风格参考图加产品图，一键生成精修电商效果图</li>
-              <li>图片标注新增箭头、方框工具；灯箱编辑工具栏重做，双击图片直接进入编辑</li>
-              <li>「生成张数」1–4 对所有 AI 绘图模型开放，其他模型自动拆成多个任务</li>
-              <li>修复中文输入法下重命名项目/分组打第一个字就中断、输入框回车上屏候选词误创建节点的问题</li>
-              <li>修复 AI 任务并发提交被上游拒绝且不留任务记录的问题（启动错峰 500ms）</li>
-              <li>修复同一节点接多条线时文字互相串扰的问题，现在按线拆分任务</li>
-              <li>橡皮擦显示实际大小的圆形光标，各工具分别记忆笔刷大小；灯箱「取消」/Esc 直接关闭</li>
-              <li>透明 PNG 显示棋盘格背景；新项目默认深色主题</li>
-              <li>服务器运行模式：修复图片文件被损坏、素材库读取失败、畸形请求导致服务崩溃的问题</li>
-              <li>本版更新了内核：请下载完整安装包覆盖安装后使用（项目与设置会保留）</li>
+              <li>新增交互·增加节点：长按节点，放置到连线上，松手接入连线</li>
+              <li>新增交互·删减节点：长按节点不动，松手隔离该节点（前后连线自动接通）</li>
+              <li>新增「以项目名称创建文件夹导出」开关，生成图片自动按项目名归档保存</li>
+              <li>AI 绘图设置新增默认分辨率、默认比例，并与默认模型一起移到 API 设置下方</li>
+              <li>任务运行中可直接新建、切换项目，完成后结果自动落回原项目</li>
+              <li>任务队列显示任务所属项目</li>
             </ul>
           </details>
         </section>
@@ -248,18 +248,7 @@
       </div>
 
       <div class="tab-page hidden" data-tab="ai">
-        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置新建节点的默认模型和 API Key；画面参数在每个 AI 绘图节点中单独设置。</p></div>
-        <section class="settings-card">
-          <label for="defaultImageModelSelect">默认绘图模型
-            <select id="defaultImageModelSelect" aria-describedby="defaultImageModelHint">
-              <option value="gpt-image-2">GPT Image 2</option>
-              <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare（快速）</option>
-              <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst（质量）</option>
-              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
-            </select>
-          </label>
-          <span id="defaultImageModelHint" class="api-url-hint">仅影响之后新建的 AI 绘图节点，不会修改已有节点。</span>
-        </section>
+        <div class="settings-page-head"><h2>AI 绘图</h2><p>配置 API 连接与新建节点的默认模型、分辨率和比例；画面参数在每个 AI 绘图节点中单独设置。</p></div>
         <section id="apiSettingsCard" class="settings-card api-settings-card">
         <div class="ai-section-head">API</div>
 
@@ -310,6 +299,24 @@
           <span class="api-url-hint">会自动携带 Authorization: Bearer &lt;API Key&gt;；此处可追加或覆盖其他请求头。</span>
         </div>
 
+        </section>
+
+        <section class="settings-card">
+          <label for="defaultImageModelSelect">默认绘图模型
+            <select id="defaultImageModelSelect" aria-describedby="defaultImageModelHint">
+              <option value="gpt-image-2">GPT Image 2</option>
+              <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare（快速）</option>
+              <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst（质量）</option>
+              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
+            </select>
+          </label>
+          <span id="defaultImageModelHint" class="api-url-hint">仅影响之后新建的 AI 绘图节点，不会修改已有节点。</span>
+          <label for="defaultResolutionSelect">默认分辨率
+            <select id="defaultResolutionSelect"></select>
+          </label>
+          <label for="defaultSizeSelect">默认比例
+            <select id="defaultSizeSelect"></select>
+          </label>
         </section>
       </div>
 
@@ -464,6 +471,6 @@
   <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
   <script src="canvas-runtime.js?v=20261003-cep"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261010-node-release3"></script>
+  <script src="app.js?v=20261012-v273"></script>
 </body>
 </html>
