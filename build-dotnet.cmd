@@ -16,18 +16,21 @@ if errorlevel 1 exit /b 1
 
 for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"
 
-rem -- Preset extension: ship only image-to-pptx with 2.7.0; the large upscale one is distributed separately
-set "EXT_SOURCE=%PROJECT_ROOT%..\ÍØÕ¹"
+rem -- Preset extension: image-to-pptx lives in the repo (extensions-presets\image-to-pptx) so CI builds the complete installer too; the large upscale one is distributed separately.
+rem -- Keep this script pure ASCII: the Chinese display folder name and file names inside the preset are preserved by the filesystem, and the DestDir mapping lives in CanvasFlow.iss.
+set "EXT_SOURCE=%PROJECT_ROOT%extensions-presets"
 set "EXT_PRESETS=%PUBLISH_DIR%\extensions-presets"
 if exist "%EXT_PRESETS%" rmdir /s /q "%EXT_PRESETS%"
-if exist "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" (
+if exist "%EXT_SOURCE%\image-to-pptx" (
   mkdir "%EXT_PRESETS%" 2>nul
-  xcopy "%EXT_SOURCE%\Í¼Æ¬ÖÃÈëpptx" "%EXT_PRESETS%\Í¼Æ¬ÖÃÈëpptx\" /e /i /y >nul
-  copy /y "%PROJECT_ROOT%ÍØÕ¹½Å±¾¹æ·¶.md" "%EXT_PRESETS%\ÍØÕ¹½Å±¾¹æ·¶.md" >nul 2>&1
+  xcopy "%EXT_SOURCE%\image-to-pptx" "%EXT_PRESETS%\image-to-pptx\" /e /i /y >nul
   echo Preset extension copied: image-to-pptx
 ) else (
-  echo [warn] preset extension not found: %EXT_SOURCE%\image-to-pptx-dir
+  echo [warn] preset extension not found: %EXT_SOURCE%\image-to-pptx
 )
+
+rem -- Release rule: ship an empty export folder, never pack user exports
+if not exist "%PUBLISH_DIR%\export" mkdir "%PUBLISH_DIR%\export"
 
 echo.
 echo CanvasFlow publish folder:
@@ -42,12 +45,19 @@ if not defined ISCC (
   exit /b 2
 )
 
-"%ISCC%" "%PROJECT_ROOT%installer\CanvasFlow.iss"
+rem -- Version comes from package.json (single source of truth; the csproj reads the same file)
+set "APP_VER="
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content -LiteralPath '%PROJECT_ROOT%package.json' -Raw | ConvertFrom-Json).version"`) do set "APP_VER=%%V"
+if not defined APP_VER (
+  echo Could not read version from package.json.
+  exit /b 1
+)
+
+"%ISCC%" /DAppVersion=%APP_VER% "%PROJECT_ROOT%installer\CanvasFlow.iss"
 if errorlevel 1 exit /b 1
 
 rem -- Also keep a versioned copy next to the fixed-name installer for manual distribution
-for /f "tokens=3 delims=<>" %%V in ('findstr /r "<Version>.*</Version>" "%DESKTOP_PROJECT%"') do set "APP_VER=%%V"
-if defined APP_VER copy /y "%SETUP_FILE%" "%PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup-%APP_VER%.exe" >nul
+copy /y "%SETUP_FILE%" "%PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup-%APP_VER%.exe" >nul
 
 echo.
 echo CanvasFlow installer:

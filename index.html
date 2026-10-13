@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261010-node-release3">
+  <link rel="stylesheet" href="styles.css?v=20261014-variabledrag1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -138,13 +138,9 @@
           <label class="check-row"><input id="autoAlignToggle" type="checkbox" checked><span>创建节点或连线时自动对齐</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
           <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
+          <label class="check-row"><input id="textMergeOnOverlapToggle" type="checkbox" checked><span>文字节点重叠时合并文案</span></label>
         </section>
 
-        <section class="settings-card">
-          <h3>生成图片保存</h3>
-          <label class="check-row"><input id="projectExportFolderToggle" type="checkbox"><span>以项目名称创建文件夹导出（生成图片保存到 ai_generated\项目名\ 子文件夹）</span></label>
-        </section>
-        
         <section class="settings-card onboarding-settings-card">
           <div class="onboarding-settings-head"><div><h3>帮助与引导</h3><p class="setting-desc">重新查看项目、底部操作区、右上工具和 API Key 设置说明。</p></div><button id="replayOnboardingBtn" type="button">查看新手引导</button></div>
         </section>
@@ -193,7 +189,7 @@
       </div>
 
       <div class="tab-page hidden" data-tab="variables">
-        <div class="settings-page-head settings-page-head-row"><div><h2>变量库</h2><p>定义所有项目共用的变量和单选值，用于画布中的变量节点。</p></div><button id="newVariableDefinitionBtn" class="primary" type="button">＋ 新建变量</button></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>变量库</h2><p>定义所有项目共用的变量和单选值；写在文字节点里即可自动变成可切换的下拉选项。</p></div><button id="newVariableDefinitionBtn" class="primary" type="button">＋ 新建变量</button></div>
         <div id="variableDefinitionsList" class="variable-definitions-list"></div>
         <section id="variableDefinitionEditor" class="settings-card variable-definition-editor hidden">
           <label>变量名<input id="variableDefinitionName" type="text" placeholder="例如：产品"></label>
@@ -329,6 +325,7 @@
 
       <div class="tab-page hidden" data-tab="export">
         <div class="settings-page-head"><h2>保存</h2><p>选择项目文件的默认保存位置。</p></div>
+        <section class="settings-card"><h3>生成图片保存</h3><label class="check-row"><input id="projectExportFolderToggle" type="checkbox"><span>以项目名称创建文件夹导出（生成图片保存到 ai_generated\项目名\ 子文件夹）</span></label></section>
         <section class="settings-card"><h3>导出方式</h3><label class="check-row"><input id="zipExportToggle" type="checkbox"><span>导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）</span></label></section>
         <section class="settings-card"><h3>项目文件夹</h3><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
       </div>
@@ -418,6 +415,7 @@
     <img id="lightboxImg" class="lightbox-img" alt="">
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
     <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
+    <div id="lightboxMattingRect" class="lightbox-matting-rect hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="镜像图片">
       <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
       <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.8 4.4 12 10l4.2-5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7.8 19.6 12 14l4.2 5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
@@ -425,10 +423,13 @@
     <div id="lightboxPaintToolbar" class="lightbox-paint-toolbar hidden">
       <div id="lightboxMainTools" class="lightbox-toolbar-section lightbox-main-tools" role="group" aria-label="图片编辑">
         <button id="lightboxInsertBtn" type="button">置入</button>
+        <button id="lightboxCropBtn" type="button" title="拖框选择需要保留的区域">裁剪</button>
+        <button id="lightboxCropApply" type="button" class="hidden" disabled>应用裁剪</button>
         <button id="lightboxPaintBrush" class="active lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
         <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
+        <button id="lightboxMattingBtn" class="lightbox-icon-btn" type="button" title="局部抠图：框选区域，AI 抠出框内主体生成透明 PNG 节点" aria-label="局部抠图"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
           <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
@@ -468,9 +469,9 @@
     </div>
   </div>
 
-  <script src="model-catalog.js?v=20260929-nanopro-apimart"></script>
-  <script src="canvas-runtime.js?v=20261003-cep"></script>
+  <script src="model-catalog.js?v=20261013-chat1"></script>
+  <script src="canvas-runtime.js?v=20261014-browserserial1"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261012-v273"></script>
+  <script src="app.js?v=20261014-crop1"></script>
 </body>
 </html>

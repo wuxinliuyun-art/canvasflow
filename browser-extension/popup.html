@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>CanvasFlow 浏览器生图</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>CanvasFlow 浏览器生图</h1>
+
+  <section>
+    <div id="status" class="status">正在查找本机 CanvasFlow 服务…</div>
+    <button id="resumeBrowserQueue" type="button" class="ghost">继续浏览器队列</button>
+    <button id="ping" type="button" class="ghost">重新连接</button>
+    <label class="row">
+      <span>手动指定端口</span>
+      <input id="port" type="text" inputmode="numeric" placeholder="自动发现">
+      <button id="savePort" type="button">保存</button>
+    </label>
+    <p class="hint">一般不用管端口：打开 CanvasFlow 后本插件会自动接上。只有服务跑在特殊端口且自动发现失败时才需要填（留空保存 = 恢复自动）。</p>
+  </section>
+
+  <section>
+    <button id="calibrate" type="button" class="primary">校准此页面的输入框和发送按钮</button>
+    <p class="hint">先打开 AI 站点的对话页面再点校准，依次点击页面上的输入框和发送按钮即可。校准记录按站点保存，站点改版后重新校准一次即可。</p>
+    <div id="calibrationInfo" class="hint"></div>
+    <button id="clearCalibration" type="button" class="ghost hidden">清除本站校准</button>
+  </section>
+
+  <section class="tips">
+    <p>使用步骤：</p>
+    <ol>
+      <li>在 CanvasFlow 画布右键 →「添加浏览器生图节点」，下拉选择站点（或选“自定义站点…”填网址）；</li>
+      <li>点击生成后自动跳到对应站点，浏览器任务逐个执行；</li>
+      <li>生成完成后图片自动回到画布节点，多余图片各自生成图片节点。</li>
+    </ol>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

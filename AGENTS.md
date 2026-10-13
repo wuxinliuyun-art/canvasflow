@@ -81,6 +81,25 @@
 - 文字/变量节点串联组合(2026-10):文字/变量节点不是截断点,`visit` 沿所在支线继续向上游收集,线内文字按路径顺序合并(最上游在前、自身文字排最下游),故 文字A→文字B→AI 的提示词为"A，B";文字→变量→文字→AI 三段同线全合并。唯一的语义边界是 AI/角度节点(截断取其生成图):文字A→AI1→文字B→AI2 时,AI2 只读文字B,AI1 成图降级为参考图。空文字/空变量节点不产生分支也不阻断透传;支线经过文字/变量节点时,该线上的图片照常随分支携带。截图线(`directScreenshotNodeInputs`)本就不截断文字,行为不变。
 - 避免:`keepCombinedInputs` 的合并打平必须作用在顶层汇总处(文字并集 + 图片按节点去重),不能只写在递归中间节点层,否则 AI 节点多条直连入线仍会被拆开;单支线画布的行为必须与拆分逻辑上线前完全一致(分支数恒为 1);分支形状变化时所有消费方(`enqueueAiNode` 传分支文字、tool-node 收集 `.images`、"执行全部"预估 `branch.images.length`)必须同步适配,`result.texts` 始终是全部分支文字并集供显示与输入存在性判断;AI 节点多条直连入线仍先经 `splitMultiInputAiNode` 拆节点,本规则管辖经汇聚节点(如图片节点)的扇入;串联合并必须写在 `visit` 的分支层(每条线独立合并),不得只在顶层 union 处打平,否则多支线任务的文字会跨线互串。
 
+### 文字节点拆分与重合合并（2026-10 已实现）
+
+- 规则：多行文字节点（≥2 个非空行）右键菜单出现「按换行拆分为文字节点」——每个非空行一个节点，首行留在原节点，其余在右侧一列落位（`splitTextNodeByLines`，防重叠避让生效）。拖动一个**有内容的文字节点**叠到另一个文字节点上（重合 ≥ 小节点面积 20%，与图片叠放同阈值）触发**文案合并**（`mergeTextNodeTexts`）：两段文案按画布位置从左到右（同列从上到下）以换行拼接并入**被叠节点**，删除拖动节点；拖动节点的连线原样转到被叠节点并清理自环，变量词选择按变量名合并（冲突保留被叠节点的选择）。两个重合行为各自独立开关：`editOnOverlap`（图片重叠打开编辑，原有）与 `textMergeOnOverlap`（文字重叠合并文案，默认开），都在设置 → 常规 → 界面与画布。
+- 避免：`updateCompositeHover` 的模式判定按**拖动源**类型分流（文字且有内容 → 合并模式；有图片引用 → 编辑模式），两开关互不牵制——`editOnOverlap` 关闭时文字合并仍可用；设置 → 保存 页签现含「生成图片保存」（projectExportFolderToggle，2026-10 从常规页挪入）与「导出方式」「项目文件夹」，`projectExportFolderToggle` 按 id 绑定、挪动 DOM 不影响接线，勿在常规页重复添加同名卡片。
+
+### 浏览器生图节点（browser-image + Chrome 扩展，2026-10 已实现）
+
+- 规则：画布 `browser-image` 节点（站点下拉 Gemini/ChatGPT/自定义站点+网址输入、提示词框留空取上游扇入文字、生成按钮）把 `{site, prompt, images[≤4 dataURL], nodeId}` POST 到 `/api/browser-task`，前端每 2.5s 轮询 `/api/browser-task/status/:id`（超时 360s）；完成后首图进节点预览、多余图各自生成图片节点（同 AI 多图语义），下游消费 `generatedImage` 截断（并入 ai-image/angle-image 边界）。任务队列是**内存态、双实现必须同步**：server.js 与 DesktopApi.cs 各一套（push / next?origin= / result / status/:id，任务与结果 10 分钟过期；`site` 为内置 id 时按 `BROWSER_SITE_ORIGINS` 映射 origin 匹配领取方，自定义站点按规整化 origin 精确匹配）。扩展在 `browser-extension/`（MV3）：content.js 轮询领任务并在站点页模拟人工操作（选择器顺序 = 手动校准记录 > SITE_PRESETS 内置 > 通用兜底；填词用 execCommand insertText、参考图先合成 paste 事件再 fallback input[type=file]、完成后轮询"新出现的大图"连续 2 轮稳定即抓取）；background.js 中继全部本地服务访问（content 脚本受页面 CORS 限制，不能直连 127.0.0.1）；popup 提供端口设置、连接测试和"校准此页面"（两步点选输入框/发送按钮，选择器按 origin 存 chrome.storage.local，自定义站点经 `ensureContentScript` 动态注册内容脚本）。
+- 避免：所有对本地服务的 fetch 必须经 background 中继，不得在 content.js 直连（跨源 403）；`canvas-runtime.js` 的 desktopApiPaths 需包含 browser-task 各路径（status 是前缀匹配）；节点等待可取消（`_browserRequestId` 序号丢弃迟到结果，同 chat 模式）；存档加载 walkNodes 必须重置 `generating`；生成按钮在 generating 期间不渲染、提示词/网址输入只 markDirty 不 render（防焦点丢失）；扩展完成判定只认"发送前快照之外的新出现大图"，不要试图解析站点私有 DOM 结构（改版只影响选择器，校准即可恢复）。
+- 服务自动发现（2026-10，面向"用户不懂端口"）：扩展 background.js 自动扫描 `127.0.0.1` 的 5173..5192，以 `/api/browser-task/status/ping` 回 `{"status":"expired"}` 为 CanvasFlow 指纹（旧版/无关服务回 404 会被跳过）；扫描范围上限必须与 server.js `tryListen` 的端口顺延次数（20）保持一致，改任一侧要同步另一侧。手动指定端口优先但失效后自动退回扫描；多实例并存时 browserPoll 逐端口问询、任务在哪个实例就在哪个端口领取，taskId→端口 记录在 chrome.storage.local（browserResult 回传同一实例，15 分钟过期）。popup 不再展示"端口一致"类术语，端口输入降级为高级覆盖项（留空保存=纯自动）。
+- server.js 是长驻进程：路由在启动时载入内存，前端文件却按 mtime 实时读盘——**改了 server.js 不重启进程时，页面看起来是新的、新 API 却 404**（2026-10 实踩：两个旧进程常驻 5173/5174，界面 ?v= 全对、扩展 ping 全 404）。排查"扩展未连接"先 curl ping 端点比对响应形状，再怀疑端口；确认常驻进程的服务目录可用"只在工作区存在的文件能否被 URL 访问"来判定（如 /browser-extension/manifest.json）。
+- 注入幂等（2026-10 实踩）：manifest 自动注入与"校准此页面"的手动 executeScript 会叠加到同一页面，content.js 顶层 const 二次声明直接 SyntaxError（"POLL_INTERVAL_MS has already been declared"），扩展错误页反复报红。content.js 整体包在 `if (!window.__canvasflowBridgeActive) {}` 块里（同扩展的内容脚本共享隔离世界的 window，二次注入直接跳过）；`ensureContentScript` 注册前先检查 URL 是否已被 manifest matches 覆盖，Service Worker 启动时清理"全部 matches 都被 manifest 覆盖"的历史冗余注册（自定义站点的注册保留）。
+
+### AI 对话节点（chat，2026-10 已实现）
+
+- 规则：画布 `chat` 节点形态 = 标题行 + 模型条 + **整块可输入文本框**（无气泡/输入行/发送按钮，节点可拖拽缩放，最小 280×220、新建 380×380）。框内分两区：**关键词区**（用户指令，长期保留可编辑）+ **结果区**（`CHAT_RESULT_DIVIDER` 长横线 `────────` 之后，每次生成整体替换为最新回复，**不逐步累加**）。发送内容 = `chatComposeSendText`：关键词区 + 结果区中用户新写的话（与最近一条 assistant 回复相同的结果本体不重发；结果区被改写过则整段并入提问；无分隔线时整框照发——老画布兼容）；回车发送（Shift+Enter 换行，IME `isComposing`/`keyCode 229` 守卫）；对话历史 `node.chatMessages` 仅作 LLM 上下文（上限 20 条，界面不可见），顶部 × 按钮只清历史、保留框内文字。模型条从左到右 = 模型下拉 + **批量提示词开关** + 清空(×) + **发送按钮**(chat-send，忙碌时整组换成停止按钮；与回车发送等效)（`chat-enumerate-toggle`，勾选态存 `node._chatEnumerated`，发送前勾选、无需先有内容）：勾选后本轮提问末尾追加 `CHAT_ENUMERATED_INSTRUCTION`（要求模型按 a. b. c. 序号每行一条输出多条方案），回复成功后 `parseNumberedChatItems` 按行解析——剥除 markdown 标记后匹配 `字母 + [.、．)）：]` 序号，无序号续行并入上一条，**序号条目 ≥2 条时自动在节点右侧排成一列文字节点**（`createChatPromptTextNodes`，与 pushHistory 同批提交），不足 2 条或无序号的回复按普通回复处理不拆分（序号拆分按回复内容判定，与开关无关，手动要求编号的普通发送同样会拆）；toast 提示拆分数量。模型目录 `window.CANVASFLOW_CHAT_CATALOG`（model-catalog.js）声明式驱动，每项带 `apiType` 与 `multimodal`：gpt-5.2-chat-latest（APIMart·多模态）、gemini-3.8-flash（APIMart·文本）、gpt-6-sol / gpt-6-astra（AGToken）。代理端点 `/api/chat/completions` 按 `apiType` 分槽透传：apimart 走 OpenAI 兼容 `/api/v1/chat/completions` 前缀（带镜像 failover，响应是 `{code,data}` 包装——前端按 `data.choices` 形状自适应解包），agtoken 走标准 `/v1/chat/completions`（单上游无镜像）；两套格式不做转换。**模型下拉按已填 key 分站点过滤**（`chatCatalogModels`：只填一家只出该站点模型，两家都填全显，都没填全显；站点 key 被清后已存模型在 `normalizeChatNode` 自动切到第一个可见模型）。服务端 404（旧进程无此路由）时前端提示重启服务，勿当作上游错误排查。**桌面版排查铁律：新前端 + 旧 EXE 会以「裸 fetch → 虚拟主机 404」的形式表现，与旧 server.js 进程的 404 症状相同**——用户自称「不是桌面版」不可信，看窗口标题栏（有最小化/关闭按钮就是桌面 WebView2 窗口）；`启动CanvasFlow-NET.bat` 启动的就是桌面版（dotnet build + start exe，前端从项目根实时加载），桌面版实例必须在接口代码合入后重新跑一次 BAT 才会带上新路由；服务模式启动用 `启动CanvasFlow服务.bat`（纯 ASCII 内容，规避中文 BAT 编码坑）。key 分槽：apimart 用 `settings.apiKey`、agtoken 用 `settings.agtokenApiKey`（服务器/浏览器模式随请求体 `_apiKey` 携带，桌面模式走 secrets）。多模态仅 gpt-5.2-chat-latest 把上游参考图以 `image_url` 内容部分随消息发送（上限 12 张），文本模型忽略图片。上游文字取扇入并集与发送内容合并为本轮 user 消息。
+- 语义边界：对话节点向下游是文字产物边界——`collectUpstreamForAI`/`directScreenshotNodeInputs` 截断不穿透；生成期间（`_chatBusy`）下游读最近一条 assistant 回复，其余时候读**最新结果**（`chatResultPortion`：最后一条分隔线之后；无分隔线时整框 `chatText`，生成中框内是提问草稿）。分隔线为纯程序写入（U+2500 长横线 ≥6 条成行，`CHAT_RESULT_DIVIDER_LINE_RE`），下游输出/发送拆分/分区均以此线为界，模型正文里偶发的 `---`/表格线不会误判。
+- 避免：对话是同步长请求（推理模型可达数分钟），桌面端统一走 600 秒 HttpClient（`ProxyApiAsync` 的 `httpClient` 参数），服务器端 300 秒；`normalizeChatNode` 不得重置 `_chatBusy`——模板每次渲染都会调用，运行时状态只能在存档加载的 walkNodes 里清；停止/迟到结果用请求序列号（`chatRequestSeq`）丢弃，桌面桥无法中断在途请求；输入期间推迟全量渲染的保护（`activeNodeTextEditor`）已扩展到 `chat-text`，且文本框失焦时若焦点移向节点内部控件必须跳过强制重建——否则按钮元素在命中与派发之间被整体替换，吞掉这次点击（本条在开发中实际踩过：发送后焦点回文本框，再点清空按钮第一次必落空）；chat 节点正文高度用 `calc(100% - 46px)`（生效的 node-head 高度在样式表后块的 46px，不是前块的 38px）。
+
 ### AI 队列并发任务错峰提交
 
 - 规则:`pumpAiTaskQueue` 以"最近一次任务启动时间"为基准,保证任意两次任务启动至少间隔 `AI_TASK_SUBMIT_STAGGER_MS`(500ms)——同步接口(如 agtoken)对同一密钥的瞬时并发提交可能被上游拒绝且不留任务记录。补位(任务完成后 refill)、入队、定时器三种触发来源共用同一时间基准,瞬时完成的任务不得绕过间隔。
@@ -96,6 +115,13 @@
 - 现象：用户把新版安装包装到旧版同一路径时，`data\web-updates` 会保留旧版下载过的界面热更新包；若启动时无条件优先加载该目录，新 EXE 会继续运行旧 app.js，新功能（如 agtoken 设置入口）不可见。
 - 解决：`WebUpdateManager.ResolveContentRoot` 只启用“版本号严格高于宿主 EXE”的热更新界面，否则清空指针、回退随包界面；Inno 脚本 `[InstallDelete]` 在安装前清理 `{app}\app` 下旧版残留的 js/html/css/modules。
 - 避免：不得无条件信任 `active.json` 指针；发布纯界面热更新时版本号必须高于所有在役宿主 EXE 版本，否则用户装了也不会生效；`build-web-update.ps1` 的 `MinimumHostVersion` 默认取"最新已发布 release"——一旦新 release 已发布、随后再重打同版本热更新包（如补漏），默认值会变成当前版本而挡住更早的在役宿主，必须显式传 `-MinimumHostVersion`（ Setup.exe 沿用旧版时尤其如此）。
+
+### Release 必须双资产齐全，版本号以 package.json 为唯一来源
+
+- 规则：每个已发布 Release 必须同时包含且只包含一个 `CanvasFlow-Setup.exe` 和（带界面更新时）一个 `CanvasFlow-Web.zip`。在役宿主（Windows `DesktopApi.CheckForUpdatesAsync`、mac `web-update.js`、server.js）的更新检查第一步就强制"最新 Release 应包含且只包含一个 CanvasFlow-Setup.exe"，缺失时直接抛异常转降级路径（`canHotUpdate=false`），所有旧宿主的"安装界面更新"按钮都会消失——纯界面热更新 release 也不例外（2.7.4 首发实踩：只传了 Web.zip，2.7.3 全线无法热更新，最终回退重建）。
+- 最低宿主：`build-web-update.ps1` 必须显式传 `-MinimumHostVersion`（取最老在役宿主，当前 2.7.1）。清单里的 `minimumHostVersion` 高于某台宿主时，该宿主会在下载校验的最后一步被拒（"此界面需要宿主 X，当前宿主 Y"），前功尽弃。
+- 版本号：`package.json` 是唯一来源——csproj `<Version>` 用 MSBuild 属性函数从它读取，`build-dotnet.cmd` 读它并经 `/DAppVersion=` 传给 ISCC（.iss 用 `#ifndef AppVersion` 兜底）。升版本只改 package.json；csproj 内已无字面版本号，不得再用 findstr 从 csproj 提取版本。
+- 避免：发布前核验 Release 形状（1 个 Setup.exe + 1 个 Web.zip、都带 GitHub digest）；publish 目录与 Web.zip 清单逐文件比对 SHA-256；`export` 目录存在且为空（build-dotnet.cmd 已内置）；改动版本链路后必须实际跑 `build-dotnet.cmd` 验证 exe ProductVersion 与版本化副本文件名。
 
 ### agtoken 与 APIMart 是两套彼此独立的请求格式
 
@@ -138,7 +164,37 @@
 - 解决：导航 URL 追加 index.html 的 `LastWriteTimeUtc` 时间戳（`?t=`，文件一变 URL 即变），并用 `WebResourceRequested` 拦截 index.html 强制 `Cache-Control: no-cache`；`?v=` 递增只对 app.js/styles.css 等子资源有效，管不住入口页自身。
 - 避免：排查“更新没生效”先比对进程启动时间与文件修改时间，再看 WebView2 缓存；服务器模式的 no-cache 头规则（见 agtoken 条目）不覆盖桌面虚拟主机映射，两条链路要分别保障。
 
+### 文字节点内嵌变量（替代独立变量节点）
 
+- 规则：画布右键菜单不再提供“添加变量节点”入口，旧变量节点在存量画布中保持兼容（渲染与收集逻辑原样保留）。文字节点内容里出现变量库变量名时，节点正文下方自动出现变量词下拉条（chip = 变量名 + 可选值 select，data-role=`text-variable-choice`）；所选值存 `node.variableChoices`（按变量名为 key，存 optionId + label 快照），用户文本本身不改写；收集文字时（`collectUpstreamForAI` / `directScreenshotNodeInputs`）经 `expandTextNodeVariables` 把已选变量名展开为“值+变量名”（如 发色 → 红色发色），与旧变量节点输出格式一致，未选择的保持原文。
+- 避免：下拉条必须随文字就地同步（输入后 250ms 防抖替换 + focusout 立即冲刷，输入期间禁止全量 renderNodes，会打断输入与 IME）；检测用名称长度降序占用区间匹配，防止互为子串的变量名误伤；改 app.js 必须同步递增 index.html 的 `?v=`——实测再次确认 `?v=` 未变时 reload 会继续跑缓存旧脚本，得出“改动没生效”的假结论（本次开发中就因此误判过一次）。
+
+
+
+## 外部 API 文档（常用，开发前先查）
+
+### agtoken 文档：https://agtoken.vip/docs
+
+- 页面为 JS 渲染，WebFetch 抓不到正文，须用 web_reader 或浏览器打开。
+- OpenAI 兼容网关，基础地址 `https://agtoken.vip/v1`，`Authorization: Bearer sk-...` 认证；兼容 OpenAI SDK 与 ChatBox/CherryStudio 等客户端。
+- 对话：`POST /v1/chat/completions`（model、messages[{role,content}]、stream、tools/tool_choice）；另有 `/v1/completions`、`/v1/responses`（支持 reasoning，默认 medium）、`/v1/embeddings`、`/v1/rerank`。
+- 绘图（CanvasFlow 现用）：`POST /v1/images/generations`（model、prompt、n、quality、size/aspect_ratio、background、moderation、output_format、stream 等）、`POST /v1/images/edits`（参考图/垫图：image[] + prompt + 可选 mask，gpt-image 系专用）。结果在 `data[].b64_json`（默认）或 `data[].url`（`response_format: "url"`）。
+- 模型可用性以 `GET /v1/models` 为准（Beta 功能加 `?beta=true`）；计费按"类型+质量档"而非文本 token；接口列表页可查任务余量。
+- 绘图为同步直连，单次可能 60-180 秒且默认无超时，客户端必须自设足够长的超时（CanvasFlow 现为 600 秒）。
+
+### APIMart 文档（中文）：https://docs.apib.ai/cn
+
+- docs.apib.ai 是 APIMart 官方文档站（与 docs.apimart.ai 同源，含 `llms.txt` 索引：https://docs.apimart.ai/llms.txt，具体接口页可直接抓取 `.md`）。
+- OpenAI 兼容入口：`https://api.apimart.ai/v1`，Bearer 认证（key 从 https://apimart.ai/keys 获取）。
+- 对话：`POST /v1/chat/completions`（model、messages、stream、temperature、top_p、max_tokens、stop、n）；文档标注 stream 默认 true（SSE）、响应为 `{ code: 200, data: {...} }` 包装（data 内为标准 OpenAI 结构）——实现时以实测为准。
+- 注意区分：CanvasFlow 现有 APIMart 绘图接入走"提交任务+轮询"（`/api/generate` → `/api/task/:id`）私有格式；OpenAI 兼容 `/v1` 是同一平台的另一套入口，chat 类需求走 `/v1/chat/completions`。
+- 对话模型：gpt-5/5.1、claude-opus-4-8 / sonnet-4-6、gemini-3.x / 2.5、deepseek-v4/v3.2 等；另有 GPT-4o Image、Sora2、VEO3、Whisper/TTS。
+
+### mac 版壳源码与跨平台界面热更新（2.7.3 起）
+
+- 规则：mac 版（Electron 壳）主进程源码以 `desktop-mac/` 为唯一真源——2.7.2 及更早的 mac 包是仓库外手工构建的，禁止再从 `release/mac/*.zip` 反向提取后直接改动；改壳源码只改 `desktop-mac/`，再由 `build-mac.ps1` 重新打包。mac 版与 Windows 版共用**同一份** Release 界面热更新资产 `CanvasFlow-Web.zip`：`desktop-mac/web-update.js` 与 `desktop-dotnet/WebUpdateManager.cs` 语义逐项对齐（GitHub digest + 清单逐文件 SHA-256 双重校验、版本严格高于宿主才启用、`active.json` 指针、启动确认与回退），任何一侧改动校验/清单/版本规则必须同步另一侧。
+- 实现：mac 壳启动时先 `resolveContentRoot()` 再把 `contentRoot` 传给 `startCanvasFlowServer`（server.js 新增可选参数，默认 `__dirname`，浏览器/服务器模式不受影响）；热更新应用后重启 server 换内容根并 `loadURL` 新端口。`build-mac.ps1` 对 Electron 官方 darwin zip 做 zip→zip 流式转写——**不得解压后再打包**（zip 里有符号链接与 unix 权限位，Windows 解压即损坏；权限位 0100644/0100755/040755 与符号链接条目原样保留）；条目改名映射（Electron.app→CanvasFlow.app、Helper 全套、electron.icns→icon.icns）与 plist 字段集中在脚本内，产物必须与上一版原包逐条目对照验证。产物 ZipArchive 的条目名编码参数必须传 `$null`（2026-10 修复）：显式传 `UTF8Encoding` 时 .NET 不写 UTF-8 语言标志位（EFS），中文名字节虽是 UTF-8，macOS 解压仍按非 UTF-8 解码出乱码名（曾误判为"GBK 编码"）；脚本内置自检——源包符号链接逐条保留（mode 0o120755 与链接目标一致，Electron 44 为 14 条）、所有非 ASCII 条目名必须带 0x800 标志，不满足即构建失败。
+- 避免：`build-mac.ps1` 含中文注释，必须保存为 UTF-8 with BOM（PowerShell 5.1 对无 BOM UTF-8 按 ANSI 解析，中文注释字节会破坏语法——与中文 BAT 用 GBK 是同一类坑）；PowerShell 双引号字符串里 `${Var}.zip` 要加大括号，`$Var.zip` 会被解析为属性访问；Electron 官方 zip 的条目带 `Electron.app/` 前缀且 helper plist 缺 CFBundleDisplayName/Executable/Version 字段，改名/新增字段逻辑要按官方结构写，不能按 electron-builder 产物结构假设；`Release/mac/.electron-cache/` 是运行时缓存，不入 Release 资产。mac 真机行为（热更新下载/切换/回退/CEP 面板源）在 Windows 上无法自动化，发版前按 `desktop-mac/README.md` 清单人工验证。Mac 端解压整包必须用 Finder 双击、`unzip` 或 `ditto -x -k`，**不得用 Python `zipfile` 解压**——它不读 unix mode 位，会把 Electron 框架的符号链接落成"内容为链接目标"的纯文本文件，启动报 "Electron Framework is not a valid Mach-O file"（2026-10 实踩，14 条链接需按 zip 内符号链接条目逐个 `ln -s` 重建；Python 解压时 zip 本身的符号链接是完好的，锅在解压侧）。
 
 ## 中长期规划 / TODO
 

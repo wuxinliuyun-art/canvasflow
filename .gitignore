@@ -19,3 +19,7 @@ background-removal-worker/bin/
 background-removal-worker/obj/
 .codex-build/
 release/
+.codex-tmp/
+.zcode/
+temp-env-before-repair.json
+/CanvasFlow-*.zip

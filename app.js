@@ -10,6 +10,20 @@ const TOOL_NODE_HEIGHT = 250;
 const DEFAULT_EXTENSION_SERVICE_URL = "http://127.0.0.1:8788";
 const GROUP_NODE_HEIGHT = 244;
 const SCREENSHOT_NODE_HEIGHT = 250;
+const CHAT_NODE_WIDTH = 380;
+const CHAT_NODE_HEIGHT = 380;
+const CHAT_HISTORY_LIMIT = 20;
+const CHAT_MAX_REFERENCE_IMAGES = 12;
+// 回复不覆盖框内关键词,而是以一条长横线分隔展示在关键词区之后;该线只能由程序写入(键盘敲不出 U+2500)
+const CHAT_RESULT_DIVIDER = "────────";
+const CHAT_RESULT_DIVIDER_LINE_RE = /^[ \t]*─{6,}[ \t\r]*$/;
+const BROWSER_NODE_HEIGHT = 300;
+const BROWSER_TASK_TIMEOUT_MS = 360000;
+const BROWSER_TASK_POLL_MS = 2500;
+const BROWSER_SITES = [
+  { id: "gemini", label: "Gemini" },
+  { id: "chatgpt", label: "ChatGPT" },
+];
 const CONNECT_SNAP_RADIUS = 38;
 const EDGE_DROP_DWELL_MS = 500;
 const NODE_RELEASE_HOLD_MS = 500;
@@ -147,6 +161,11 @@ const UI_EN = {
   "APIMart 新增 Nano Banana Pro 模型": "Added the Nano Banana Pro model on APIMart",
   "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
   "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
+  "AI对话": "AI Chat", "添加对话节点": "Add Chat Node", "清空对话记忆": "Clear chat memory", "停止生成": "Stop generating", "对话模型": "Chat model",
+  "发送消息": "Send message", "批量": "Batch", "批量提示词：勾选后本次发送会要求按 a. b. 序号输出多条，回复自动拆分为文字节点": "Batch prompts: when checked, replies use numbered a. b. items that split into text nodes automatically",
+  "浏览器生图": "Browser Image", "添加浏览器生图节点": "Add Browser Image Node", "自定义站点…": "Custom site…", "站点网址": "Site URL", "取消等待": "Cancel waiting", "清除结果": "Clear result",
+  "按换行拆分为文字节点": "Split into text nodes by line", "已合并文案（Ctrl+Z 可撤销）": "Text merged (Ctrl+Z to undo)", "已按换行拆分为文字节点": "Split into text nodes by line",
+  "输入内容，Enter 发送；Shift+Enter 换行": "Type here. Enter to send; Shift+Enter for a new line",
   "反转左右关键词": "Reverse left/right prompt directions", "仅交换自动关键词中的左、右，不镜像图片": "Only swaps left and right in the automatic prompt; the image is not mirrored",
   "单击切换项目，双击重命名": "Click to switch projects; double-click to rename",
   "未命名项目": "Untitled Project", "未命名": "Untitled", "项目1": "Project 1",
@@ -189,7 +208,7 @@ const UI_EN = {
   "9:21（竖图）": "9:21 (portrait)",
   "快捷键说明": "Keyboard Shortcuts", "删除选中节点和相关连线": "Delete selected nodes and connected edges",
   "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
-  "置入": "Insert", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "箭头": "Arrow", "方框": "Box", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
+  "裁剪": "Crop", "应用裁剪": "Apply crop", "拖框选择需要保留的区域": "Drag to select the area to keep", "拖框选择保留区域，再点击应用裁剪": "Drag to select the area to keep, then apply the crop", "置入": "Insert", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "箭头": "Arrow", "方框": "Box", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
   "将选中节点设为多任务": "Create a multi-task node from selected nodes", "右键多任务节点": "Right-click a multi-task node",
   "取消多任务，还原内部节点和连线": "Dissolve multi-task and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
   "Alt + 拖拽": "Alt + Drag", "划线切断连线；同时划中两条连线时自动桥接两端节点": "Draw a line to cut a connection; crossing two at once bridges their endpoints",
@@ -259,10 +278,11 @@ const UI_EN = {
   "保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text, images, and node sets for every project; created nodes are independent copies.",
   "导入素材": "Import Assets", "导出素材": "Export Assets", "保存修改": "Save Changes", "注册获取 API Key": "Register for an API Key", "注册获取 API Key ↗": "Register for an API Key ↗",
   "导出": "Export", "管理导出方式和本地文件夹。": "Manage export options and local folders.", "选择项目文件的默认保存位置。": "Choose the default folder for project files.",
-  "变量库": "Variable Library", "定义所有项目共用的变量和单选值，用于画布中的变量节点。": "Define global variables and single-choice values for variable nodes.",
+  "变量库": "Variable Library", "定义所有项目共用的变量和单选值；写在文字节点里即可自动变成可切换的下拉选项。": "Define global variables and single-choice values; type a variable name inside a text node and it becomes a switchable dropdown.",
   "＋ 新建变量": "+ New Variable", "变量名": "Variable Name", "可选值（每行一个）": "Choices (one per line)", "保存变量": "Save Variable",
-  "变量节点": "Variable Node", "添加变量节点": "Add Variable Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
+  "变量节点": "Variable Node", "选择变量": "Select variable", "选择值": "Select value", "输出": "Output",
   "＋ 添加一行": "+ Add Row", "请先在设置 → 变量库中创建变量": "Create a variable in Settings → Variable Library first",
+  "文字中的变量": "Variables in text", "未选择值": "No value chosen", "清除选择": "Clear selection",
   "项目文件夹": "Project Folder", "修改位置": "Change Folder",
   "从项目导入": "Import from Project", "从 JSON 导入": "Import from JSON", "保存可重复使用的完整多行文字。": "Save reusable complete multi-line text.",
   "保存常用图片，也可从图片节点右键收藏。": "Save reusable images or collect them from an image node.", "在画布中多选节点后右键保存，同时保留节点布局和内部连线。": "Select multiple nodes on the canvas, then right-click to save their layout and internal connections.",
@@ -383,7 +403,7 @@ const state = {
   edges: [],
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -618,6 +638,7 @@ const els = {
   autoAlign: $("autoAlignToggle"),
   hideNodeTitles: $("hideNodeTitlesToggle"),
   editOnOverlap: $("editOnOverlapToggle"),
+  textMergeOnOverlap: $("textMergeOnOverlapToggle"),
   projectFolder: $("projectFolderInput"),
   zipExportToggle: $("zipExportToggle"),
   projectExportFolderToggle: $("projectExportFolderToggle"),
@@ -691,6 +712,8 @@ const els = {
   lightboxPaintConfirm: $("lightboxPaintConfirm"),
   lightboxPaintArrow: $("lightboxPaintArrow"),
   lightboxPaintRect: $("lightboxPaintRect"),
+  lightboxMattingBtn: $("lightboxMattingBtn"),
+  lightboxMattingRect: $("lightboxMattingRect"),
   executeDialog: $("executeDialog"),
   executeTitle: $("executeTitle"),
   executeList: $("executeList"),
@@ -890,9 +913,10 @@ function saveCurrentPage() {
 
 function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
+  const runtimeAgtokenApiKey = desktop ? (state.settings?.agtokenApiKey || "") : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
@@ -908,12 +932,31 @@ function restoreData(data) {
   delete state.settings.resolution;
   delete state.settings.quality;
   delete state.settings.defaultRatio;
-  if (desktop) state.settings.apiKey = runtimeApiKey;
+  if (desktop) {
+    state.settings.apiKey = runtimeApiKey;
+    state.settings.agtokenApiKey = runtimeAgtokenApiKey;
+  }
   migrateLegacyMaterials(data);
   state.customLibrary = emptyLibrary();
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
   walkNodes(state.nodes, node => normalizeAiNodeSettings(node, legacyAiSettings));
   walkNodes(state.nodes, node => { if (node.type === "variable") normalizeVariableNode(node); });
+  // 浏览器生图节点:存档加载时清掉不可能仍存活的等待状态
+  walkNodes(state.nodes, node => {
+    if (node.type !== "browser-image") return;
+    normalizeBrowserNode(node);
+    node.generating = false;
+    node._browserStatus = "";
+    node._browserTaskId = null;
+  });
+  // 对话节点:存档加载时清掉不可能仍存活的请求状态
+  walkNodes(state.nodes, node => {
+    if (node.type !== "chat") return;
+    normalizeChatNode(node);
+    node._chatBusy = false;
+    delete node._chatAbort;
+    delete node._chatCancelled;
+  });
   walkNodes(state.nodes, node => {
     if (node.type !== "ai-image" && node.type !== "angle-image") return;
     const hasLiveQueueTask = aiTaskQueue.items.some(task => task.nodeId === node.id && task.runId === node._queueRunId && !queueTaskIsSettled(task));
@@ -1083,6 +1126,7 @@ function syncSettingsPanel() {
   els.autoAlign.checked = state.settings.autoAlign !== false;
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
+  els.textMergeOnOverlap.checked = state.settings.textMergeOnOverlap !== false;
   els.zipExportToggle.checked = state.settings.zipExport === true;
   if (els.projectExportFolderToggle) els.projectExportFolderToggle.checked = state.settings.projectExportFolder === true;
   const darkThemeToggle = $("darkThemeToggle");
@@ -1104,10 +1148,12 @@ function variableDefinitionById(id) {
 function renderVariableDefinitions() {
   if (!els.variableDefinitionsList) return;
   const items = globalLibrary.variableDefinitions;
-  els.variableDefinitionsList.innerHTML = items.length ? items.map((item, index) => `<div class="variable-definition-item" data-id="${escHtml(item.id)}">
+  els.variableDefinitionsList.innerHTML = items.length ? items.map(item => `<div class="variable-definition-item material-item" data-kind="variable" data-id="${escHtml(item.id)}">
+    <button class="material-drag-handle" type="button" title="拖动排序" aria-label="拖动排序">⋮⋮</button>
     <div><strong>${escHtml(item.name)}</strong><p>${escHtml(item.options.map(option => option.label).join("、") || "暂无可选值")}</p></div>
-    <div class="variable-definition-actions"><button data-variable-action="up" ${index === 0 ? "disabled" : ""} title="上移">↑</button><button data-variable-action="down" ${index === items.length - 1 ? "disabled" : ""} title="下移">↓</button><button data-variable-action="edit" title="编辑">✎</button><button data-variable-action="delete" title="删除">×</button></div>
+    <div class="variable-definition-actions"><button data-variable-action="edit" title="编辑" aria-label="编辑变量">✎</button><button data-variable-action="delete" title="删除" aria-label="删除变量">×</button></div>
   </div>`).join("") : '<div class="setting-desc variable-definition-empty">还没有变量，请创建一个全局变量。</div>';
+  bindLibraryDragSort("variable", els.variableDefinitionsList);
 }
 
 function openVariableDefinitionEditor(id = "") {
@@ -1187,6 +1233,11 @@ function renderLibraryList(kind, container) {
     <button class="material-rename-btn" title="编辑">✎</button>
     <button class="material-del-btn" title="删除素材">×</button>
   </div>`).join("");
+  bindLibraryDragSort(kind, container);
+}
+
+// 自定义节点和变量库共用拖拽手柄、落点指示与排序保存。
+function bindLibraryDragSort(kind, container) {
   const dropIndicator = document.createElement("div");
   dropIndicator.className = "material-drop-indicator hidden";
   container.appendChild(dropIndicator);
@@ -1215,8 +1266,10 @@ function renderLibraryList(kind, container) {
       ev.stopPropagation();
       showLightbox(thumb.src);
     };
-    row.querySelector(".material-rename-btn").onclick = () => kind === "multi" ? renameMultiNodeTemplate(id) : editTemplate(kind, id);
-    row.querySelector(".material-del-btn").onclick = () => deleteTemplate(kind, id);
+    const editButton = row.querySelector(".material-rename-btn");
+    if (editButton) editButton.onclick = () => kind === "multi" ? renameMultiNodeTemplate(id) : editTemplate(kind, id);
+    const deleteButton = row.querySelector(".material-del-btn");
+    if (deleteButton) deleteButton.onclick = () => deleteTemplate(kind, id);
   });
   container.ondragover = ev => {
     const dragging = container.querySelector(".material-item.is-dragging");
@@ -1234,7 +1287,7 @@ function renderLibraryList(kind, container) {
     if (!dragging || !dropTargetId) return;
     ev.preventDefault();
     dropIndicator.classList.add("hidden");
-    const key = kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
+    const key = kind === "variable" ? "variableDefinitions" : kind === "text" ? "textTemplates" : kind === "image" ? "imageMaterials" : "multiNodeTemplates";
     const items = globalLibrary[key];
     const sourceIndex = items.findIndex(item => item.id === dragging.dataset.id);
     if (sourceIndex < 0) return;
@@ -1244,7 +1297,8 @@ function renderLibraryList(kind, container) {
     items.splice(targetIndex + (dropAfter ? 1 : 0), 0, movedItem);
     persistLibraries();
     console.info(`[素材排序] ${kind}：${globalLibrary[key].map(item => item.name).join(" → ")}`);
-    renderLibraryList(kind, container);
+    if (kind === "variable") { renderVariableDefinitions(); renderNodes(); }
+    else renderLibraryList(kind, container);
   };
 }
 
@@ -1681,6 +1735,8 @@ function nodeHeightForType(type) {
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
       : type === "tool-node" ? TOOL_NODE_HEIGHT
       : type === "image" ? IMAGE_NODE_HEIGHT
+        : type === "chat" ? CHAT_NODE_HEIGHT
+        : type === "browser-image" ? BROWSER_NODE_HEIGHT
         : type === "folder" ? GROUP_NODE_HEIGHT
           : type === "mind-group" ? NODE_HEIGHT
         : type === "group" ? GROUP_NODE_HEIGHT
@@ -1758,6 +1814,57 @@ function variableNodeOutput(node) {
   return node.variableRows.map(resolvedVariableRow).filter(row => row.variableName && row.valueLabel).map(row => `${row.valueLabel}${row.variableName}`).join("，");
 }
 
+// ===== 文字节点内嵌变量：文字内容中出现变量库名称时自动出现下拉，选择后按“值+变量名”展开 =====
+function variableDefinitionByName(name) {
+  const target = String(name || "").trim().toLocaleLowerCase();
+  if (!target) return null;
+  return globalLibrary.variableDefinitions.find(item => item.name.toLocaleLowerCase() === target) || null;
+}
+
+function escapeRegExpValue(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// 检测文字中出现的变量名：按名称长度降序占用区间，避免“发色”/“发色板”这类子串互相误伤
+function detectTextNodeVariables(text) {
+  const value = String(text || "");
+  if (!value || !globalLibrary.variableDefinitions.length) return [];
+  const lowerValue = value.toLocaleLowerCase();
+  const taken = new Array(value.length).fill(false);
+  const found = [];
+  const definitions = [...globalLibrary.variableDefinitions].sort((a, b) => (b.name.length - a.name.length) || String(a.name).localeCompare(String(b.name)));
+  for (const definition of definitions) {
+    const name = String(definition.name || "");
+    if (!name) continue;
+    const lowerName = name.toLocaleLowerCase();
+    let from = 0;
+    while (from <= lowerValue.length - lowerName.length) {
+      const index = lowerValue.indexOf(lowerName, from);
+      if (index < 0) break;
+      from = index + Math.max(1, lowerName.length);
+      if (taken.slice(index, index + lowerName.length).some(Boolean)) continue;
+      taken.fill(true, index, index + lowerName.length);
+      found.push({ definition, name });
+      break;
+    }
+  }
+  return found;
+}
+
+// 展开文字内容：已选择值的变量名替换为“值+变量名”（与原变量节点输出格式一致）；未选择的保持原文
+function expandTextNodeVariables(node) {
+  const value = String(node?.text || "");
+  if (!value || !globalLibrary.variableDefinitions.length) return value;
+  const choices = node?.variableChoices || {};
+  let expanded = value;
+  for (const match of detectTextNodeVariables(value)) {
+    const choice = choices[match.name];
+    if (!choice?.label || choice.enabled === false) continue;
+    expanded = expanded.replace(new RegExp(escapeRegExpValue(match.name), "gi"), matched => `${choice.label}${matched}`);
+  }
+  return expanded;
+}
+
 function buildNodeObject(type, position, width, height) {
   return {
     id: uid("n"),
@@ -1793,11 +1900,17 @@ function buildNodeObject(type, position, width, height) {
     seq: 0,
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
+    _chatModel: type === "chat" ? (window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
+    _chatEnumerated: type === "chat" ? false : undefined,
+    chatMessages: type === "chat" ? [] : undefined,
+    chatText: type === "chat" ? "" : undefined,
+    _browserSite: type === "browser-image" ? BROWSER_SITES[0].id : undefined,
+    _browserOrigin: type === "browser-image" ? "" : undefined,
   };
 }
 
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
-  const width = NODE_WIDTH;
+  const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : NODE_WIDTH);
   const height = placementOptions.height || nodeHeightForType(type);
   let position = placementOptions.avoidOverlap === false
     ? { x: snap(x), y: snap(y) }
@@ -2818,6 +2931,72 @@ function modelSupportsQuality(model) {
   return Boolean(modelCatalogEntry(model)?.quality);
 }
 
+// AI 对话（chat）节点：模型目录与工具函数。对话与绘图是两套目录、两套网关格式，互不回退。
+// 下拉只显示已填 key 的站点：只填一家只出该站点模型,两家都填才全部显示;都没填时不显示模型，提示填写 API Key。
+function chatCatalogModels() {
+  const models = window.CANVASFLOW_CHAT_CATALOG?.models || [];
+  const apimartReady = String(state?.settings?.apiKey || "").trim().length > 0;
+  const agtokenReady = String(state?.settings?.agtokenApiKey || "").trim().length > 0;
+  return models.filter(model => (model.apiType === "agtoken" ? agtokenReady : apimartReady));
+}
+
+function chatModelEntry(modelId) {
+  return chatCatalogModels().find(model => model.id === modelId) || null;
+}
+
+function normalizeChatNode(node) {
+  // 尺寸不强制:节点支持拖拽缩放(与文字节点一致),只钳制最小值;新建默认 380×380
+  node.w = Math.max(280, Number(node.w) || CHAT_NODE_WIDTH);
+  node.h = Math.max(220, Number(node.h) || CHAT_NODE_HEIGHT);
+  const messages = Array.isArray(node.chatMessages) ? node.chatMessages : [];
+  node.chatMessages = messages
+    .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
+    .slice(-CHAT_HISTORY_LIMIT);
+  if (!chatModelEntry(node._chatModel)) node._chatModel = chatCatalogModels()[0]?.id || "";
+  node._chatEnumerated = node._chatEnumerated === true;
+  // 内测旧字段 chatResult 平滑迁移为 chatText
+  if (node.chatText === undefined && node.chatResult !== undefined) node.chatText = node.chatResult;
+  delete node.chatResult;
+  // 框内文字即当前输出(下游消费它),也是下一轮的提问草稿
+  node.chatText = String(node.chatText || "");
+  node._chatError = String(node._chatError || "");
+  // 注意:这里不重置 _chatBusy/_chatAbort——模板每次渲染都会走本函数,
+  // 运行时状态只能由存档加载路径清掉(见 loadProject 的 walkNodes)
+  return node;
+}
+
+// 上游 content 可能是字符串，也可能是多模态内容数组（[{type:"text",...},...]），统一取文字
+function chatContentToText(content) {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content.map(part => (part && typeof part === "object" && typeof part.text === "string" ? part.text : "")).join("").trim();
+  }
+  return "";
+}
+
+// 浏览器生图节点:把提示词/参考图交给浏览器扩展,在 Gemini/ChatGPT 等站点页面模拟人工操作并回收结果
+function normalizeBrowserNode(node) {
+  if (!BROWSER_SITES.some(site => site.id === node._browserSite) && node._browserSite !== "custom") node._browserSite = BROWSER_SITES[0].id;
+  node._browserOrigin = String(node._browserOrigin || "").trim();
+  node._browserNewConversation = node._browserNewConversation === true;
+  node._browserError = String(node._browserError || "");
+  node._browserStatus = String(node._browserStatus || "");
+  return node;
+}
+
+// 自定义站点输入 → 规整 origin(https://host);内置站点直接返回 id,由本地服务映射到允许的 origin
+function browserNodeSiteTarget(node) {
+  if (node._browserSite !== "custom") return node._browserSite;
+  const raw = String(node._browserOrigin || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function normalizeAiNodeSettings(node, fallback = {}) {
 if (!node || (node.type !== "ai-image" && node.type !== "screenshot-input")) return node;
   const catalog = activeCatalog();
@@ -3199,14 +3378,19 @@ function collectUpstreamForAI(nodeId, incoming) {
     nextVisited.add(id);
     const n = findNode(id);
     if (!n || n.disabled) return [];
-    if (n.type === "ai-image" || n.type === "angle-image") {
-      // AI/角度节点截断:取其已生成图片作为参考,不再向上追溯
+    if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image") {
+      // AI/角度/浏览器生图节点截断:取其已生成图片作为参考,不再向上追溯
       if (n.generatedImage) return [{ texts: [], images: [imageRef(n, n.generatedImage, n.generatedAssetId)] }];
       return [];
     }
+    if (n.type === "chat") {
+      // 对话节点是语义边界:框内保留「关键词+分隔线+最新结果」,下游只取最新结果;生成期间读最近一条回复;不向上追溯
+      const chatOutput = chatNodeOutputText(n).trim();
+      return chatOutput ? [{ texts: [chatOutput], images: [] }] : [];
+    }
     if (n.type === "text" || n.type === "variable") {
       // 串联组合:文字/变量节点继续向上游收集,线内文字按路径顺序合并,自身文字排最下游
-      const ownText = n.type === "text" ? String(n.text || "").trim() : String(variableNodeOutput(n) || "").trim();
+      const ownText = n.type === "text" ? String(expandTextNodeVariables(n) || "").trim() : String(variableNodeOutput(n) || "").trim();
       const edges = incoming.get(id) || [];
       const upBranches = [];
       for (const edge of edges) {
@@ -3309,11 +3493,15 @@ function directScreenshotNodeInputs(nodeId) {
     const node = findNode(id);
     if (!node || node.disabled) return;
     const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
-    if (node.type === "text" && String(node.text || "").trim()) {
-      textEntries.push({ text: node.text.trim(), ...order });
+    if (node.type === "text") {
+      const expandedText = String(expandTextNodeVariables(node) || "").trim();
+      if (expandedText) textEntries.push({ text: expandedText, ...order });
     } else if (node.type === "variable") {
       const output = variableNodeOutput(node);
       if (output) textEntries.push({ text: output, ...order });
+    } else if (node.type === "chat") {
+      const chatOutput = chatNodeOutputText(node).trim();
+      if (chatOutput) textEntries.push({ text: chatOutput, ...order });
     } else if (node.type === "image" && (node.image || node.imageAssetId)) {
       imageEntries.push({ image: node.image || "", assetId: node.imageAssetId || "", fileName: node.fileName || "参考图.png", mime: node.mime || "image/png", ...order });
     } else if (node.type === "group" || node.type === "folder") {
@@ -3322,8 +3510,8 @@ function directScreenshotNodeInputs(nodeId) {
         if (image?.image || image?.assetId) batchEntries.push({ image: image.image || "", assetId: image.assetId || "", fileName: image.fileName || "批量图片.png", mime: image.mime || "image/png", ...order, index });
       });
     }
-    // 功能节点是语义边界：使用其自身结果，不继续把更早的工作流输入带入截图任务。
-    if (node.type === "ai-image" || node.type === "angle-image" || node.type === "screenshot-input") return;
+    // 功能节点是对话语义边界:使用其自身结果,不继续把更早的工作流输入带入截图任务。
+    if (node.type === "ai-image" || node.type === "angle-image" || node.type === "screenshot-input" || node.type === "chat" || node.type === "browser-image") return;
     for (const edge of incoming.get(id) || []) visit(edge.from.node);
   }
   for (const edge of incoming.get(nodeId) || []) visit(edge.from.node);
@@ -3341,6 +3529,283 @@ function directScreenshotNodeInputs(nodeId) {
 function screenshotNodeSummary(node) {
   const input = directScreenshotNodeInputs(node.id);
   return `${input.texts.length} 条文字 · ${input.images.length} 张参考图 · ${input.batchImages.length} 张批量图 · 单图生成 ${Math.max(1, Number(node._count) || 1)} 张`;
+}
+
+// 批量提示词:点击按钮后追加到本轮提问末尾的指令,要求模型按 a. b. c. 序号输出多条
+const CHAT_ENUMERATED_INSTRUCTION = "请针对上面的内容输出多条不同的提示词方案：每条独占一行，以英文字母序号开头（a. b. c. …），序号后直接跟提示词本身；不要输出序号条目以外的任何标题、说明或结尾。";
+
+// 按首条结果分隔线把框内文字切成两区:关键词区(用户指令,长期保留可编辑)与结果区(展示最新回复,每次整体替换)
+function findChatResultDivider(text) {
+  const raw = String(text || "").replace(/\r\n?/g, "\n");
+  const lines = raw.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (CHAT_RESULT_DIVIDER_LINE_RE.test(lines[i])) return { prompt: lines.slice(0, i).join("\n"), result: lines.slice(i + 1).join("\n") };
+  }
+  return { prompt: raw, result: "" };
+}
+
+// 对话节点的结果 = 最后一条结果分隔线之后的文字(即最新回复);没有分隔线时整段框内文字都是结果(首次生成前/手改后)
+function chatResultPortion(text) {
+  const raw = String(text || "").replace(/\r\n?/g, "\n");
+  const lines = raw.split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (CHAT_RESULT_DIVIDER_LINE_RE.test(lines[i])) start = i + 1;
+  }
+  return (start < 0 ? raw : lines.slice(start).join("\n")).trim();
+}
+
+// 本轮发送文字 = 关键词区 + 结果区中用户新写的内容;与最近一条回复相同的结果本体不重发,结果区被改写过则整段并入
+function chatComposeSendText(node) {
+  const { prompt, result } = findChatResultDivider(node.chatText);
+  const promptText = prompt.trim();
+  let resultText = result.trim();
+  if (!resultText) return promptText;
+  const lastReply = String([...(node.chatMessages || [])].reverse().find(message => message.role === "assistant")?.content || "").trim();
+  if (lastReply && resultText === lastReply) return promptText;
+  if (lastReply && resultText.startsWith(lastReply)) resultText = resultText.slice(lastReply.length).trim();
+  return [promptText, resultText].filter(Boolean).join("\n\n");
+}
+
+// 下游与截图收集读取对话节点输出的统一入口:生成期间读最近一条回复(框内是提问草稿),其余时候读最新结果
+function chatNodeOutputText(node) {
+  if (node._chatBusy) {
+    return String([...(node.chatMessages || [])].reverse().find(message => message.role === "assistant")?.content || "");
+  }
+  return chatResultPortion(node.chatText);
+}
+
+// 解析 a. b. c. 序号回复:返回序号后的内容数组;无序号行并入上一条(多行提示词),序号条目不足 2 条视为普通回复(返回 null)
+function parseNumberedChatItems(text) {
+  const items = [];
+  for (const rawLine of String(text || "").split(/\r?\n/)) {
+    const line = rawLine.replace(/[*`_#>]/g, "").trim();
+    if (!line) continue;
+    const matched = line.match(/^([a-zA-Z])\s*[.、．)）:：]\s*(.+)$/);
+    if (matched) items.push(matched[2].trim());
+    else if (items.length) items[items.length - 1] += `\n${line}`;
+  }
+  return items.length >= 2 ? items : null;
+}
+
+// 把拆分出的提示词在对话节点右侧排成一列文字节点(与图片结果落位同风格);不负责 pushHistory,由调用方一次性提交
+function createChatPromptTextNodes(chatNode, items) {
+  const baseX = chatNode.x + chatNode.w + 40;
+  items.forEach((text, index) => {
+    const textNode = addNode("text", baseX, chatNode.y + index * (NODE_HEIGHT + 40), false);
+    textNode.text = text;
+  });
+  render();
+}
+
+let chatRequestSeq = 0;
+// AI 对话节点:框内分两区——关键词区(用户指令,长期保留) + 结果区(分隔线之后,每次整体替换为最新回复,不累加)。
+// 发送内容 = 关键词区 + 结果区里用户新写的话(chatComposeSendText);「批量」开关(node._chatEnumerated)勾选时,
+// 提问末尾追加序号输出指令,回复带 ≥2 个 a. b. 条目时自动拆成文字节点。
+// 下游消费的是最新结果(chatResultPortion:最后一条分隔线之后);生成期间下游读最近一条回复,避免读到提问草稿。
+async function sendChatNodeMessage(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "chat" || node.disabled || node._chatBusy) return;
+  normalizeChatNode(node);
+  const entry = chatModelEntry(node._chatModel);
+  if (!entry) {
+    node._chatError = chatCatalogModels().length ? "对话模型不可用，请重新选择模型" : "请先在设置 → API 中填写对应站点的 API Key";
+    syncChatNodeBody(node);
+    return;
+  }
+  const typed = chatComposeSendText(node);
+  const collected = collectUpstreamForAI(node.id, buildIncomingIndex());
+  const upstreamText = collected.texts.join("，").trim();
+  const userText = [upstreamText, typed].filter(Boolean).join("\n\n");
+  if (!userText) {
+    node._chatError = "需要输入内容，或连接上游文字/图片节点";
+    syncChatNodeBody(node);
+    return;
+  }
+  const requestText = node._chatEnumerated === true ? `${userText}\n\n${CHAT_ENUMERATED_INSTRUCTION}` : userText;
+  let imageDataUrls = [];
+  if (entry.multimodal && collected.images.length) {
+    const refs = collected.images.slice(0, CHAT_MAX_REFERENCE_IMAGES);
+    imageDataUrls = (await Promise.all(refs.map(ref => materializeReferenceImage(ref)))).filter(url => typeof url === "string" && url);
+  }
+  const history = node.chatMessages.map(message => ({ role: message.role, content: message.content }));
+  const userContent = entry.multimodal && imageDataUrls.length
+    ? [{ type: "text", text: requestText }, ...imageDataUrls.map(url => ({ type: "image_url", image_url: { url } }))]
+    : requestText;
+  const payload = { apiType: entry.apiType, model: node._chatModel, stream: false, messages: [...history, { role: "user", content: userContent }] };
+  // 服务器/浏览器模式:密钥随请求体按 apiType 分槽携带;桌面模式走 secrets.json,不带 key
+  if (!desktop) payload._apiKey = entry.apiType === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+
+  node._chatBusy = true;
+  node._chatError = "";
+  node._chatCancelled = false;
+  // 回车发送时输入框仍持有焦点,置 disabled 会丢焦点;完成后若之前在输入就还给它,方便连续追问
+  node._chatRefocus = document.activeElement?.matches?.(`.node[data-id="${node.id}"] textarea[data-role="chat-text"]`) || false;
+  const controller = new AbortController();
+  node._chatAbort = controller;
+  const requestId = ++chatRequestSeq;
+  node._chatRequestId = requestId;
+  syncChatNodeBody(node);
+  try {
+    const resp = await apiFetch("/api/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    // 停止后迟到的结果直接丢弃(桌面桥无法中断进行中的请求)
+    if (node._chatRequestId !== requestId || node._chatCancelled) return;
+    const data = await resp.json().catch(() => ({}));
+    const apiError = typeof data.error === "string" ? data.error : data.error?.message;
+    if (resp.status === 404 && (!data.error || apiError === "桌面接口不存在")) {
+      throw new Error(desktop
+        ? "当前桌面程序没有对话接口：请保存画布并关闭窗口，再运行「启动CanvasFlow-NET.bat」重新构建启动"
+        : "本机服务没有对话接口：请重启「启动CanvasFlow服务.bat」，再用新标签页打开画布");
+    }
+    if (!resp.ok || data.error) throw new Error(apiError || `${entry.apiType === "agtoken" ? "AGToken" : "APIMart"} 对话请求失败（HTTP ${resp.status}）`);
+    // apimart 响应为 {code,data} 包装(data 内为标准 OpenAI 结构),agtoken 为标准结构;按 choices 形状自适应解包
+    const inner = data && typeof data === "object" && data.data && Array.isArray(data.data.choices) ? data.data : data;
+    const reply = chatContentToText(inner?.choices?.[0]?.message?.content);
+    if (!reply) throw new Error("上游未返回文字内容");
+    node.chatMessages.push({ role: "user", content: requestText, imageCount: imageDataUrls.length });
+    node.chatMessages.push({ role: "assistant", content: reply });
+    if (node.chatMessages.length > CHAT_HISTORY_LIMIT) node.chatMessages = node.chatMessages.slice(-CHAT_HISTORY_LIMIT);
+    // 关键词区原样保留,结果区整体替换为最新回复(不累加);下游/截图收集只取最后一条分隔线之后的结果
+    node.chatText = typed ? `${typed}\n\n${CHAT_RESULT_DIVIDER}\n\n${reply}` : reply;
+    // 回复带 ≥2 个 a. b. 序号条目时,自动把序号后的内容拆成文字节点(批量提示词工作流)
+    const splitItems = parseNumberedChatItems(reply);
+    if (splitItems) createChatPromptTextNodes(node, splitItems);
+    node._chatError = "";
+    pushHistory();
+    if (splitItems) toast(`已按序号拆分为 ${splitItems.length} 个文字节点`);
+  } catch (error) {
+    if (node._chatRequestId !== requestId) return;
+    if (node._chatCancelled || error.name === "AbortError") node._chatError = "已停止生成";
+    else node._chatError = error.message || "对话请求失败";
+  } finally {
+    if (node._chatRequestId === requestId) {
+      node._chatBusy = false;
+      delete node._chatAbort;
+      delete node._chatCancelled;
+      syncChatNodeBody(node);
+      if (node._chatRefocus) {
+        const textarea = els.nodes.querySelector(`.node[data-id="${node.id}"] textarea[data-role="chat-text"]`);
+        if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+      }
+      delete node._chatRefocus;
+      markDirty();
+    }
+  }
+}
+
+// 就地刷新对话节点正文(不整节点重建);仅在对话自身状态变化时调用
+function syncChatNodeBody(node) {
+  const nodeEl = els.nodes.querySelector(`.node[data-id="${node.id}"]`);
+  const body = nodeEl?.querySelector(".node-body");
+  if (!nodeEl || !body || !body.querySelector("textarea[data-role='chat-text']")) return;
+  body.innerHTML = chatNodeBody(node);
+}
+
+// 浏览器生图:建任务 → 扩展内容脚本在站点页面模拟人工操作 → 轮询取结果。
+// 首图进节点预览,多余图片各自生成图片节点(与 AI 节点多图语义一致)。
+async function generateBrowserImage(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "browser-image" || node.disabled || node.generating) return;
+  normalizeBrowserNode(node);
+  const siteTarget = browserNodeSiteTarget(node);
+  if (!siteTarget) {
+    node._browserError = "请填写自定义站点网址（含域名）";
+    render();
+    return;
+  }
+  const collected = collectUpstreamForAI(node.id, buildIncomingIndex());
+  const upstreamText = collected.texts.join("，").trim();
+  const prompt = String(node.prompt || "").trim() || upstreamText;
+  const images = [];
+  for (const ref of [...(collected.branches || []).flatMap(branch => branch.images || []), ...(collected.groupImages || [])].filter((ref, index, refs) => refs.findIndex(other => (other.assetId || other.image || other._nodeId) === (ref.assetId || ref.image || ref._nodeId)) === index).slice(0, 4)) {
+    const url = await materializeReferenceImage(ref);
+    if (typeof url === "string" && url.startsWith("data:image/")) images.push(url);
+  }
+  if (!prompt && !images.length) {
+    node._browserError = "需要提示词，或连接上游文字/图片节点";
+    render();
+    return;
+  }
+  node.generating = true;
+  node._browserError = "";
+  node._browserStatus = "正在创建任务";
+  const queueTask = { id: `q${aiTaskQueue.nextId++}`, kind: "browser", nodeId: node.id, pageId: state.activePageId, label: "浏览器生图", model: node._browserSite, resolution: "串行", size: node._browserNewConversation ? "新对话" : "继续对话", projectName: currentPage()?.name || "", prompt, thumbnail: images[0] || "", status: "waiting", progress: 0 };
+  aiTaskQueue.items.push(queueTask);
+  renderTaskQueue();
+  const requestId = `breq-${++chatRequestSeq}`;
+  node._browserRequestId = requestId;
+  render();
+  try {
+    const resp = await apiFetch("/api/browser-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: siteTarget, pageUrl: node._browserSite === "custom" ? node._browserOrigin : "", newConversation: node._browserNewConversation, prompt, images, nodeId: node.id }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error((typeof data.error === "string" ? data.error : data.error?.message) || `创建任务失败（HTTP ${resp.status}）`);
+    const taskId = String(data.taskId || "");
+    node._browserTaskId = taskId;
+    queueTask.browserTaskId = taskId;
+    node._browserStatus = "等待浏览器插件领取";
+    renderNodes();
+    const startedAt = Date.now();
+    for (;;) {
+      await new Promise(resolve => setTimeout(resolve, BROWSER_TASK_POLL_MS));
+      if (node._browserRequestId !== requestId || node._browserTaskId !== taskId) { queueTask.status = "cancelled"; renderTaskQueue(); return; } // 已取消/节点已删除
+      let status;
+      try {
+        const statusResp = await apiFetch(`/api/browser-task/status/${encodeURIComponent(taskId)}`);
+        status = await statusResp.json();
+      } catch (error) {
+        if (Date.now() - startedAt > BROWSER_TASK_TIMEOUT_MS) throw new Error("查询任务状态失败");
+        continue;
+      }
+      queueTask.status = status.status === "running" ? "generating" : "waiting";
+      queueTask.progress = status.status === "running" ? 30 : 0;
+      if (status.status === "running" && !queueTask.startedAt) queueTask.startedAt = Date.now();
+      renderTaskQueue();
+      if (status.status === "completed") {
+        const urls = Array.isArray(status.images) ? status.images.filter(url => typeof url === "string") : [];
+        if (!urls.length) throw new Error(status.text ? "站点只返回了文字，没有生成图片" : "站点未返回图片");
+        queueTask.status = "done"; queueTask.progress = 100; queueTask.thumbnail = urls[0]; renderTaskQueue();
+        node.generatedImage = urls[0];
+        urls.slice(1).forEach((url, index) => {
+          const imageNode = addNode("image", node.x + node.w + 40, node.y + index * IMAGE_NODE_VERTICAL_STEP, false);
+          imageNode.image = url;
+          imageNode.fileName = `browser-result-${index + 2}.png`;
+          imageNode.mime = "image/png";
+        });
+        node.generating = false;
+        node._browserStatus = "";
+        node._browserError = "";
+        pushHistory();
+        render();
+        toast(urls.length > 1 ? `浏览器生成完成，共 ${urls.length} 张` : "浏览器生成完成");
+        return;
+      }
+      if (status.status === "failed") throw new Error(status.error || "浏览器生成失败");
+      if (status.status === "expired") throw new Error("浏览器任务已过期或服务已重启，请重新生成");
+      if (queueTask.startedAt && Date.now() - queueTask.startedAt > BROWSER_TASK_TIMEOUT_MS) throw new Error("浏览器插件超时未响应（确认已在目标站点页面安装并启用 CanvasFlow 插件）");
+      node._browserStatus = status.status === "running" ? "浏览器页面执行中…" : "等待浏览器插件领取";
+      renderNodes();
+    }
+  } catch (error) {
+    if (node._browserRequestId !== requestId) return;
+    node.generating = false;
+    queueTask.status = "failed"; queueTask.error = error.message || "浏览器生成失败"; renderTaskQueue();
+    node._browserError = error.message || "浏览器生成失败";
+    render();
+  } finally {
+    if (node._browserRequestId === requestId) delete node._browserRequestId;
+  }
 }
 
 let screenshotCatalogSignature = "";
@@ -3585,6 +4050,7 @@ function refreshQueuedNodeProgress(nodeId) {
   if (!nodeId) return;
   const node = findNode(nodeId);
   if (!node) return;
+  if (node.type === "browser-image") { renderNodes(); return; }
   const tasks = taskQueueForNode(nodeId).filter(task => !node._queueRunId || task.runId === node._queueRunId);
   const pending = tasks.filter(task => !queueTaskIsSettled(task));
   node.generating = pending.some(queueTaskIsRunning);
@@ -3609,8 +4075,8 @@ function renderTaskQueue() {
     : translateUiString("暂无任务");
   els.taskQueueList.innerHTML = aiTaskQueue.items.length ? aiTaskQueue.items.map((task, index) => {
     const thumbnail = task.thumbnail ? `<img src="${task.thumbnail}" alt="">` : translateUiString("无参考图");
-    const canManage = task.status === "waiting" || task.status === "paused";
-    const pauseButton = task.status === "waiting" ? `<button data-queue-action="pause" title="${translateUiString("暂停等待任务")}">Ⅱ</button>` : task.status === "paused" ? `<button data-queue-action="resume" title="${translateUiString("继续任务")}">▶</button>` : "";
+    const canManage = task.kind !== "browser" && (task.status === "waiting" || task.status === "paused");
+    const pauseButton = task.kind === "browser" ? "" : task.status === "waiting" ? `<button data-queue-action="pause" title="${translateUiString("暂停等待任务")}">Ⅱ</button>` : task.status === "paused" ? `<button data-queue-action="resume" title="${translateUiString("继续任务")}">▶</button>` : "";
     const orderButtons = canManage ? `<button data-queue-action="up" title="${translateUiString("向前移动")}">↑</button><button data-queue-action="down" title="${translateUiString("向后移动")}">↓</button><button data-queue-action="remove" title="${translateUiString("删除等待任务")}">×</button>` : "";
     const progress = task.status === "done" ? 100 : Number(task.progress) || 0;
     const runningClass = queueTaskIsRunning(task) ? " is-running" : "";
@@ -4077,7 +4543,7 @@ let aiQueueLastSubmitAt = 0;
 function pumpAiTaskQueue() {
   if (aiQueueStaggerTimer) { clearTimeout(aiQueueStaggerTimer); aiQueueStaggerTimer = null; }
   while (aiTaskQueue.running < AI_QUEUE_MAX_CONCURRENT) {
-    const task = aiTaskQueue.items.find(item => item.status === "waiting");
+    const task = aiTaskQueue.items.find(item => item.kind !== "browser" && item.status === "waiting");
     if (!task) break;
     const sinceLastSubmit = Date.now() - aiQueueLastSubmitAt;
     if (sinceLastSubmit < AI_TASK_SUBMIT_STAGGER_MS) {
@@ -5256,7 +5722,8 @@ let pendingNodeRenderAfterSelect = false;
 
 function activeNodeTextEditor() {
   const active = document.activeElement;
-  return active?.matches?.('.node textarea[data-role="text"]') && els.nodes.contains(active) ? active : null;
+  // 文字节点与对话节点正文都是常驻 textarea:输入期间推迟全量渲染,避免重建打断输入/IME
+  return active?.matches?.('.node textarea[data-role="text"], .node textarea[data-role="chat-text"]') && els.nodes.contains(active) ? active : null;
 }
 
 function activeNodeSelect() {
@@ -5315,7 +5782,8 @@ function syncContentDrivenNodeHeights() {
   let changed = false;
   els.nodes.querySelectorAll(".node").forEach(nodeElement => {
     const node = findNode(nodeElement.dataset.id);
-    if (!node || node.type === "text") return;
+    // 文字节点与对话节点高度固定:对话节点历史区内部滚动,不随内容撑高
+    if (!node || node.type === "text" || node.type === "chat") return;
     const head = nodeElement.querySelector(":scope > .node-head");
     const body = nodeElement.querySelector(":scope > .node-body");
     if (!body) return;
@@ -5351,14 +5819,80 @@ function syncSelectedNodeClasses() {
   });
 }
 
+// 在正文中原位显示变量选择；点击普通文字切回原文编辑，失焦恢复正文控件。
+function textVariableStripHtml(node) {
+  const matches = detectTextNodeVariables(node?.text);
+  if (!matches.length) return "";
+  const choices = node?.variableChoices || {};
+  const chips = new Map(matches.map(match => {
+    const choice = choices[match.name] || null;
+    const enabled = choice ? choice.enabled !== false : true;
+    const hasValidChoice = !!(choice?.optionId && match.definition.options.some(option => option.id === choice.optionId));
+    const missingOption = choice?.optionId && !hasValidChoice ? `<option value="${escapeHtml(choice.optionId)}" selected>已失效：${escapeHtml(choice.label || "未知值")}</option>` : "";
+    const options = match.definition.options.map(option => `<option value="${escapeHtml(option.id)}" ${choice?.optionId === option.id ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+    const toggleTitle = `${enabled ? "停用" : "启用"}变量${match.name}`;
+    const displayLabel = hasValidChoice ? choice.label || match.definition.options.find(option => option.id === choice.optionId)?.label : "选值";
+    const width = Math.max(56, Math.min(120, Math.ceil((String(displayLabel || "选值").length * 12 + 24) / 4) * 4));
+    return [match.name, `<span class="text-variable-chip ${enabled ? "" : "is-off"}"><span class="variable-select-wrap"><select data-role="text-variable-choice" data-var-name="${escapeHtml(match.name)}" style="width:${width}px" aria-label="选择${escapeHtml(match.name)}的值"${enabled ? "" : " disabled"}><option value="" ${hasValidChoice ? "" : "selected"}>${hasValidChoice ? "清除选择" : "选值"}</option>${missingOption}${options}</select><span class="variable-select-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></span><button type="button" class="text-variable-toggle" data-role="text-variable-toggle" data-var-name="${escapeHtml(match.name)}" role="switch" aria-checked="${enabled}" aria-label="${toggleTitle}" title="${toggleTitle}">${escapeHtml(match.name)}</button></span>`];
+
+  }));
+  const text = String(node.text || "");
+  const names = [...chips.keys()].sort((a,b) => b.length - a.length);
+  let html = "";
+  for (let index = 0; index < text.length;) {
+    const name = names.find(name => text.slice(index, index + name.length).toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (name) { html += chips.get(name); index += name.length; }
+    else { html += escapeHtml(text[index]); index++; }
+  }
+  return `<div class="text-inline-preview" data-role="text-inline-edit" tabindex="0" aria-label="文字内容，点击编辑">${html}</div>`;
+}
+
+// 对话节点正文 = 顶部模型条 + 整块可输入文本框:框内文字即当前输出,回车整框发送,回复填回框内。
+// 「批量」是发送前勾选的开关:勾选后本轮请求自动追加 a. b. 序号输出指令,回复按序号拆成文字节点。
+function chatNodeBody(node) {
+  normalizeChatNode(node);
+  const busy = node._chatBusy === true;
+  const models = chatCatalogModels().map(model => `<option value="${escapeHtml(model.id)}" ${node._chatModel === model.id ? "selected" : ""}>${escapeHtml(model.label)}</option>`).join("") || '<option value="">请先填写 API Key</option>';
+  const historyTool = busy
+    ? `<button class="chat-tool-btn is-busy" data-role="chat-stop" type="button" title="停止生成" aria-label="停止生成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>`
+    : `<label class="chat-enumerate-toggle" title="批量提示词：勾选后本次发送会要求按 a. b. 序号输出多条，回复自动拆分为文字节点"><input type="checkbox" data-role="chat-enumerate-toggle" ${node._chatEnumerated ? "checked" : ""} ${busy ? "disabled" : ""}><span>批量</span></label>`
+      + `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话记忆（保留当前文字）" aria-label="清空对话记忆" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
+      + `<button class="chat-tool-btn is-send" data-role="chat-send" type="button" title="发送" aria-label="发送消息"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6"/></svg></button>`;
+  return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${historyTool}</div>`
+    + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
+    + `<textarea data-role="chat-text" placeholder="输入内容，Enter 发送；Shift+Enter 换行" ${busy ? "disabled" : ""}>${escapeHtml(node.chatText || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
+}
+
+// 浏览器生图节点正文:站点下拉(+自定义网址)/提示词/生成按钮/结果预览
+function browserNodeBody(node) {
+  normalizeBrowserNode(node);
+  const isCustom = node._browserSite === "custom";
+  const sites = BROWSER_SITES.map(site => `<option value="${escapeHtml(site.id)}" ${node._browserSite === site.id ? "selected" : ""}>${escapeHtml(site.label)}</option>`).join("")
+    + `<option value="custom" ${isCustom ? "selected" : ""}>自定义站点…</option>`;
+  const status = node.generating
+    ? `<div class="browser-node-status is-busy">${escapeHtml(node._browserStatus || "执行中…")}<button class="browser-node-cancel" data-role="browser-cancel" type="button" title="取消等待" aria-label="取消等待">取消</button></div>`
+    : node._browserError
+      ? `<div class="browser-node-status is-error">${escapeHtml(node._browserError)}</div>`
+      : "";
+  const preview = node.generatedImage
+    ? `<div class="image-preview" title="双击放大预览"><img src="${node.generatedImage}" alt="" draggable="false"></div>`
+    : `<div class="browser-node-empty">未生成——连接上游文字/图片，或直接在上方输入提示词</div>`;
+  return `<div class="ai-node-settings"><label class="ai-model-field">站点<select data-role="browser-site" ${node.generating ? "disabled" : ""}>${sites}</select></label><label class="${isCustom ? "" : "hidden"}">站点网址<input type="text" data-role="browser-origin" placeholder="https://站点域名" value="${escapeHtml(node._browserOrigin)}" ${node.generating ? "disabled" : ""}></label></div>`
+    + `<textarea data-role="browser-prompt" rows="2" placeholder="提示词" ${node.generating ? "disabled" : ""}>${escapeHtml(node.prompt || "")}</textarea>`
+    + `<label class="browser-new-conversation"><input type="checkbox" data-role="browser-new-conversation" ${node._browserNewConversation ? "checked" : ""} ${node.generating ? "disabled" : ""}>每次创建新对话</label>`
+    + status
+    + `<div class="image-actions browser-node-actions">${node.generating ? "" : `<button type="button" data-role="browser-generate" class="ai-generate-btn">生成</button>${node.generatedImage ? `<button type="button" data-role="browser-clear">清除结果</button>` : ""}`}</div>`
+    + preview;
+}
+
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = (node.type === "output" || node.type === "screenshot-input" || node.type === "tool-node") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
-    body = `<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
+    body = `${textVariableStripHtml(node)}<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
   } else if (node.type === "variable") {
     normalizeVariableNode(node);
     if (!globalLibrary.variableDefinitions.length && !node.variableRows.some(row => row.variableNameSnapshot)) {
@@ -5438,6 +5972,10 @@ function nodeTemplate(node) {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "tool-node") {
     body = toolNodeBody(node);
+  } else if (node.type === "chat") {
+    body = chatNodeBody(node);
+  } else if (node.type === "browser-image") {
+    body = browserNodeBody(node);
   } else if (node.type === "angle-image") {
     body = angleImageBody(node);
   } else if (node.type === "screenshot-input") {
@@ -5861,14 +6399,19 @@ function clearCompositeHover() {
 }
 
 function updateCompositeHover(dragState) {
-  if (state.settings.editOnOverlap === false) return clearCompositeHover();
   if (!dragState?.moved || dragState.original.length !== 1) return clearCompositeHover();
   const source = findNode(dragState.original[0].id);
-  if (!nodeImageReference(source)) return clearCompositeHover();
+  if (!source) return clearCompositeHover();
+  // 文字节点重合=文案合并(独立开关);其余走图片叠放编辑(独立开关)
+  const textMergeMode = state.settings.textMergeOnOverlap !== false
+    && source.type === "text" && String(source.text || "").trim().length > 0;
+  const imageMode = state.settings.editOnOverlap !== false && Boolean(nodeImageReference(source));
+  if (!textMergeMode && !imageMode) return clearCompositeHover();
   let bestTarget = null;
   let bestRatio = 0;
   for (const target of state.nodes) {
-    if (target.id === source.id || state.selected.has(target.id) || !nodeImageReference(target)) continue;
+    if (target.id === source.id || state.selected.has(target.id)) continue;
+    if (textMergeMode ? (target.type !== "text") : !nodeImageReference(target)) continue;
     const overlapWidth = Math.max(0, Math.min(source.x + source.w, target.x + target.w) - Math.max(source.x, target.x));
     const overlapHeight = Math.max(0, Math.min(source.y + source.h, target.y + target.h) - Math.max(source.y, target.y));
     const ratio = overlapWidth * overlapHeight / Math.max(1, Math.min(source.w * source.h, target.w * target.h));
@@ -5887,6 +6430,43 @@ function updateCompositeHover(dragState) {
 
 function edgeInsertableNode(node) {
   return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "tool-node";
+}
+
+// 文字节点重合合并:两段文案按画布位置从左到右(同列按从上到下)拼接,并入被叠节点,删除拖动节点;
+// 拖动节点的连线转到被叠节点,变量词选择同名冲突时保留被叠节点的选择
+function mergeTextNodeTexts(target, source) {
+  const ordered = [source, target].sort((a, b) => (a.x - b.x) || (a.y - b.y));
+  target.text = ordered.map(node => String(node.text || "").trim()).filter(Boolean).join("\n");
+  if (source.variableChoices) target.variableChoices = { ...source.variableChoices, ...(target.variableChoices || {}) };
+  for (const edge of state.edges) {
+    if (edge.from.node === source.id) edge.from.node = target.id;
+    if (edge.to.node === source.id) edge.to.node = target.id;
+  }
+  state.edges = state.edges.filter(edge => !(edge.from.node === target.id && edge.to.node === target.id));
+  state.nodes = state.nodes.filter(node => node.id !== source.id);
+  state.selected.delete(source.id);
+  state.selected.add(target.id);
+  pushHistory();
+  render();
+  toast("已合并文案（Ctrl+Z 可撤销）");
+  console.log("[文字节点合并]", { targetId: target.id, removedId: source.id });
+}
+
+// 文字节点按换行拆分:每个非空行一个文字节点,首个留在原节点,其余在右侧排成一列
+function splitTextNodeByLines(node) {
+  const lines = String(node.text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) {
+    toast("文字没有多个非空行，无法拆分");
+    return;
+  }
+  node.text = lines[0];
+  lines.slice(1).forEach((line, index) => {
+    const textNode = addNode("text", node.x + node.w + 40, node.y + index * (node.h + 24), false);
+    textNode.text = line;
+  });
+  pushHistory();
+  render();
+  toast(`已按换行拆分为 ${lines.length} 个文字节点`);
 }
 
 function edgeHitPoints(a, b) {
@@ -6015,7 +6595,7 @@ els.viewport.addEventListener("mousedown", ev => {
   hideMenu();
   els.projectMenu.classList.add("hidden");
   lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
-  if (altDown && ev.button === 0 && !ev.target.closest(".minimap-panel") && !ev.target.closest("textarea,button,input,select,[contenteditable='true']")) {
+  if (altDown && ev.button === 0 && !ev.target.closest(".minimap-panel") && !ev.target.closest("textarea,button,input,select,[contenteditable='true'],[data-role='text-inline-edit']")) {
     ev.preventDefault();
     cutStroke = { points: [screenToWorld(ev.clientX, ev.clientY)] };
     return;
@@ -6023,7 +6603,7 @@ els.viewport.addEventListener("mousedown", ev => {
   if (ev.target.closest(".edge-hit")) return; // 点击连线不做任何操作，交给 dblclick / contextmenu
   const port = ev.target.closest(".port");
   const nodeEl = ev.target.closest(".node");
-  const interactive = ev.target.closest("textarea,button,input,select,[contenteditable='true']");
+  const interactive = ev.target.closest("textarea,button,input,select,[contenteditable='true'],[data-role='text-inline-edit']");
   if (!interactive) els.viewport.focus();
   if (port && port.dataset.port === "out") {
     const node = findNode(nodeEl.dataset.id);
@@ -6153,7 +6733,8 @@ window.addEventListener("mouseup", ev => {
     if (source && target) {
       source.x = drag.original[0].x;
       source.y = drag.original[0].y;
-      compositeRequest = { source, target };
+      // 文字节点重合=合并文案;图片照旧打开叠放编辑
+      compositeRequest = { source, target, textMerge: source.type === "text" && target.type === "text" };
       render();
     }
   } else if (drag?.type === "nodes") {
@@ -6196,8 +6777,12 @@ window.addEventListener("mouseup", ev => {
   clearNodeRelease();
   drag = null;
   if (compositeRequest) {
-    console.log("[节点叠放合成] 已触发编辑", { baseNodeId: compositeRequest.target.id, placedNodeId: compositeRequest.source.id });
-    void openNodeCompositeEditor(compositeRequest.target, compositeRequest.source);
+    if (compositeRequest.textMerge) {
+      mergeTextNodeTexts(compositeRequest.target, compositeRequest.source);
+    } else {
+      console.log("[节点叠放合成] 已触发编辑", { baseNodeId: compositeRequest.target.id, placedNodeId: compositeRequest.source.id });
+      void openNodeCompositeEditor(compositeRequest.target, compositeRequest.source);
+    }
   }
   if (selectionDraft) {
     selectionDraft = null;
@@ -6242,6 +6827,20 @@ function updateSelectionBox() {
   Object.assign(els.selectionBox.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
 }
 
+// 文字内容变化后就地同步该节点的变量下拉条(不动 textarea,避免打断输入/IME);变量集合没变就不动 DOM
+let textVariableStripSyncTimer = 0;
+function syncTextNodeVariableStrip(node) {
+  const nodeEl = els.nodes.querySelector(`.node[data-id="${node.id}"]`);
+  const textarea = nodeEl?.querySelector('textarea[data-role="text"]');
+  if (!nodeEl || !textarea) return;
+  const html = textVariableStripHtml(node);
+  const preview = nodeEl.querySelector(".text-inline-preview");
+  if (html) {
+    if (preview) { const wrap = document.createElement("div"); wrap.innerHTML = html; preview.replaceWith(wrap.firstElementChild); }
+    else textarea.insertAdjacentHTML("beforebegin", html);
+  } else preview?.remove();
+}
+
 els.nodes.addEventListener("input", ev => {
   const nodeEl = ev.target.closest(".node");
   if (!nodeEl) return;
@@ -6250,7 +6849,37 @@ els.nodes.addEventListener("input", ev => {
     node.text = ev.target.value;
     markDirty();
     publishScreenshotNodeCatalog();
+    if (!ev.isComposing) {
+      window.clearTimeout(textVariableStripSyncTimer);
+      textVariableStripSyncTimer = window.setTimeout(() => syncTextNodeVariableStrip(node), 250);
+    }
   }
+  // 对话正文:框内文字即节点当前输出,随输入同步落盘,不触发渲染(避免重建打断输入/IME)
+  if (ev.target.dataset.role === "chat-text") {
+    node.chatText = ev.target.value;
+    markDirty();
+  }
+  // 浏览器生图:提示词与自定义网址只落盘不渲染(保住输入焦点)
+  if (ev.target.dataset.role === "browser-prompt") {
+    node.prompt = ev.target.value;
+    markDirty();
+  }
+  if (ev.target.dataset.role === "browser-origin") {
+    node._browserOrigin = ev.target.value;
+    markDirty();
+  }
+});
+
+// 对话正文回车即发送(Shift+Enter 换行);IME 组合中的回车是选字确认,不发送
+els.nodes.addEventListener("keydown", ev => {
+  if (ev.target.dataset?.role !== "chat-text") return;
+  if (ev.key !== "Enter" || ev.shiftKey) return;
+  if (ev.isComposing || ev.keyCode === 229) return;
+  ev.preventDefault();
+  const nodeEl = ev.target.closest(".node");
+  const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
+  if (!node || node.type !== "chat" || node._chatBusy) return;
+  sendChatNodeMessage(node.id);
 });
 
 els.nodes.addEventListener("pointerdown", ev => {
@@ -6264,6 +6893,7 @@ els.nodes.addEventListener("pointerdown", ev => {
 
 els.nodes.addEventListener("focusin", ev => {
   if (ev.target.dataset.role !== "text") return;
+  ev.target.closest(".node")?.classList.add("is-text-editing");
   const value = ev.target.value.trim();
   if (value !== "请输入文字内容" && value !== "Enter text") return;
   const nodeEl = ev.target.closest(".node");
@@ -6277,7 +6907,21 @@ els.nodes.addEventListener("focusin", ev => {
 });
 
 els.nodes.addEventListener("focusout", ev => {
-  if (ev.target.dataset.role !== "text" || !pendingNodeRenderAfterTextEdit) return;
+  if (ev.target.dataset?.role === "text") {
+    ev.target.closest(".node")?.classList.remove("is-text-editing");
+    // 失焦时立即把变量下拉条刷到最新（输入期间的 250ms 定时器可能被后台节流推迟）
+    const node = findNode(ev.target.closest(".node")?.dataset.id);
+    if (node) {
+      window.clearTimeout(textVariableStripSyncTimer);
+      syncTextNodeVariableStrip(node);
+    }
+  }
+  const isNodeTextEditor = ev.target.dataset?.role === "text" || ev.target.dataset?.role === "chat-text";
+  if (!isNodeTextEditor || !pendingNodeRenderAfterTextEdit) return;
+  // 焦点仍移向画布节点内部的控件(按钮/下拉等)时不立即强制重建:
+  // 否则按钮元素会在命中与派发之间被整体替换,吞掉这次点击(见已知问题"异步全量重渲染吞掉节点按钮的第一次点击"),
+  // 挂起的渲染留待下一次 render() 自然处理
+  if (ev.relatedTarget && els.nodes.contains(ev.relatedTarget)) return;
   window.queueMicrotask(() => {
     if (!activeNodeTextEditor() && pendingNodeRenderAfterTextEdit) {
       renderNodes({ force: true });
@@ -6319,6 +6963,15 @@ els.nodes.addEventListener("change", ev => {
     pushHistory(); render();
     return;
   }
+  if (role === "text-variable-choice" && node.type === "text") {
+    const definition = variableDefinitionByName(ev.target.dataset.varName);
+    const option = definition?.options.find(item => item.id === ev.target.value) || null;
+    node.variableChoices = node.variableChoices || {};
+    if (definition && option) node.variableChoices[definition.name] = { optionId: option.id, label: option.label };
+    else delete node.variableChoices[definition?.name || ev.target.dataset.varName];
+    pushHistory(); render();
+    return;
+  }
   if (node.type === "screenshot-input") {
     if (role === "screenshot-model") {
       node._model = ev.target.value;
@@ -6337,6 +6990,29 @@ els.nodes.addEventListener("change", ev => {
     else if (role === "angle-size") node._size = ev.target.value;
     else return;
     pushHistory();
+    return;
+  }
+  if (node.type === "chat") {
+    if (role === "chat-model") {
+      node._chatModel = ev.target.value;
+      node._chatError = "";
+      pushHistory(); render();
+      return;
+    }
+    if (role === "chat-enumerate-toggle") {
+      // 批量提示词开关:只落盘不渲染(checkbox 自身持态),下次回车发送即生效
+      node._chatEnumerated = ev.target.checked;
+      markDirty();
+      return;
+    }
+    return;
+  }
+  if (node.type === "browser-image") {
+    if (role === "browser-new-conversation") { node._browserNewConversation = ev.target.checked; pushHistory(); return; }
+    if (role === "browser-site") {
+      node._browserSite = ev.target.value;
+      pushHistory(); render();
+    }
     return;
   }
   if (node.type === "tool-node") {
@@ -6386,6 +7062,37 @@ els.nodes.addEventListener("click", ev => {
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
   if (actionRole === "tool-run") runToolNode(node.id);
+  if (actionRole === "browser-generate" && node.type === "browser-image") generateBrowserImage(node.id);
+  if (actionRole === "browser-cancel" && node.type === "browser-image" && node.generating) {
+    if (node._browserTaskId) apiFetch("/api/browser-task/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId: node._browserTaskId }) }).catch(() => {});
+    for (const task of aiTaskQueue.items) if (task.kind === "browser" && task.nodeId === node.id && !queueTaskIsSettled(task)) task.status = "cancelled";
+    renderTaskQueue();
+    node.generating = false;
+    node._browserTaskId = null;
+    node._browserStatus = "";
+    node._browserError = "已取消等待（站点页面可能仍在生成）";
+    render();
+  }
+  if (actionRole === "browser-clear" && node.type === "browser-image") {
+    node.generatedImage = null;
+    delete node.generatedAssetId;
+    pushHistory(); render();
+  }
+  if (actionRole === "chat-send" && node.type === "chat") sendChatNodeMessage(node.id);
+  if (actionRole === "chat-stop" && node.type === "chat" && node._chatBusy) {
+    // 桌面桥无法中断进行中的请求:立即回到可输入状态,迟到的结果由请求序列号丢弃
+    node._chatCancelled = true;
+    node._chatAbort?.abort();
+    node._chatBusy = false;
+    node._chatError = "已停止生成";
+    syncChatNodeBody(node);
+  }
+  if (actionRole === "chat-clear" && node.type === "chat") {
+    // 只清对话记忆,保留框内文字(那可能是用户手工润色过的产物,清文字直接选中删除即可)
+    node.chatMessages = [];
+    node._chatError = "";
+    pushHistory(); render();
+  }
   if (actionRole === "variable-add-row") {
     normalizeVariableNode(node);
     node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
@@ -6397,6 +7104,23 @@ els.nodes.addEventListener("click", ev => {
     node.variableRows = node.variableRows.filter(row => row.id !== rowId);
     if (!node.variableRows.length) node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
     pushHistory(); render();
+  }
+  if (actionRole === "text-inline-edit" && node.type === "text") {
+    nodeEl.classList.add("is-text-editing");
+    const editor = nodeEl.querySelector('textarea[data-role="text"]');
+    editor?.focus();
+    editor?.setSelectionRange(editor.value.length, editor.value.length);
+    return;
+  }
+  if (actionRole === "text-variable-toggle" && node.type === "text") {
+    const definition = variableDefinitionByName(action.dataset.varName);
+    if (definition) {
+      node.variableChoices = node.variableChoices || {};
+      const entry = node.variableChoices[definition.name];
+      const isOn = entry ? entry.enabled !== false : true;
+      node.variableChoices[definition.name] = { ...(entry || {}), enabled: !isOn };
+      pushHistory(); render();
+    }
   }
   if (ev.target.dataset.role === "clear-image") {
     node.outputPath = "";
@@ -6589,6 +7313,9 @@ const lightboxPaintSizes = { brush: 36, eraser: 36, arrow: 12, rect: 12 };
 let lightboxEraserRingPoint = null;
 let lightboxPaintActions = [];
 let lightboxPaintCurrentAction = null;
+let lightboxMattingDrag = null;
+let lightboxMattingBusy = false;
+const MATTING_ENDPOINT = localStorage.getItem("canvasflowMattingEndpoint") || "http://127.0.0.1:8790";
 const lightboxPaintOverlay = document.createElement("canvas");
 let lightboxBaseFlipX = false;
 let lightboxBaseFlipY = false;
@@ -6596,6 +7323,90 @@ let lightboxPlacedImage = null;
 let lightboxPlacedSelected = false;
 let lightboxTransformDrag = null;
 let lightboxEditUndoStack = [];
+let lightboxEditBase = null;
+let lightboxCropRect = null;
+let lightboxCropDrag = null;
+const lightboxCropBtn = $("lightboxCropBtn");
+const lightboxCropApply = $("lightboxCropApply");
+
+function clearLightboxCrop() {
+  lightboxCropRect = null;
+  lightboxCropDrag = null;
+  lightboxCropApply.disabled = true;
+}
+
+function updateLightboxCrop(point) {
+  const canvas = els.lightboxPaintCanvas;
+  const end = { x: Math.max(0, Math.min(canvas.width, point.x)), y: Math.max(0, Math.min(canvas.height, point.y)) };
+  const start = lightboxCropDrag;
+  const x = Math.floor(Math.min(start.x, end.x));
+  const y = Math.floor(Math.min(start.y, end.y));
+  lightboxCropRect = { x, y, w: Math.ceil(Math.max(start.x, end.x)) - x, h: Math.ceil(Math.max(start.y, end.y)) - y };
+  lightboxCropApply.disabled = lightboxCropRect.w < 2 || lightboxCropRect.h < 2;
+  renderLightboxPaintComposite();
+}
+
+function drawLightboxCropSelection(context) {
+  if (lightboxPaintMode !== "crop" || !lightboxCropRect) return;
+  const { x, y, w, h } = lightboxCropRect;
+  const canvas = els.lightboxPaintCanvas;
+  const tokens = getComputedStyle(canvas);
+  context.save();
+  context.fillStyle = tokens.getPropertyValue("--text").trim();
+  context.globalAlpha = .6;
+  context.fillRect(0, 0, canvas.width, y);
+  context.fillRect(0, y + h, canvas.width, canvas.height - y - h);
+  context.fillRect(0, y, x, h);
+  context.fillRect(x + w, y, canvas.width - x - w, h);
+  context.globalAlpha = 1;
+  context.strokeStyle = tokens.getPropertyValue("--primary").trim();
+  context.lineWidth = 2 * canvas.width / canvas.getBoundingClientRect().width;
+  context.strokeRect(x, y, w, h);
+  context.restore();
+}
+
+function applyLightboxCrop() {
+  if (!lightboxPainting || lightboxCropApply.disabled || !lightboxCropRect) return;
+  const canvas = els.lightboxPaintCanvas;
+  const rect = { ...lightboxCropRect };
+  const previous = { base: lightboxEditBase, width: canvas.width, height: canvas.height, actions: lightboxPaintActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
+  clearLightboxCrop();
+  lightboxPlacedSelected = false;
+  renderLightboxPaintComposite();
+  const cropped = document.createElement("canvas");
+  cropped.width = rect.w;
+  cropped.height = rect.h;
+  cropped.getContext("2d").drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  lightboxEditBase = cropped;
+  canvas.width = rect.w;
+  canvas.height = rect.h;
+  lightboxPaintOverlay.width = rect.w;
+  lightboxPaintOverlay.height = rect.h;
+  lightboxPaintActions = [];
+  lightboxPlacedImage = null;
+  lightboxBaseFlipX = false;
+  lightboxBaseFlipY = false;
+  pushLightboxEditUndo(() => {
+    clearLightboxCrop();
+    lightboxEditBase = previous.base;
+    canvas.width = previous.width;
+    canvas.height = previous.height;
+    lightboxPaintOverlay.width = previous.width;
+    lightboxPaintOverlay.height = previous.height;
+    lightboxPaintActions = previous.actions;
+    lightboxPlacedImage = previous.placed;
+    lightboxPlacedSelected = previous.selected;
+    lightboxBaseFlipX = previous.flipX;
+    lightboxBaseFlipY = previous.flipY;
+    updateLightboxPaintDisplaySize();
+  });
+  updateLightboxPaintDisplaySize();
+  setLightboxPaintMode("crop");
+  rebuildLightboxPaintOverlay();
+}
+
+lightboxCropBtn.onclick = () => { setLightboxPaintMode("crop"); toast("拖框选择保留区域，再点击应用裁剪"); };
+lightboxCropApply.onclick = applyLightboxCrop;
 
 function showLightbox(src, sourceNodeId = "") {
   els.lightboxImg.classList.remove("hidden");
@@ -6653,6 +7464,8 @@ function hideLightbox() {
 
 function startLightboxPaint() {
   if (!lightboxSourceNodeId || !els.lightboxImg.naturalWidth) return;
+  lightboxEditBase = null;
+  clearLightboxCrop();
   const canvas = els.lightboxPaintCanvas;
   canvas.width = els.lightboxImg.naturalWidth;
   canvas.height = els.lightboxImg.naturalHeight;
@@ -6683,9 +7496,13 @@ function startLightboxPaint() {
 }
 
 function cancelLightboxPaint() {
+  lightboxEditBase = null;
+  clearLightboxCrop();
   clearCompositeHover();
   lightboxPainting = false;
   lightboxDrawing = false;
+  lightboxMattingDrag = null;
+  els.lightboxMattingRect.classList.add("hidden");
   hideLightboxEraserRing();
   lightboxPaintActions = [];
   lightboxPaintCurrentAction = null;
@@ -6728,14 +7545,19 @@ function updateLightboxPaintDisplaySize() {
 }
 
 function setLightboxPaintMode(mode) {
-  lightboxPaintMode = ["brush", "eraser", "arrow", "rect", "transform"].includes(mode) ? mode : "idle";
+  clearLightboxCrop();
+  lightboxPaintMode = ["brush", "eraser", "arrow", "rect", "transform", "matting", "crop"].includes(mode) ? mode : "idle";
+  lightboxCropBtn.classList.toggle("active", lightboxPaintMode === "crop");
+  lightboxCropApply.classList.toggle("hidden", lightboxPaintMode !== "crop");
+  els.lightboxPaintCanvas.style.cursor = lightboxPaintMode === "crop" ? "crosshair" : "";
   if (lightboxPaintSizes[lightboxPaintMode] != null) els.lightboxPaintSize.value = lightboxPaintSizes[lightboxPaintMode];
   const annotateColor = lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect";
   els.lightboxPaintBrush.classList.toggle("active", lightboxPaintMode === "brush");
   els.lightboxPaintEraser.classList.toggle("active", lightboxPaintMode === "eraser");
   els.lightboxPaintArrow.classList.toggle("active", lightboxPaintMode === "arrow");
   els.lightboxPaintRect.classList.toggle("active", lightboxPaintMode === "rect");
-  els.lightboxPaintOptions.classList.toggle("hidden", lightboxPaintMode === "transform");
+  els.lightboxMattingBtn.classList.toggle("active", lightboxPaintMode === "matting");
+  els.lightboxPaintOptions.classList.toggle("hidden", ["transform", "matting", "crop"].includes(lightboxPaintMode));
   els.lightboxPaintColorField.classList.toggle("hidden", !annotateColor);
   els.lightboxPaintColor.disabled = !annotateColor;
   els.lightboxPaintCanvas.classList.toggle("transform-mode", lightboxPaintMode === "transform");
@@ -6743,6 +7565,7 @@ function setLightboxPaintMode(mode) {
   els.lightboxPaintCanvas.classList.toggle("eraser-mode", lightboxPaintMode === "eraser");
   els.lightboxPaintCanvas.classList.toggle("arrow-mode", lightboxPaintMode === "arrow");
   els.lightboxPaintCanvas.classList.toggle("rect-mode", lightboxPaintMode === "rect");
+  els.lightboxPaintCanvas.classList.toggle("matting-mode", lightboxPaintMode === "matting");
   if (lightboxPaintMode !== "transform") els.lightboxPaintCanvas.classList.remove("is-rotate-target");
   if (lightboxPaintMode !== "eraser") hideLightboxEraserRing();
   if (lightboxPainting) renderLightboxPaintComposite();
@@ -6828,7 +7651,7 @@ function renderLightboxPaintComposite() {
   context.save();
   context.translate(lightboxBaseFlipX ? canvas.width : 0, lightboxBaseFlipY ? canvas.height : 0);
   context.scale(lightboxBaseFlipX ? -1 : 1, lightboxBaseFlipY ? -1 : 1);
-  context.drawImage(els.lightboxImg, 0, 0, canvas.width, canvas.height);
+  context.drawImage(lightboxEditBase || els.lightboxImg, 0, 0, canvas.width, canvas.height);
   context.restore();
   if (lightboxPlacedImage?.element) {
     const placed = lightboxPlacedImage;
@@ -6841,6 +7664,7 @@ function renderLightboxPaintComposite() {
   }
   context.drawImage(lightboxPaintOverlay, 0, 0);
   if (lightboxPaintMode === "transform" && lightboxPlacedSelected && lightboxPlacedImage) drawLightboxPlacedSelection(context);
+  drawLightboxCropSelection(context);
 }
 
 function drawLightboxPlacedSelection(context) {
@@ -6901,6 +7725,7 @@ function updateLightboxPaintUndo() {
 
 function undoLightboxPaint() {
   if (!lightboxPainting || !lightboxEditUndoStack.length) return;
+  clearLightboxCrop();
   lightboxDrawing = false;
   lightboxPaintCurrentAction = null;
   const undoAction = lightboxEditUndoStack.pop();
@@ -7006,6 +7831,12 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   if (!lightboxPainting) return;
   if (lightboxPaintMode === "idle") return;
   const p = paintCanvasPoint(ev);
+  if (lightboxPaintMode === "crop") {
+    lightboxCropDrag = { x: Math.max(0, Math.min(els.lightboxPaintCanvas.width, p.x)), y: Math.max(0, Math.min(els.lightboxPaintCanvas.height, p.y)) };
+    els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
+    updateLightboxCrop(p);
+    return;
+  }
   if (lightboxPaintMode === "transform") {
     const hit = lightboxPlacedHit(p);
     els.lightboxPaintCanvas.classList.toggle("is-rotate-target", hit?.type === "rotate");
@@ -7014,6 +7845,12 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
     lightboxTransformDrag = { ...hit, start: p, initial: cloneLightboxPlacedImage() };
     els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
     return renderLightboxPaintComposite();
+  }
+  if (lightboxPaintMode === "matting") {
+    lightboxMattingDrag = { startX: ev.clientX, startY: ev.clientY };
+    try { els.lightboxPaintCanvas.setPointerCapture(ev.pointerId); } catch { /* 合成事件无可捕获指针 */ }
+    updateLightboxMattingRect(ev.clientX, ev.clientY, ev.clientX, ev.clientY);
+    return;
   }
   lightboxDrawing = true;
   els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
@@ -7032,10 +7869,15 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
 });
 
 els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
+  if (lightboxCropDrag) return updateLightboxCrop(paintCanvasPoint(ev));
   if (lightboxTransformDrag) return updateLightboxPlacedTransform(paintCanvasPoint(ev));
   if (lightboxPaintMode === "transform") {
     const hit = lightboxPlacedHit(paintCanvasPoint(ev));
     els.lightboxPaintCanvas.classList.toggle("is-rotate-target", hit?.type === "rotate");
+    return;
+  }
+  if (lightboxMattingDrag) {
+    updateLightboxMattingRect(lightboxMattingDrag.startX, lightboxMattingDrag.startY, ev.clientX, ev.clientY);
     return;
   }
   if (!lightboxDrawing) return;
@@ -7057,7 +7899,27 @@ els.lightboxPaintCanvas.addEventListener("pointerleave", () => {
   hideLightboxEraserRing();
 });
 
-function finishLightboxPointerAction() {
+function finishLightboxPointerAction(ev) {
+  if (lightboxCropDrag) {
+    if (ev.type === "pointercancel") clearLightboxCrop();
+    else { updateLightboxCrop(paintCanvasPoint(ev)); lightboxCropDrag = null; }
+    renderLightboxPaintComposite();
+    return;
+  }
+  if (lightboxMattingDrag) {
+    lightboxMattingDrag = null;
+    const box = els.lightboxMattingRect.getBoundingClientRect();
+    els.lightboxMattingRect.classList.add("hidden");
+    if (box.width < 6 || box.height < 6) return;
+    const a = paintCanvasPoint({ clientX: box.left, clientY: box.top });
+    const b = paintCanvasPoint({ clientX: box.right, clientY: box.bottom });
+    const x = Math.max(0, Math.floor(Math.min(a.x, b.x)));
+    const y = Math.max(0, Math.floor(Math.min(a.y, b.y)));
+    const w = Math.min(els.lightboxPaintCanvas.width - x, Math.ceil(Math.abs(b.x - a.x)));
+    const h = Math.min(els.lightboxPaintCanvas.height - y, Math.ceil(Math.abs(b.y - a.y)));
+    if (w >= 8 && h >= 8) runLightboxMatting([x, y, w, h]);
+    return;
+  }
   if (lightboxTransformDrag) {
     const previous = lightboxTransformDrag.initial;
     lightboxTransformDrag = null;
@@ -7087,6 +7949,63 @@ els.lightboxPaintBrush.onclick = () => setLightboxPaintMode("brush");
 els.lightboxPaintEraser.onclick = () => setLightboxPaintMode("eraser");
 els.lightboxPaintArrow.onclick = () => setLightboxPaintMode("arrow");
 els.lightboxPaintRect.onclick = () => setLightboxPaintMode("rect");
+els.lightboxMattingBtn.onclick = () => {
+  setLightboxPaintMode("matting");
+  checkMattingService();
+};
+
+function updateLightboxMattingRect(x1, y1, x2, y2) {
+  const rect = els.lightboxMattingRect;
+  rect.classList.remove("hidden");
+  rect.style.left = `${Math.min(x1, x2)}px`;
+  rect.style.top = `${Math.min(y1, y2)}px`;
+  rect.style.width = `${Math.abs(x2 - x1)}px`;
+  rect.style.height = `${Math.abs(y2 - y1)}px`;
+}
+
+async function checkMattingService() {
+  try {
+    const resp = await fetch(`${MATTING_ENDPOINT}/health`, { signal: AbortSignal.timeout(2500) });
+    const data = await resp.json();
+    if (!data.success) throw new Error("服务异常");
+    toast(data.provider === "CUDAExecutionProvider" ? "抠图服务已连接（GPU 加速）" : `抠图服务已连接（${data.provider}）`);
+  } catch {
+    toast("抠图服务未连接：请先运行 F:\\卡牌游戏demo\\启动抠图服务.cmd");
+  }
+}
+
+async function runLightboxMatting(rect) {
+  if (lightboxMattingBusy) return;
+  lightboxMattingBusy = true;
+  els.lightboxMattingBtn.disabled = true;
+  toast("正在局部抠图（首次约需 10 秒加载模型）…");
+  try {
+    const image = els.lightboxPaintCanvas.toDataURL("image/png");
+    const resp = await fetch(`${MATTING_ENDPOINT}/matting`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image, rect, low: 0, high: 255, erode: 0 })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+    const source = findNode(lightboxSourceNodeId);
+    const node = addNode("image", source ? source.x + NODE_WIDTH + 40 : lastPointerWorld.x, source ? source.y : lastPointerWorld.y, false);
+    node.image = data.image;
+    node.fileName = `局部抠图_${Date.now()}.png`;
+    node.mime = "image/png";
+    await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+    pushHistory();
+    render();
+    hideLightbox();
+    toast("已生成局部抠图图片节点");
+  } catch (err) {
+    const hint = err instanceof TypeError ? "抠图服务未启动：请先运行 F:\\卡牌游戏demo\\启动抠图服务.cmd" : err.message;
+    toast(`局部抠图失败：${hint}`);
+  } finally {
+    lightboxMattingBusy = false;
+    els.lightboxMattingBtn.disabled = false;
+  }
+}
 els.lightboxPaintUndo.onclick = undoLightboxPaint;
 els.lightboxPaintSize.addEventListener("input", () => {
   if (lightboxPaintSizes[lightboxPaintMode] != null) lightboxPaintSizes[lightboxPaintMode] = Number(els.lightboxPaintSize.value);
@@ -7215,6 +8134,8 @@ els.lightboxFlipVertical.onclick = () => flipLightboxSelection("y");
 els.lightboxPaintCancel.onclick = hideLightbox;
 els.lightboxPaintConfirm.onclick = async () => {
   if (!lightboxPainting) return;
+  if (lightboxCropRect && !lightboxCropApply.disabled) applyLightboxCrop();
+  clearLightboxCrop();
   clearCompositeHover();
   const source = findNode(lightboxSourceNodeId);
   lightboxPlacedSelected = false;
@@ -7582,6 +8503,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(window.canvasflowDesktop?.launchInPs && selectedNode?.type === "image" && (selectedNode?.imageAssetId || selectedNode?.outputPath || selectedNode?.fileName) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(window.canvasflowDesktop?.launchInPs && (selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") && (selectedNode?.generatedAssetId || selectedNode?.outputPath) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
+      ...(state.selected.size === 1 && selectedNode?.type === "text" && String(selectedNode.text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).length > 1 ? [["按换行拆分为文字节点", () => splitTextNodeByLines(selectedNode)]] : []),
       ...(embeddedPrompt ? [["提取生成所用关键词", () => extractGenerationKeywords(selectedNode, embeddedPrompt)]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
@@ -7650,10 +8572,11 @@ els.viewport.addEventListener("contextmenu", async ev => {
       return;
     }
     items.push(["添加文字节点", () => addNode("text", p.x, p.y)]);
-    if (globalLibrary.variableDefinitions.length) items.push(["添加变量节点", () => addNode("variable", p.x, p.y)]);
     items.push(
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
+      ["添加对话节点", () => addNode("chat", p.x, p.y)],
+      ["添加浏览器生图节点", () => addNode("browser-image", p.x, p.y)],
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
         ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
@@ -9109,7 +10032,18 @@ els.editOnOverlap.onchange = () => {
   pushHistory();
 };
 
+els.textMergeOnOverlap.onchange = () => {
+  state.settings.textMergeOnOverlap = els.textMergeOnOverlap.checked;
+  pushHistory();
+};
+
 // screenshot panel trigger removed
+
+// mac 桌面壳不提供截图窗口：桌面桥存在但没有 openScreenshotWindow 时隐藏"截图工具"设置入口
+// （浏览器模式 desktop 为空、Windows 桌面有该能力，两种情况的入口行为不变）
+if (desktop && !desktop.openScreenshotWindow) {
+  document.querySelector('.settings-tab-btn[data-tab="screenshot"]')?.classList.add("hidden");
+}
 
 const openScreenshotToolBtn = $("openScreenshotToolBtn");
 if (openScreenshotToolBtn) openScreenshotToolBtn.onclick = async () => {
@@ -9377,6 +10311,7 @@ if (!desktop) {
 
 els.apiKeyInput.onchange = () => {
   setActiveApiKey(els.apiKeyInput.value.trim());
+  renderNodes();
   if (desktop) desktop.saveApiKey(activeApiKey(), activeApiType()).then(result => { if (result.warning) toast(result.warning); });
   pushHistory();
 };
@@ -9494,6 +10429,7 @@ els.balanceRefreshBtn.onclick = fetchBalance;
 
 els.saveKeyBtn.onclick = async () => {
   setActiveApiKey(els.apiKeyInput.value.trim());
+  renderNodes();
   if (desktop) {
     const result = await desktop.saveApiKey(activeApiKey(), activeApiType());
     if (result.warning) toast(result.warning);
@@ -9509,6 +10445,7 @@ els.clearKeyBtn.onclick = async () => {
   els.apiKeyInput.value = "";
   state.settings.apiKey = "";
   state.settings.agtokenApiKey = "";
+  renderNodes();
   if (desktop) {
     await desktop.saveApiKey("", "apimart");
     await desktop.saveApiKey("", "agtoken");
@@ -9619,10 +10556,6 @@ els.variableDefinitionsList.onclick = event => {
     const item = globalLibrary.variableDefinitions[index];
     if (!confirm(`删除变量“${item.name}”？已有节点会保留快照并标记为失效。`)) return;
     globalLibrary.variableDefinitions.splice(index, 1);
-  } else if (action === "up" && index > 0) {
-    [globalLibrary.variableDefinitions[index - 1], globalLibrary.variableDefinitions[index]] = [globalLibrary.variableDefinitions[index], globalLibrary.variableDefinitions[index - 1]];
-  } else if (action === "down" && index < globalLibrary.variableDefinitions.length - 1) {
-    [globalLibrary.variableDefinitions[index + 1], globalLibrary.variableDefinitions[index]] = [globalLibrary.variableDefinitions[index], globalLibrary.variableDefinitions[index + 1]];
   } else return;
   persistLibraries(); renderVariableDefinitions(); render();
 };
@@ -10647,3 +11580,5 @@ async function init() {
 }
 
 init().catch(e => { console.error("[初始化] 启动失败", e); toast("启动失败：" + e.message); });
+
+els.nodes.addEventListener("keydown", ev => { if (ev.target.dataset.role === "text-inline-edit" && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); ev.target.click(); } });

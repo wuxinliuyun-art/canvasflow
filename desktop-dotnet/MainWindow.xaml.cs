@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private DesktopApi? _desktopApi;
     private WebUpdateManager? _webUpdateManager;
     private DesktopBridge? _desktopBridge;
+    private BrowserTaskBridge? _browserTaskBridge;
     private ScreenshotToolWindow? _screenshotToolWindow;
     private CoreWebView2Environment? _webViewEnvironment;
     private string? _root;
@@ -226,6 +227,9 @@ public partial class MainWindow : Window
                 Log($"[桥接] CEP 面板桥启动失败，面板将走直连模式。详细信息：{bridgeError.Message}", true);
                 _desktopBridge = null;
             }
+            _browserTaskBridge = new BrowserTaskBridge(_desktopApi, Log);
+            try { _browserTaskBridge.Start(); }
+            catch (Exception error) { Log($"[浏览器桥] 启动失败：{error.Message}", true); _browserTaskBridge.Dispose(); _browserTaskBridge = null; }
             var assetsTask = Task.Run(LoadAssets, _shutdown.Token);
             Log("[启动] 已找到项目目录。", false);
             await InitializeWebViewAsync(_shutdown.Token);
@@ -1130,6 +1134,7 @@ public partial class MainWindow : Window
         Hide();
         _screenshotToolWindow?.ShutdownWindow();
         _desktopBridge?.Dispose();
+        _browserTaskBridge?.Dispose();
         _shutdown.Cancel();
         _shutdownComplete = true;
         Environment.Exit(0);

@@ -1,5 +1,9 @@
 #define AppName "CanvasFlow"
-#define AppVersion "2.7.1"
+; -- AppVersion is passed by build-dotnet.cmd as /DAppVersion=<package.json version>;
+; -- the fallback below only covers a bare ISCC run.
+#ifndef AppVersion
+  #define AppVersion "2.7.1"
+#endif
 #define PublishDir "..\desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish"
 
 [Setup]
@@ -28,8 +32,9 @@ SetupIconFile=..\assets\canvasflow.ico
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
-; -- 预制拓展（2.7.0：图片置入PPTX）。发布前由 build-dotnet.cmd 从 ..\..\拓展 拷入 PublishDir\extensions-presets
-Source: "{#PublishDir}\extensions-presets\*"; DestDir: "{app}\拓展"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。预设源码在仓库 extensions-presets\image-to-pptx，发布前由 build-dotnet.cmd 拷入 PublishDir
+Source: "{#PublishDir}\extensions-presets\image-to-pptx\*"; DestDir: "{app}\拓展\图片置入pptx"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "..\拓展脚本规范.md"; DestDir: "{app}\拓展"; Flags: ignoreversion uninsneveruninstall
 
 [InstallDelete]
 Type: files; Name: "{app}\*.dll"

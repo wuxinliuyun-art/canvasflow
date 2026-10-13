@@ -5,6 +5,7 @@
     "/api/save-json", "/api/save-project", "/api/save-images", "/api/custom-material", "/api/save-export-files",
     "/api/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
     "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
+    "/api/chat/completions", "/api/browser-task/cancel", "/api/browser-task", "/api/browser-task/next", "/api/browser-task/result",
     "/api/extensions", "/api/extensions/refresh",
     "/api/cep/status", "/api/cep/install", "/api/cep/uninstall",
   ]);
@@ -12,7 +13,7 @@
   async function apiFetch(input, options = {}) {
     const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
     const url = new URL(rawUrl, location.href);
-    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/") || url.pathname.startsWith("/api/extensions/"))) {
+    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/") || url.pathname.startsWith("/api/extensions/") || url.pathname.startsWith("/api/browser-task/status/"))) {
       const headers = new Headers(options.headers || {});
       const result = await desktop.apiRequest(url.pathname + url.search, {
         method: options.method || "GET",

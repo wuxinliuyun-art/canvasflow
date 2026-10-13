@@ -43,4 +43,19 @@
       ],
     },
   };
+
+  // AI 对话（chat）模型目录：与绘图目录相互独立。
+  //   id         模型 ID（提交给上游 chat/completions 的 model 值）
+  //   apiType    网关归属：apimart（settings.apiKey 槽）/ agtoken（settings.agtokenApiKey 槽），
+  //              两家走各自的 OpenAI 兼容 chat/completions，请求格式互不转换
+  //   multimodal true 时把上游参考图以 image_url 内容部分随消息发送；false 时忽略上游图片
+  window.CANVASFLOW_CHAT_CATALOG = {
+    defaultModel: "gpt-5.2-chat-latest",
+    models: [
+      { id: "gpt-5.2-chat-latest", label: "GPT-5.2 Chat（多模态·APIMart）", apiType: "apimart", multimodal: true },
+      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（APIMart）", apiType: "apimart", multimodal: false },
+      { id: "gpt-6-sol", label: "GPT-6 Sol（AGToken）", apiType: "agtoken", multimodal: false },
+      { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", apiType: "agtoken", multimodal: false },
+    ],
+  };
 })();

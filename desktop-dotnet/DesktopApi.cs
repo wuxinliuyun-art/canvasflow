@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
 using Microsoft.Win32;
 
 namespace CanvasFlow.Desktop;
@@ -87,7 +88,60 @@ internal sealed class DesktopApi
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
-        || path.StartsWith("/api/task/", StringComparison.Ordinal);
+        or "/api/chat/completions"
+        or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
+        || path.StartsWith("/api/task/", StringComparison.Ordinal)
+        || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal);
+
+    // 浏览器生图任务队列(内存态):前端 push → 浏览器扩展内容脚本 claim/result,前端轮询 status。
+    // 任务/结果 10 分钟过期,与 server.js 的同名端点行为逐项一致。
+    private static readonly ConcurrentDictionary<string, JsonObject> BrowserTasks = new();
+    private const int BrowserTaskTtlMinutes = 10;
+    private static readonly object BrowserTaskClaimLock = new();
+
+    private static string NormalizeBrowserOrigin(string value)
+    {
+        var raw = (value ?? "").Trim();
+        if (raw.Length == 0) return "";
+        if (!raw.StartsWith("http", StringComparison.OrdinalIgnoreCase)) raw = "https://" + raw;
+        return Uri.TryCreate(raw, UriKind.Absolute, out var parsed) ? $"{parsed.Scheme}://{parsed.Host}" : "";
+    }
+
+    private static bool BrowserSiteMatches(string site, string origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin)) return false;
+        var wanted = (site ?? "").Trim().ToLowerInvariant();
+        if (wanted.Length == 0) return false;
+        var allowed = wanted switch
+        {
+            "gemini" => new[] { "https://gemini.google.com" },
+            "chatgpt" => new[] { "https://chatgpt.com", "https://chat.openai.com" },
+            _ => null,
+        };
+        if (allowed is not null) return allowed.Any(item => item == origin);
+        return NormalizeBrowserOrigin(wanted) == origin;
+    }
+
+    private static void PurgeBrowserTasks()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (id, task) in BrowserTasks)
+        {
+            var createdAt = task.TryGetPropertyValue("createdAt", out var createdNode) ? createdNode?.GetValue<long>() ?? 0 : 0;
+            var claimedAt = task.TryGetPropertyValue("claimedAt", out var claimedNode) ? claimedNode?.GetValue<long>() ?? 0 : 0;
+            long finishedAt = 0;
+            if (task.TryGetPropertyValue("result", out var resultNode) && resultNode is JsonObject resultObject
+                && resultObject.TryGetPropertyValue("finishedAt", out var finishedNode)) finishedAt = finishedNode?.GetValue<long>() ?? 0;
+            var status = task.TryGetPropertyValue("status", out var statusNode) ? statusNode?.GetValue<string>() : null;
+            var baseline = status switch
+            {
+                "pending" => createdAt,
+                "running" => claimedAt > 0 ? claimedAt : createdAt,
+                _ => finishedAt > 0 ? finishedAt : createdAt,
+            };
+            if (baseline > 0 && now.ToUnixTimeMilliseconds() - baseline > BrowserTaskTtlMinutes * 60_000L) BrowserTasks.TryRemove(id, out _);
+        }
+    }
 
     private async Task<DesktopApiResponse> HandleNetworkAsync(string method, Uri requestUri, string body, string apiKey, CancellationToken cancellationToken)
     {
@@ -126,6 +180,141 @@ internal sealed class DesktopApi
                 var fallbackKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
                 return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/models", null, fallbackKey, cancellationToken);
             }
+            if (method == "POST" && path == "/api/chat/completions")
+            {
+                // AI 对话：按 apiType 分槽透传（apimart 走 /api/v1 前缀 + 镜像 failover，agtoken 走标准 /v1），
+                // 两家请求格式互不转换；响应的 {code,data} 包装由前端解包
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("对话参数为空");
+                var apiType = payload.TryGetPropertyValue("apiType", out var chatTypeNode) ? chatTypeNode?.GetValue<string>() ?? "" : "";
+                payload.Remove("apiType");
+                var payloadKey = payload.TryGetPropertyValue("_apiKey", out var chatKeyNode) ? chatKeyNode?.GetValue<string>() ?? "" : "";
+                payload.Remove("_apiKey");
+                // 对话是同步长请求（推理模型可达数分钟），统一走 600 秒客户端
+                if (apiType == "agtoken")
+                {
+                    var upstreamKey = string.IsNullOrWhiteSpace(payloadKey) ? _getAgtokenKey() : payloadKey;
+                    return await ProxyAgtokenAsync(HttpMethod.Post, "/v1/chat/completions", payload.ToJsonString(), upstreamKey, cancellationToken);
+                }
+                return await ProxyApiAsync(HttpMethod.Post, "/api/v1/chat/completions", payload.ToJsonString(), cancellationToken, httpClient: _agtokenHttp);
+            }
+            if (path == "/api/browser-task" && method == "POST")
+            {
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("任务参数为空");
+                var site = payload.TryGetPropertyValue("site", out var siteNode) ? siteNode?.GetValue<string>() ?? "" : "";
+                if (string.IsNullOrWhiteSpace(site)) throw new InvalidDataException("缺少站点");
+                var taskId = $"bt-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}-{Random.Shared.NextInt64(0xfffff):x5}";
+                var images = new JsonArray();
+                if (payload.TryGetPropertyValue("images", out var imagesNode) && imagesNode is JsonArray imageArray)
+                {
+                    foreach (var item in imageArray)
+                    {
+                        var url = item?.GetValue<string>() ?? "";
+                        if (url.StartsWith("data:image/", StringComparison.Ordinal)) images.Add(url);
+                        if (images.Count >= 4) break;
+                    }
+                }
+                BrowserTasks[taskId] = new JsonObject
+                {
+                    ["id"] = taskId,
+                    ["site"] = site,
+                    ["pageUrl"] = payload["pageUrl"]?.GetValue<string>() ?? "",
+                    ["newConversation"] = payload["newConversation"]?.GetValue<bool>() == true,
+                    ["prompt"] = payload.TryGetPropertyValue("prompt", out var promptNode) ? promptNode?.GetValue<string>() ?? "" : "",
+                    ["images"] = images,
+                    ["status"] = "pending",
+                    ["createdAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                };
+                PurgeBrowserTasks();
+                return Json(200, new { taskId });
+            }
+            if (path == "/api/browser-task/pending" && method == "GET")
+            {
+                PurgeBrowserTasks();
+                var tasks = BrowserTasks.Values.Where(task => task["status"]?.GetValue<string>() == "pending").OrderBy(task => task["createdAt"]?.GetValue<long>() ?? 0)
+                    .Select(task => new { id = task["id"]?.GetValue<string>(), site = task["site"]?.GetValue<string>(), pageUrl = task["pageUrl"]?.GetValue<string>() ?? "", newConversation = task["newConversation"]?.GetValue<bool>() == true }).ToArray();
+                return Json(200, new { tasks });
+            }
+            if (path == "/api/browser-task/next" && method == "GET")
+            {
+                PurgeBrowserTasks();
+                var origin = NormalizeBrowserOrigin(requestUri.Query.StartsWith("?origin=", StringComparison.Ordinal)
+                    ? Uri.UnescapeDataString(requestUri.Query["?origin=".Length..])
+                    : "");
+                JsonObject? found = null;
+                lock (BrowserTaskClaimLock)
+                foreach (var task in BrowserTasks.Values.OrderBy(item => item["createdAt"]?.GetValue<long>() ?? 0))
+                {
+                    var status = task.TryGetPropertyValue("status", out var statusNode) ? statusNode?.GetValue<string>() : null;
+                    var site = task.TryGetPropertyValue("site", out var siteNode) ? siteNode?.GetValue<string>() ?? "" : "";
+                    if (BrowserTasks.Values.Any(item => item["status"]?.GetValue<string>() == "running")) break;
+                    if (status != "pending") continue;
+                    if (!BrowserSiteMatches(site, origin)) break;
+                    lock (task) { if ((task["status"]?.GetValue<string>()) == "pending") { task["status"] = "running"; task["claimedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); found = task; } }
+                    break;
+                }
+                if (found is null) return Json(200, new { task = (string?)null });
+                return Json(200, new
+                {
+                    task = new
+                    {
+                        id = found["id"]?.GetValue<string>(),
+                        site = found["site"]?.GetValue<string>(),
+                        prompt = found["prompt"]?.GetValue<string>(),
+                        images = found["images"]?.DeepClone(),
+                    }
+                });
+            }
+            if (path == "/api/browser-task/cancel" && method == "POST")
+            {
+                var id = JsonNode.Parse(body)?["taskId"]?.GetValue<string>() ?? "";
+                if (BrowserTasks.TryGetValue(id, out var task)) lock (task) { if (task["status"]?.GetValue<string>() == "pending") task["status"] = "cancelled"; }
+                return Json(200, new { ok = true });
+            }
+            if (path == "/api/browser-task/result" && method == "POST")
+            {
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("结果参数为空");
+                var taskId = payload.TryGetPropertyValue("taskId", out var idNode) ? idNode?.GetValue<string>() ?? "" : "";
+                if (!BrowserTasks.TryGetValue(taskId, out var task)) throw new InvalidDataException("任务不存在或已过期");
+                var ok = payload.TryGetPropertyValue("ok", out var okNode) && okNode?.GetValue<bool>() == true;
+                lock (task)
+                {
+                    task["status"] = ok ? "completed" : "failed";
+                    var result = new JsonObject { ["finishedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+                    if (ok)
+                    {
+                        var images = new JsonArray();
+                        if (payload.TryGetPropertyValue("images", out var resultImages) && resultImages is JsonArray resultArray)
+                            foreach (var item in resultArray)
+                            {
+                                var url = item?.GetValue<string>() ?? "";
+                                if (url.StartsWith("data:image/", StringComparison.Ordinal)) images.Add(url);
+                            }
+                        result["images"] = images;
+                        result["text"] = payload.TryGetPropertyValue("text", out var textNode) ? textNode?.GetValue<string>() ?? "" : "";
+                    }
+                    else
+                    {
+                        result["error"] = payload.TryGetPropertyValue("error", out var errorNode) ? errorNode?.GetValue<string>() ?? "" : "浏览器生成失败";
+                    }
+                    task["result"] = result;
+                }
+                return Json(200, new { ok = true });
+            }
+            if (path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal) && method == "GET")
+            {
+                PurgeBrowserTasks();
+                var taskId = path["/api/browser-task/status/".Length..];
+                if (!BrowserTasks.TryGetValue(taskId, out var task)) return Json(200, new { status = "expired" });
+                var status = task["status"]?.GetValue<string>() ?? "pending";
+                if (status is "completed" or "failed")
+                {
+                    var result = task["result"] as JsonObject;
+                    var response = result?.DeepClone() as JsonObject ?? new JsonObject();
+                    response["status"] = status;
+                    return Json(200, response);
+                }
+                return Json(200, new { status });
+            }
             return Json(405, new { error = "请求方法不受支持" });
         }
         catch (Exception error)
@@ -148,7 +337,7 @@ internal sealed class DesktopApi
         return messages.Count > 0 ? string.Join(" ← ", messages) : error.GetType().Name;
     }
 
-    private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken, string apiKey = "")
+    private async Task<DesktopApiResponse> ProxyApiAsync(HttpMethod method, string apiPath, string? body, CancellationToken cancellationToken, string apiKey = "", HttpClient? httpClient = null)
     {
         Exception? lastError = null;
         DesktopApiResponse? lastRetryableResponse = null;
@@ -159,7 +348,7 @@ internal sealed class DesktopApi
                 using var request = new HttpRequestMessage(method, baseUrl + apiPath);
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", string.IsNullOrWhiteSpace(apiKey) ? _getApiKey() : apiKey.Trim());
                 if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+                using var response = await (httpClient ?? _http).SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 var result = new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
                 if (result.Status is 500 or 502 or 503 or 504)

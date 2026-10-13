@@ -70,6 +70,21 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $resolvedOutput) -Force | Out-Null
     if (Test-Path -LiteralPath $resolvedOutput) { Remove-Item -LiteralPath $resolvedOutput -Force }
     Compress-Archive -Path (Join-Path $stageRoot "*") -DestinationPath $resolvedOutput -CompressionLevel Optimal
+    # Create an explicit empty directory entry; never copy local export contents.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::Open($resolvedOutput, [System.IO.Compression.ZipArchiveMode]::Update)
+    try {
+        [void]$archive.CreateEntry("export/")
+    }
+    finally { $archive.Dispose() }
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedOutput)
+    try {
+        $exportEntries = @($archive.Entries | Where-Object { $_.FullName.Replace("\", "/") -match "^export(?:/|$)" })
+        if ($exportEntries.Count -ne 1 -or $exportEntries[0].FullName -ne "export/" -or $exportEntries[0].Length -ne 0) {
+            throw "Web update package must contain an empty export/ directory."
+        }
+    }
+    finally { $archive.Dispose() }
     $zipHash = (Get-FileHash -LiteralPath $resolvedOutput -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "[Done] Web update package: $resolvedOutput"
     Write-Host "[Verify] SHA-256: $zipHash"

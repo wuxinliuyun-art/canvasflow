@@ -7,6 +7,8 @@ const packageInfo = require("./package.json");
 
 const root = __dirname;
 let dataRoot = root;
+// 界面内容根：桌面壳（mac 版 web-update.js）可指向热更新版本目录，默认随包目录
+let contentRoot = root;
 let secretProvider = () => "";
 const APP_VERSION = packageInfo.version;
 const RELEASES_API = "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest";
@@ -38,8 +40,11 @@ var configPath = path.join(dataRoot, "data", "config.json");
 function configureRuntime(options = {}) {
   dataRoot = path.resolve(options.dataRoot || root);
   configPath = path.join(dataRoot, "data", "config.json");
+  contentRoot = options.contentRoot ? path.resolve(options.contentRoot) : root;
   secretProvider = typeof options.getApiKey === "function" ? options.getApiKey : () => "";
   for (const folder of ["data", "download", "export"]) fs.mkdirSync(path.join(dataRoot, folder), { recursive: true });
+  // 热更新重启会换内容根：按 pathname 缓存的旧条目必须整体作废，防止吐出上一根的文件
+  staticCache = {};
 }
 
 function atomicWriteFile(filePath, content) {
@@ -90,7 +95,7 @@ var TEXT_STATIC_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".
 function readStaticFile(pathname) {
   try {
     if (!TEXT_STATIC_EXTENSIONS.has(path.extname(pathname).toLowerCase())) return null;
-    var filePath = __dirname + pathname;
+    var filePath = contentRoot + pathname;
     var mtime = fs.statSync(filePath).mtimeMs;
     var entry = staticCache[pathname];
     if (entry && entry.mtime === mtime) return entry.content;
@@ -113,6 +118,46 @@ const API_BASE_URLS = [
 // 与 APIMart 的异步任务格式彼此独立，不做任何请求/响应格式转换。
 const AGTOKEN_BASE_URL = "https://agtoken.vip";
 const AGTOKEN_TIMEOUT_MS = 600000;
+// AI 对话同步长请求：推理模型（gpt-6 系）可能超过 2 分钟，给 300 秒
+const CHAT_TIMEOUT_MS = 300000;
+
+// 浏览器生图任务队列(内存态):站点 id → 允许的页面 origin;任务/结果 10 分钟过期
+const browserTasks = new Map();
+const BROWSER_SITE_TTL_MS = 10 * 60 * 1000;
+const BROWSER_SITE_ORIGINS = {
+  gemini: ["https://gemini.google.com"],
+  chatgpt: ["https://chatgpt.com", "https://chat.openai.com"],
+};
+
+function normalizeBrowserOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function browserSiteMatches(site, origin) {
+  if (!origin) return false;
+  const wanted = String(site || "").trim().toLowerCase();
+  if (!wanted) return false;
+  const allowed = BROWSER_SITE_ORIGINS[wanted];
+  if (allowed) return allowed.some(item => item.toLowerCase() === origin);
+  return normalizeBrowserOrigin(wanted) === origin;
+}
+
+function purgeBrowserTasks() {
+  const now = Date.now();
+  for (const [id, task] of browserTasks) {
+    const expiredAt = task.status === "pending" ? task.createdAt + BROWSER_SITE_TTL_MS
+      : task.status === "running" ? (task.claimedAt || task.createdAt) + BROWSER_SITE_TTL_MS
+        : (task.result ? (task.result.finishedAt || 0) + BROWSER_SITE_TTL_MS : task.createdAt + BROWSER_SITE_TTL_MS);
+    if (now >= expiredAt) browserTasks.delete(id);
+  }
+}
 
 // --- 自动清理旧进程（解决启动闪退 / 端口占用） ---
 function readBody(req, maxBytes = 128 * 1024 * 1024) {
@@ -254,12 +299,12 @@ function proxyRequest(method, targetUrl, headers, body, timeoutMs = 120000) {
   });
 }
 
-async function tryProxyRequest(method, pathStr, headers, body) {
+async function tryProxyRequest(method, pathStr, headers, body, timeoutMs = 120000) {
   let lastError = null;
   let lastRetryableResult = null;
   for (const baseUrl of API_BASE_URLS) {
     try {
-      const result = await proxyRequest(method, baseUrl + pathStr, headers, body);
+      const result = await proxyRequest(method, baseUrl + pathStr, headers, body, timeoutMs);
       console.log(`[Proxy] ${baseUrl}${pathStr} -> ${result.status}`);
       if ([500, 502, 503, 504].includes(result.status)) {
         lastRetryableResult = result;
@@ -683,6 +728,146 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // AI 对话（chat completions）：按 apiType 分槽透传到两个网关，请求格式互不转换。
+  // apimart 走 OpenAI 兼容 /api/v1 前缀（响应为 {code,data} 包装，由前端解包）；
+  // agtoken 走标准 /v1。对话是同步长请求（推理模型可达数分钟），超时给足 300 秒。
+  if (pathname === "/api/chat/completions" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body.toString());
+      const apiType = payload.apiType === "agtoken" ? "agtoken" : "apimart";
+      delete payload.apiType;
+      const apiKey = payload._apiKey || requestApiKey() || "";
+      delete payload._apiKey;
+      payload.stream = payload.stream === true;
+      const headers = { Authorization: `Bearer ${apiKey}` };
+      let result;
+      if (apiType === "agtoken") {
+        result = await proxyRequest("POST", AGTOKEN_BASE_URL + "/v1/chat/completions", headers, JSON.stringify(payload), CHAT_TIMEOUT_MS);
+        console.log(`[AGToken] /v1/chat/completions -> ${result.status}`);
+      } else {
+        result = await tryProxyRequest("POST", "/api/v1/chat/completions", headers, JSON.stringify(payload), CHAT_TIMEOUT_MS);
+      }
+      res.writeHead(result.status, { "Content-Type": "application/json" });
+      res.end(result.body);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "对话请求失败: " + err.message } }));
+    }
+    return;
+  }
+
+  // 浏览器生图:CanvasFlow 前端 push 任务 → 浏览器扩展内容脚本 claim 并在站点页面模拟人工操作 → result 回传。
+  // 队列仅存内存;任务 10 分钟未取/未完自动过期,结果取走后保留 10 分钟供前端轮询。
+  if (pathname === "/api/browser-task" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body.toString());
+      const site = String(payload.site || "").trim();
+      if (!site) throw new Error("缺少站点");
+      const task = {
+        id: `bt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        site,
+        pageUrl: String(payload.pageUrl || ""),
+        newConversation: payload.newConversation === true,
+        prompt: String(payload.prompt || ""),
+        images: Array.isArray(payload.images) ? payload.images.filter(url => typeof url === "string" && url.startsWith("data:image/")).slice(0, 8) : [],
+        nodeId: String(payload.nodeId || ""),
+        status: "pending",
+        createdAt: Date.now(),
+        claimedAt: 0,
+        claimOrigin: "",
+        result: null,
+      };
+      browserTasks.set(task.id, task);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ taskId: task.id }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: err.message } }));
+    }
+    return;
+  }
+
+  // Metadata only: background can open the target page without claiming the task.
+  if (pathname === "/api/browser-task/pending" && req.method === "GET") {
+    purgeBrowserTasks();
+    const tasks = [...browserTasks.values()].filter(task => task.status === "pending")
+      .map(task => ({ id: task.id, site: task.site, pageUrl: task.pageUrl || "", newConversation: task.newConversation }));
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ tasks }));
+    return;
+  }
+
+  // 扩展内容脚本领取任务:按来源 origin 匹配(内置站点 id 会映射到允许的 origin 列表)
+  if (pathname === "/api/browser-task/next" && req.method === "GET") {
+    try {
+      purgeBrowserTasks();
+      const origin = normalizeBrowserOrigin(parsedUrl.searchParams.get("origin") || "");
+      let found = null;
+      for (const task of browserTasks.values()) {
+        if ([...browserTasks.values()].some(item => item.status === "running")) break;
+        if (task.status !== "pending") continue;
+        if (!browserSiteMatches(task.site, origin)) break;
+        task.status = "running";
+        task.claimedAt = Date.now();
+        task.claimOrigin = origin;
+        found = { id: task.id, site: task.site, prompt: task.prompt, images: task.images };
+        break;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ task: found }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: err.message } }));
+    }
+    return;
+  }
+
+  if (pathname === "/api/browser-task/cancel" && req.method === "POST") {
+    try { const payload = JSON.parse((await readBody(req)).toString()); const task = browserTasks.get(String(payload.taskId || "")); if (task?.status === "pending") task.status = "cancelled"; res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+    catch { res.writeHead(400); res.end("{}"); }
+    return;
+  }
+
+  if (pathname === "/api/browser-task/result" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body.toString());
+      const task = browserTasks.get(String(payload.taskId || ""));
+      if (!task) throw new Error("任务不存在或已过期");
+      if (payload.ok) {
+        task.status = "completed";
+        task.result = {
+          images: Array.isArray(payload.images) ? payload.images.filter(url => typeof url === "string" && url.startsWith("data:image/")) : [],
+          text: String(payload.text || ""),
+          finishedAt: Date.now(),
+        };
+      } else {
+        task.status = "failed";
+        task.result = { error: String(payload.error || "浏览器生成失败"), finishedAt: Date.now() };
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: err.message } }));
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/browser-task/status/") && req.method === "GET") {
+    purgeBrowserTasks();
+    const task = browserTasks.get(pathname.slice("/api/browser-task/status/".length));
+    res.writeHead(200, { "Content-Type": "application/json" });
+    if (!task) {
+      res.end(JSON.stringify({ status: "expired" }));
+    } else {
+      res.end(JSON.stringify({ status: task.status, ...(task.result || {}) }));
+    }
+    return;
+  }
+
   if (pathname === "/api/verify" && req.method === "GET") {
     try {
       const apiKey = requestApiKey();
@@ -830,8 +1015,8 @@ async function requestHandler(req, res) {
   }
   // 回退到磁盘读取（download/images 等非缓存文件）
   var relPath = pathname.replace(/^\//, "");
-  var file = path.join(root, relPath);
-  if (file !== root && !file.startsWith(root + path.sep)) {
+  var file = path.join(contentRoot, relPath);
+  if (file !== contentRoot && !file.startsWith(contentRoot + path.sep)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -890,7 +1075,7 @@ function startCanvasFlowServer(options = {}) {
     const tryListen = (candidate, attempts = 0) => {
       const onError = error => {
         server.removeListener("listening", onListening);
-        if (error.code === "EADDRINUSE" && attempts < 20) {
+        if (error.code === "EADDRINUSE" && attempts < 19) {
           console.warn(`[Start] port ${candidate} in use, switching to ${candidate + 1}`);
           setTimeout(() => tryListen(candidate + 1, attempts + 1), 100);
           return;
