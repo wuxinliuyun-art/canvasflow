@@ -105,7 +105,13 @@ Multiple AI Image nodes can run at the same time. When using multiple references
 - Editing or deleting an asset does not alter existing nodes
 - Double-click custom images for a larger preview
 
-On a fresh installation with an empty library, CanvasFlow provides two sample text assets: **Image to Line Art** and **Multi-view Reference**.
+The library includes seven reusable prompt presets: Model to Line Art, Detail to Full Scene, Image to Line Art, Multi-view Reference, CMF Transfer, High-resolution Restoration, and Photo to Line Art. View, edit, or add presets in **Settings → Library → Custom Text**, then insert them from the canvas context menu.
+
+![Built-in text presets in the released library](docs/images/library-texts-v273.jpg)
+
+The **Custom Components** tab also includes **Re-render** and **Marker Sketch Coloring**, reusable workflows that preserve node layout, reference images, and internal connections.
+
+![Built-in Re-render and Marker Sketch Coloring components](docs/images/library-components-v273.jpg)
 
 ### Variable Library and Combination Nodes
 
