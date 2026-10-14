@@ -49,18 +49,16 @@ You can also drag images from your computer onto the canvas or paste copied imag
 ### 4. Connect and Generate
 
 ```text
-Text Node  ─┐
-            ├─→ AI Image Node ─→ Generated Image Node
-Image Node ─┘
+Text Node → Image Node (reference) → AI Image Node → Generated Result
 ```
 
 1. Describe the desired image in a Text node.
 2. Upload a reference image to an Image node.
-3. Connect the text and image to an AI Image node.
+3. Connect the nodes in series: Text Node → Image Node → AI Image Node, so the prompt and reference travel along the same branch.
 4. Choose the model, resolution, quality, and aspect ratio in that node.
 5. Click **Generate**.
 
-Connect only text for text-to-image generation. Add an Image node when you want the AI to use a reference image. Each completed result is automatically created as a regular Image node.
+For text-to-image generation, connect Text Node → AI Image Node directly. With a reference image, use the series connection above to create one task containing both text and image. Connecting the text and image separately to the AI Image node splits the incoming connections into multiple tasks. Results can appear in the AI node preview or as separate Image nodes, according to your settings.
 
 ---
 
