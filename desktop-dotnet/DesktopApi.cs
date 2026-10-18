@@ -86,10 +86,10 @@ internal sealed class DesktopApi
         return Task.Run(() => HandleLocal(method.ToUpperInvariant(), pathAndQuery, body), cancellationToken);
     }
 
-    private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
+    private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
         or "/api/chat/completions"
-        or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
+        or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
         || path.StartsWith("/api/task/", StringComparison.Ordinal)
         || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal);
 
@@ -150,11 +150,11 @@ internal sealed class DesktopApi
             var path = requestUri.AbsolutePath;
             if (method == "GET" && path == "/api/update/check") return await CheckForUpdatesAsync(cancellationToken);
             if (method == "POST" && path == "/api/download-image") return await DownloadImageAsync(body, cancellationToken);
-            if (method == "POST" && path == "/api/generate")
+            if (method == "POST" && path is "/api/generate" or "/api/midjourney/generate")
             {
                 var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("生成参数为空");
                 payload.Remove("_apiKey");
-                return await ProxyApiAsync(HttpMethod.Post, "/v1/images/generations", payload.ToJsonString(), cancellationToken);
+                return await ProxyApiAsync(HttpMethod.Post, path == "/api/midjourney/generate" ? "/v1/midjourney/generations" : "/v1/images/generations", payload.ToJsonString(), cancellationToken);
             }
             if (method == "GET" && path.StartsWith("/api/task/", StringComparison.Ordinal))
             {
@@ -197,6 +197,8 @@ internal sealed class DesktopApi
                 }
                 return await ProxyApiAsync(HttpMethod.Post, "/api/v1/chat/completions", payload.ToJsonString(), cancellationToken, httpClient: _agtokenHttp);
             }
+            if (path == "/api/browser-transfer" && method == "POST")
+                return Json(200, BrowserImageTransfer.Handle(body));
             if (path == "/api/browser-task" && method == "POST")
             {
                 var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("任务参数为空");
@@ -385,7 +387,7 @@ internal sealed class DesktopApi
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         {
-            throw new HttpRequestException($"agtoken 接口请求失败：{error.Message}");
+            throw new HttpRequestException("agtoken 接口连接失败", error);
         }
     }
 
@@ -561,6 +563,7 @@ internal sealed class DesktopApi
             if (method == "GET" && path == "/api/extensions") return ListExtensions();
             if (method == "POST" && path == "/api/extensions/refresh") return ListExtensions();
             if (method == "POST" && path.StartsWith("/api/extensions/", StringComparison.Ordinal) && path.EndsWith("/run", StringComparison.Ordinal)) return RunExtension(path, body);
+            if (method == "GET" && path == "/api/ps/status") return Json(200, new { app = "CanvasFlow" });
             if (method == "GET" && path == "/api/cep/status") return CepPanelStatus();
             if (method == "POST" && path == "/api/cep/install") return InstallCepPanel();
             if (method == "POST" && path == "/api/cep/uninstall") return UninstallCepPanel();
@@ -714,8 +717,10 @@ internal sealed class DesktopApi
             var relative = SafeRelativePath(file.GetProperty("name").GetString());
             var target = Path.GetFullPath(Path.Combine(exportDirectory, relative));
             if (!target.StartsWith(exportPrefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("导出文件超出目标目录");
-            WriteBase64File(target, file.GetProperty("data").GetString() ?? "");
-            savedFiles.Add(target);
+            var value = file.GetProperty("data").GetString() ?? "";
+            var separator = value.IndexOf(',');
+            var bytes = Convert.FromBase64String(separator >= 0 ? value[(separator + 1)..] : value);
+            savedFiles.Add(ExportFileStore.Write(target, bytes));
         }
         return Json(200, new { success = true, path = exportDirectory, files = savedFiles });
     }

@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 5,
+  "id": "com.canvasflow.photoshop.uxp",
+  "name": "CanvasFlow 互传 UXP",
+  "version": "1.0.0",
+  "main": "index.html",
+  "host": { "app": "PS", "minVersion": "23.3.0", "data": { "apiVersion": 2 } },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "canvasflowTransfer",
+      "label": { "default": "CanvasFlow 互传 UXP" },
+      "minimumSize": { "width": 280, "height": 400 },
+      "maximumSize": { "width": 2000, "height": 2000 },
+      "preferredDockedSize": { "width": 320, "height": 520 },
+      "preferredFloatingSize": { "width": 320, "height": 520 }
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "request",
+    "network": { "domains": ["http://localhost", "http://127.0.0.1"] }
+  }
+}

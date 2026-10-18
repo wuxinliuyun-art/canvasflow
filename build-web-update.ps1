@@ -34,6 +34,7 @@ $files = @(
     "styles.css",
     "canvas-runtime.js",
     "modules/mindmap-module.js",
+    "modules/manual-matting.js",
     "builtin-templates/rerender-style.jpg",
     "builtin-templates/rerender-product.png",
     "builtin-templates/builtin-marker-style.png",
@@ -43,7 +44,14 @@ $files = @(
     "cep-panel/CanvasFlowPanel/js/csinterface-lite.js",
     "cep-panel/CanvasFlowPanel/js/main.js",
     "cep-panel/CanvasFlowPanel/jsx/host.jsx",
-    "cep-panel/CanvasFlowPanel/.debug"
+    "cep-panel/CanvasFlowPanel/.debug",
+    "uxp-panel/README.md",
+    "uxp-panel/CanvasFlowPanel/manifest.json",
+    "uxp-panel/CanvasFlowPanel/index.html",
+    "uxp-panel/CanvasFlowPanel/styles.css",
+    "uxp-panel/CanvasFlowPanel/main.js",
+    "uxp-panel/CanvasFlowPanel/transport.js",
+    "uxp-panel/CanvasFlowPanel/photoshop.js"
 )
 $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("canvasflow-web-" + [Guid]::NewGuid().ToString("N"))
 try {

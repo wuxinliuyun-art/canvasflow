@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261014-variabledrag1">
+  <link rel="stylesheet" href="styles.css?v=20261018-annotation-blue2">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -67,6 +67,7 @@
         <svg id="gestureStroke" class="gesture-stroke"></svg>
         <div id="selectionBox" class="selection-box hidden"></div>
       </div>
+      <div id="annotations" class="canvas-annotations" aria-label="画布文字标注"></div>
       <div class="minimap-panel">
         <canvas id="minimap" class="minimap" width="150" height="96" aria-label="画布缩略图"></canvas>
       </div>
@@ -111,7 +112,13 @@
           <strong>设置</strong>
           <p>调整界面语言、画布与工作流体验</p>
         </div>
-        <button id="closeSettingsBtn" class="icon-btn" title="关闭">×</button>
+        <div class="settings-head-actions">
+          <div id="settingsLanguageSwitch" class="settings-language-switch" role="group" aria-label="Language / 语言">
+            <button type="button" data-ui-language="zh-CN" aria-label="简体中文" aria-pressed="false" lang="zh-CN">CN</button>
+            <button type="button" data-ui-language="en" aria-label="English" aria-pressed="false" lang="en">EN</button>
+          </div>
+          <button id="closeSettingsBtn" class="icon-btn" title="关闭">×</button>
+        </div>
       </div>
       <div class="settings-layout">
         <nav class="settings-side-nav" aria-label="设置分类">
@@ -126,11 +133,10 @@
         </nav>
         <div class="settings-content">
       <div class="tab-page" data-tab="general">
-        <div class="settings-page-head"><h2>常规</h2><p>调整界面语言与画布操作习惯。</p></div>
+        <div class="settings-page-head"><h2>常规</h2><p>调整画布操作习惯。</p></div>
         <section class="settings-card">
           <h3>界面与画布</h3>
           <div class="settings-field-grid">
-            <label>界面语言<select id="languageSelect"><option value="zh-CN">简体中文</option><option value="en">English</option></select></label>
             <label>网格对齐距离<input id="gridSizeInput" type="number" min="10" max="200" value="40"></label>
           </div>
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
@@ -189,10 +195,11 @@
       </div>
 
       <div class="tab-page hidden" data-tab="variables">
-        <div class="settings-page-head settings-page-head-row"><div><h2>变量库</h2><p>定义所有项目共用的变量和单选值；写在文字节点里即可自动变成可切换的下拉选项。</p></div><button id="newVariableDefinitionBtn" class="primary" type="button">＋ 新建变量</button></div>
+        <div class="settings-page-head settings-page-head-row"><div><h2>变量库</h2><p>定义所有项目共用的变量和单选值；写在文字节点里（变量名前后留空格）即可自动变成可切换的下拉选项。</p></div><button id="newVariableDefinitionBtn" class="primary" type="button">＋ 新建变量</button></div>
         <div id="variableDefinitionsList" class="variable-definitions-list"></div>
         <section id="variableDefinitionEditor" class="settings-card variable-definition-editor hidden">
           <label>变量名<input id="variableDefinitionName" type="text" placeholder="例如：产品"></label>
+          <p class="setting-desc">文字节点识别规则：变量名前后需要有空格（位于文字首尾也可以），如「红色 发色 长发」可识别，「红色发色长发」不识别。</p>
           <label>可选值（每行一个）<textarea id="variableDefinitionOptions" rows="7" placeholder=""></textarea></label>
           <div class="asset-editor-actions"><button id="variableDefinitionCancelBtn" type="button">取消</button><button id="variableDefinitionSaveBtn" class="primary" type="button">保存变量</button></div>
         </section>
@@ -213,11 +220,18 @@
         </section>
         <section class="settings-card" id="cepPanelCard">
           <h3>Photoshop 互传</h3>
+          <p class="setting-desc">UXP 支持 Photoshop 2022（23.3）及以上。</p>
+          <details>
+            <summary>UXP 快速开始</summary>
+            <p class="setting-desc">1. 用 UXP Developer Tool 加载插件（安装方法见 uxp-panel/README.md）。</p>
+            <p class="setting-desc">2. PS → 增效工具 → CanvasFlow 互传 UXP。</p>
+            <p class="setting-desc">3. 面板中点「连接桌面版」，按提示选择连接文件。只需设置一次。</p>
+          </details>
           <label>Photoshop 主程序路径（photoshop.exe）<input id="psPathInput" type="text" placeholder="例如 C:\Program Files\Adobe\Adobe Photoshop 2024\photoshop.exe"></label>
           <div class="cep-panel-actions">
             <button id="psPathBrowseBtn" type="button">浏览选择…</button>
-            <button id="cepInstallBtn" type="button" class="primary">安装 / 更新 PS 面板</button>
-            <button id="cepUninstallBtn" type="button">移除面板</button>
+            <button id="cepInstallBtn" type="button">安装 / 更新 CEP 面板</button>
+            <button id="cepUninstallBtn" type="button">移除 CEP 面板</button>
           </div>
           <p id="cepStatusLine" class="setting-desc" hidden></p>
         </section>
@@ -299,12 +313,7 @@
 
         <section class="settings-card">
           <label for="defaultImageModelSelect">默认绘图模型
-            <select id="defaultImageModelSelect" aria-describedby="defaultImageModelHint">
-              <option value="gpt-image-2">GPT Image 2</option>
-              <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare（快速）</option>
-              <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst（质量）</option>
-              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
-            </select>
+            <select id="defaultImageModelSelect" aria-describedby="defaultImageModelHint"></select>
           </label>
           <span id="defaultImageModelHint" class="api-url-hint">仅影响之后新建的 AI 绘图节点，不会修改已有节点。</span>
           <label for="defaultResolutionSelect">默认分辨率
@@ -414,8 +423,18 @@
     <div class="lightbox-bg"></div>
     <img id="lightboxImg" class="lightbox-img" alt="">
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
+    <div id="lightboxArrowNote" class="lightbox-arrow-note hidden" role="group" aria-label="箭头说明">
+      <textarea id="lightboxArrowText" rows="2" maxlength="500" placeholder="输入箭头说明" aria-label="箭头说明文字"></textarea>
+      <button id="lightboxArrowColorPreview" type="button" class="btn lightbox-arrow-color-preview hidden" title="点击修改标注颜色" aria-label="修改当前配色标注颜色"><span id="lightboxArrowPreviewSwatch" class="lightbox-arrow-swatch" aria-hidden="true"></span><span id="lightboxArrowPreviewHex"></span></button>
+      <button id="lightboxArrowPaletteBtn" class="btn" type="button" aria-expanded="false" aria-controls="lightboxArrowPalette">配色标注</button>
+      <div id="lightboxArrowPalette" class="lightbox-arrow-palette hidden">
+        <label>标注颜色 <input id="lightboxArrowColor" type="color" aria-label="配色标注颜色"></label>
+        <span id="lightboxArrowHex"></span>
+        <button id="lightboxArrowColorClear" class="btn" type="button">移除色块</button>
+        <div id="lightboxArrowColorSlots" class="lightbox-arrow-color-slots" role="group" aria-label="10 个配色槽位，每行 5 个"></div>
+      </div>
+    </div>
     <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
-    <div id="lightboxMattingRect" class="lightbox-matting-rect hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="镜像图片">
       <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
       <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.8 4.4 12 10l4.2-5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7.8 19.6 12 14l4.2 5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
@@ -425,11 +444,11 @@
         <button id="lightboxInsertBtn" type="button">置入</button>
         <button id="lightboxCropBtn" type="button" title="拖框选择需要保留的区域">裁剪</button>
         <button id="lightboxCropApply" type="button" class="hidden" disabled>应用裁剪</button>
-        <button id="lightboxPaintBrush" class="active lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
+        <button id="lightboxPaintPointer" class="active lightbox-icon-btn" type="button" title="鼠标" aria-label="鼠标"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m5 3 14 10-7 1-3 7z"/></svg></button>
+        <button id="lightboxPaintBrush" class="lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
         <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
-        <button id="lightboxMattingBtn" class="lightbox-icon-btn" type="button" title="局部抠图：框选区域，AI 抠出框内主体生成透明 PNG 节点" aria-label="局部抠图"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
           <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
@@ -469,9 +488,10 @@
     </div>
   </div>
 
-  <script src="model-catalog.js?v=20261013-chat1"></script>
-  <script src="canvas-runtime.js?v=20261014-browserserial1"></script>
+  <script src="model-catalog.js?v=20261018-chat-opus2"></script>
+  <script src="canvas-runtime.js?v=20261017-modelsync1"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261014-crop1"></script>
+  <script src="app.js?v=20261018-canvas-annotations1"></script>
+  <script src="modules/manual-matting.js?v=20261015-mattingdraft1"></script>
 </body>
 </html>

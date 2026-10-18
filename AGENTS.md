@@ -6,6 +6,8 @@
 
 ## 浏览器测试规范
 
+- **会话不得自行用浏览器测试/验证画布界面（2026-10 用户明确要求）**：改动完成后只说明改了什么、请用户测什么，由用户自己直接测试；不得打开浏览器做自动化点击、截图比对等任何验证。原因：画布实例里跑着用户的真实项目数据，自动化操作会新建/删除项目、切换画布、打断正在进行的任务；自动化注入路径（evaluate/合成事件）与真实操作也存在差异，结论不可靠。
+- 仅当用户明确要求"用浏览器帮我测一次"时才允许开浏览器，且仍须遵守下一条单标签规范，测试项目只允许使用会话自建的测试项目，严禁触碰用户已有项目。
 - 用浏览器验证界面时,**先关闭所有旧标签页,只新开一个标签**;测试全程只使用这一个标签,测试结束保留或关闭均可,但下次测试仍从新标签开始。
 - 原因:旧标签页里跑着旧版前端脚本(HTML/CSS/JS 更新后不会自动到达已打开的页面),在旧标签上验证会得出"改了没生效/时好时坏"的错误结论;多个标签并存还会互相覆盖 localStorage 里的项目设置。
 - 服务器侧配套:`server.js` 对前端文件按 mtime 实时读盘(不做启动快照),`index.html` 响应头 `Cache-Control: no-store`;桌面版 WebView2 对 index.html 强制不缓存。三者任一被改回旧模式,本规范的前提即失效。
@@ -169,6 +171,16 @@
 - 规则：画布右键菜单不再提供“添加变量节点”入口，旧变量节点在存量画布中保持兼容（渲染与收集逻辑原样保留）。文字节点内容里出现变量库变量名时，节点正文下方自动出现变量词下拉条（chip = 变量名 + 可选值 select，data-role=`text-variable-choice`）；所选值存 `node.variableChoices`（按变量名为 key，存 optionId + label 快照），用户文本本身不改写；收集文字时（`collectUpstreamForAI` / `directScreenshotNodeInputs`）经 `expandTextNodeVariables` 把已选变量名展开为“值+变量名”（如 发色 → 红色发色），与旧变量节点输出格式一致，未选择的保持原文。
 - 避免：下拉条必须随文字就地同步（输入后 250ms 防抖替换 + focusout 立即冲刷，输入期间禁止全量 renderNodes，会打断输入与 IME）；检测用名称长度降序占用区间匹配，防止互为子串的变量名误伤；改 app.js 必须同步递增 index.html 的 `?v=`——实测再次确认 `?v=` 未变时 reload 会继续跑缓存旧脚本，得出“改动没生效”的假结论（本次开发中就因此误判过一次）。
 
+### 文字节点变量下拉宽度按实际文字测量（2026-10）
+
+- 规则：`textVariableStripHtml` 里变量下拉 select 的内联宽度不再按“字数×12+36”估算，改由 `variableChoiceSelectWidth` 用 canvas `measureText` 以 select 同款字体栈测量当前选中项真实宽度，加左 8px + 右 32px（箭头区）内边距与 4px 余量后按 4px 网格取整（下限 64px）；显示标签（displayLabel）同时覆盖“已失效：xxx”分支，title 与宽度一致。
+- 避免：旧公式未覆盖 select 实际 40px 水平内边距，中文选值（如“第二张图”）和占位“选值”都会被省略号截断；测量必须用与 select 相同的 font-family（HarmonyOS Sans 栈），否则中文宽度偏差会再次截断；选项变更走 `pushHistory(); render()` 会重新计算宽度，无需就地调宽。
+
+### 带配色标注箭头的参考图自动内置颜色修改提示词（2026-10）
+
+- 规则：灯箱画笔里画的箭头带“配色标注”（`action.noteColor` 非空）并确认生成节点时，产物图片节点打 `node.hasColorArrowNotes`（来源图本身带标记则继承；普通箭头/画笔/裁剪不标记）。标记经 `collectUpstreamForAI.imageRef` 与 `directScreenshotNodeInputs` 随参考图对象传播；`runQueuedAiTask` 在 submitGeneration 前（`task.localMatting` 分支之外）按**本次实际发送数组**（AI 任务=orderedImages 画布 x 排序；截图任务=[截图, ...参考图]）计算标注图序号，把「根据第x张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注」追加到 `task.prompt`（多张用「、」，如“第2、3张”；无上游文字时该句即 prompt）。因发送时才追加，任务队列在启动前面板显示的是用户原文；导出 PNG 的 generationPrompt 取自发送后的 task.prompt，与实际请求一致。
+- 避免：追加必须只做一次（`task._arrowNoteClause === undefined` 守卫，重试不重复拼接）；序号必须按发送数组下标+1，不能按节点创建顺序；浏览器生图节点（/api/browser-task）不走此逻辑，勿在别处重复拼接；自动化测试中灯箱箭头拖拽对 `setPointerCapture` 有依赖，合成 PointerEvent 需临时屏蔽该方法，且 `startLightboxPaint` 要求 lightboxImg 加载完成（naturalWidth>0），过早点击会静默返回。
+
 
 
 ## 外部 API 文档（常用，开发前先查）
@@ -208,3 +220,16 @@
 - 修改模板时只检查当前项目中开启同步的属性卡，并弹出应用内确认：可同步当前项目、暂不同步或取消保存。同步只更新属性结构、顺序、类型和选项，不覆盖用户填写的值；被模板删除的属性保留为本地属性。
 - 其他项目不得被后台自动修改；切换到含旧模板版本属性卡的项目时再提示用户同步。删除模板时，已有属性卡转为独立状态并保留全部结构、颜色和值。
 - 属性卡数据需保存模板编号、模板快照、模板版本、同步状态、颜色、字段结构和值；文本值为字符串，单选值为字符串，多选值为字符串数组。
+
+
+### 拖回导出图的关键词提取（generationPrompt 记录，2026-10）
+
+- 规则：生成结果导出 PNG 时用 iTXt 块嵌入 `prompt`（同存 `CanvasFlow.Project/Time/TaskId`；空值不写块）。从导出文件夹拖回、剪贴板粘贴、上传按钮、composer、PS 粘贴等所有外部图片进入画布的入口，都必须经 `externalizeImageField`——它在把图片换成缩略图（桌面版素材迁移）**之前**先把 prompt 读进 `node.generationPrompt`；右键「提取生成所用关键词」（`readEmbeddedGenerationPrompt`）优先读这份记录，记录缺失才回退「素材仓库原图 → 节点内嵌图」重新解析 PNG 元数据。
+- 事实核对结论（2026-10 实测）：导出文件夹里的图绝大多数带 prompt，拖回画布右键可正常提取；提示「没有找到生成关键词」的合法场景有三类——生成时该任务无文字（扇入纯图片支线，`task.prompt` 为空，如 `261017-测试-001 (1).png`）、图片经 PS 等软件重存丢元数据、导出格式为 JPEG（`embedGenerationMetadata` 只写 PNG）。
+- 避免：新增导入入口必须走 `externalizeImageField` 或等价地「先捕获 prompt 再缩略」，顺序不能反（换图后元数据即丢失）；`readEmbeddedGenerationPrompt` 的记录短路必须保持在函数最前，否则桌面版右键菜单项会因缩略图无元数据而消失；替换式拖入（拖到已有图片节点上）先 `delete node.generationPrompt` 再由新文件重新捕获，两步顺序固定。
+
+### 自动抠图拓展仅独立分发（2026-10 用户明确要求）
+
+- `extensions-presets/auto-matting` 与 `dist/自动抠图` 是独立的自动抠图拓展，不随 CanvasFlow 主程序发布。
+- 以后生成完整安装包、便携包、mac 包、界面热更新包时，均不得带入该拓展、BiRefNet 权重、Python 环境、缓存或 `CanvasFlow-自动抠图-通用模型.zip`。
+- 主程序打包继续按资源白名单收集，不得把整个 `extensions-presets` 或 `dist` 目录递归打入；自动抠图包仅在用户单独要求时制作或分发。

@@ -46,6 +46,7 @@ $appFiles = @(
     @{ src = Join-Path $projectRoot "PRIVACY.md";             entry = "app/PRIVACY.md" },
     @{ src = Join-Path $projectRoot "拓展脚本规范.md";         entry = "app/拓展脚本规范.md" },
     @{ src = Join-Path $projectRoot "modules\mindmap-module.js"; entry = "app/modules/mindmap-module.js" },
+    @{ src = Join-Path $projectRoot "modules\manual-matting.js"; entry = "app/modules/manual-matting.js" },
     @{ src = Join-Path $projectRoot "assets\canvasflow-app-icon.png"; entry = "app/assets/canvasflow-app-icon.png" },
     @{ src = Join-Path $projectRoot "assets\canvasflow-app-icon.svg"; entry = "app/assets/canvasflow-app-icon.svg" },
     @{ src = Join-Path $projectRoot "assets\canvasflow-logo.png";     entry = "app/assets/canvasflow-logo.png" },
@@ -60,6 +61,13 @@ $appFiles = @(
     @{ src = Join-Path $projectRoot "cep-panel\CanvasFlowPanel\js\main.js";             entry = "app/cep-panel/CanvasFlowPanel/js/main.js" },
     @{ src = Join-Path $projectRoot "cep-panel\CanvasFlowPanel\jsx\host.jsx";           entry = "app/cep-panel/CanvasFlowPanel/jsx/host.jsx" },
     @{ src = Join-Path $projectRoot "cep-panel\CanvasFlowPanel\.debug";                 entry = "app/cep-panel/CanvasFlowPanel/.debug" },
+    @{ src = Join-Path $projectRoot "uxp-panel\README.md"; entry = "app/uxp-panel/README.md" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\manifest.json"; entry = "app/uxp-panel/CanvasFlowPanel/manifest.json" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\index.html"; entry = "app/uxp-panel/CanvasFlowPanel/index.html" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\styles.css"; entry = "app/uxp-panel/CanvasFlowPanel/styles.css" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\main.js"; entry = "app/uxp-panel/CanvasFlowPanel/main.js" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\transport.js"; entry = "app/uxp-panel/CanvasFlowPanel/transport.js" },
+    @{ src = Join-Path $projectRoot "uxp-panel\CanvasFlowPanel\photoshop.js"; entry = "app/uxp-panel/CanvasFlowPanel/photoshop.js" },
     @{ src = Join-Path $projectRoot "cep-panel\README.md";                entry = "app/cep-panel/README.md" },
     @{ src = Join-Path $projectRoot "cep-panel\install-for-testing.bat";  entry = "app/cep-panel/install-for-testing.bat" }
 )

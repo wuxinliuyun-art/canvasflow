@@ -81,7 +81,7 @@ public partial class MainWindow : Window
           isDesktop: true,
           getApiKey: () => invoke("desktop:get-api-key"),
           saveApiKey: (apiKey, apiType) => invoke("desktop:save-api-key", { apiKey: String(apiKey || ""), apiType: String(apiType || "apimart") }),
-          storeImage: (dataUrl, fileName, mime, category = "originals") => invoke("desktop:store-image", { dataUrl, fileName, mime, category }, 60000),
+          storeImage: (dataUrl, fileName, mime, category = "originals", projectName = "") => invoke("desktop:store-image", { dataUrl, fileName, mime, category, projectName }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
           openAssetLocation: assetId => invoke("desktop:open-asset-location", { assetId: String(assetId || "") }),
@@ -90,7 +90,7 @@ public partial class MainWindow : Window
           chooseLibraryFile: currentPath => invoke("desktop:choose-library-file", { currentPath: String(currentPath || "") }, 60000),
           chooseImageFile: currentPath => invoke("desktop:choose-image-file", { currentPath: String(currentPath || "") }, 60000),
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
-          copyImage: filePath => invoke("desktop:copy-image", { filePath: String(filePath || "") }),
+          copyImage: (filePath, dataUrl = "") => invoke("desktop:copy-image", { filePath: String(filePath || ""), dataUrl: String(dataUrl || "") }, 60000),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
           applyWebUpdate: () => invoke("desktop:apply-web-update", {}, 600000),
           webReady: () => window.chrome.webview.postMessage({ type: "desktop:web-ready" }),
@@ -655,17 +655,18 @@ public partial class MainWindow : Window
         var dataUrl = request.GetProperty("dataUrl").GetString() ?? "";
         var fileName = request.TryGetProperty("fileName", out var nameElement) ? Path.GetFileName(nameElement.GetString() ?? "image") : "image";
         var category = request.TryGetProperty("category", out var categoryElement) && categoryElement.GetString() == "generated" ? "generated" : "originals";
-        return Task.Run(() => StoreImageData(dataUrl, fileName, category), _shutdown.Token);
+        var projectName = request.TryGetProperty("projectName", out var projectElement) ? projectElement.GetString() ?? "" : "";
+        return Task.Run(() => StoreImageData(dataUrl, fileName, category, projectName), _shutdown.Token);
     }
 
-    private AssetRecord StoreImageData(string dataUrl, string fileName, string category)
+    private AssetRecord StoreImageData(string dataUrl, string fileName, string category, string projectName)
     {
         var match = Regex.Match(dataUrl, "^data:(image/(?:jpeg|png|webp|gif));base64,(.+)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         if (!match.Success) throw new InvalidDataException("图片数据格式无效");
         var mime = match.Groups[1].Value.ToLowerInvariant();
         var bytes = Convert.FromBase64String(match.Groups[2].Value);
         if (bytes.Length > 64 * 1024 * 1024) throw new InvalidDataException("单张图片超过64MB限制");
-        return StoreAssetBytes(bytes, fileName, mime, true, category);
+        return StoreAssetBytes(bytes, fileName, mime, true, category, projectName);
     }
 
     private AssetRecord StoreAssetFile(string sourcePath, bool saveIndex)
@@ -675,17 +676,28 @@ public partial class MainWindow : Window
         return StoreAssetBytes(bytes, Path.GetFileName(sourcePath), MimeFromExtension(Path.GetExtension(sourcePath)), saveIndex);
     }
 
-    private AssetRecord StoreAssetBytes(byte[] bytes, string fileName, string mime, bool saveIndex, string category = "originals")
+    private AssetRecord StoreAssetBytes(byte[] bytes, string fileName, string mime, bool saveIndex, string category = "originals", string projectName = "")
     {
         var id = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         AssetRecord record;
         lock (_assetLock)
         {
             if (_assets.TryGetValue(id, out var existing)) return existing;
-            var relativePath = Path.Combine(category == "generated" ? "generated" : "originals", id + ExtensionFromMime(mime));
-            var destination = Path.Combine(AssetsDirectory, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.WriteAllBytes(destination, bytes);
+            string relativePath;
+            if (category == "generated")
+            {
+                bytes = GeneratedAssetFile.WithSourceHash(bytes, id);
+                var destination = GeneratedAssetFile.Write(Path.Combine(AssetsDirectory, "generated"), projectName, ExtensionFromMime(mime), bytes);
+                relativePath = Path.GetRelativePath(AssetsDirectory, destination);
+                fileName = Path.GetFileName(destination);
+            }
+            else
+            {
+                relativePath = Path.Combine("originals", id + ExtensionFromMime(mime));
+                var destination = Path.Combine(AssetsDirectory, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.WriteAllBytes(destination, bytes);
+            }
             record = new AssetRecord { Id = id, FileName = Path.GetFileName(fileName), Mime = mime, RelativePath = relativePath, Size = bytes.LongLength };
             _assets[id] = record;
         }
@@ -929,12 +941,45 @@ public partial class MainWindow : Window
     private object CopyImageToClipboard(JsonElement request)
     {
         var requestedPath = request.TryGetProperty("filePath", out var pathElement) ? pathElement.GetString() ?? "" : "";
-        if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("图片没有可用的本地文件路径");
-        var fullPath = Path.GetFullPath(requestedPath);
-        if (!File.Exists(fullPath)) throw new FileNotFoundException("图片文件不存在，可能已被移动或删除", fullPath);
-        var bitmap = LoadClipboardBitmap(fullPath);
-        System.Windows.Clipboard.SetImage(bitmap);
-        Log($"[生成结果] 已复制图片到剪贴板：{fullPath}", false);
+        var dataUrl = request.TryGetProperty("dataUrl", out var dataElement) ? dataElement.GetString() ?? "" : "";
+        byte[] pngBytes;
+        string fullPath = "";
+        System.Windows.Media.Imaging.BitmapSource bitmap;
+        if (dataUrl.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase))
+        {
+            pngBytes = Convert.FromBase64String(dataUrl[(dataUrl.IndexOf(',') + 1)..]);
+            using var imageStream = new MemoryStream(pngBytes, writable: false);
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(imageStream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            bitmap = decoder.Frames[0];
+            bitmap.Freeze();
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(requestedPath)) throw new ArgumentException("图片没有可用的本地文件路径");
+            fullPath = Path.GetFullPath(requestedPath);
+            if (!File.Exists(fullPath)) throw new FileNotFoundException("图片文件不存在，可能已被移动或删除", fullPath);
+            bitmap = LoadClipboardBitmap(fullPath);
+            var original = File.ReadAllBytes(fullPath);
+            byte[] signature = [137, 80, 78, 71, 13, 10, 26, 10];
+            if (original.Length >= 8 && original.AsSpan(0, 8).SequenceEqual(signature)) pngBytes = original;
+            else
+            {
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var encoded = new MemoryStream();
+                encoder.Save(encoded);
+                pngBytes = encoded.ToArray();
+            }
+        }
+        // SetImage alone discards PNG text chunks. Preserve exact bytes in a named PNG format.
+        var clipboardData = new System.Windows.DataObject();
+        clipboardData.SetData(System.Windows.DataFormats.Bitmap, bitmap);
+        using var pngStream = new MemoryStream(pngBytes, writable: false);
+        clipboardData.SetData("PNG", pngStream);
+        System.Windows.Clipboard.SetDataObject(clipboardData, true);
+        Log("[生成结果] 已复制图片与PNG生成信息到剪贴板。", false);
         return new { copied = true, path = fullPath };
     }
 

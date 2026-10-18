@@ -1,0 +1,73 @@
+{
+  "source": "https://apib.ai/zh/model/gpt-image-2",
+  "checked": "2026-10-17",
+  "apiType": "apimart",
+  "model": "gpt-image-2-official",
+  "ratio": "1:1",
+  "tier": "黄金会员",
+  "rows": [
+    {
+      "quality": "low",
+      "resolution": "1k",
+      "credits": 0.0488,
+      "regularCredits": 0.061,
+      "tokens": 196
+    },
+    {
+      "quality": "low",
+      "resolution": "2k",
+      "credits": 0.0968,
+      "regularCredits": 0.121,
+      "tokens": 397
+    },
+    {
+      "quality": "low",
+      "resolution": "4k",
+      "credits": 0.1592,
+      "regularCredits": 0.199,
+      "tokens": 659
+    },
+    {
+      "quality": "medium",
+      "resolution": "1k",
+      "credits": 0.4232,
+      "regularCredits": 0.529,
+      "tokens": 1756
+    },
+    {
+      "quality": "medium",
+      "resolution": "2k",
+      "credits": 0.8576,
+      "regularCredits": 1.072,
+      "tokens": 3568
+    },
+    {
+      "quality": "medium",
+      "resolution": "4k",
+      "credits": 1.424,
+      "regularCredits": 1.78,
+      "tokens": 5930
+    },
+    {
+      "quality": "high",
+      "resolution": "1k",
+      "credits": 1.6872,
+      "regularCredits": 2.109,
+      "tokens": 7024
+    },
+    {
+      "quality": "high",
+      "resolution": "2k",
+      "credits": 3.4264,
+      "regularCredits": 4.283,
+      "tokens": 14272
+    },
+    {
+      "quality": "high",
+      "resolution": "4k",
+      "credits": 5.6936,
+      "regularCredits": 7.117,
+      "tokens": 23719
+    }
+  ]
+}

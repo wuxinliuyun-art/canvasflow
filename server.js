@@ -4,6 +4,24 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const packageInfo = require("./package.json");
+const browserTransfer = require("./modules/browser-transfer-server");
+
+// Reserve each export atomically so repeated names and concurrent requests keep every result.
+function writeExportFile(requestedPath, bytes) {
+  const parsed = path.parse(requestedPath);
+  for (let index = 0; ; index++) {
+    const candidate = index === 0 ? requestedPath : path.join(parsed.dir, `${parsed.name} (${index})${parsed.ext}`);
+    let fd;
+    try { fd = fs.openSync(candidate, "wx"); }
+    catch (error) {
+      if (error.code === "EEXIST") continue;
+      throw error;
+    }
+    try { fs.writeFileSync(fd, bytes); }
+    finally { fs.closeSync(fd); }
+    return candidate;
+  }
+}
 
 const root = __dirname;
 let dataRoot = root;
@@ -588,8 +606,7 @@ async function requestHandler(req, res) {
         const parentDir = path.dirname(filePath);
         if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
         const buf = Buffer.from(file.data.split(",")[1] || file.data, "base64");
-        fs.writeFileSync(filePath, buf);
-        savedFiles.push(filePath);
+        savedFiles.push(writeExportFile(filePath, buf));
       }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, path: exportDir, files: savedFiles }));
@@ -616,7 +633,7 @@ async function requestHandler(req, res) {
     return;
   }
 
-  if (pathname === "/api/generate" && req.method === "POST") {
+  if (["/api/generate", "/api/midjourney/generate"].includes(pathname) && req.method === "POST") {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
@@ -625,7 +642,7 @@ async function requestHandler(req, res) {
 
       const { status, body: resBody } = await tryProxyRequest(
         "POST",
-        "/v1/images/generations",
+        pathname === "/api/midjourney/generate" ? "/v1/midjourney/generations" : "/v1/images/generations",
         { Authorization: `Bearer ${apiKey}` },
         JSON.stringify(payload)
       );
@@ -636,6 +653,13 @@ async function requestHandler(req, res) {
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { code: 502, message: "代理请求失败: " + err.message } }));
     }
+    return;
+  }
+
+  // UXP connection probes must not consume the pending-image queue.
+  if (pathname === "/api/ps/status" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ app: "CanvasFlow", version: APP_VERSION }));
     return;
   }
 
@@ -759,6 +783,18 @@ async function requestHandler(req, res) {
 
   // 浏览器生图:CanvasFlow 前端 push 任务 → 浏览器扩展内容脚本 claim 并在站点页面模拟人工操作 → result 回传。
   // 队列仅存内存;任务 10 分钟未取/未完自动过期,结果取走后保留 10 分钟供前端轮询。
+  if (pathname === "/api/browser-transfer" && req.method === "POST") {
+    try {
+      const result = browserTransfer(JSON.parse((await readBody(req)).toString()));
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
   if (pathname === "/api/browser-task" && req.method === "POST") {
     try {
       const body = await readBody(req);

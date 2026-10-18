@@ -112,7 +112,7 @@ function globToRegExp(pattern) {
 }
 
 function manifestPatterns() {
-  return (chrome.runtime.getManifest().content_scripts || []).flatMap(script => script.matches || []);
+  return (chrome.runtime.getManifest().content_scripts || []).filter(script => script.js?.includes("content.js")).flatMap(script => script.matches || []);
 }
 
 // manifest 已声明自动注入的站点不进 ensureContentScript 的动态注册,
@@ -245,12 +245,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       // 站点 CDN 图片(如 googleusercontent)由后台抓取:content 脚本受页面 CORS 限制,后台不受
+      case "sendImageToCanvas": {
+        if (!sender.tab || !/^https?:/.test(sender.url || "")) throw new Error("图片须从网页发送");
+        const ports = await resolveServerPorts();
+        const ready = [];
+        for (const port of ports) {
+          const result = await fetchJson(await serverUrl("/api/browser-transfer", port), {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "probe" }), signal: AbortSignal.timeout(3000),
+          }).catch(() => null);
+          if (result?.ready) ready.push(port);
+        }
+        if (!ready.length) throw new Error("请先打开新版 CanvasFlow 画布；更新后需重启服务或桌面程序");
+        if (ready.length > 1) throw new Error("发现多个接收实例，请只保留一个 CanvasFlow 实例后重试");
+        const data = await fetchJson(await serverUrl("/api/browser-transfer", ready[0]), {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "send", image: message.image }),
+        });
+        sendResponse({ ok: true, data });
+        return;
+      }
       case "fetchImageDataUrl": {
         const url = String(message.url || "");
         if (!/^https?:\/\//i.test(url)) throw new Error("仅支持 http(s) 图片地址");
         const response = await fetch(url, { credentials: "include" });
         if (!response.ok) throw new Error(`图片下载 HTTP ${response.status}`);
         const blob = await response.blob();
+        if (blob.size > 10 * 1024 * 1024) throw new Error("图片超过 10MB");
         if (!blob.type.startsWith("image/")) throw new Error("响应不是图片");
         sendResponse({ ok: true, dataUrl: await blobToDataUrl(blob) });
         return;

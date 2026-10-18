@@ -1,5 +1,7 @@
 # CanvasFlow × Photoshop 互传
 
+Photoshop 2022（23.3）及以上可使用新增的 **UXP 面板**，加载与连接步骤见 [uxp-panel/README.md](../uxp-panel/README.md)。下文保留 CEP 兼容版说明；UXP 不使用 CSXS 注册表或 CEP 安装目录。
+
 只做一件事：**画布和 Photoshop 之间互传图片**。面板不做任何 AI 调用。
 
 - **画布 → PS**：图片节点右键 → 「在 PS 中编辑」，用 Photoshop 打开该图的本地文件。

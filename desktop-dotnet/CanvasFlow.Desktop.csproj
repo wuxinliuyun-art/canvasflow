@@ -27,11 +27,13 @@
     <Content Include="..\app.js" Link="app.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\canvas-runtime.js" Link="canvas-runtime.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\mindmap-module.js" Link="modules\mindmap-module.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\manual-matting.js" Link="modules\manual-matting.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\styles.css" Link="styles.css" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\canvasflow-logo.png" Link="assets\canvasflow-logo.png" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\builtin-templates\**\*.*" LinkBase="builtin-templates\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\cep-panel\**\*.*" Exclude="..\cep-panel\*.bat;..\cep-panel\*.md" LinkBase="cep-panel\" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\uxp-panel\**\*.*" LinkBase="uxp-panel\" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

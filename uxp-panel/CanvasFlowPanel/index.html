@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js"></script>
+</head>
+<body>
+  <h2>CanvasFlow 互传 <span id="version"></span></h2>
+  <p id="docInfo" class="muted">正在读取 Photoshop 文档…</p>
+  <button id="sendMerged" class="primary">合并图层 → 画布</button>
+  <button id="sendLayer">当前图层 → 画布</button>
+  <p class="muted">回传为新图片节点，原始文档保持不变。</p>
+  <section>
+    <h3>连接画布</h3>
+    <p id="connection" class="muted" role="status">正在检测连接…</p>
+    <button id="chooseBridge">连接桌面版…</button>
+    <p class="muted">首次连接：打开下方目录，选择 bridge.json。</p>
+    <p class="muted">%APPDATA%\CanvasFlowBridge</p>
+    <label for="serverUrl">服务器地址（选填，留空自动连接）</label>
+    <input id="serverUrl" type="text" placeholder="http://127.0.0.1:5173">
+    <button id="reconnect">重新连接</button>
+  </section>
+  <p id="log" role="status" aria-live="polite"></p>
+</body>
+</html>

@@ -68,7 +68,7 @@ internal sealed class BrowserTaskBridge : IDisposable
                 { await ReplyAsync(stream, 403, "{}", token); return; }
                 var uri = new Uri("http://127.0.0.1" + parts[1]);
                 var allowed = parts[0] == "GET" && (uri.AbsolutePath == "/api/browser-task/pending" || uri.AbsolutePath == "/api/browser-task/next" || uri.AbsolutePath.StartsWith("/api/browser-task/status/", StringComparison.Ordinal))
-                    || parts[0] == "POST" && uri.AbsolutePath == "/api/browser-task/result";
+                    || parts[0] == "POST" && (uri.AbsolutePath == "/api/browser-task/result" || uri.AbsolutePath == "/api/browser-transfer");
                 if (!allowed) { await ReplyAsync(stream, 404, "{}", token); return; }
                 if (headers.ContainsKey("Transfer-Encoding")) { await ReplyAsync(stream, 400, "{}", token); return; }
                 var length = 0;
