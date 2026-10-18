@@ -35,5 +35,6 @@
     <Content Include="..\builtin-templates\**\*.*" LinkBase="builtin-templates\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\cep-panel\**\*.*" Exclude="..\cep-panel\*.bat;..\cep-panel\*.md" LinkBase="cep-panel\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\uxp-panel\**\*.*" LinkBase="uxp-panel\" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\browser-extension\**\*.*" LinkBase="browser-extension\" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

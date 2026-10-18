@@ -178,6 +178,8 @@
 
 ### 带配色标注箭头的参考图自动内置颜色修改提示词（2026-10）
 
+- **功能已隐藏（2026-10 用户明确要求）**：箭头末端标注功能（悬浮编辑器 + 画布标注渲染）自 2.7.4 起整体隐藏，**后续打包版本均不得包含此功能**。实现为 app.js 箭头标注区顶部的总闸门 `ARROW_NOTE_ENABLED = false`，共闸三处：`showArrowNote` 入口（画完箭头自动弹出 + 悬浮弹出都走这里）、灯箱 pointermove 的箭头尾点命中检测、`drawArrowAnnotation` 渲染调用。index.html 的 DOM 与事件绑定保留（顶层绑定删掉会因元素缺失抛错），置回 `true` 可整体恢复。
+- 下游逻辑保留不删：`hasColorArrowNotes` 继承（重编辑已烘焙标注的旧图仍继承标记）与颜色修改提示词追加（4707-4711）按节点数据驱动，隐藏后不会再产生新标记，但旧图行为不变；改动此功能时不要顺手删这两处。
 - 规则：灯箱画笔里画的箭头带“配色标注”（`action.noteColor` 非空）并确认生成节点时，产物图片节点打 `node.hasColorArrowNotes`（来源图本身带标记则继承；普通箭头/画笔/裁剪不标记）。标记经 `collectUpstreamForAI.imageRef` 与 `directScreenshotNodeInputs` 随参考图对象传播；`runQueuedAiTask` 在 submitGeneration 前（`task.localMatting` 分支之外）按**本次实际发送数组**（AI 任务=orderedImages 画布 x 排序；截图任务=[截图, ...参考图]）计算标注图序号，把「根据第x张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注」追加到 `task.prompt`（多张用「、」，如“第2、3张”；无上游文字时该句即 prompt）。因发送时才追加，任务队列在启动前面板显示的是用户原文；导出 PNG 的 generationPrompt 取自发送后的 task.prompt，与实际请求一致。
 - 避免：追加必须只做一次（`task._arrowNoteClause === undefined` 守卫，重试不重复拼接）；序号必须按发送数组下标+1，不能按节点创建顺序；浏览器生图节点（/api/browser-task）不走此逻辑，勿在别处重复拼接；自动化测试中灯箱箭头拖拽对 `setPointerCapture` 有依赖，合成 PointerEvent 需临时屏蔽该方法，且 `startLightboxPaint` 要求 lightboxImg 加载完成（naturalWidth>0），过早点击会静默返回。
 
@@ -233,3 +235,5 @@
 - `extensions-presets/auto-matting` 与 `dist/自动抠图` 是独立的自动抠图拓展，不随 CanvasFlow 主程序发布。
 - 以后生成完整安装包、便携包、mac 包、界面热更新包时，均不得带入该拓展、BiRefNet 权重、Python 环境、缓存或 `CanvasFlow-自动抠图-通用模型.zip`。
 - 主程序打包继续按资源白名单收集，不得把整个 `extensions-presets` 或 `dist` 目录递归打入；自动抠图包仅在用户单独要求时制作或分发。
+- 分区抠图选择「本地 BiRefNet」时直接复用 `auto-matting-general` 拓展执行接口，由 CanvasFlow 自动启动拓展 Python；不得恢复要求用户预先运行 `127.0.0.1:8790` 服务或启动脚本的流程。多个选区任务必须串行调用该拓展，避免并发清理同一 `input/`、`output/` 目录。
+- 拓展的 `python-path.txt` 只作为 Python 3.11–3.13 的引导解释器，实际依赖安装在拓展自己的 `.venv`；路径失效时回退系统 Python，清华镜像缺包时回退官方 PyPI。

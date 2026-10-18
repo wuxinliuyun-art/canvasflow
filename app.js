@@ -311,6 +311,10 @@ Object.assign(UI_EN, {
   "简体中文": "简体中文",
   "文字节点重叠时合并文案": "Merge text when text nodes overlap",
   "Photoshop 互传": "Photoshop Integration",
+  "安装面板后，可在 CanvasFlow 与 Photoshop 间互传图片。": "Install the panel to transfer images between CanvasFlow and Photoshop.",
+  "Photoshop 路径": "Photoshop Path",
+  "选择路径": "Choose Path",
+  "安装 / 更新面板": "Install / Update Panel",
   "Photoshop 主程序路径（photoshop.exe）": "Photoshop executable path (photoshop.exe)",
   "浏览选择…": "Browse…",
   "安装 / 更新 PS 面板": "Install / Update PS Panel",
@@ -365,6 +369,7 @@ Object.assign(UI_EN, {
   "上下镜像当前图片": "Flip current image vertically",
   "图片编辑": "Image Editor",
   "手动分区抠图": "Manual Region Cutout",
+  "分区抠图": "Region Cutout",
   "关闭手动抠图": "Close manual cutout",
   "原图上拖动添加选框，选择选框后放大修整": "Drag on the original to add regions; select a region and zoom in to refine it",
   "图片选框和蒙版编辑区": "Image regions and mask editor",
@@ -599,7 +604,9 @@ let desktopAssetMigrationTimer = null;
 let desktopAssetMigrationPromise = null;
 let desktopAssetMigrationQueued = false;
 const AI_QUEUE_MAX_CONCURRENT = 5;
-const aiTaskQueue = { items: [], running: 0, nextId: 1 };
+// 远程 AI 与本地 BiRefNet 分开计数：本地任务不占用远程并发名额，
+// 但本地拓展仍固定串行，避免多个任务同时清理同一 input/output 目录。
+const aiTaskQueue = { items: [], running: 0, localRunning: 0, nextId: 1 };
 const aiApiSlots = { active: 0, waiters: [] };
 
 function acquireAiApiSlot(label = "AI任务") {
@@ -860,6 +867,7 @@ const els = {
   lightboxCounter: $("lightboxCounter"),
   lightboxDots: $("lightboxDots"),
   lightboxPaintBtn: $("lightboxPaintBtn"),
+  lightboxMattingBtn: $("lightboxMattingBtn"),
   lightboxPaintCanvas: $("lightboxPaintCanvas"),
   lightboxEraserRing: $("lightboxEraserRing"),
   lightboxPaintToolbar: $("lightboxPaintToolbar"),
@@ -4680,7 +4688,7 @@ async function runQueuedAiTask(task) {
   task.status = "slot-waiting";
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
-  const releaseSlot = await acquireAiApiSlot(task.label || task.id);
+  const releaseSlot = task.localMatting ? () => {} : await acquireAiApiSlot(task.label || task.id);
   let imageUrls;
   try {
   task.status = "submitting";
@@ -4801,8 +4809,27 @@ let aiQueueLastSubmitAt = 0;
 
 function pumpAiTaskQueue() {
   if (aiQueueStaggerTimer) { clearTimeout(aiQueueStaggerTimer); aiQueueStaggerTimer = null; }
+
+  // 本地抠图拥有独立的单任务通道，不等待远程 AI 槽位，也不参与远程提交错峰。
+  if (aiTaskQueue.localRunning < 1) {
+    const localTask = aiTaskQueue.items.find(item => item.kind !== "browser" && item.localMatting && item.status === "waiting");
+    if (localTask) {
+      aiTaskQueue.localRunning++;
+      runQueuedTask(localTask).catch(error => {
+        localTask.status = "failed";
+        localTask.error = error.message;
+        console.error("[本地抠图队列] 任务执行失败", { taskId: localTask.id, nodeId: localTask.nodeId, message: error.message });
+      }).finally(() => {
+        aiTaskQueue.localRunning--;
+        refreshQueuedNodeProgress(localTask.nodeId);
+        renderTaskQueue();
+        pumpAiTaskQueue();
+      });
+    }
+  }
+
   while (aiTaskQueue.running < AI_QUEUE_MAX_CONCURRENT) {
-    const task = aiTaskQueue.items.find(item => item.kind !== "browser" && item.status === "waiting");
+    const task = aiTaskQueue.items.find(item => item.kind !== "browser" && !item.localMatting && item.status === "waiting");
     if (!task) break;
     const sinceLastSubmit = Date.now() - aiQueueLastSubmitAt;
     if (sinceLastSubmit < AI_TASK_SUBMIT_STAGGER_MS) {
@@ -7878,6 +7905,9 @@ const lightboxCropBtn = $("lightboxCropBtn");
 const lightboxCropApply = $("lightboxCropApply");
 
 // Arrow annotations are part of the paint overlay; the floating editor is never exported.
+// 箭头末端标注（文字+配色）2026-10 起按用户要求整体隐藏，后续打包版本均不含此功能；置回 true 可整体恢复。
+// 下游 hasColorArrowNotes 继承与颜色修改提示词逻辑保留，兼容已烘焙标注的旧图。
+const ARROW_NOTE_ENABLED = false;
 const arrowNote = $("lightboxArrowNote");
 const arrowNoteText = $("lightboxArrowText");
 const arrowNoteColor = $("lightboxArrowColor");
@@ -7968,7 +7998,7 @@ function positionArrowNote() {
   arrowNote.style.top = `${Math.max(8, Math.min(panelY >= 8 ? panelY : y + 64, bottom - arrowNote.offsetHeight))}px`;
 }
 function showArrowNote(action) {
-  if (!action || !lightboxPaintActions.includes(action)) return;
+  if (!ARROW_NOTE_ENABLED || !action || !lightboxPaintActions.includes(action)) return;
   if (arrowNoteAction !== action) {
     if (document.activeElement === arrowNoteText || arrowColorPicking) return;
     arrowNoteAction = action;
@@ -8135,6 +8165,7 @@ function arrowNoteAtClientPoint(clientX, clientY) {
 }
 els.lightbox.addEventListener("pointermove", ev => {
   if (!lightboxPainting || lightboxDrawing || lightboxViewDrag || lightboxTransformDrag || lightboxCropDrag) return;
+  if (!ARROW_NOTE_ENABLED) return; // 标注功能隐藏时跳过箭头尾点命中检测
   if (arrowNote.contains(ev.target)) { cancelArrowNoteHide(); return; }
   const action = arrowNoteAtClientPoint(ev.clientX, ev.clientY);
   if (action) { showArrowNote(action); cancelArrowNoteHide(); }
@@ -8466,7 +8497,7 @@ function drawLightboxShape(context, action) {
     context.fill();
   }
   context.restore();
-  if (action.kind === "arrow") drawArrowAnnotation(context, action);
+  if (action.kind === "arrow" && ARROW_NOTE_ENABLED) drawArrowAnnotation(context, action);
 }
 
 function isLightboxShapeAction(action) {
@@ -8777,6 +8808,12 @@ els.lightboxPaintCanvas.addEventListener("dragstart", ev => ev.preventDefault())
 els.lightboxPaintCanvas.addEventListener("lostpointercapture", finishLightboxPointerAction);
 $("lightboxPaintPointer").onclick = () => setLightboxPaintMode(lightboxPlacedImage ? "transform" : "idle");
 els.lightboxPaintBtn.onclick = startLightboxPaint;
+els.lightboxMattingBtn.onclick = () => {
+  const node = findNode(lightboxSourceNodeId);
+  if (!node) return toast("原图片节点已被删除");
+  hideLightbox();
+  openImageRegionMatting(node);
+};
 els.lightboxPaintBrush.onclick = () => setLightboxPaintMode("brush");
 els.lightboxPaintEraser.onclick = () => setLightboxPaintMode("eraser");
 els.lightboxPaintArrow.onclick = () => setLightboxPaintMode("arrow");
@@ -9319,7 +9356,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
       ...(state.selected.size === 1 ? [["AI绘图", aiDrawAction]] : []),
-      ...(state.selected.size === 1 && extensionSources.some(source => source.id === id) ? [["分区抠图", () => openImageRegionMatting(selectedNode)]] : []),
       ...(extensionSources.length ? [["角度变化", () => {
         extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
       }]] : []),
@@ -9497,7 +9533,8 @@ window.addEventListener("keydown", ev => {
     return;
   }
   if (ev.target.matches("textarea,input,select")) return;
-  if (ev.target.closest?.(".canvas-annotation")) return; // 标注编辑中，按键交给文本输入
+  const annotationTarget = ev.target.closest?.(".canvas-annotation");
+  if (annotationTarget?.isContentEditable) return; // 仅编辑状态交给文本输入；选中状态仍响应 Delete
   if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); }
   if (ev.key === "Delete") {
     if (!deleteSelectedAnnotation()) deleteNodes(state.selected);
@@ -11068,9 +11105,9 @@ els.extensionOpenFolderBtn.onclick = async () => {
 // ---- Photoshop CEP 面板：仅桌面版提供一键安装，走 DesktopApi 的 /api/cep/* 路由 ----
 function describeCepStatus(status) {
   if (!status.sourceExists) return "未找到随包面板文件（cep-panel/CanvasFlowPanel）：安装版需重新打包，源码版请检查仓库目录。";
-  if (!status.installed) return `面板未安装。安装目标：${status.installFolder}`;
+  if (!status.installed) return `面板未安装\n安装目标：${status.installFolder}`;
   if (status.needsUpdate) return `已安装 v${status.installedVersion}，随包新版本 v${status.sourceVersion}，点击“安装 / 更新面板”覆盖更新。`;
-  return `已安装 v${status.installedVersion}（与随包版本一致）。安装目录：${status.installFolder}`;
+  return `已安装 v${status.installedVersion}\n安装目录：${status.installFolder}`;
 }
 
 async function refreshCepPanelStatus() {

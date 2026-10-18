@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261018-annotation-blue2">
+  <link rel="stylesheet" href="styles.css?v=20261018-variable-button2">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -220,18 +220,12 @@
         </section>
         <section class="settings-card" id="cepPanelCard">
           <h3>Photoshop 互传</h3>
-          <p class="setting-desc">UXP 支持 Photoshop 2022（23.3）及以上。</p>
-          <details>
-            <summary>UXP 快速开始</summary>
-            <p class="setting-desc">1. 用 UXP Developer Tool 加载插件（安装方法见 uxp-panel/README.md）。</p>
-            <p class="setting-desc">2. PS → 增效工具 → CanvasFlow 互传 UXP。</p>
-            <p class="setting-desc">3. 面板中点「连接桌面版」，按提示选择连接文件。只需设置一次。</p>
-          </details>
-          <label>Photoshop 主程序路径（photoshop.exe）<input id="psPathInput" type="text" placeholder="例如 C:\Program Files\Adobe\Adobe Photoshop 2024\photoshop.exe"></label>
+          <p class="setting-desc">安装面板后，可在 CanvasFlow 与 Photoshop 间互传图片。</p>
+          <label>Photoshop 路径<input id="psPathInput" type="text" placeholder="例如 C:\Program Files\Adobe\Adobe Photoshop 2024\photoshop.exe"></label>
           <div class="cep-panel-actions">
-            <button id="psPathBrowseBtn" type="button">浏览选择…</button>
-            <button id="cepInstallBtn" type="button">安装 / 更新 CEP 面板</button>
-            <button id="cepUninstallBtn" type="button">移除 CEP 面板</button>
+            <button id="psPathBrowseBtn" type="button">选择路径</button>
+            <button id="cepInstallBtn" type="button">安装 / 更新面板</button>
+            <button id="cepUninstallBtn" type="button">移除面板</button>
           </div>
           <p id="cepStatusLine" class="setting-desc" hidden></p>
         </section>
@@ -443,6 +437,7 @@
       <div id="lightboxMainTools" class="lightbox-toolbar-section lightbox-main-tools" role="group" aria-label="图片编辑">
         <button id="lightboxInsertBtn" type="button">置入</button>
         <button id="lightboxCropBtn" type="button" title="拖框选择需要保留的区域">裁剪</button>
+        <button id="lightboxMattingBtn" type="button" title="框选多个区域分别抠图">分区抠图</button>
         <button id="lightboxCropApply" type="button" class="hidden" disabled>应用裁剪</button>
         <button id="lightboxPaintPointer" class="active lightbox-icon-btn" type="button" title="鼠标" aria-label="鼠标"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m5 3 14 10-7 1-3 7z"/></svg></button>
         <button id="lightboxPaintBrush" class="lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
@@ -491,7 +486,7 @@
   <script src="model-catalog.js?v=20261018-chat-opus2"></script>
   <script src="canvas-runtime.js?v=20261017-modelsync1"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261018-canvas-annotations1"></script>
-  <script src="modules/manual-matting.js?v=20261015-mattingdraft1"></script>
+  <script src="app.js?v=20261018-arrownote-hidden1"></script>
+  <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
 </body>
 </html>

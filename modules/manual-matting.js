@@ -1,24 +1,28 @@
-const LOCAL_MATTING_URL = "http://127.0.0.1:8790";
-async function localMattingRequest(path, options = {}, timeout = 600000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(LOCAL_MATTING_URL + path, {...options, signal:controller.signal});
-    const result = await response.json();
-    if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
-    return result;
-  } catch (error) {
-    if (error instanceof TypeError) throw new Error("无法连接本地抠图服务，请先运行画布目录中的「启动本地抠图.cmd」，再重试（127.0.0.1:8790）");
-    if (error.name === "AbortError") throw new Error("本地抠图服务响应超时，请检查服务窗口后重试");
-    throw error;
-  } finally { clearTimeout(timer); }
+let localMattingRunChain = Promise.resolve();
+function runLocalRegionMatting(task) {
+  const run = () => executeLocalRegionMatting(task);
+  const queued = localMattingRunChain.then(run, run);
+  localMattingRunChain = queued.catch(() => {});
+  return queued;
 }
-async function runLocalRegionMatting(task) {
+async function executeLocalRegionMatting(task) {
   const image = task.orderedImages[0].image;
   const input = new Image(); input.src = image; await input.decode();
-  const result = await localMattingRequest("/matting", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image,rect:[0,0,input.naturalWidth,input.naturalHeight]})});
-  if (!/^data:image\/png;base64,/.test(result.image || "")) throw new Error("本地服务未返回有效 PNG 图片");
-  const output = new Image(); output.src = result.image; await output.decode();
+  const runUrl = "/api/extensions/auto-matting-general/run";
+  const runInit = {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:[{name:"001.png",data:stripDataUrl(image)}],params:{}})};
+  const cfg = extensionSettings();
+  const base = cfg.serviceUrl.replace(/\/+$/, "");
+  let response;
+  try {
+    response = window.canvasflowDesktop?.apiRequest ? await apiFetch(runUrl,runInit) : await fetch(`${base}${runUrl}`,runInit);
+  } catch (error) {
+    throw new Error(`无法启动自动抠图拓展：${error.message || "请在设置 → 拓展中确认已安装并刷新"}`);
+  }
+  const result = await response.json().catch(()=>({ok:false,error:"拓展响应不是合法 JSON"}));
+  if (!response.ok || !result.ok) throw new Error(result.error || `自动抠图拓展返回状态 ${response.status}`);
+  const outputImage = result.images?.[0]?.data;
+  if (!outputImage) throw new Error("自动抠图拓展没有返回图片");
+  const output = new Image(); output.src = `data:image/png;base64,${outputImage}`; await output.decode();
   if (output.naturalWidth !== input.naturalWidth || output.naturalHeight !== input.naturalHeight) throw new Error("本地抠图结果尺寸与选区不一致");
   // Keep manual erasures even when the service replaces the input alpha channel.
   const canvas = document.createElement("canvas"); canvas.width=input.naturalWidth; canvas.height=input.naturalHeight;
@@ -47,17 +51,27 @@ function enqueueRegionMatting(sourceNodeId, regions, sourceSize, apiType = activ
   const source = findNode(sourceNodeId);
   if (!source) throw new Error("原图片节点已被删除");
   if (apiType !== "local" && !activeApiKey(apiType).trim()) throw new Error(`当前使用 ${apiType === "agtoken" ? "AGToken" : "APIMart"}，尚未配置 API Key。请到设置 → AI绘图选择该 API 并保存 Key，然后重新确认。`);
-  if (taskQueueForNode(sourceNodeId).some(task => !queueTaskIsSettled(task))) throw new Error("该图片已有等待或运行中的任务，请完成后再提交");
-  const model = "gpt-image-2.5";
+  const localMatting = apiType === "local";
+  const hasConflictingTask = aiTaskQueue.items.some(task =>
+    task.nodeId === sourceNodeId &&
+    task.pageId === state.activePageId &&
+    !queueTaskIsSettled(task) &&
+    Boolean(task.localMatting) === localMatting
+  );
+  if (hasConflictingTask) throw new Error(localMatting
+    ? "该图片已有等待或运行中的本地抠图任务，请完成后再提交"
+    : "该图片已有等待或运行中的 GPT 任务，请完成后再提交");
+  const model = apiType === "apimart" ? "gpt-image-2.5-flare" : "gpt-image-2.5";
+  const modelLabel = apiType === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5";
   const entry = modelCatalogEntry(model, apiType);
-  if (apiType !== "local" && !entry) throw new Error("当前 API 不支持 GPT Image 2.5");
+  if (apiType !== "local" && !entry) throw new Error(`当前 API 不支持 ${modelLabel}`);
   const settings = {type:"ai-image",_apiType:apiType,_model:model,_resolution:"1k",_quality:"medium",_size:"auto",_count:1};
   const runId = `matting-${Date.now()}-${aiTaskQueue.nextId}`;
   const existing = state.nodes.filter(node => node.type === "image" && node.aiSourceNodeId === sourceNodeId).length;
   const tasks = regions.map((region, index) => {
     const reference = {image:region.canvas.toDataURL("image/png"),fileName:`选框${region.id}.png`};
     const task = buildAiQueueTasks({...source,...settings}, {texts:["将图片中主体抠出、透明背景"],images:[reference],orderedRefs:[reference]}, "image-node", runId)[0];
-    return {...task,source:"region-matting",generationSettings:{...settings},localMatting:apiType === "local",model:apiType === "local" ? "BiRefNet（本地）" : model,label:`分区抠图 · 选框 ${region.id}`,resultOrder:existing+index,resultCount:existing+regions.length,mattingSourceRect:region.rect.slice(),mattingSourceSize:sourceSize.slice()};
+    return {...task,source:"region-matting",generationSettings:{...settings},localMatting,model:localMatting ? "BiRefNet（本地）" : model,label:`分区抠图 · 选框 ${region.id}`,resultOrder:existing+index,resultCount:existing+regions.length,mattingSourceRect:region.rect.slice(),mattingSourceSize:sourceSize.slice()};
   });
   source._queueRunId = runId;
   aiTaskQueue.items.push(...tasks);
@@ -125,7 +139,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     <header><strong>手动分区抠图</strong><span>原图上拖动添加选框，选择选框后放大修整</span><button type="button" data-action="close" aria-label="关闭手动抠图">关闭</button></header>
     <div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="图片选框和蒙版编辑区"></canvas><div class="mm-boxes"></div></div></div><p class="mm-status" role="status"></p></div>
     <aside aria-label="选区列表"><strong>原图与选框</strong><div class="mm-list"></div></aside></div>
-    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">GPT Image 2.5</option><option value="local">本地 BiRefNet</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
+    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
   </div>`;
   // Inherit the app's theme and user-customized semantic color variables.
   els.app.append(dialog);
@@ -286,15 +300,16 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   zoom.onchange = fit;
   function confirmSubmission(apiType) {
     return new Promise(resolve => {
+      const onlineModelLabel = apiType === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5";
       const panel = dialog.querySelector(".mm-panel");
       const overlay = document.createElement("div");
       overlay.className = "mm-confirm";
       overlay.innerHTML = `<section class="mm-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="mmConfirmTitle" aria-describedby="mmConfirmDescription">
         <h2 id="mmConfirmTitle">确认分区抠图</h2>
-        <p id="mmConfirmDescription">${apiType === "local" ? "将使用本地 BiRefNet 进行抠图，无需 API Key，每个选区生成一张透明 PNG。" : "将使用 GPT Image 2.5 进行抠图，每个选区生成一张图片。"}</p>
+        <p id="mmConfirmDescription">${apiType === "local" ? "将使用本地 BiRefNet 进行抠图，无需 API Key，每个选区生成一张透明 PNG。" : `将使用 ${onlineModelLabel} 进行抠图，每个选区生成一张图片。`}</p>
         <dl><div><dt>生成张数</dt><dd>${regions.length} 张（${regions.length} 个选区）</dd></div>
-        <div><dt>使用模型</dt><dd>${apiType === "local" ? "BiRefNet（本地服务当前加载的模型）" : "GPT Image 2.5"}</dd></div>
-        <div><dt>使用 API</dt><dd>${apiType === "local" ? LOCAL_MATTING_URL : apiType === "agtoken" ? "AGToken" : "APIMart"}</dd></div>
+        <div><dt>使用模型</dt><dd>${apiType === "local" ? "BiRefNet（本地服务当前加载的模型）" : onlineModelLabel}</dd></div>
+        <div><dt>使用 API</dt><dd>${apiType === "local" ? "自动抠图拓展（自动运行）" : apiType === "agtoken" ? "AGToken" : "APIMart"}</dd></div>
         <div><dt>提示词</dt><dd>${apiType === "local" ? "本地模型直接移除选区背景" : "将图片中主体抠出、透明背景"}</dd></div></dl>
         <div class="mm-confirm-actions"><button type="button" data-confirm-cancel>返回调整</button><button type="button" class="primary" data-confirm-submit>开始抠图</button></div>
       </section>`;
@@ -320,11 +335,11 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     if (!await confirmSubmission(selectedApiType)) return;
     busy=true; redraw();
     try {
-      if (selectedApiType === "local") await localMattingRequest("/health", {}, 5000);
       const {count,apiType} = enqueueRegionMatting(sourceNodeId,regions,[original.width,original.height],selectedApiType);
       busy=false; close(); render();
       setTaskQueueOpen(true);
-      toast(`${apiType === "local" ? "本地 BiRefNet" : "GPT Image 2.5 · " + (apiType === "agtoken" ? "AGToken" : "APIMart")} · ${count} 个选区已加入抠图队列`);
+      const onlineModelLabel = apiType === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5";
+      toast(`${apiType === "local" ? "本地 BiRefNet" : onlineModelLabel + " · " + (apiType === "agtoken" ? "AGToken" : "APIMart")} · ${count} 个选区已加入抠图队列`);
       pumpAiTaskQueue();
     } catch (error) {
       submissionError = `无法提交：${error.message || "发生未知错误，请重试"}`;

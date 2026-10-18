@@ -30,7 +30,7 @@ if (!window.__canvasflowImageTransfer) {
   }
   function reset() { drag = null; if (!busy) notice.hidden = true; }
   function armed(event) {
-    return drag && event.clientY - drag.y >= 80 && event.clientY - drag.y > Math.abs(event.clientX - drag.x);
+    return drag && event.clientX - drag.x >= 80 && event.clientX - drag.x > Math.abs(event.clientY - drag.y);
   }
   // Keep start/end intact for the browser's native drag image and site cleanup.
   // Isolate enter/leave/over while our gesture is active: galleries often repaint
@@ -39,7 +39,7 @@ if (!window.__canvasflowImageTransfer) {
     const image = event.target.closest?.("img");
     if (busy || !image || image.closest("[contenteditable='true']") || !image.currentSrc && !image.src) return;
     drag = { image, src: image.currentSrc || image.src, x: event.clientX, y: event.clientY };
-    show("图片向下拖动 80 像素后松手，发送到画布（Esc 取消）");
+    show("图片向右拖动 80 像素后松手，发送到画布（Esc 取消）");
   }, true);
   for (const type of ["dragenter", "dragleave"]) {
     window.addEventListener(type, event => {
@@ -53,7 +53,7 @@ if (!window.__canvasflowImageTransfer) {
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
       show("松手发送到画布（Esc 取消）");
-    } else show("图片向下拖动 80 像素后松手，发送到画布（Esc 取消）");
+    } else show("图片向右拖动 80 像素后松手，发送到画布（Esc 取消）");
   }, true);
   window.addEventListener("drop", async event => {
     if (!armed(event)) { reset(); return; }

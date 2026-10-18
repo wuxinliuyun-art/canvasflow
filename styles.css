@@ -1604,6 +1604,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .settings-page-head h2 { margin: 0 0 4px; font-size: 19px; }
 .settings-page-head p, .asset-pane-head p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .settings-page-head-row, .asset-pane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+#newVariableDefinitionBtn { flex: 0 0 auto; white-space: nowrap; }
 .settings-card { margin-bottom: 12px; padding: 14px; border: 1px solid var(--panel-2); border-radius: 12px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
 .variable-definitions-list { position: relative; display: grid; gap: 8px; margin-bottom: 12px; }
 .variable-definition-item.material-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 10px; background: var(--node-control); }
@@ -3400,6 +3401,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 /* Photoshop CEP 面板安装卡：按钮复用全局 button 样式，这里只排版 */
 .cep-panel-actions { display: flex; gap: 8px; margin-top: 8px; }
 .cep-panel-actions #cepStatusLine { margin-top: 8px; }
+#cepStatusLine { white-space: pre-line; }
 .extension-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--panel-2); border-radius: 9px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
 .extension-item.dragging { opacity: .5; }
 .extension-item[data-disabled="1"] .extension-item-info { opacity: .55; }

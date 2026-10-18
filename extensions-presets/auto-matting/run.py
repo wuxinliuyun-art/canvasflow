@@ -3,6 +3,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -18,30 +19,41 @@ def runtime_ready():
 def ensure_runtime():
     """Use an optional existing Python, otherwise install into a private venv."""
     config = ROOT / "python-path.txt"
+    bootstrap_python = Path(sys.executable)
     if config.exists() and not os.environ.get("CANVASFLOW_MATTING_CHILD"):
         python = Path(config.read_text(encoding="utf-8-sig").strip())
-        if not python.is_file():
-            raise RuntimeError("python-path.txt 指定的 Python 不存在，请修正路径或删除该文件")
-        env = dict(os.environ, CANVASFLOW_MATTING_CHILD="1")
-        raise SystemExit(subprocess.call([str(python), str(Path(__file__).resolve())], cwd=ROOT, env=env))
+        if python.is_file():
+            bootstrap_python = python
+        else:
+            print("python-path.txt 指定的 Python 已不存在，改用当前系统 Python 创建独立环境。", flush=True)
     if runtime_ready():
         return
     if os.environ.get("CANVASFLOW_MATTING_CHILD"):
-        raise RuntimeError("所选 Python 缺少 rembg、onnxruntime 或 Pillow，请安装依赖或删除 python-path.txt")
-    if sys.version_info < (3, 11):
-        raise RuntimeError("自动抠图需要 Python 3.11 或更新版本，也可在 python-path.txt 指定已有环境")
+        raise RuntimeError("拓展独立环境缺少 rembg、onnxruntime 或 Pillow，请删除 .venv 后重试")
+    version_text = subprocess.check_output([str(bootstrap_python), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], text=True).strip()
+    version = tuple(int(part) for part in version_text.split(".")[:2])
+    if version < (3, 11) or version >= (3, 14):
+        raise RuntimeError("自动抠图需要 Python 3.11–3.13；请在 python-path.txt 指定兼容的 python.exe")
     python = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if python.exists():
+        private_version = subprocess.check_output([str(python), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], text=True).strip()
+        if private_version != version_text:
+            print(f"独立环境版本 {private_version} 与指定 Python {version_text} 不一致，正在重建…", flush=True)
+            shutil.rmtree(ROOT / ".venv")
     if not python.exists():
         print("首次运行：创建独立 Python 环境…", flush=True)
-        subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
+        subprocess.check_call([str(bootstrap_python), "-m", "venv", str(ROOT / ".venv")])
     probe = subprocess.run([str(python), "-c", "import rembg, onnxruntime, PIL"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if probe.returncode:
         print("首次运行：安装抠图依赖（需要联网，后续可离线运行）…", flush=True)
-        subprocess.check_call([str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements.txt"),
-                               "-i", "https://pypi.tuna.tsinghua.edu.cn/simple"])
+        install = [str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")]
+        mirror = subprocess.run([*install, "-i", "https://pypi.tuna.tsinghua.edu.cn/simple"])
+        if mirror.returncode:
+            print("镜像源缺少所需版本，改用官方 PyPI…", flush=True)
+            subprocess.check_call([*install, "-i", "https://pypi.org/simple"])
     env = dict(os.environ, CANVASFLOW_MATTING_CHILD="1")
-    raise SystemExit(subprocess.call([str(python), str(Path(__file__).resolve())], cwd=ROOT, env=env))
+    raise SystemExit(subprocess.call([str(python), str(Path(__file__).resolve()), *sys.argv[1:]], cwd=ROOT, env=env))
 
 
 def register_gpu_dlls():
@@ -70,6 +82,37 @@ def register_gpu_dlls():
     return handles
 
 
+def prepare_runtime():
+    if not (ROOT / "models" / f"{MODEL}.onnx").is_file():
+        raise RuntimeError("缺少 models/birefnet-general.onnx，请解压完整的自动抠图拓展包。")
+    os.environ["U2NET_HOME"] = str(ROOT / "models")
+    os.environ["NUMBA_CACHE_DIR"] = str(ROOT / ".cache" / "numba")
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    ensure_runtime()
+
+
+def create_session():
+    register_gpu_dlls()
+    import onnxruntime as ort
+    from rembg import new_session
+    providers = ["CPUExecutionProvider"]
+    if "CUDAExecutionProvider" in ort.get_available_providers():
+        providers.insert(0, ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC",
+                        "cudnn_conv_use_max_workspace": "0", "arena_extend_strategy": "kSameAsRequested"}))
+    session = new_session(MODEL, providers=providers)
+    print(f"推理后端：{session.inner_session.get_providers()}", flush=True)
+    return session
+
+
+def remove_background(image, session):
+    from PIL import ImageChops
+    from rembg import remove
+    original = image.convert("RGBA")
+    result = remove(original.convert("RGB"), session=session).convert("RGBA")
+    result.putalpha(ImageChops.multiply(result.getchannel("A"), original.getchannel("A")))
+    return result
+
+
 def main():
     for name in ("input", "output"):
         (ROOT / name).mkdir(exist_ok=True)
@@ -77,33 +120,17 @@ def main():
     if not files:
         print("input/ 里没有图片：请放入图片，或在画布中连接图片后执行。", file=sys.stderr)
         return 1
-    if not (ROOT / "models" / f"{MODEL}.onnx").is_file():
-        print("缺少 models/birefnet-general.onnx，请解压完整的自动抠图拓展包。", file=sys.stderr)
-        return 1
-    # Keep all caches local; the bundled weight prevents rembg from downloading other models.
-    os.environ["U2NET_HOME"] = str(ROOT / "models")
-    os.environ["NUMBA_CACHE_DIR"] = str(ROOT / ".cache" / "numba")
-    os.environ["PYTHONIOENCODING"] = "utf-8"
-    ensure_runtime()
-    handles = register_gpu_dlls()
-    from PIL import Image, ImageChops, ImageOps
-    import onnxruntime as ort
-    from rembg import new_session, remove
-    providers = ["CPUExecutionProvider"]
-    if "CUDAExecutionProvider" in ort.get_available_providers():
-        providers.insert(0, ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC",
-                        "cudnn_conv_use_max_workspace": "0", "arena_extend_strategy": "kSameAsRequested"}))
+    prepare_runtime()
+    from PIL import Image, ImageOps
     print(f"加载唯一模型 {MODEL}，共 {len(files)} 张图片…", flush=True)
-    session = new_session(MODEL, providers=providers)
-    print(f"推理后端：{session.inner_session.get_providers()}", flush=True)
+    session = create_session()
     succeeded = 0
     for index, path in enumerate(files, 1):
         try:
             with Image.open(path) as image:
                 original = ImageOps.exif_transpose(image).convert("RGBA")
             # Preserve existing alpha, including manual erasures in upstream images.
-            result = remove(original.convert("RGB"), session=session).convert("RGBA")
-            result.putalpha(ImageChops.multiply(result.getchannel("A"), original.getchannel("A")))
+            result = remove_background(original, session)
             output = ROOT / "output" / f"{index:03d}-{path.stem}-透明.png"
             result.save(output, "PNG")
             succeeded += 1
