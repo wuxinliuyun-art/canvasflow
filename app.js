@@ -308,21 +308,25 @@ const UI_EN = {
 
 Object.assign(UI_EN, {
   "外观": "Appearance",
-  "Codex 连接": "Codex Connection",
-  "让 Codex 在你确认后调用 CanvasFlow 绘图；不会自动提交可能计费的任务。": "Let Codex call CanvasFlow after your confirmation. Potentially billed generation is never submitted automatically.",
-  "CanvasFlow MCP": "CanvasFlow MCP",
-  "安装后，Codex 可以检查绘图配置、提交任务、查询进度并把结果保存到 CanvasFlow。": "After installation, Codex can inspect image settings, submit tasks, check progress, and save results to CanvasFlow.",
+  "MCP 连接": "MCP Connection",
+  "让支持 MCP 的 AI 工具连接 CanvasFlow；真实绘图仍需单独确认。": "Connect any MCP-capable AI tool to CanvasFlow. Actual image generation still requires separate confirmation.",
+  "CanvasFlow MCP 服务": "CanvasFlow MCP Service",
+  "提供 stdio MCP 服务，可供不同 AI 客户端连接。": "Provides a stdio MCP service that different AI clients can connect to.",
   "检查中": "Checking",
-  "正在检查 Codex 与 MCP 文件…": "Checking Codex and MCP files…",
-  "安装 / 更新 MCP": "Install / Update MCP",
-  "卸载 MCP": "Remove MCP",
+  "正在检查 MCP 服务文件与客户端连接…": "Checking MCP service files and client connections…",
+  "连接到 Codex": "Connect to Codex",
+  "从 Codex 移除": "Remove from Codex",
   "打开所在文件夹": "Open Folder",
   "刷新状态": "Refresh Status",
-  "安装或卸载后，请重启 Codex 或新建任务。操作不会删除画布项目、API Key 或生成图片。": "Restart Codex or start a new task after installing or removing MCP. This does not delete canvas projects, API keys, or generated images.",
-  "发给 AI Agent 的安装指令": "Instructions for an AI Agent",
-  "复制后发给能操作本机文件和命令行的 AI Agent。指令要求先检查文件、确认覆盖并验证结果。": "Copy this to an AI agent that can access local files and the command line. It requires file checks, replacement confirmation, and result verification.",
-  "复制 Agent 安装指令": "Copy Agent Instructions",
-  "发给 AI Agent 的 CanvasFlow MCP 安装指令": "CanvasFlow MCP installation instructions for an AI agent",
+  "Codex 按钮只是快捷连接；其他支持 stdio MCP 的工具可使用下方启动命令。连接操作不会删除项目、API Key 或图片。": "The Codex buttons are only shortcuts. Other stdio MCP clients can use the launch command below. Connecting does not delete projects, API keys, or images.",
+  "通用 MCP 连接信息": "Generic MCP Connection",
+  "传输方式为 stdio。把下面的启动命令填入当前 AI 工具的 MCP 服务器配置。": "Transport is stdio. Add the launch command below to the MCP server settings of your current AI tool.",
+  "CanvasFlow MCP stdio 启动命令": "CanvasFlow MCP stdio launch command",
+  "复制启动命令": "Copy Launch Command",
+  "发给 AI Agent 的连接指令": "Connection Instructions for an AI Agent",
+  "复制后发给能操作本机文件和命令行的 AI Agent。指令会要求它识别当前 AI 工具，不默认使用 Codex。": "Copy this to an AI agent that can access local files and the command line. It must identify the current AI tool instead of assuming Codex.",
+  "复制 Agent 连接指令": "Copy Agent Connection Instructions",
+  "发给 AI Agent 的 CanvasFlow MCP 连接指令": "CanvasFlow MCP connection instructions for an AI agent",
   "简体中文": "简体中文",
   "文字节点重叠时合并文案": "Merge text when text nodes overlap",
   "Photoshop 互传": "Photoshop Integration",
@@ -844,6 +848,8 @@ const els = {
   mcpUninstallBtn: $("mcpUninstallBtn"),
   mcpOpenFolderBtn: $("mcpOpenFolderBtn"),
   mcpRefreshBtn: $("mcpRefreshBtn"),
+  mcpLaunchCommand: $("mcpLaunchCommand"),
+  mcpCopyLaunchCommandBtn: $("mcpCopyLaunchCommandBtn"),
   mcpAgentInstruction: $("mcpAgentInstruction"),
   mcpCopyAgentInstructionBtn: $("mcpCopyAgentInstructionBtn"),
 
@@ -10287,7 +10293,7 @@ function switchSettingsTab(name) {
   }
   if (name === "extensions") renderExtensionsPage();
   if (name === "appearance") syncUiColorInputs();
-  if (name === "codex") refreshMcpStatus();
+  if (name === "mcp") refreshMcpStatus();
 }
 
 let lastMcpStatus = null;
@@ -10296,47 +10302,52 @@ function mcpCopy(zh, en) {
   return uiLanguage === "en" ? en : zh;
 }
 
-function mcpAgentInstruction(status = lastMcpStatus || {}) {
+function mcpLaunchCommand(status = lastMcpStatus || {}) {
   const directory = status.directory || "CanvasFlow安装目录\\app\\mcp";
   const executable = `${directory}\\CanvasFlow.Mcp.exe`;
   const project = `${directory}\\CanvasFlow.Mcp.csproj`;
-  const registerCommand = status.mode === "source"
-    ? `codex mcp add canvasflow -- dotnet run --project "${project}"`
-    : `codex mcp add canvasflow -- "${executable}"`;
+  return status.mode === "source"
+    ? `dotnet run --project "${project}"`
+    : `"${executable}"`;
+}
+
+function mcpAgentInstruction(status = lastMcpStatus || {}) {
+  const directory = status.directory || "CanvasFlow安装目录\\app\\mcp";
+  const launchCommand = mcpLaunchCommand(status);
   return [
-    "请帮我安装 CanvasFlow MCP，并严格遵守以下要求：",
+    "请把 CanvasFlow MCP 连接到我当前使用的 AI 工具，不要默认客户端是 Codex。",
     `1. 先确认 MCP 目录存在：${directory}`,
-    "2. 运行 codex mcp get canvasflow 检查是否已有同名注册；如果已有，先向我确认是否替换，不要直接覆盖。",
-    `3. 如果已有注册并且我确认替换，先执行 codex mcp remove canvasflow；然后执行：${registerCommand}`,
-    "4. 执行 codex mcp get canvasflow 验证已启用，并告诉我是否需要重启 Codex 或新建任务。",
-    "5. 不要读取、显示或复制 CanvasFlow 的 API Key。",
-    "6. 本次只安装和验证 MCP；不要发起图片生成，不要产生任何费用。",
-    "7. 如果文件、Codex CLI 或 .NET 依赖缺失，请停止并把准确错误告诉我，不要猜测路径。",
+    "2. 先识别我当前使用的 AI 工具，并查明该工具官方支持的 MCP 配置方式；不要猜测配置文件名或字段。",
+    "3. CanvasFlow MCP 使用 stdio 传输，启动命令如下：",
+    launchCommand,
+    "4. 如果当前工具已有名为 canvasflow 的 MCP 配置，先向我确认是否替换，不要直接覆盖。",
+    `5. 如果当前工具是 Codex，可执行 codex mcp add canvasflow -- ${launchCommand} 并用 codex mcp get canvasflow 验证；其他工具使用其官方支持的等价配置。`,
+    "6. 配置后只做连接或工具列表检查，并告诉我是否需要重启当前 AI 工具。",
+    "7. 不要读取、显示或复制 CanvasFlow 的 API Key；不要发起图片生成，不要产生费用。",
+    "8. 如果文件、客户端或运行依赖缺失，请停止并报告准确错误，不要猜测路径。",
   ].join("\n");
 }
 
 function renderMcpStatus(status) {
   if (!els.mcpStatusBadge) return;
   lastMcpStatus = status || {};
-  let stateName = "missing";
-  let badge = mcpCopy("未安装", "Not installed");
-  let description = mcpCopy("可以安装 CanvasFlow MCP。", "CanvasFlow MCP is ready to install.");
+  let stateName = "ready";
+  let badge = mcpCopy("服务可用", "Service ready");
+  let description = mcpCopy("MCP 服务文件已就绪。", "MCP service files are ready.");
   if (!desktop?.getMcpStatus) {
     stateName = "unavailable";
     badge = mcpCopy("仅桌面版", "Desktop only");
-    description = mcpCopy("浏览器模式不能修改 Codex 配置；请使用 Windows 桌面版，或复制下方指令交给 AI Agent。", "Browser mode cannot modify Codex settings. Use the Windows desktop app or copy the agent instructions below.");
-  } else if (!status?.codexAvailable) {
-    stateName = "unavailable";
-    badge = mcpCopy("缺少 Codex", "Codex missing");
-    description = mcpCopy("没有在 PATH 中找到 Codex CLI。请先安装或更新 Codex。", "Codex CLI was not found in PATH. Install or update Codex first.");
+    description = mcpCopy("浏览器模式不能检测本机 MCP 文件或客户端连接；请使用 Windows 桌面版查看准确状态。", "Browser mode cannot inspect local MCP files or client connections. Use the Windows desktop app for an accurate status.");
   } else if (!status?.filesAvailable) {
     stateName = "unavailable";
     badge = mcpCopy("缺少文件", "Files missing");
     description = mcpCopy("当前 CanvasFlow 安装包不含 MCP 文件，请安装最新完整版本。", "This CanvasFlow build does not include the MCP files. Install the latest full version.");
   } else if (status?.registered) {
-    stateName = "ready";
-    badge = mcpCopy("已安装", "Installed");
-    description = mcpCopy("CanvasFlow MCP 已在 Codex 中启用。", "CanvasFlow MCP is enabled in Codex.");
+    description = mcpCopy("MCP 服务文件已就绪；Codex 已连接。其他客户端也可以使用下方启动命令。", "MCP service files are ready and Codex is connected. Other clients can also use the launch command below.");
+  } else if (status?.codexAvailable) {
+    description = mcpCopy("MCP 服务文件已就绪；Codex 尚未连接，可用快捷按钮连接。其他客户端请使用下方启动命令。", "MCP service files are ready. Codex is not connected yet; use the shortcut button. Other clients can use the launch command below.");
+  } else {
+    description = mcpCopy("MCP 服务文件已就绪；未检测到 Codex CLI。其他客户端仍可使用下方启动命令。", "MCP service files are ready. Codex CLI was not detected, but other clients can still use the launch command below.");
   }
   els.mcpStatusBadge.dataset.state = stateName;
   els.mcpStatusBadge.textContent = badge;
@@ -10347,6 +10358,7 @@ function renderMcpStatus(status) {
   els.mcpInstallBtn.disabled = !desktop?.installMcp || !status?.codexAvailable || !status?.filesAvailable;
   els.mcpUninstallBtn.disabled = !desktop?.uninstallMcp || !status?.registered;
   els.mcpOpenFolderBtn.disabled = !desktop?.openOutputFolder || !directory || !status?.filesAvailable;
+  els.mcpLaunchCommand.value = mcpLaunchCommand(status);
   els.mcpAgentInstruction.value = mcpAgentInstruction(status);
 }
 
@@ -10354,7 +10366,7 @@ async function refreshMcpStatus() {
   if (!els.mcpStatusBadge) return;
   els.mcpStatusBadge.dataset.state = "checking";
   els.mcpStatusBadge.textContent = mcpCopy("检查中", "Checking");
-  els.mcpStatusText.textContent = mcpCopy("正在检查 Codex 与 MCP 文件…", "Checking Codex and MCP files…");
+  els.mcpStatusText.textContent = mcpCopy("正在检查 MCP 服务文件与客户端连接…", "Checking MCP service files and client connections…");
   if (!desktop?.getMcpStatus) return renderMcpStatus({});
   try {
     renderMcpStatus(await desktop.getMcpStatus());
@@ -10367,19 +10379,19 @@ async function refreshMcpStatus() {
 async function runMcpAction(kind) {
   const installing = kind === "install";
   const confirmation = installing
-    ? mcpCopy("将把 CanvasFlow MCP 写入 Codex 配置；已有同名注册会被替换。继续吗？", "CanvasFlow MCP will be written to Codex settings and an existing registration with the same name will be replaced. Continue?")
+    ? mcpCopy("将把 CanvasFlow MCP 连接到 Codex；已有同名 Codex 注册会被替换。继续吗？", "Connect CanvasFlow MCP to Codex? An existing Codex registration with the same name will be replaced.")
     : mcpCopy("从 Codex 中移除 CanvasFlow MCP？这不会删除 CanvasFlow、项目、密钥或图片。", "Remove CanvasFlow MCP from Codex? This will not delete CanvasFlow, projects, keys, or images.");
   if (!window.confirm(confirmation)) return;
-  const buttons = [els.mcpInstallBtn, els.mcpUninstallBtn, els.mcpOpenFolderBtn, els.mcpRefreshBtn].filter(Boolean);
+  const buttons = [els.mcpInstallBtn, els.mcpUninstallBtn, els.mcpOpenFolderBtn, els.mcpRefreshBtn, els.mcpCopyLaunchCommandBtn].filter(Boolean);
   buttons.forEach(button => { button.disabled = true; });
   els.mcpStatusBadge.dataset.state = "checking";
-  els.mcpStatusBadge.textContent = installing ? mcpCopy("安装中", "Installing") : mcpCopy("卸载中", "Removing");
+  els.mcpStatusBadge.textContent = installing ? mcpCopy("连接中", "Connecting") : mcpCopy("移除中", "Removing");
   try {
     const result = installing ? await desktop.installMcp() : await desktop.uninstallMcp();
     renderMcpStatus(result);
-    toast(installing ? mcpCopy("CanvasFlow MCP 已安装，请重启 Codex 或新建任务", "CanvasFlow MCP installed. Restart Codex or start a new task") : mcpCopy("CanvasFlow MCP 已卸载", "CanvasFlow MCP removed"));
+    toast(installing ? mcpCopy("CanvasFlow MCP 已连接到 Codex，请重启 Codex 或新建任务", "CanvasFlow MCP connected to Codex. Restart Codex or start a new task") : mcpCopy("CanvasFlow MCP 已从 Codex 移除", "CanvasFlow MCP removed from Codex"));
   } catch (error) {
-    toast(`${installing ? mcpCopy("安装失败", "Install failed") : mcpCopy("卸载失败", "Removal failed")}: ${error.message}`);
+    toast(`${installing ? mcpCopy("连接失败", "Connection failed") : mcpCopy("移除失败", "Removal failed")}: ${error.message}`);
     await refreshMcpStatus();
   } finally {
     if (!lastMcpStatus) buttons.forEach(button => { button.disabled = false; });
@@ -10621,10 +10633,18 @@ if (els.mcpOpenFolderBtn) els.mcpOpenFolderBtn.onclick = async () => {
   try { await desktop.openOutputFolder(directory); }
   catch (error) { toast(`${mcpCopy("打开文件夹失败", "Could not open folder")}: ${error.message}`); }
 };
+if (els.mcpCopyLaunchCommandBtn) els.mcpCopyLaunchCommandBtn.onclick = async () => {
+  try {
+    await copyTextValue(els.mcpLaunchCommand.value || mcpLaunchCommand());
+    toast(mcpCopy("MCP 启动命令已复制", "MCP launch command copied"));
+  } catch (error) {
+    toast(`${mcpCopy("复制失败", "Copy failed")}: ${error.message}`);
+  }
+};
 if (els.mcpCopyAgentInstructionBtn) els.mcpCopyAgentInstructionBtn.onclick = async () => {
   try {
     await copyTextValue(els.mcpAgentInstruction.value || mcpAgentInstruction());
-    toast(mcpCopy("Agent 安装指令已复制", "Agent instructions copied"));
+    toast(mcpCopy("Agent 连接指令已复制", "Agent connection instructions copied"));
   } catch (error) {
     toast(`${mcpCopy("复制失败", "Copy failed")}: ${error.message}`);
   }
