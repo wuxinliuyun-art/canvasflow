@@ -323,10 +323,6 @@ Object.assign(UI_EN, {
   "传输方式为 stdio。把下面的启动命令填入当前 AI 工具的 MCP 服务器配置。": "Transport is stdio. Add the launch command below to the MCP server settings of your current AI tool.",
   "CanvasFlow MCP stdio 启动命令": "CanvasFlow MCP stdio launch command",
   "复制启动命令": "Copy Launch Command",
-  "发给 AI Agent 的连接指令": "Connection Instructions for an AI Agent",
-  "复制后发给能操作本机文件和命令行的 AI Agent。指令会要求它识别当前 AI 工具，不默认使用 Codex。": "Copy this to an AI agent that can access local files and the command line. It must identify the current AI tool instead of assuming Codex.",
-  "复制 Agent 连接指令": "Copy Agent Connection Instructions",
-  "发给 AI Agent 的 CanvasFlow MCP 连接指令": "CanvasFlow MCP connection instructions for an AI agent",
   "简体中文": "简体中文",
   "文字节点重叠时合并文案": "Merge text when text nodes overlap",
   "Photoshop 互传": "Photoshop Integration",
@@ -850,8 +846,6 @@ const els = {
   mcpRefreshBtn: $("mcpRefreshBtn"),
   mcpLaunchCommand: $("mcpLaunchCommand"),
   mcpCopyLaunchCommandBtn: $("mcpCopyLaunchCommandBtn"),
-  mcpAgentInstruction: $("mcpAgentInstruction"),
-  mcpCopyAgentInstructionBtn: $("mcpCopyAgentInstructionBtn"),
 
   loadJson: $("loadJsonInput"),
   projectNameBtn: $("projectNameBtn"),
@@ -10311,23 +10305,6 @@ function mcpLaunchCommand(status = lastMcpStatus || {}) {
     : `"${executable}"`;
 }
 
-function mcpAgentInstruction(status = lastMcpStatus || {}) {
-  const directory = status.directory || "CanvasFlow安装目录\\app\\mcp";
-  const launchCommand = mcpLaunchCommand(status);
-  return [
-    "请把 CanvasFlow MCP 连接到我当前使用的 AI 工具，不要默认客户端是 Codex。",
-    `1. 先确认 MCP 目录存在：${directory}`,
-    "2. 先识别我当前使用的 AI 工具，并查明该工具官方支持的 MCP 配置方式；不要猜测配置文件名或字段。",
-    "3. CanvasFlow MCP 使用 stdio 传输，启动命令如下：",
-    launchCommand,
-    "4. 如果当前工具已有名为 canvasflow 的 MCP 配置，先向我确认是否替换，不要直接覆盖。",
-    `5. 如果当前工具是 Codex，可执行 codex mcp add canvasflow -- ${launchCommand} 并用 codex mcp get canvasflow 验证；其他工具使用其官方支持的等价配置。`,
-    "6. 配置后只做连接或工具列表检查，并告诉我是否需要重启当前 AI 工具。",
-    "7. 不要读取、显示或复制 CanvasFlow 的 API Key；不要发起图片生成，不要产生费用。",
-    "8. 如果文件、客户端或运行依赖缺失，请停止并报告准确错误，不要猜测路径。",
-  ].join("\n");
-}
-
 function renderMcpStatus(status) {
   if (!els.mcpStatusBadge) return;
   lastMcpStatus = status || {};
@@ -10359,7 +10336,6 @@ function renderMcpStatus(status) {
   els.mcpUninstallBtn.disabled = !desktop?.uninstallMcp || !status?.registered;
   els.mcpOpenFolderBtn.disabled = !desktop?.openOutputFolder || !directory || !status?.filesAvailable;
   els.mcpLaunchCommand.value = mcpLaunchCommand(status);
-  els.mcpAgentInstruction.value = mcpAgentInstruction(status);
 }
 
 async function refreshMcpStatus() {
@@ -10637,14 +10613,6 @@ if (els.mcpCopyLaunchCommandBtn) els.mcpCopyLaunchCommandBtn.onclick = async () 
   try {
     await copyTextValue(els.mcpLaunchCommand.value || mcpLaunchCommand());
     toast(mcpCopy("MCP 启动命令已复制", "MCP launch command copied"));
-  } catch (error) {
-    toast(`${mcpCopy("复制失败", "Copy failed")}: ${error.message}`);
-  }
-};
-if (els.mcpCopyAgentInstructionBtn) els.mcpCopyAgentInstructionBtn.onclick = async () => {
-  try {
-    await copyTextValue(els.mcpAgentInstruction.value || mcpAgentInstruction());
-    toast(mcpCopy("Agent 连接指令已复制", "Agent connection instructions copied"));
   } catch (error) {
     toast(`${mcpCopy("复制失败", "Copy failed")}: ${error.message}`);
   }
