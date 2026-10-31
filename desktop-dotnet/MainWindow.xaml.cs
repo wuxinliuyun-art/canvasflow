@@ -49,6 +49,8 @@ public partial class MainWindow : Window
         public long Size { get; set; }
     }
 
+    private sealed record CommandResult(int ExitCode, string Output);
+
     private const string DesktopBridgeScript = """
       (() => {
         if (window.canvasflowDesktop || !window.chrome?.webview) return;
@@ -106,6 +108,9 @@ public partial class MainWindow : Window
           savePsPath: path => invoke("desktop:save-ps-path", { path: String(path || "") }),
           choosePsExe: () => invoke("desktop:choose-ps-exe", {}, 60000),
           launchInPs: (filePath, fileName, assetId) => invoke("desktop:open-in-ps", { filePath: String(filePath || ""), fileName: String(fileName || ""), assetId: String(assetId || "") }, 60000),
+          getMcpStatus: () => invoke("desktop:mcp-status", {}, 30000),
+          installMcp: () => invoke("desktop:mcp-install", {}, 120000),
+          uninstallMcp: () => invoke("desktop:mcp-uninstall", {}, 60000),
         };
       })();
       """;
@@ -358,6 +363,21 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, OpenOutputFolder(root)); }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-status")
+                    {
+                        try { PostRpcResult(root, await GetMcpStatusAsync()); }
+                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-install")
+                    {
+                        try { PostRpcResult(root, await InstallMcpAsync()); }
+                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-uninstall")
+                    {
+                        try { PostRpcResult(root, await UninstallMcpAsync()); }
+                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
                     }
                     else if (type.GetString() == "desktop:copy-image")
                     {
@@ -850,6 +870,152 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
         Log($"[生成文件夹] 已请求打开：{fullPath}", false);
         return new { opened = true, path = fullPath };
+    }
+
+    private string ResolveMcpDirectory()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(_contentRoot ?? "", "mcp"),
+            Path.Combine(_root ?? "", "app", "mcp"),
+            Path.Combine(_root ?? "", "integrations", "canvasflow-mcp"),
+            Path.Combine(_contentRoot ?? "", "integrations", "canvasflow-mcp"),
+        };
+        foreach (var candidate in candidates.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (File.Exists(Path.Combine(candidate, "CanvasFlow.Mcp.exe")) ||
+                File.Exists(Path.Combine(candidate, "CanvasFlow.Mcp.csproj")) ||
+                File.Exists(Path.Combine(candidate, "install-mcp.cmd"))) return Path.GetFullPath(candidate);
+        }
+        return Path.GetFullPath(candidates[0]);
+    }
+
+    private static string? FindCommandOnPath(string command)
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var extensions = new[] { ".exe", ".cmd", ".bat", "" };
+        foreach (var rawDirectory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var directory = rawDirectory.Trim().Trim('"');
+            if (directory.Length == 0) continue;
+            foreach (var extension in extensions)
+            {
+                try
+                {
+                    var candidate = Path.Combine(directory, command + extension);
+                    if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+                }
+                catch { }
+            }
+        }
+        return null;
+    }
+
+    private static string QuoteForCmd(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    private async Task<CommandResult> RunCommandAsync(string executable, params string[] arguments)
+    {
+        var info = new ProcessStartInfo
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        var extension = Path.GetExtension(executable).ToLowerInvariant();
+        if (extension is ".cmd" or ".bat")
+        {
+            info.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+            info.ArgumentList.Add("/d");
+            info.ArgumentList.Add("/s");
+            info.ArgumentList.Add("/c");
+            info.ArgumentList.Add(QuoteForCmd(executable) + " " + string.Join(" ", arguments.Select(QuoteForCmd)));
+        }
+        else
+        {
+            info.FileName = executable;
+            foreach (var argument in arguments) info.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(info) ?? throw new InvalidOperationException($"无法启动命令：{Path.GetFileName(executable)}");
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(_shutdown.Token);
+        var output = string.Join(Environment.NewLine, new[] { await standardOutput, await standardError }.Where(value => !string.IsNullOrWhiteSpace(value))).Trim();
+        return new CommandResult(process.ExitCode, output);
+    }
+
+    private async Task<object> GetMcpStatusAsync()
+    {
+        var directory = ResolveMcpDirectory();
+        var executable = Path.Combine(directory, "CanvasFlow.Mcp.exe");
+        var project = Path.Combine(directory, "CanvasFlow.Mcp.csproj");
+        var installScript = Path.Combine(directory, "install-mcp.cmd");
+        var codex = FindCommandOnPath("codex");
+        var filesAvailable = File.Exists(executable) || File.Exists(project);
+        var registered = false;
+        var detail = "";
+        if (codex is not null)
+        {
+            var result = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+            registered = result.ExitCode == 0;
+            detail = result.Output;
+        }
+        return new
+        {
+            desktopSupported = true,
+            codexAvailable = codex is not null,
+            filesAvailable,
+            registered,
+            directory,
+            installScript,
+            mode = File.Exists(executable) ? "exe" : File.Exists(project) ? "source" : "missing",
+            detail,
+        };
+    }
+
+    private async Task<object> InstallMcpAsync()
+    {
+        var codex = FindCommandOnPath("codex") ?? throw new FileNotFoundException("没有在 PATH 中找到 Codex CLI。请先安装或更新 Codex，再重试。");
+        var directory = ResolveMcpDirectory();
+        var executable = Path.Combine(directory, "CanvasFlow.Mcp.exe");
+        var project = Path.Combine(directory, "CanvasFlow.Mcp.csproj");
+        var existing = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+        if (existing.ExitCode == 0)
+        {
+            var remove = await RunCommandAsync(codex, "mcp", "remove", "canvasflow");
+            if (remove.ExitCode != 0) throw new InvalidOperationException("无法替换现有 CanvasFlow MCP：" + remove.Output);
+        }
+
+        CommandResult add;
+        if (File.Exists(executable))
+        {
+            add = await RunCommandAsync(codex, "mcp", "add", "canvasflow", "--", executable);
+        }
+        else if (File.Exists(project))
+        {
+            var dotnet = FindCommandOnPath("dotnet") ?? throw new FileNotFoundException("源码模式需要 .NET SDK，但没有在 PATH 中找到 dotnet。");
+            add = await RunCommandAsync(codex, "mcp", "add", "canvasflow", "--", dotnet, "run", "--project", project);
+        }
+        else
+        {
+            throw new FileNotFoundException("安装包中没有找到 CanvasFlow MCP 文件，请安装最新完整版本。", directory);
+        }
+        if (add.ExitCode != 0) throw new InvalidOperationException("CanvasFlow MCP 安装失败：" + add.Output);
+        Log($"[CanvasFlow MCP] 已由用户在设置中安装：{directory}", false);
+        return await GetMcpStatusAsync();
+    }
+
+    private async Task<object> UninstallMcpAsync()
+    {
+        var codex = FindCommandOnPath("codex") ?? throw new FileNotFoundException("没有在 PATH 中找到 Codex CLI。");
+        var current = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+        if (current.ExitCode == 0)
+        {
+            var remove = await RunCommandAsync(codex, "mcp", "remove", "canvasflow");
+            if (remove.ExitCode != 0) throw new InvalidOperationException("CanvasFlow MCP 卸载失败：" + remove.Output);
+            Log("[CanvasFlow MCP] 已由用户在设置中卸载。", false);
+        }
+        return await GetMcpStatusAsync();
     }
 
     // ---- Photoshop 互传：图片节点右键“在 PS 中编辑” + PS 面板回传注入画布 ----

@@ -308,6 +308,21 @@ const UI_EN = {
 
 Object.assign(UI_EN, {
   "外观": "Appearance",
+  "Codex 连接": "Codex Connection",
+  "让 Codex 在你确认后调用 CanvasFlow 绘图；不会自动提交可能计费的任务。": "Let Codex call CanvasFlow after your confirmation. Potentially billed generation is never submitted automatically.",
+  "CanvasFlow MCP": "CanvasFlow MCP",
+  "安装后，Codex 可以检查绘图配置、提交任务、查询进度并把结果保存到 CanvasFlow。": "After installation, Codex can inspect image settings, submit tasks, check progress, and save results to CanvasFlow.",
+  "检查中": "Checking",
+  "正在检查 Codex 与 MCP 文件…": "Checking Codex and MCP files…",
+  "安装 / 更新 MCP": "Install / Update MCP",
+  "卸载 MCP": "Remove MCP",
+  "打开所在文件夹": "Open Folder",
+  "刷新状态": "Refresh Status",
+  "安装或卸载后，请重启 Codex 或新建任务。操作不会删除画布项目、API Key 或生成图片。": "Restart Codex or start a new task after installing or removing MCP. This does not delete canvas projects, API keys, or generated images.",
+  "发给 AI Agent 的安装指令": "Instructions for an AI Agent",
+  "复制后发给能操作本机文件和命令行的 AI Agent。指令要求先检查文件、确认覆盖并验证结果。": "Copy this to an AI agent that can access local files and the command line. It requires file checks, replacement confirmation, and result verification.",
+  "复制 Agent 安装指令": "Copy Agent Instructions",
+  "发给 AI Agent 的 CanvasFlow MCP 安装指令": "CanvasFlow MCP installation instructions for an AI agent",
   "简体中文": "简体中文",
   "文字节点重叠时合并文案": "Merge text when text nodes overlap",
   "Photoshop 互传": "Photoshop Integration",
@@ -822,6 +837,15 @@ const els = {
   chooseProjectFolderBtn: $("chooseProjectFolderBtn"),
   openProjectFolderBtn: $("openProjectFolderBtn"),
   copyProjectPathBtn: $("copyProjectPathBtn"),
+  mcpStatusBadge: $("mcpStatusBadge"),
+  mcpStatusText: $("mcpStatusText"),
+  mcpLocation: $("mcpLocation"),
+  mcpInstallBtn: $("mcpInstallBtn"),
+  mcpUninstallBtn: $("mcpUninstallBtn"),
+  mcpOpenFolderBtn: $("mcpOpenFolderBtn"),
+  mcpRefreshBtn: $("mcpRefreshBtn"),
+  mcpAgentInstruction: $("mcpAgentInstruction"),
+  mcpCopyAgentInstructionBtn: $("mcpCopyAgentInstructionBtn"),
 
   loadJson: $("loadJsonInput"),
   projectNameBtn: $("projectNameBtn"),
@@ -10263,6 +10287,103 @@ function switchSettingsTab(name) {
   }
   if (name === "extensions") renderExtensionsPage();
   if (name === "appearance") syncUiColorInputs();
+  if (name === "codex") refreshMcpStatus();
+}
+
+let lastMcpStatus = null;
+
+function mcpCopy(zh, en) {
+  return uiLanguage === "en" ? en : zh;
+}
+
+function mcpAgentInstruction(status = lastMcpStatus || {}) {
+  const directory = status.directory || "CanvasFlow安装目录\\app\\mcp";
+  const executable = `${directory}\\CanvasFlow.Mcp.exe`;
+  const project = `${directory}\\CanvasFlow.Mcp.csproj`;
+  const registerCommand = status.mode === "source"
+    ? `codex mcp add canvasflow -- dotnet run --project "${project}"`
+    : `codex mcp add canvasflow -- "${executable}"`;
+  return [
+    "请帮我安装 CanvasFlow MCP，并严格遵守以下要求：",
+    `1. 先确认 MCP 目录存在：${directory}`,
+    "2. 运行 codex mcp get canvasflow 检查是否已有同名注册；如果已有，先向我确认是否替换，不要直接覆盖。",
+    `3. 如果已有注册并且我确认替换，先执行 codex mcp remove canvasflow；然后执行：${registerCommand}`,
+    "4. 执行 codex mcp get canvasflow 验证已启用，并告诉我是否需要重启 Codex 或新建任务。",
+    "5. 不要读取、显示或复制 CanvasFlow 的 API Key。",
+    "6. 本次只安装和验证 MCP；不要发起图片生成，不要产生任何费用。",
+    "7. 如果文件、Codex CLI 或 .NET 依赖缺失，请停止并把准确错误告诉我，不要猜测路径。",
+  ].join("\n");
+}
+
+function renderMcpStatus(status) {
+  if (!els.mcpStatusBadge) return;
+  lastMcpStatus = status || {};
+  let stateName = "missing";
+  let badge = mcpCopy("未安装", "Not installed");
+  let description = mcpCopy("可以安装 CanvasFlow MCP。", "CanvasFlow MCP is ready to install.");
+  if (!desktop?.getMcpStatus) {
+    stateName = "unavailable";
+    badge = mcpCopy("仅桌面版", "Desktop only");
+    description = mcpCopy("浏览器模式不能修改 Codex 配置；请使用 Windows 桌面版，或复制下方指令交给 AI Agent。", "Browser mode cannot modify Codex settings. Use the Windows desktop app or copy the agent instructions below.");
+  } else if (!status?.codexAvailable) {
+    stateName = "unavailable";
+    badge = mcpCopy("缺少 Codex", "Codex missing");
+    description = mcpCopy("没有在 PATH 中找到 Codex CLI。请先安装或更新 Codex。", "Codex CLI was not found in PATH. Install or update Codex first.");
+  } else if (!status?.filesAvailable) {
+    stateName = "unavailable";
+    badge = mcpCopy("缺少文件", "Files missing");
+    description = mcpCopy("当前 CanvasFlow 安装包不含 MCP 文件，请安装最新完整版本。", "This CanvasFlow build does not include the MCP files. Install the latest full version.");
+  } else if (status?.registered) {
+    stateName = "ready";
+    badge = mcpCopy("已安装", "Installed");
+    description = mcpCopy("CanvasFlow MCP 已在 Codex 中启用。", "CanvasFlow MCP is enabled in Codex.");
+  }
+  els.mcpStatusBadge.dataset.state = stateName;
+  els.mcpStatusBadge.textContent = badge;
+  els.mcpStatusText.textContent = description;
+  const directory = status?.directory || "";
+  els.mcpLocation.hidden = !directory;
+  els.mcpLocation.textContent = directory ? `${mcpCopy("MCP 位置", "MCP location")}: ${directory}` : "";
+  els.mcpInstallBtn.disabled = !desktop?.installMcp || !status?.codexAvailable || !status?.filesAvailable;
+  els.mcpUninstallBtn.disabled = !desktop?.uninstallMcp || !status?.registered;
+  els.mcpOpenFolderBtn.disabled = !desktop?.openOutputFolder || !directory || !status?.filesAvailable;
+  els.mcpAgentInstruction.value = mcpAgentInstruction(status);
+}
+
+async function refreshMcpStatus() {
+  if (!els.mcpStatusBadge) return;
+  els.mcpStatusBadge.dataset.state = "checking";
+  els.mcpStatusBadge.textContent = mcpCopy("检查中", "Checking");
+  els.mcpStatusText.textContent = mcpCopy("正在检查 Codex 与 MCP 文件…", "Checking Codex and MCP files…");
+  if (!desktop?.getMcpStatus) return renderMcpStatus({});
+  try {
+    renderMcpStatus(await desktop.getMcpStatus());
+  } catch (error) {
+    renderMcpStatus({ codexAvailable: false, filesAvailable: false });
+    els.mcpStatusText.textContent = `${mcpCopy("检查失败", "Check failed")}: ${error.message}`;
+  }
+}
+
+async function runMcpAction(kind) {
+  const installing = kind === "install";
+  const confirmation = installing
+    ? mcpCopy("将把 CanvasFlow MCP 写入 Codex 配置；已有同名注册会被替换。继续吗？", "CanvasFlow MCP will be written to Codex settings and an existing registration with the same name will be replaced. Continue?")
+    : mcpCopy("从 Codex 中移除 CanvasFlow MCP？这不会删除 CanvasFlow、项目、密钥或图片。", "Remove CanvasFlow MCP from Codex? This will not delete CanvasFlow, projects, keys, or images.");
+  if (!window.confirm(confirmation)) return;
+  const buttons = [els.mcpInstallBtn, els.mcpUninstallBtn, els.mcpOpenFolderBtn, els.mcpRefreshBtn].filter(Boolean);
+  buttons.forEach(button => { button.disabled = true; });
+  els.mcpStatusBadge.dataset.state = "checking";
+  els.mcpStatusBadge.textContent = installing ? mcpCopy("安装中", "Installing") : mcpCopy("卸载中", "Removing");
+  try {
+    const result = installing ? await desktop.installMcp() : await desktop.uninstallMcp();
+    renderMcpStatus(result);
+    toast(installing ? mcpCopy("CanvasFlow MCP 已安装，请重启 Codex 或新建任务", "CanvasFlow MCP installed. Restart Codex or start a new task") : mcpCopy("CanvasFlow MCP 已卸载", "CanvasFlow MCP removed"));
+  } catch (error) {
+    toast(`${installing ? mcpCopy("安装失败", "Install failed") : mcpCopy("卸载失败", "Removal failed")}: ${error.message}`);
+    await refreshMcpStatus();
+  } finally {
+    if (!lastMcpStatus) buttons.forEach(button => { button.disabled = false; });
+  }
 }
 
 const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, layoutFrame: 0 };
@@ -10491,6 +10612,23 @@ for (var t = 0; t < tabBtns.length; t++) {
     switchSettingsTab(this.getAttribute("data-tab"));
   };
 }
+if (els.mcpRefreshBtn) els.mcpRefreshBtn.onclick = refreshMcpStatus;
+if (els.mcpInstallBtn) els.mcpInstallBtn.onclick = () => runMcpAction("install");
+if (els.mcpUninstallBtn) els.mcpUninstallBtn.onclick = () => runMcpAction("uninstall");
+if (els.mcpOpenFolderBtn) els.mcpOpenFolderBtn.onclick = async () => {
+  const directory = lastMcpStatus?.directory || "";
+  if (!directory || !desktop?.openOutputFolder) return;
+  try { await desktop.openOutputFolder(directory); }
+  catch (error) { toast(`${mcpCopy("打开文件夹失败", "Could not open folder")}: ${error.message}`); }
+};
+if (els.mcpCopyAgentInstructionBtn) els.mcpCopyAgentInstructionBtn.onclick = async () => {
+  try {
+    await copyTextValue(els.mcpAgentInstruction.value || mcpAgentInstruction());
+    toast(mcpCopy("Agent 安装指令已复制", "Agent instructions copied"));
+  } catch (error) {
+    toast(`${mcpCopy("复制失败", "Copy failed")}: ${error.message}`);
+  }
+};
 var assetTabBtns = els.settings.querySelectorAll(".asset-type-btn");
 for (var at = 0; at < assetTabBtns.length; at++) {
   assetTabBtns[at].onclick = function() {
@@ -10979,6 +11117,7 @@ function changeInterfaceLanguage(language) {
   renderTaskQueue();
   syncSettingsPanel();
   renderCheckedUpdateStatus();
+  if (lastMcpStatus) renderMcpStatus(lastMcpStatus);
   if (onboardingState.active) showOnboardingStep(onboardingState.step);
 }
 document.querySelectorAll("[data-ui-language]").forEach(button => {
