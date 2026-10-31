@@ -66,6 +66,8 @@ Name: "{app}\app\export"; Permissions: users-modify; Flags: uninsneveruninstall
 [Icons]
 Name: "{autodesktop}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
 Name: "{group}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
+Name: "{group}\安装 Codex MCP"; Filename: "{app}\app\mcp\install-mcp.cmd"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}\app\mcp"
+Name: "{group}\卸载 Codex MCP"; Filename: "{app}\app\mcp\uninstall-mcp.cmd"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}\app\mcp"
 
 [Run]
 Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"; Description: "启动 CanvasFlow"; Flags: nowait postinstall skipifsilent

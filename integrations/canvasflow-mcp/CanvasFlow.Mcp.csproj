@@ -14,4 +14,9 @@
     <Compile Include="..\..\desktop-dotnet\ExportFileStore.cs" Link="CanvasFlow\ExportFileStore.cs" />
     <Compile Include="..\..\desktop-dotnet\BrowserImageTransfer.cs" Link="CanvasFlow\BrowserImageTransfer.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="install-mcp.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="uninstall-mcp.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

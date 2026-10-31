@@ -230,15 +230,49 @@ internal static class Program
     private static string ResolveRoot()
     {
         var configured = Environment.GetEnvironmentVariable("CANVASFLOW_ROOT")?.Trim();
-        if (string.IsNullOrWhiteSpace(configured)) throw new InvalidOperationException("CANVASFLOW_ROOT is not configured");
-        var root = Path.GetFullPath(configured);
-        if (!File.Exists(Path.Combine(root, "package.json")) || !Directory.Exists(Path.Combine(root, "desktop-dotnet"))) throw new DirectoryNotFoundException($"CanvasFlow root is invalid: {root}");
-        return root;
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            var configuredRoot = Path.GetFullPath(configured);
+            if (IsCanvasFlowRoot(configuredRoot)) return configuredRoot;
+            throw new DirectoryNotFoundException($"CANVASFLOW_ROOT is invalid: {configuredRoot}");
+        }
+
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (IsCanvasFlowRoot(directory.FullName)) return directory.FullName;
+        }
+
+        var commonRoots = new[]
+        {
+            @"D:\CanvasFlow",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "CanvasFlow")
+        };
+        foreach (var candidate in commonRoots)
+        {
+            if (IsCanvasFlowRoot(candidate)) return Path.GetFullPath(candidate);
+        }
+
+        throw new DirectoryNotFoundException("CanvasFlow was not found. Run the MCP from CanvasFlow's app\\mcp folder, or set CANVASFLOW_ROOT to the CanvasFlow install folder.");
     }
+
+    private static bool IsCanvasFlowRoot(string path) =>
+        IsSourceRoot(path) || IsInstalledRoot(path);
+
+    private static bool IsSourceRoot(string path) =>
+        File.Exists(Path.Combine(path, "package.json")) &&
+        Directory.Exists(Path.Combine(path, "desktop-dotnet"));
+
+    private static bool IsInstalledRoot(string path) =>
+        File.Exists(Path.Combine(path, "app", "package.json")) &&
+        File.Exists(Path.Combine(path, "app", "CanvasFlow.exe"));
+
+    private static string PackageJsonPath() => IsSourceRoot(_root)
+        ? Path.Combine(_root, "package.json")
+        : Path.Combine(_root, "app", "package.json");
 
     private static string ReadVersion()
     {
-        using var package = JsonDocument.Parse(File.ReadAllText(Path.Combine(_root, "package.json"), Encoding.UTF8));
+        using var package = JsonDocument.Parse(File.ReadAllText(PackageJsonPath(), Encoding.UTF8));
         return package.RootElement.GetProperty("version").GetString() ?? "0.0.0";
     }
 

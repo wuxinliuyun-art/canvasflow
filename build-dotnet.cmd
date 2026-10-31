@@ -3,7 +3,9 @@ setlocal
 
 set "PROJECT_ROOT=%~dp0"
 set "DESKTOP_PROJECT=%PROJECT_ROOT%desktop-dotnet\CanvasFlow.Desktop.csproj"
+set "MCP_PROJECT=%PROJECT_ROOT%integrations\canvasflow-mcp\CanvasFlow.Mcp.csproj"
 set "PUBLISH_DIR=%PROJECT_ROOT%desktop-dotnet\bin\Release\net10.0-windows\win-x64\publish"
+set "MCP_PUBLISH_DIR=%PUBLISH_DIR%\mcp"
 set "SETUP_FILE=%PROJECT_ROOT%dist-dotnet\CanvasFlow-Setup.exe"
 set "ISCC="
 
@@ -12,6 +14,11 @@ if errorlevel 1 exit /b 1
 
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 dotnet publish "%DESKTOP_PROJECT%" --configuration Release --runtime win-x64 --self-contained true --no-restore --nologo
+if errorlevel 1 exit /b 1
+
+dotnet restore "%MCP_PROJECT%" --runtime win-x64 --nologo
+if errorlevel 1 exit /b 1
+dotnet publish "%MCP_PROJECT%" --configuration Release --runtime win-x64 --self-contained true --output "%MCP_PUBLISH_DIR%" --no-restore --nologo
 if errorlevel 1 exit /b 1
 
 for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"

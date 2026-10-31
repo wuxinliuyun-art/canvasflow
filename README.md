@@ -104,6 +104,19 @@ macOS 下载包以各 Release 实际提供的资产为准；最新 Release 页�
 
 ![画布基本操作：项目面板、设置、右键创建节点和底部快捷工具](docs/images/canvas-overview.png)
 
+### 5. 让 Codex 调用 CanvasFlow（可选）
+
+Windows 安装包会把 CanvasFlow MCP 一起放入安装目录，但不会静默修改 Codex 配置。需要时按下面步骤手动启用：
+
+1. 打开 Windows 开始菜单中的“CanvasFlow”文件夹，点击“安装 Codex MCP”。如果该入口不可用，也可以到 CanvasFlow 安装目录的 `app\mcp` 双击 `install-mcp.cmd`。
+2. 看到成功提示后重启 Codex 或新建任务。
+3. 对 Codex 说“检查 CanvasFlow 是否可以绘图”，确认连接状态。
+4. 之后可以说“用 CanvasFlow 生成一张 16:9、2K 的冰霜剑气特效素材”。真实生成可能产生费用，仍需明确确认后才会提交。
+
+默认安装目录通常是 `D:\CanvasFlow` 或 `%LOCALAPPDATA%\Programs\CanvasFlow`；如果安装到了其他磁盘，直接从实际安装目录的 `app\mcp` 运行脚本即可，脚本会自动使用自己的位置，不需要填写磁盘路径。源码用户可运行 `integrations\canvasflow-mcp\install-mcp.cmd`。
+
+生成结果保存在 `CanvasFlow安装目录\export\ai_generated\Codex特效素材`。不再需要时，点击开始菜单中的“卸载 Codex MCP”，或双击同目录的 `uninstall-mcp.cmd`；它只移除 MCP 注册，不删除 CanvasFlow、项目、密钥或图片。完整说明见 [CanvasFlow MCP 使用说明](integrations/canvasflow-mcp/README.md)。
+
 ## 功能实览
 
 工作流示例来自 [CanvasFlow 绘图工具使用说明](https://my.feishu.cn/wiki/HHV9wswCmiCPxDk4ruKcKWuCnVe)；图片编辑配图为 v2.7.3 正式界面的实拍。部分早期示例的界面和模型名称可能与最新发布版略有差异。
