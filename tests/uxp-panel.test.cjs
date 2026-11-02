@@ -3,6 +3,42 @@ const assert = require("node:assert/strict");
 const { localBase, parseBridge, createTransport } = require("../uxp-panel/CanvasFlowPanel/transport");
 const { base64, createExporter } = require("../uxp-panel/CanvasFlowPanel/photoshop");
 
+test("UXP network permissions cover every discovery port and stay on loopback", () => {
+  const { domains } = require("../uxp-panel/CanvasFlowPanel/manifest.json").requiredPermissions.network;
+  for (const domain of domains) assert.ok(["localhost", "127.0.0.1"].includes(new URL(domain).hostname));
+  for (let port = 5173; port <= 5192; port++) {
+    assert.ok(domains.includes(`http://localhost:${port}`));
+  }
+});
+
+test("panel initializes and reconnects in UXP without browser matchMedia", async () => {
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, { addEventListener() {} });
+    return elements.get(id);
+  };
+  let panels;
+  let connections = 0;
+  require("node:vm").runInNewContext(require("node:fs").readFileSync(require.resolve("../uxp-panel/CanvasFlowPanel/main.js"), "utf8"), {
+    window: {},
+    document: { getElementById: element },
+    localStorage: { getItem: () => null },
+    require: name => ({
+      photoshop: { app: { activeDocument: { name: "test.psd", width: 100, height: 80 } } },
+      uxp: { storage: {}, entrypoints: { setup: value => { panels = value.panels; } } },
+      "./transport.js": { createTransport: () => ({ connect: async () => { connections++; return { base: "http://127.0.0.1:5173" }; } }) },
+      "./photoshop.js": { createExporter: () => () => {} },
+      "./manifest.json": { version: "1.0.0" },
+    })[name],
+  });
+  panels.canvasflowTransfer.show();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(element("docInfo").textContent, "test.psd · 100 × 80");
+  assert.equal(element("connection").textContent, "已连接：http://127.0.0.1:5173");
+  panels.canvasflowTransfer.show();
+  assert.equal(connections, 1);
+});
+
 function transportFixture(values = {}, request = async () => ({ app: "CanvasFlow" })) {
   const state = { source: "desktop", port: 12345, token: "a".repeat(32) };
   const store = { get: key => values[key] || "", set: (key, value) => { values[key] = value; } };
@@ -17,12 +53,13 @@ function transportFixture(values = {}, request = async () => ({ app: "CanvasFlow
 
 test("addresses and discovery metadata cannot send bridge credentials to remote hosts", () => {
   assert.equal(localBase(" http://LOCALHOST:5173/ "), "http://localhost:5173");
+  assert.equal(localBase("http://127.0.0.1:5173"), "http://localhost:5173");
   for (const url of ["https://example.com", "http://localhost.evil:5173", "http://localhost:0", "http://127.0.0.1:65536", "http://user@localhost:5173", "http://localhost:5173/path"]) {
     assert.throws(() => localBase(url));
   }
   assert.throws(() => parseBridge('{"port":123,"source":"desktop"}'), /令牌/);
   assert.throws(() => parseBridge('{"port":123.5,"source":"server"}'));
-  assert.equal(parseBridge('\uFEFF{"port":5173,"source":"server"}').base, "http://127.0.0.1:5173");
+  assert.equal(parseBridge('\uFEFF{"port":5173,"source":"server"}').base, "http://localhost:5173");
 });
 
 test("bridge port and token are reread after desktop restarts", async () => {
@@ -74,9 +111,9 @@ test("automatic server discovery includes port 5192 and rejects unrelated servic
   const calls = [];
   const fixture = transportFixture({}, async url => {
     calls.push(url);
-    return url.startsWith("http://127.0.0.1:5192/") ? { app: "CanvasFlow" } : { data: [] };
+    return url.startsWith("http://localhost:5192/") ? { app: "CanvasFlow" } : { data: [] };
   });
-  assert.equal((await fixture.transport.connect()).base, "http://127.0.0.1:5192");
+  assert.equal((await fixture.transport.connect()).base, "http://localhost:5192");
   assert.equal(calls.length, 20);
   assert.ok(calls.every(url => url.endsWith("/api/ps/status")));
 });

@@ -16,9 +16,6 @@ let initialized = false;
 let probeSequence = 0;
 const $ = id => document.getElementById(id);
 
-function theme() {
-  document.body.classList.toggle("theme-dark", window.matchMedia("(prefers-color-scheme: dark)").matches);
-}
 function documentInfo() {
   try {
     const doc = ps.app.activeDocument;
@@ -89,13 +86,9 @@ function init() {
     } catch (error) { message(error.message, true); }
     finally { setBusy(false); }
   });
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  if (typeof media.addEventListener === "function") media.addEventListener("change", theme);
-  else if (typeof media.addListener === "function") media.addListener(theme);
-  theme();
   documentInfo();
   reconnect();
 }
 entrypoints.setup({ panels: { canvasflowTransfer: {
-  show() { init(); documentInfo(); theme(); },
+  show() { init(); documentInfo(); },
 } } });

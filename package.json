@@ -8,6 +8,7 @@
   "scripts": {
     "start": "dotnet run --project desktop-dotnet/CanvasFlow.Desktop.csproj",
     "start:server": "node server.js",
+    "test": "node --test \"tests/*.test.cjs\"",
     "build:windows": "dotnet publish desktop-dotnet/CanvasFlow.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true"
   }
 }

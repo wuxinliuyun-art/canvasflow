@@ -8,15 +8,18 @@
   --inverse-text: #ffffff;
   --danger: #b91c1c;
 }
-.theme-dark {
-  --bg: #131316;
-  --panel: #26262a;
-  --text: #f4f4f5;
-  --muted: #b0b0b8;
-  --line: #666670;
-  --primary: #78aaff;
-  --inverse-text: #131316;
-  --danger: #ff8a80;
+/* UXP supports host theme CSS queries, but does not expose window.matchMedia. */
+@media (prefers-color-scheme: dark), (prefers-color-scheme: darkest) {
+  :root, .theme-dark {
+    --bg: #131316;
+    --panel: #26262a;
+    --text: #f4f4f5;
+    --muted: #b0b0b8;
+    --line: #666670;
+    --primary: #78aaff;
+    --inverse-text: #131316;
+    --danger: #ff8a80;
+  }
 }
 body { padding: 16px; margin: 0; font-family: "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; color: var(--text); background: var(--bg); }
 h2 { margin: 0 0 12px; font-size: 18px; }
