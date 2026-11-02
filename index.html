@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261018-variable-button2">
+  <link rel="stylesheet" href="styles.css?v=20261102-fill">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -444,9 +444,13 @@
         <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
+        <button id="lightboxPaintFill" class="lightbox-icon-btn" type="button" title="填色：点击区域填入颜色，可跨过草图细线" aria-label="填色"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></g></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
-          <label>大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+          <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+          <label id="lightboxFillToleranceField" class="hidden" title="颜色差异在此范围内的相邻像素视为同一区域">容差 <input id="lightboxFillTolerance" type="range" min="0" max="100" value="40"><span id="lightboxFillToleranceValue" class="lightbox-readout">40</span></label>
+          <label id="lightboxFillLineWidthField" class="hidden" title="区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界">忽略细线 <input id="lightboxFillLineWidth" type="range" min="0" max="12" value="3"><span id="lightboxFillLineWidthValue" class="lightbox-readout">3px</span></label>
+          <label id="lightboxFillKeepLinesField" class="hidden lightbox-check" title="填色层以正片叠底合成，线稿透过颜色可见；关闭则为实色覆盖（对全部填色生效）"><input id="lightboxFillKeepLines" type="checkbox" checked>保留线稿</label>
         </div>
       </div>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
@@ -486,7 +490,7 @@
   <script src="model-catalog.js?v=20261018-chat-opus2"></script>
   <script src="canvas-runtime.js?v=20261017-modelsync1"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="app.js?v=20261018-arrownote-hidden1"></script>
+  <script src="app.js?v=20261102-fill-project-import"></script>
   <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
 </body>
 </html>

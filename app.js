@@ -209,6 +209,9 @@ const UI_EN = {
   "快捷键说明": "Keyboard Shortcuts", "删除选中节点和相关连线": "Delete selected nodes and connected edges",
   "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
   "裁剪": "Crop", "应用裁剪": "Apply crop", "拖框选择需要保留的区域": "Drag to select the area to keep", "拖框选择保留区域，再点击应用裁剪": "Drag to select the area to keep, then apply the crop", "置入": "Insert", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "箭头": "Arrow", "方框": "Box", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
+  "填色": "Fill", "填色：点击区域填入颜色，可跨过草图细线": "Fill: click a region to fill it; thin sketch lines can be crossed", "容差": "Tolerance", "忽略细线": "Ignore thin lines", "保留线稿": "Keep line art",
+  "颜色差异在此范围内的相邻像素视为同一区域": "Neighboring pixels within this color difference count as the same region", "区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界": "Lines inside the region no wider than this (hatching, guide lines) are filled over too; thicker dark strokes act as boundaries", "填色层以正片叠底合成，线稿透过颜色可见；关闭则为实色覆盖（对全部填色生效）": "The fill layer is blended with multiply so line art shows through; turn off for solid cover (applies to all fills)",
+  "点击要填色的区域；拖动容差或忽略细线可实时调整本次填色": "Click the region to fill; drag Tolerance or Ignore thin lines to adjust this fill live",
   "将选中节点设为多任务": "Create a multi-task node from selected nodes", "右键多任务节点": "Right-click a multi-task node",
   "取消多任务，还原内部节点和连线": "Dissolve multi-task and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
   "Alt + 拖拽": "Alt + Drag", "划线切断连线；同时划中两条连线时自动桥接两端节点": "Draw a line to cut a connection; crossing two at once bridges their endpoints",
@@ -491,7 +494,7 @@ function translateEnglishString(source) {
     [/^(.+) 当前 API：(.+)，已选 (\d+) 个区域。$/, (_, instruction, api, count) => `${translateEnglishString(instruction)} API: ${api}, ${count} regions selected.`],
     [/^无法提交：(.*)$/, (_, message) => `Unable to submit: ${translateEnglishString(message)}`],
     [/^分区抠图打开失败：(.*)$/, (_, message) => `Could not open region cutout: ${translateEnglishString(message)}`],
-    [/^项目(\d+)$/, "Project $1"], [/^AI绘图 #(\d+)$/, "AI Image #$1"], [/^输出节点 (\d+)$/, "Output Node $1"],
+    [/^项目(\d+)$/, "Project $1"], [/^已新增 (\d+) 个项目$/, "Added $1 projects"], [/^AI绘图 #(\d+)$/, "AI Image #$1"], [/^输出节点 (\d+)$/, "Output Node $1"],
     [/^编组 (\d+)$/, "Group $1"], [/^(\d+) 个节点 · 双击进入$/, "$1 nodes · Double-click to enter"],
     [/^已创建编组，包含 (\d+) 个节点$/, "Created a group containing $1 nodes"], [/^已创建文件夹节点，包含 (\d+) 张图片$/, "Created an image folder containing $1 images"],
     [/^已依次连接 (\d+) 个节点并添加 1 个 AI 绘图节点$/, "Connected $1 nodes in sequence and added 1 AI image node"],
@@ -508,7 +511,7 @@ function translateEnglishString(source) {
     [/^收集输出 (\d+)\/(\d+)$/, "Collecting output $1/$2"], [/^写入文件 (\d+)\/(\d+)$/, "Writing files $1/$2"],
     [/^任务(\d+)$/, "Task $1"], [/^共 (\d+) 个任务（(\d+) 个节点）· 双击标题放大$/, "$1 tasks ($2 nodes) · Double-click the title to maximize"],
     [/^令牌余额：([\d.]+)（已用 ([\d.]+)）$/, "Token balance: $1 ($2 used)"], [/^已打开文件夹: (.+)$/, "Opened folder: $1"],
-    [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"],
+    [/^已导出到 (.+)$/, "Exported to $1"], [/^保存失败: (.*)$/, "Save failed: $1"], [/^AI 生成失败: (.*)$/, "AI generation failed: $1"], [/^填色失败：(.*)$/, "Fill failed: $1"],
     [/^API 返回异常状态 (.+)$/, "Unexpected API status: $1"],
     [/^自定义文字：(.+)$/, "Custom Text: $1"], [/^自定义图片：(.+)$/, "Custom Image: $1"],
     [/^其他项目仍有 (\d+) 个任务运行中，完成后结果会自动落回原项目$/, "$1 task(s) still running in other projects — results will be delivered back to their projects when done"],
@@ -890,6 +893,16 @@ const els = {
   lightboxPaintConfirm: $("lightboxPaintConfirm"),
   lightboxPaintArrow: $("lightboxPaintArrow"),
   lightboxPaintRect: $("lightboxPaintRect"),
+  lightboxPaintFill: $("lightboxPaintFill"),
+  lightboxPaintSizeField: $("lightboxPaintSizeField"),
+  lightboxFillToleranceField: $("lightboxFillToleranceField"),
+  lightboxFillTolerance: $("lightboxFillTolerance"),
+  lightboxFillToleranceValue: $("lightboxFillToleranceValue"),
+  lightboxFillLineWidthField: $("lightboxFillLineWidthField"),
+  lightboxFillLineWidth: $("lightboxFillLineWidth"),
+  lightboxFillLineWidthValue: $("lightboxFillLineWidthValue"),
+  lightboxFillKeepLinesField: $("lightboxFillKeepLinesField"),
+  lightboxFillKeepLines: $("lightboxFillKeepLines"),
   executeDialog: $("executeDialog"),
   executeTitle: $("executeTitle"),
   executeList: $("executeList"),
@@ -1007,6 +1020,53 @@ function uid(prefix) {
 
 function pageId() {
   return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function uniqueImportedProjectName(name, usedNames) {
+  const requested = String(name || "未命名项目").trim() || "未命名项目";
+  if (!usedNames.has(requested)) {
+    usedNames.add(requested);
+    return requested;
+  }
+  const suffixMatch = requested.match(/^(.*)（(\d+)）$/);
+  const base = suffixMatch?.[1]?.trim() || requested;
+  let sequence = suffixMatch ? Number(suffixMatch[2]) + 1 : 1;
+  let candidate = `${base}（${sequence}）`;
+  while (usedNames.has(candidate)) candidate = `${base}（${++sequence}）`;
+  usedNames.add(candidate);
+  return candidate;
+}
+
+function prepareImportedProjects(data, fallbackName) {
+  const sourcePages = Array.isArray(data.pages)
+    ? data.pages
+    : [{ name: fallbackName, mode: data.mode, data }];
+  const usedNames = new Set(state.pages.map(page => String(page.name || "未命名项目")));
+  const importedGroups = Array.isArray(data.groups) ? data.groups : [];
+  const groupIdMap = new Map();
+  const groups = importedGroups
+    .filter(group => group && typeof group.name === "string" && group.name.trim())
+    .map(group => {
+      const id = createGroupId();
+      if (typeof group.id === "string" && group.id) groupIdMap.set(group.id, id);
+      return { id, name: group.name.trim() };
+    });
+  const sourceActiveId = data.activePageId;
+  let activePageId = "";
+  const pages = sourcePages.map(sourcePage => {
+    const imported = JSON.parse(JSON.stringify(sourcePage || {}));
+    const originalId = imported.id;
+    imported.id = pageId();
+    imported.name = uniqueImportedProjectName(imported.name || fallbackName, usedNames);
+    imported.mode = imported.mode === "mindmap" ? "mindmap" : "ai";
+    imported.groupId = groupIdMap.get(imported.groupId) || UNGROUPED_GROUP_ID;
+    imported.data = imported.data && typeof imported.data === "object" ? imported.data : blankPage(imported.name, imported.mode).data;
+    imported._history = [];
+    imported._future = [];
+    if (originalId === sourceActiveId) activePageId = imported.id;
+    return imported;
+  });
+  return { pages, groups, activePageId: activePageId || pages[0]?.id || "" };
 }
 
 function blankPage(name = "未命名", mode = "ai") {
@@ -7898,6 +7958,13 @@ let lightboxPlacedImage = null;
 let lightboxPlacedSelected = false;
 let lightboxTransformDrag = null;
 let lightboxEditUndoStack = [];
+// 填色：独立于画笔动作的填充层列表，始终渲染在底图/置入图之上、画笔描边之下
+let lightboxFillActions = [];
+let lightboxLastFill = null;
+let lightboxFillReapplyTimer = 0;
+const lightboxFillSettings = { tolerance: 40, lineWidth: 3, keepLines: true };
+// 硬线余量（百分点）：色差超过 容差+余量 的像素始终阻挡填色；实测草图轮廓≈75–85%、排线≈45–57%、辅助线≈30%
+const LIGHTBOX_FILL_HARD_MARGIN = 15;
 let lightboxEditBase = null;
 let lightboxCropRect = null;
 let lightboxCropDrag = null;
@@ -8213,7 +8280,7 @@ function applyLightboxCrop() {
   if (!lightboxPainting || lightboxCropApply.disabled || !lightboxCropRect) return;
   const canvas = els.lightboxPaintCanvas;
   const rect = { ...lightboxCropRect };
-  const previous = { base: lightboxEditBase, width: canvas.width, height: canvas.height, actions: lightboxPaintActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
+  const previous = { base: lightboxEditBase, width: canvas.width, height: canvas.height, actions: lightboxPaintActions, fills: lightboxFillActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
   clearLightboxCrop();
   lightboxPlacedSelected = false;
   renderLightboxPaintComposite();
@@ -8227,6 +8294,8 @@ function applyLightboxCrop() {
   lightboxPaintOverlay.width = rect.w;
   lightboxPaintOverlay.height = rect.h;
   lightboxPaintActions = [];
+  lightboxFillActions = [];
+  markLightboxFillLayerDirty();
   lightboxPlacedImage = null;
   lightboxBaseFlipX = false;
   lightboxBaseFlipY = false;
@@ -8238,6 +8307,8 @@ function applyLightboxCrop() {
     lightboxPaintOverlay.width = previous.width;
     lightboxPaintOverlay.height = previous.height;
     lightboxPaintActions = previous.actions;
+    lightboxFillActions = previous.fills;
+    markLightboxFillLayerDirty();
     lightboxPlacedImage = previous.placed;
     lightboxPlacedSelected = previous.selected;
     lightboxBaseFlipX = previous.flipX;
@@ -8328,6 +8399,7 @@ function startLightboxPaint() {
   lightboxPlacedSelected = false;
   lightboxTransformDrag = null;
   lightboxEditUndoStack = [];
+  resetLightboxFillState();
   setLightboxPaintMode("idle");
   updateLightboxPaintUndo();
   lightboxPainting = true;
@@ -8359,6 +8431,7 @@ function cancelLightboxPaint() {
   lightboxPlacedSelected = false;
   lightboxTransformDrag = null;
   lightboxEditUndoStack = [];
+  resetLightboxFillState();
   lightboxBaseFlipX = false;
   lightboxBaseFlipY = false;
   lightboxPaintOverlay.width = 0;
@@ -8400,10 +8473,10 @@ function updateLightboxPaintDisplaySize() {
 
 function setLightboxPaintMode(mode) {
   clearLightboxCrop();
-  lightboxPaintMode = ["brush", "eraser", "arrow", "rect", "transform", "crop"].includes(mode) ? mode : "idle";
+  lightboxPaintMode = ["brush", "eraser", "arrow", "rect", "fill", "transform", "crop"].includes(mode) ? mode : "idle";
   lightboxCropBtn.classList.toggle("active", lightboxPaintMode === "crop");
   lightboxCropApply.classList.toggle("hidden", lightboxPaintMode !== "crop");
-  els.lightboxPaintCanvas.style.cursor = lightboxPaintMode === "crop" ? "crosshair" : "";
+  els.lightboxPaintCanvas.style.cursor = ["crop", "fill"].includes(lightboxPaintMode) ? "crosshair" : "";
   const sizeRange = lightboxPaintSizeRanges[lightboxPaintMode];
   if (sizeRange) {
     els.lightboxPaintSize.min = sizeRange.min;
@@ -8411,7 +8484,14 @@ function setLightboxPaintMode(mode) {
     lightboxPaintSizes[lightboxPaintMode] = Math.max(sizeRange.min, Math.min(sizeRange.max, lightboxPaintSizes[lightboxPaintMode]));
     els.lightboxPaintSize.value = lightboxPaintSizes[lightboxPaintMode];
   }
-  const annotateColor = lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect";
+  const isFill = lightboxPaintMode === "fill";
+  const annotateColor = lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
+  els.lightboxPaintFill.classList.toggle("active", isFill);
+  els.lightboxPaintSizeField.classList.toggle("hidden", isFill);
+  els.lightboxFillToleranceField.classList.toggle("hidden", !isFill);
+  els.lightboxFillLineWidthField.classList.toggle("hidden", !isFill);
+  els.lightboxFillKeepLinesField.classList.toggle("hidden", !isFill);
+  if (isFill) syncLightboxFillControls();
   $("lightboxPaintPointer").classList.toggle("active", lightboxPaintMode === "idle" || lightboxPaintMode === "transform");
   els.lightboxPaintBrush.classList.toggle("active", lightboxPaintMode === "brush");
   els.lightboxPaintEraser.classList.toggle("active", lightboxPaintMode === "eraser");
@@ -8504,10 +8584,31 @@ function isLightboxShapeAction(action) {
   return action.kind === "arrow" || action.kind === "rect";
 }
 
-function renderLightboxPaintComposite() {
+// 所有填色共用的一个颜色层：后填的颜色覆盖先填的（不互相叠色），整层再按模式合成到底图上
+const lightboxFillLayer = document.createElement("canvas");
+let lightboxFillLayerDirty = true;
+
+function markLightboxFillLayerDirty() {
+  lightboxFillLayerDirty = true;
+}
+
+function getLightboxFillLayer() {
   const canvas = els.lightboxPaintCanvas;
-  const context = canvas.getContext("2d");
-  context.clearRect(0, 0, canvas.width, canvas.height);
+  if (lightboxFillLayer.width !== canvas.width || lightboxFillLayer.height !== canvas.height) {
+    lightboxFillLayer.width = canvas.width;
+    lightboxFillLayer.height = canvas.height;
+    lightboxFillLayerDirty = true;
+  }
+  if (!lightboxFillLayerDirty) return lightboxFillLayer;
+  const context = lightboxFillLayer.getContext("2d");
+  context.clearRect(0, 0, lightboxFillLayer.width, lightboxFillLayer.height);
+  for (const fill of lightboxFillActions) if (fill.layer) context.drawImage(fill.layer, 0, 0);
+  lightboxFillLayerDirty = false;
+  return lightboxFillLayer;
+}
+
+function drawLightboxBaseLayers(context) {
+  const canvas = els.lightboxPaintCanvas;
   context.save();
   context.translate(lightboxBaseFlipX ? canvas.width : 0, lightboxBaseFlipY ? canvas.height : 0);
   context.scale(lightboxBaseFlipX ? -1 : 1, lightboxBaseFlipY ? -1 : 1);
@@ -8520,6 +8621,31 @@ function renderLightboxPaintComposite() {
     context.rotate((Number(placed.rotation) || 0) * Math.PI / 180);
     context.scale(placed.flipX ? -1 : 1, placed.flipY ? -1 : 1);
     context.drawImage(placed.element, -placed.w / 2, -placed.h / 2, placed.w, placed.h);
+    context.restore();
+  }
+}
+
+// 填色取样源 = 底图 + 置入图 + 画笔描边，不含已有填色——重新点击已填色区域即换色，区域判断不受填色影响
+function lightboxFillSourceImageData() {
+  const canvas = els.lightboxPaintCanvas;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = canvas.width;
+  offscreen.height = canvas.height;
+  const context = offscreen.getContext("2d");
+  drawLightboxBaseLayers(context);
+  context.drawImage(lightboxPaintOverlay, 0, 0);
+  return context.getImageData(0, 0, offscreen.width, offscreen.height);
+}
+function renderLightboxPaintComposite() {
+  const canvas = els.lightboxPaintCanvas;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  drawLightboxBaseLayers(context);
+  if (lightboxFillActions.length) {
+    // 单一填色层整体合成：正片叠底时线稿透过颜色保持可见，覆盖模式为实色
+    context.save();
+    context.globalCompositeOperation = lightboxFillSettings.keepLines ? "multiply" : "source-over";
+    context.drawImage(getLightboxFillLayer(), 0, 0);
     context.restore();
   }
   context.drawImage(lightboxPaintOverlay, 0, 0);
@@ -8599,6 +8725,8 @@ function undoLightboxPaint() {
 }
 
 function pushLightboxEditUndo(undoAction) {
+  // 任何新编辑都会终止“上一次填色”的实时调整；填色路径会在 push 之后重新标记
+  commitLightboxLastFill();
   lightboxEditUndoStack.push(undoAction);
   if (lightboxEditUndoStack.length > 50) lightboxEditUndoStack.shift();
   updateLightboxPaintUndo();
@@ -8704,6 +8832,10 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   ev.stopPropagation();
   if (lightboxPaintMode === "idle") return;
   const p = paintCanvasPoint(ev);
+  if (lightboxPaintMode === "fill") {
+    applyLightboxFillAt(p);
+    return;
+  }
   if (lightboxPaintMode === "crop") {
     lightboxCropDrag = { x: Math.max(0, Math.min(els.lightboxPaintCanvas.width, p.x)), y: Math.max(0, Math.min(els.lightboxPaintCanvas.height, p.y)) };
     els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
@@ -8824,6 +8956,295 @@ els.lightboxPaintSize.addEventListener("input", () => {
   if (lightboxPaintSizes[lightboxPaintMode] != null) lightboxPaintSizes[lightboxPaintMode] = Number(els.lightboxPaintSize.value);
   syncLightboxEraserRing();
 });
+// ===== 填色（魔棒式区域填充）=====
+// 流程：按容差二值化 → 按“忽略细线”半径膨胀可通行区（浅色细线被吸收，深色硬线保持阻挡）→ 扫描线连通填充 → 闭运算填满区域内细线 → 生成颜色层。
+// 所有填色写入同一颜色层（后填覆盖先填，不叠色），整层按“保留线稿”以正片叠底或实色合成；上一次填色在滑块变动时可实时重算。
+
+let lightboxFillBusy = false;
+let lightboxFillHintShown = false;
+
+function resetLightboxFillState() {
+  lightboxFillActions = [];
+  lightboxLastFill = null;
+  lightboxFillBusy = false;
+  lightboxFillLayer.width = 0;
+  lightboxFillLayer.height = 0;
+  lightboxFillLayerDirty = true;
+  if (lightboxFillReapplyTimer) clearTimeout(lightboxFillReapplyTimer);
+  lightboxFillReapplyTimer = 0;
+}
+
+function syncLightboxFillControls() {
+  els.lightboxFillTolerance.value = lightboxFillSettings.tolerance;
+  els.lightboxFillLineWidth.value = lightboxFillSettings.lineWidth;
+  els.lightboxFillKeepLines.checked = lightboxFillSettings.keepLines;
+  els.lightboxFillToleranceValue.textContent = String(lightboxFillSettings.tolerance);
+  els.lightboxFillLineWidthValue.textContent = `${lightboxFillSettings.lineWidth}px`;
+}
+
+// 结束“上一次填色”的实时调整，释放其缓存的源像素与掩膜
+function commitLightboxLastFill() {
+  if (!lightboxLastFill) return;
+  lightboxLastFill.source = null;
+  lightboxLastFill.mask = null;
+  lightboxLastFill = null;
+}
+
+function parseHexColor(hex) {
+  const value = String(hex || "").replace("#", "");
+  const full = value.length === 3 ? value.split("").map(ch => ch + ch).join("") : value.padEnd(6, "0").slice(0, 6);
+  const num = parseInt(full, 16);
+  return Number.isNaN(num) ? [255, 59, 48] : [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+// 二值掩膜的可分离膨胀：半径 radius 内任一像素为 1 则输出 1；tmp 为同尺寸暂存
+function dilateBinaryMask(src, width, height, radius, dst, tmp) {
+  if (radius <= 0) { dst.set(src); return dst; }
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let count = 0;
+    for (let x = 0; x <= Math.min(radius, width - 1); x++) count += src[row + x];
+    for (let x = 0; x < width; x++) {
+      tmp[row + x] = count > 0 ? 1 : 0;
+      const add = x + radius + 1;
+      if (add < width) count += src[row + add];
+      const remove = x - radius;
+      if (remove >= 0) count -= src[row + remove];
+    }
+  }
+  const counts = new Int32Array(width);
+  for (let y = 0; y <= Math.min(radius, height - 1); y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) counts[x] += tmp[row + x];
+  }
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const addRow = y + radius + 1 < height ? (y + radius + 1) * width : -1;
+    const removeRow = y - radius >= 0 ? (y - radius) * width : -1;
+    for (let x = 0; x < width; x++) {
+      dst[row + x] = counts[x] > 0 ? 1 : 0;
+      if (addRow >= 0) counts[x] += tmp[addRow + x];
+      if (removeRow >= 0) counts[x] -= tmp[removeRow + x];
+    }
+  }
+  return dst;
+}
+
+// 二值掩膜的可分离腐蚀：半径 radius 内全部为 1 才输出 1；图像边界外视为 1，贴边区域不会被腐蚀掉
+function erodeBinaryMask(src, width, height, radius, dst, tmp) {
+  if (radius <= 0) { dst.set(src); return dst; }
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let count = 0;
+    let span = Math.min(radius, width - 1) + 1;
+    for (let x = 0; x < span; x++) count += src[row + x];
+    for (let x = 0; x < width; x++) {
+      tmp[row + x] = count === span ? 1 : 0;
+      const add = x + radius + 1;
+      if (add < width) { count += src[row + add]; span++; }
+      const remove = x - radius;
+      if (remove >= 0) { count -= src[row + remove]; span--; }
+    }
+  }
+  const counts = new Int32Array(width);
+  let span = Math.min(radius, height - 1) + 1;
+  for (let y = 0; y < span; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) counts[x] += tmp[row + x];
+  }
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const addRow = y + radius + 1 < height ? (y + radius + 1) * width : -1;
+    const removeRow = y - radius >= 0 ? (y - radius) * width : -1;
+    for (let x = 0; x < width; x++) {
+      dst[row + x] = counts[x] === span ? 1 : 0;
+      if (addRow >= 0) counts[x] += tmp[addRow + x];
+      if (removeRow >= 0) counts[x] -= tmp[removeRow + x];
+    }
+    if (addRow >= 0) span++;
+    if (removeRow >= 0) span--;
+  }
+  return dst;
+}
+
+// 扫描线泛洪（4 连通）：在 passable 上从种子出发标记连通区域到 visited，返回像素数
+function floodFillMask(passable, width, height, seedX, seedY, visited) {
+  const total = width * height;
+  const stack = [seedY * width + seedX];
+  let count = 0;
+  while (stack.length) {
+    const index = stack.pop();
+    if (visited[index] || !passable[index]) continue;
+    const row = ((index / width) | 0) * width;
+    let x0 = index - row;
+    let x1 = x0;
+    while (x0 > 0 && passable[row + x0 - 1] && !visited[row + x0 - 1]) x0--;
+    while (x1 < width - 1 && passable[row + x1 + 1] && !visited[row + x1 + 1]) x1++;
+    for (let x = x0; x <= x1; x++) visited[row + x] = 1;
+    count += x1 - x0 + 1;
+    for (let step = -1; step <= 1; step += 2) {
+      const nextRow = row + step * width;
+      if (nextRow < 0 || nextRow >= total) continue;
+      let inRun = false;
+      for (let x = x0; x <= x1; x++) {
+        const candidate = passable[nextRow + x] === 1 && !visited[nextRow + x];
+        if (candidate && !inRun) stack.push(nextRow + x);
+        inRun = candidate;
+      }
+    }
+  }
+  return count;
+}
+
+function computeLightboxFillMask(source, seedX, seedY, settings) {
+  const { width, height, data } = source;
+  const total = width * height;
+  const seed = (seedY * width + seedX) * 4;
+  const sr = data[seed], sg = data[seed + 1], sb = data[seed + 2], sa = data[seed + 3];
+  // 容差 0–100 映射为 0–255 的通道差；比较平方距离避免逐像素开方
+  const tolerance = Math.round(settings.tolerance / 100 * 255);
+  const toleranceSq = tolerance * tolerance * 3;
+  // 硬线：与种子色差超过“容差 + 固定余量”的像素视为实线，无论多细都不可跨越——
+  // 草图里浅色辅助线/排线可被忽略，深色轮廓始终是边界，避免“忽略细线”把填色漏到轮廓外
+  const hard = Math.round(Math.min(100, settings.tolerance + LIGHTBOX_FILL_HARD_MARGIN) / 100 * 255);
+  const hardSq = hard * hard * 3;
+  const withinTolerance = new Uint8Array(total);
+  const hardLine = new Uint8Array(total);
+  for (let i = 0, p = 0; i < total; i++, p += 4) {
+    const dr = data[p] - sr, dg = data[p + 1] - sg, db = data[p + 2] - sb;
+    const distanceSq = dr * dr + dg * dg + db * db;
+    const alphaClose = Math.abs(data[p + 3] - sa) <= tolerance;
+    if (distanceSq <= toleranceSq && alphaClose) withinTolerance[i] = 1;
+    else if (distanceSq > hardSq || !alphaClose) hardLine[i] = 1;
+  }
+  // 忽略细线：膨胀可通行区，使宽度不超过 2×radius 的浅色线条可被跨过；硬线像素随后恢复为不可通行
+  const radius = Math.ceil(Math.max(0, settings.lineWidth) / 2);
+  const passable = new Uint8Array(total);
+  const scratch = new Uint8Array(total);
+  dilateBinaryMask(withinTolerance, width, height, radius, passable, scratch);
+  if (radius > 0) for (let i = 0; i < total; i++) if (hardLine[i]) passable[i] = 0;
+  let filled = new Uint8Array(total);
+  floodFillMask(passable, width, height, seedX, seedY, filled);
+  if (radius > 0) {
+    // 闭运算（先膨胀后腐蚀）：把区域内部两侧都已填色、宽度不超过 2×radius 的线条（辅助线、排线、硬线）一并填满，
+    // 得到整块实心区域；外轮廓两侧只有一侧填色，腐蚀会把它还原，不会漏到相邻区域
+    dilateBinaryMask(filled, width, height, radius, passable, scratch);
+    erodeBinaryMask(passable, width, height, radius, filled, scratch);
+  }
+  let count = 0;
+  for (let i = 0; i < total; i++) count += filled[i];
+  return { mask: filled, count };
+}
+
+function buildLightboxFillLayer(mask, width, height, color) {
+  const layer = document.createElement("canvas");
+  layer.width = width;
+  layer.height = height;
+  const context = layer.getContext("2d");
+  const image = context.createImageData(width, height);
+  const [r, g, b] = parseHexColor(color);
+  const pixels = image.data;
+  for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
+    if (!mask[i]) continue;
+    pixels[p] = r;
+    pixels[p + 1] = g;
+    pixels[p + 2] = b;
+    pixels[p + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+  return layer;
+}
+
+async function applyLightboxFillAt(point) {
+  if (lightboxFillBusy) return;
+  const canvas = els.lightboxPaintCanvas;
+  const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(point.x)));
+  const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(point.y)));
+  lightboxFillBusy = true;
+  canvas.style.cursor = "progress";
+  // 让出一次事件循环以便忙碌光标有机会绘制；不用 requestAnimationFrame——嵌入式 WebView 会把帧节流到秒级
+  await new Promise(resolve => setTimeout(resolve, 0));
+  try {
+    if (!lightboxPainting || lightboxPaintMode !== "fill") return;
+    const source = lightboxFillSourceImageData();
+    const color = els.lightboxPaintColor.value;
+    const { tolerance, lineWidth } = lightboxFillSettings;
+    const { mask, count } = computeLightboxFillMask(source, x, y, { tolerance, lineWidth });
+    if (count <= 0) return;
+    const action = { kind: "fill", seed: { x, y }, color, tolerance, lineWidth, layer: buildLightboxFillLayer(mask, source.width, source.height, color), source, mask };
+    lightboxFillActions.push(action);
+    markLightboxFillLayerDirty();
+    pushLightboxEditUndo(() => {
+      const index = lightboxFillActions.lastIndexOf(action);
+      if (index >= 0) lightboxFillActions.splice(index, 1);
+      if (lightboxLastFill === action) commitLightboxLastFill();
+      markLightboxFillLayerDirty();
+    });
+    // 在 push 之后标记，允许随后拖动滑块/改色实时重算本次填色
+    lightboxLastFill = action;
+    renderLightboxPaintComposite();
+    if (!lightboxFillHintShown) {
+      lightboxFillHintShown = true;
+      toast("点击要填色的区域；拖动容差或忽略细线可实时调整本次填色");
+    }
+  } catch (error) {
+    console.error("[图片编辑] 填色失败", { x, y, message: error.message });
+    toast(`填色失败：${error.message || "无法读取图片像素"}`);
+  } finally {
+    lightboxFillBusy = false;
+    canvas.style.cursor = lightboxPaintMode === "fill" ? "crosshair" : "";
+  }
+}
+
+function scheduleLightboxFillReapply() {
+  if (!lightboxLastFill || !lightboxPainting || lightboxPaintMode !== "fill") return;
+  // 尾随去抖：拖动滑块期间合并连续输入，停顿即重算
+  if (lightboxFillReapplyTimer) clearTimeout(lightboxFillReapplyTimer);
+  lightboxFillReapplyTimer = setTimeout(() => {
+    lightboxFillReapplyTimer = 0;
+    reapplyLightboxLastFill();
+  }, 40);
+}
+
+function reapplyLightboxLastFill() {
+  const action = lightboxLastFill;
+  if (!action || !action.source || !lightboxFillActions.includes(action)) return;
+  const color = els.lightboxPaintColor.value;
+  const { tolerance, lineWidth } = lightboxFillSettings;
+  const needsMask = tolerance !== action.tolerance || lineWidth !== action.lineWidth;
+  if (needsMask) {
+    action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
+    action.tolerance = tolerance;
+    action.lineWidth = lineWidth;
+  } else if (color === action.color) {
+    return;
+  }
+  action.color = color;
+  action.layer = buildLightboxFillLayer(action.mask, action.source.width, action.source.height, color);
+  markLightboxFillLayerDirty();
+  renderLightboxPaintComposite();
+}
+
+els.lightboxPaintFill.onclick = () => setLightboxPaintMode("fill");
+els.lightboxFillTolerance.addEventListener("input", () => {
+  lightboxFillSettings.tolerance = Number(els.lightboxFillTolerance.value);
+  els.lightboxFillToleranceValue.textContent = String(lightboxFillSettings.tolerance);
+  scheduleLightboxFillReapply();
+});
+els.lightboxFillLineWidth.addEventListener("input", () => {
+  lightboxFillSettings.lineWidth = Number(els.lightboxFillLineWidth.value);
+  els.lightboxFillLineWidthValue.textContent = `${lightboxFillSettings.lineWidth}px`;
+  scheduleLightboxFillReapply();
+});
+els.lightboxFillKeepLines.addEventListener("change", () => {
+  // 保留线稿是整个填色层的合成模式，切换即时生效于全部填色，无需重算掩膜
+  lightboxFillSettings.keepLines = els.lightboxFillKeepLines.checked;
+  if (lightboxPainting) renderLightboxPaintComposite();
+});
+els.lightboxPaintColor.addEventListener("input", () => {
+  if (lightboxPaintMode === "fill") scheduleLightboxFillReapply();
+});
+
 async function placeImageInLightbox(source) {
   const element = new Image();
   await new Promise((resolve, reject) => {
@@ -9563,6 +9984,10 @@ window.addEventListener("blur", () => {
   altDown = false;
   spaceDown = false;
 });
+
+// 阻止 Ctrl+滚轮 触发浏览器页面缩放：本工具是固定尺寸画布界面，页面缩放会破坏布局；
+// 编辑器内 Ctrl+滚轮属于缩放图片（画布自己的 wheel 处理不受影响）
+window.addEventListener("wheel", ev => { if (ev.ctrlKey || ev.metaKey) ev.preventDefault(); }, { passive: false, capture: true });
 
 els.viewport.addEventListener("pointerdown", ev => {
   if (ev.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
@@ -11525,31 +11950,25 @@ els.loadJson.onchange = async () => {
   const data = parsed?.type === "project" ? parsed.project : parsed;
   if (!data || (!Array.isArray(data.pages) && !Array.isArray(data.nodes))) throw new Error("缺少项目数据");
   if (!parsed?.type) await restoreLibrariesFromJson(data);
-  if (Array.isArray(data.pages)) {
-    state.pages = data.pages.map(page => ({ ...page, mode: page.mode === "mindmap" ? "mindmap" : "ai" }));
-    normalizeGroups(Array.isArray(data.groups) ? data.groups : []);
-    resetGraphNavigation();
-    state.activePageId = data.activePageId || state.pages[0].id;
-    let page = currentPage();
-    if (!page || (page.mode === "mindmap" && !mindmapFeatureEnabled())) page = state.pages.find(item => item.mode !== "mindmap");
-    if (!page) {
-      page = blankPage(`项目${state.nextPageNum++}`, "ai");
-      state.pages.push(page);
-    }
-    state.activePageId = page.id;
-    restoreData(page.data);
-  } else {
-    const page = blankPage(file.name.replace(/\.(?:cflow|json)$/i, ""), data.mode === "mindmap" ? "mindmap" : "ai");
-    page.data = data;
-    normalizeGroups([]);
-    state.pages.push(page);
-    const activePage = page.mode === "mindmap" && !mindmapFeatureEnabled()
-      ? blankPage(`项目${state.nextPageNum++}`, "ai")
-      : page;
-    if (activePage !== page) state.pages.push(activePage);
-    state.activePageId = activePage.id;
-    restoreData(activePage.data);
+  saveCurrentPage();
+  savePageHistory();
+  resetGraphNavigation();
+  const fallbackName = file.name.replace(/\.(?:cflow|json)$/i, "");
+  const imported = prepareImportedProjects(data, fallbackName);
+  if (!imported.pages.length) throw new Error("项目文件中没有可打开的项目");
+  state.groups.push(...imported.groups);
+  state.pages.push(...imported.pages);
+  normalizeGroups();
+  let page = state.pages.find(item => item.id === imported.activePageId);
+  if (!page || (page.mode === "mindmap" && !mindmapFeatureEnabled())) {
+    page = imported.pages.find(item => item.mode !== "mindmap");
   }
+  if (!page) {
+    page = blankPage(`项目${state.nextPageNum++}`, "ai");
+    state.pages.push(page);
+  }
+  state.activePageId = page.id;
+  restoreData(page.data);
   await resolveImageRefs(state.nodes);
   saveCurrentPage();
   for (const page of state.pages) {
@@ -11560,7 +11979,7 @@ els.loadJson.onchange = async () => {
   state.future = [];
   updateUndoRedo();
   markDirty();
-  toast("项目已打开");
+  toast(`已新增 ${imported.pages.length} 个项目`);
   } catch (error) {
     console.error("[项目打开] 失败", { file: file.name, message: error.message });
     toast(`打开失败：${error.message || "文件格式不正确"}；请选择有效的 .cflow 项目或旧版 JSON`);
