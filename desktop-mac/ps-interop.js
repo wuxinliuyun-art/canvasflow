@@ -164,18 +164,67 @@ function resolvePsTargetFile(outputPath, fileName, assetId) {
   throw new Error("找不到图片的本地文件（outputPath、download/images、素材库都没有），请先在画布里重新生成或导入");
 }
 
-// mac 兜底：设置里没配路径时，扫描常见位置找已装的 Photoshop（应用名带年份，直接 open -a 名字会找不到）
-function defaultMacPhotoshopApp() {
-  for (const dir of ["/Applications", path.join(os.homedir(), "Applications")]) {
+// 从 Photoshop 应用路径中提取版本年份（如 "Adobe Photoshop 2026.app" → 2026），
+// 用于多版本并存时按年份数字排序，而不是对完整路径做字符串排序。
+function photoshopVersionYear(candidate) {
+  const match = /(20\d{2})/.exec(path.basename(String(candidate || "")));
+  return match ? Number(match[1]) : 0;
+}
+
+// mac 兜底：设置里没配路径时，扫描常见位置找已装的 Photoshop。
+// Adobe 通常把 .app 放在带年份的子目录中（如 /Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app），
+// 也可能直接放在 Applications 目录下（如 /Applications/Adobe Photoshop 2022.app）。
+function defaultMacPhotoshopApp(dirs) {
+  const searchDirs = Array.isArray(dirs) && dirs.length
+    ? dirs
+    : ["/Applications", path.join(os.homedir(), "Applications")];
+  const candidates = [];
+  // 只收真实存在的候选：应用被删后残留的断链 .app 不能算"已安装"，
+  // 否则会跳过扫描结果、让 open -a 报一个无从下手的退出码。
+  const addCandidate = candidate => {
+    if (fs.existsSync(candidate)) candidates.push(candidate);
+  };
+  for (const dir of searchDirs) {
     try {
-      const hit = fs.readdirSync(dir)
-        .filter(name => /^Adobe Photoshop.*\.app$/i.test(name))
-        .sort()
-        .pop();
-      if (hit) return path.join(dir, hit);
-    } catch (_) { /* 目录不存在试下一个 */ }
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        // 普通文件既不是 .app 包也不会是版本目录；目录与符号链接（用户可能把安装目录链过来）都要看
+        if (entry.isFile()) continue;
+        if (!/^Adobe Photoshop/i.test(entry.name)) continue;
+        const item = path.join(dir, entry.name);
+        if (/\.app$/i.test(entry.name)) {
+          // 直接放在 Applications 下的 .app 包
+          addCandidate(item);
+          continue;
+        }
+        // 带年份的子目录：只向下看一层，不做无界限递归扫描
+        try {
+          for (const child of fs.readdirSync(item, { withFileTypes: true })) {
+            if (child.isFile()) continue;
+            if (/^Adobe Photoshop.*\.app$/i.test(child.name)) addCandidate(path.join(item, child.name));
+          }
+        } catch (_) { /* 不是目录或不可读，忽略这一项 */ }
+      }
+    } catch (_) { /* 目录不存在或不可读，试下一个 */ }
   }
-  return "Adobe Photoshop";
+  // 优先按版本年份数字升序，同年份再按路径做数值化比较保证结果稳定；取最新版本
+  candidates.sort((a, b) => {
+    const yearDelta = photoshopVersionYear(a) - photoshopVersionYear(b);
+    if (yearDelta !== 0) return yearDelta;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+  return candidates[candidates.length - 1] || "";
+}
+
+// 解析最终要打开的应用：用户手动保存且仍然有效的路径优先；
+// 失效时回退到自动扫描；仍找不到则给出明确中文错误，引导到设置中手动选择。
+function resolvePhotoshopApp(savedPath, dirs) {
+  const saved = String(savedPath || "").trim();
+  if (saved && fs.existsSync(saved)) return saved;
+  const discovered = defaultMacPhotoshopApp(dirs);
+  if (!discovered) {
+    throw new Error("未找到 Photoshop.app，请到设置中手动选择 Photoshop 主程序路径");
+  }
+  return discovered;
 }
 
 async function launchInPs(outputPath, fileName, assetId) {
@@ -186,7 +235,7 @@ async function launchInPs(outputPath, fileName, assetId) {
     child.unref();
     return { opened: true, path: file };
   }
-  const target = saved || defaultMacPhotoshopApp();
+  const target = resolvePhotoshopApp(saved);
   const child = spawn("open", ["-a", target, file], { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.setEncoding("utf-8");
@@ -200,4 +249,4 @@ async function launchInPs(outputPath, fileName, assetId) {
   });
 }
 
-module.exports = { init, cepPanelStatus, installCepPanel, uninstallCepPanel, getPsPath, savePsPath, launchInPs };
+module.exports = { init, cepPanelStatus, installCepPanel, uninstallCepPanel, getPsPath, savePsPath, launchInPs, defaultMacPhotoshopApp, photoshopVersionYear, resolvePhotoshopApp };
