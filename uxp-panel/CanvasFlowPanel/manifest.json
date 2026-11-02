@@ -2,14 +2,20 @@
   "manifestVersion": 5,
   "id": "com.canvasflow.photoshop.uxp",
   "name": "CanvasFlow 互传 UXP",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.html",
+  "icons": [
+    { "width": 48, "height": 48, "path": "icon.png", "scale": [1], "theme": ["dark", "darkest", "light", "lightest"], "species": ["generic"] }
+  ],
   "host": { "app": "PS", "minVersion": "23.3.0", "data": { "apiVersion": 2 } },
   "entrypoints": [
     {
       "type": "panel",
       "id": "canvasflowTransfer",
       "label": { "default": "CanvasFlow 互传 UXP" },
+      "icons": [
+        { "width": 24, "height": 24, "path": "icon.png", "scale": [2], "theme": ["dark", "darkest", "light", "lightest"] }
+      ],
       "minimumSize": { "width": 280, "height": 400 },
       "maximumSize": { "width": 2000, "height": 2000 },
       "preferredDockedSize": { "width": 320, "height": 520 },
@@ -18,6 +24,28 @@
   ],
   "requiredPermissions": {
     "localFileSystem": "request",
-    "network": { "domains": ["http://localhost", "http://127.0.0.1"] }
+    "network": { "domains": [
+        "http://localhost",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "http://localhost:5177",
+        "http://localhost:5178",
+        "http://localhost:5179",
+        "http://localhost:5180",
+        "http://localhost:5181",
+        "http://localhost:5182",
+        "http://localhost:5183",
+        "http://localhost:5184",
+        "http://localhost:5185",
+        "http://localhost:5186",
+        "http://localhost:5187",
+        "http://localhost:5188",
+        "http://localhost:5189",
+        "http://localhost:5190",
+        "http://localhost:5191",
+        "http://localhost:5192"
+    ] }
   }
 }
