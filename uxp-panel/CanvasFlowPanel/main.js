@@ -31,6 +31,15 @@ function message(text, error = false) {
   $("log").textContent = text;
   $("log").className = error ? "error" : "";
 }
+// UXP modal rejections and non-Error throws can carry no usable message. Rendering
+// "undefined" tells the user nothing, so fall back to an actionable sentence.
+function describeError(error) {
+  const text = typeof error === "string" ? error
+    : error && typeof error.message === "string" ? error.message
+    : "";
+  const trimmed = text.trim();
+  return trimmed && trimmed !== "undefined" && trimmed !== "null" ? trimmed : "未知错误，请重试";
+}
 async function reconnect() {
   const seq = ++probeSequence;
   $("connection").textContent = "正在检测连接…";
@@ -56,7 +65,7 @@ async function send(kind) {
     await transport.send(target, payload);
     message("已回传：" + payload.name + "。请在画布中查看新图片节点。");
   } catch (error) {
-    message("回传失败：" + error.message + "。若请求超时，请先检查画布是否已收到图片再重试。", true);
+    message("回传失败：" + describeError(error) + "。若请求超时，请先检查画布是否已收到图片再重试。", true);
   } finally {
     setBusy(false);
     documentInfo();
