@@ -30,6 +30,8 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 $files = @(
     "index.html",
     "model-catalog.js",
+    "assets/vendor/three/three.module.js",
+    "assets/vendor/three/three.core.js",
     "app.js",
     "styles.css",
     "canvas-runtime.js",

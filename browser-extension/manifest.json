@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "CanvasFlow 浏览器生图桥",
-  "version": "1.0.6",
-  "description": "把 CanvasFlow 画布的提示词和参考图送到 Gemini / ChatGPT 等网页对话，模拟人工操作并把生成图片带回画布。支持手动校准任意站点的输入框与发送按钮。",
-  "permissions": ["storage", "scripting", "activeTab", "tabs", "alarms"],
+  "name": "CanvasFlow 浏览器桥",
+  "version": "1.1.0",
+  "description": "在 CanvasFlow 与网页之间传送提示词、图片和选中文字，并保留返回原网页的入口。",
+  "permissions": ["storage", "scripting", "activeTab", "tabs", "alarms", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "CanvasFlow 浏览器生图"
+    "default_title": "CanvasFlow 浏览器桥"
   },
   "content_scripts": [
     { "matches": ["http://*/*", "https://*/*"], "exclude_matches": ["http://127.0.0.1/*", "http://localhost/*", "https://canvasflow.local/*"], "js": ["image-transfer.js"], "run_at": "document_idle" },

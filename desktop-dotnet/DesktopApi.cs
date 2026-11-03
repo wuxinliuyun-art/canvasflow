@@ -30,14 +30,16 @@ internal sealed class DesktopApi
     private readonly Func<string> _getApiKey;
     private readonly Func<string> _getAgtokenKey;
     private readonly Func<string> _getContentRoot;
+    private readonly Action _focusCanvas;
     private readonly HttpClient _http;
     private readonly HttpClient _agtokenHttp;
     private readonly string _version;
     private readonly WebUpdateManager _webUpdateManager;
+    private readonly ComfyUiApi _comfyUiApi;
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Action? focusCanvas = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
@@ -45,7 +47,9 @@ internal sealed class DesktopApi
         _getAgtokenKey = getAgtokenKey ?? (() => "");
         // 界面热更新会把 cep-panel 面板源文件带进内容根，安装面板时必须优先取内容根里的版本
         _getContentRoot = getContentRoot ?? (() => "");
+        _focusCanvas = focusCanvas ?? (() => { });
         _webUpdateManager = webUpdateManager;
+        _comfyUiApi = new ComfyUiApi(_root);
         _http = new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
@@ -88,10 +92,15 @@ internal sealed class DesktopApi
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
+        or "/api/agtoken/video-generate" or "/api/download-video"
         or "/api/chat/completions"
+        or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/run" or "/api/comfyui/cancel"
         or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
         || path.StartsWith("/api/task/", StringComparison.Ordinal)
-        || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal);
+        || path.StartsWith("/api/agtoken/video-task/", StringComparison.Ordinal)
+        || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal)
+        || path.StartsWith("/api/comfyui/status/", StringComparison.Ordinal);
+        
 
     // 浏览器生图任务队列(内存态):前端 push → 浏览器扩展内容脚本 claim/result,前端轮询 status。
     // 任务/结果 10 分钟过期,与 server.js 的同名端点行为逐项一致。
@@ -148,6 +157,7 @@ internal sealed class DesktopApi
         try
         {
             var path = requestUri.AbsolutePath;
+            if (path.StartsWith("/api/comfyui/", StringComparison.Ordinal)) return await _comfyUiApi.HandleAsync(method, requestUri, body, cancellationToken);
             if (method == "GET" && path == "/api/update/check") return await CheckForUpdatesAsync(cancellationToken);
             if (method == "POST" && path == "/api/download-image") return await DownloadImageAsync(body, cancellationToken);
             if (method == "POST" && path is "/api/generate" or "/api/midjourney/generate")
@@ -180,6 +190,24 @@ internal sealed class DesktopApi
                 var fallbackKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
                 return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/models", null, fallbackKey, cancellationToken);
             }
+            if (method == "POST" && path == "/api/agtoken/video-generate")
+            {
+                // AI 视频节点：统一视频接口提交，透传请求体不做字段转换
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("视频生成参数为空");
+                var payloadKey = payload.TryGetPropertyValue("_apiKey", out var videoKeyNode) ? videoKeyNode?.GetValue<string>() ?? "" : "";
+                payload.Remove("_apiKey");
+                var upstreamKey = string.IsNullOrWhiteSpace(payloadKey) ? apiKey : payloadKey;
+                if (string.IsNullOrWhiteSpace(upstreamKey)) upstreamKey = _getAgtokenKey();
+                return await ProxyAgtokenAsync(HttpMethod.Post, "/v1/video/generations", payload.ToJsonString(), upstreamKey, cancellationToken);
+            }
+            if (method == "GET" && path.StartsWith("/api/agtoken/video-task/", StringComparison.Ordinal))
+            {
+                var videoTaskId = Uri.UnescapeDataString(path["/api/agtoken/video-task/".Length..]);
+                if (!Regex.IsMatch(videoTaskId, @"^[A-Za-z0-9._:-]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
+                var taskKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
+                return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/video/generations/" + Uri.EscapeDataString(videoTaskId), null, taskKey, cancellationToken);
+            }
+            if (method == "POST" && path == "/api/download-video") return await DownloadVideoAsync(body, cancellationToken);
             if (method == "POST" && path == "/api/chat/completions")
             {
                 // AI 对话：按 apiType 分槽透传（apimart 走 /api/v1 前缀 + 镜像 failover，agtoken 走标准 /v1），
@@ -198,7 +226,12 @@ internal sealed class DesktopApi
                 return await ProxyApiAsync(HttpMethod.Post, "/api/v1/chat/completions", payload.ToJsonString(), cancellationToken, httpClient: _agtokenHttp);
             }
             if (path == "/api/browser-transfer" && method == "POST")
-                return Json(200, BrowserImageTransfer.Handle(body));
+            {
+                var result = BrowserImageTransfer.Handle(body);
+                var payload = JsonNode.Parse(body)?.AsObject();
+                if (payload?["action"]?.GetValue<string>() == "send" && payload["autoFocus"]?.GetValue<bool>() == true) _focusCanvas();
+                return Json(200, result);
+            }
             if (path == "/api/browser-task" && method == "POST")
             {
                 var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("任务参数为空");
@@ -378,6 +411,10 @@ internal sealed class DesktopApi
         try
         {
             using var request = new HttpRequestMessage(method, AgtokenBaseUrl + apiPath);
+            // agtoken 的同步生图响应可能直接携带体积很大的 base64 图片。
+            // 固定使用 HTTP/1.1，避开部分网关/代理在 HTTP/2 长响应结束前关闭流而触发 ResponseEnded。
+            request.Version = HttpVersion.Version11;
+            request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
             if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
             using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
@@ -414,6 +451,49 @@ internal sealed class DesktopApi
             return Json(200, new { base64 = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}" });
         }
         throw new HttpRequestException("图片下载重定向次数过多");
+    }
+
+    // 视频成片落盘：把上游临时视频链接下载到 {数据根}\download\videos，节点只保存文件名；
+    // 播放经 canvasflow-videos.local 虚拟主机（MainWindow 启动时已映射并预建目录）
+    private async Task<DesktopApiResponse> DownloadVideoAsync(string body, CancellationToken cancellationToken)
+    {
+        using var document = JsonDocument.Parse(body);
+        var videoUrl = document.RootElement.GetProperty("url").GetString() ?? "";
+        var requestedName = document.RootElement.TryGetProperty("fileName", out var nameElement) ? nameElement.GetString() ?? "" : "";
+        var current = new Uri(videoUrl, UriKind.Absolute);
+        for (var redirect = 0; redirect <= 5; redirect++)
+        {
+            await ValidatePublicHttpsUriAsync(current, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, current);
+            using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is not null)
+            {
+                current = response.Headers.Location.IsAbsoluteUri ? response.Headers.Location : new Uri(current, response.Headers.Location);
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "video/mp4";
+            if (!contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) && !contentType.Contains("octet-stream")) throw new InvalidDataException("远程地址返回的不是视频");
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            if (bytes.Length > 1024L * 1024 * 1024) throw new InvalidDataException("视频文件超过1GB限制");
+            var videosDir = Path.Combine(_root, "download", "videos");
+            Directory.CreateDirectory(videosDir);
+            var safeName = Regex.Replace(requestedName, @"[\\/:*?""<>|\r\n]", "_").TrimEnd('.').Trim();
+            if (safeName.Length > 120 || safeName.Length == 0) safeName = $"video-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+            var extension = Path.GetExtension(safeName);
+            if (!extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)
+                && !extension.Equals(".webm", StringComparison.OrdinalIgnoreCase)
+                && !extension.Equals(".mov", StringComparison.OrdinalIgnoreCase)) safeName += ".mp4";
+            var fileName = safeName;
+            for (var index = 1; File.Exists(Path.Combine(videosDir, fileName)); index++)
+            {
+                fileName = $"{Path.GetFileNameWithoutExtension(safeName)} ({index}){Path.GetExtension(safeName)}";
+            }
+            await File.WriteAllBytesAsync(Path.Combine(videosDir, fileName), bytes, cancellationToken);
+            _log($"[视频] 已保存 {fileName}（{bytes.Length / 1024 / 1024.0:F1} MB）", false);
+            return Json(200, new { fileName, bytes = bytes.Length });
+        }
+        throw new HttpRequestException("视频下载重定向次数过多");
     }
 
     private static async Task ValidatePublicHttpsUriAsync(Uri uri, CancellationToken cancellationToken)

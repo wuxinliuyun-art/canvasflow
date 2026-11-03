@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const packageInfo = require("./package.json");
 const browserTransfer = require("./modules/browser-transfer-server");
+const comfyuiServer = require("./modules/comfyui-server");
 
 // Reserve each export atomically so repeated names and concurrent requests keep every result.
 function writeExportFile(requestedPath, bytes) {
@@ -27,6 +28,8 @@ const root = __dirname;
 let dataRoot = root;
 // 界面内容根：桌面壳（mac 版 web-update.js）可指向热更新版本目录，默认随包目录
 let contentRoot = root;
+// 桌面宿主注入的分槽取 key 函数（apiType = "apimart" | "agtoken"，对齐 Windows DesktopApi 的 _getApiKey/_getAgtokenKey）；
+// 浏览器/服务器模式恒为空——key 随请求体 _apiKey 携带，不依赖本函数
 let secretProvider = () => "";
 const APP_VERSION = packageInfo.version;
 const RELEASES_API = "https://api.github.com/repos/wuxinliuyun-art/canvasflow/releases/latest";
@@ -339,6 +342,34 @@ async function tryProxyRequest(method, pathStr, headers, body, timeoutMs = 12000
   throw lastError || new Error("所有 API 地址均不可达");
 }
 
+// 下载上游视频成片（火山 CDN 链接约 24 小时有效），整段读入后交调用方写盘
+function downloadVideoToBuffer(videoUrl, timeoutMs = 600000) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(videoUrl);
+    if (parsed.protocol !== "https:") { reject(new Error("视频链接必须是 https")); return; }
+    const options = { method: "GET", hostname: parsed.hostname, path: parsed.pathname + parsed.search, port: 443, headers: { Accept: "*/*" } };
+    const videoReq = https.request(options, videoRes => {
+      if (videoRes.statusCode !== 200) {
+        videoRes.resume();
+        reject(new Error(`视频源返回 HTTP ${videoRes.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      let total = 0;
+      videoRes.on("data", chunk => {
+        total += chunk.length;
+        if (total > 1024 * 1024 * 1024) { videoReq.destroy(); reject(new Error("视频文件超过 1GB，拒绝保存")); return; }
+        chunks.push(chunk);
+      });
+      videoRes.on("end", () => resolve(Buffer.concat(chunks)));
+      videoRes.on("error", reject);
+    });
+    videoReq.on("error", reject);
+    videoReq.setTimeout(timeoutMs, () => { videoReq.destroy(); reject(new Error("视频下载超时")); });
+    videoReq.end();
+  });
+}
+
 async function requestHandler(req, res) {
   const host = String(req.headers.host || "");
   if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) {
@@ -367,7 +398,9 @@ async function requestHandler(req, res) {
     res.end("Bad request: malformed URL encoding");
     return;
   }
-  const requestApiKey = () => String(req.headers["x-canvasflow-api-key"] || parsedUrl.searchParams.get("apiKey") || secretProvider() || "");
+  const requestApiKey = (apiType = "apimart") => String(req.headers["x-canvasflow-api-key"] || parsedUrl.searchParams.get("apiKey") || secretProvider(apiType) || "");
+
+  if (await comfyuiServer.handle(req, res, { pathname, dataRoot })) return;
 
   if (pathname === "/api/runtime-paths" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
@@ -637,7 +670,9 @@ async function requestHandler(req, res) {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
-      const apiKey = payload._apiKey || secretProvider() || "";
+      // 与其余代理路由同优先级：body._apiKey > 请求头 > 宿主注入的 apimart 槽 key
+      // （桌面模式前端三样都不带，落到宿主 key，语义对齐 Windows DesktopApi）
+      const apiKey = payload._apiKey || requestApiKey("apimart") || "";
       delete payload._apiKey;
 
       const { status, body: resBody } = await tryProxyRequest(
@@ -691,7 +726,7 @@ async function requestHandler(req, res) {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
-      const apiKey = payload._apiKey || requestApiKey() || "";
+      const apiKey = payload._apiKey || requestApiKey("agtoken") || "";
       delete payload._apiKey;
       const { status, body: resBody } = await proxyRequest(
         "POST",
@@ -714,7 +749,7 @@ async function requestHandler(req, res) {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
-      const apiKey = payload._apiKey || requestApiKey() || "";
+      const apiKey = payload._apiKey || requestApiKey("agtoken") || "";
       delete payload._apiKey;
       const { status, body: resBody } = await proxyRequest(
         "POST",
@@ -735,7 +770,7 @@ async function requestHandler(req, res) {
 
   if (pathname === "/api/agtoken/models" && req.method === "GET") {
     try {
-      const apiKey = requestApiKey();
+      const apiKey = requestApiKey("agtoken");
       const { status, body: resBody } = await proxyRequest(
         "GET",
         AGTOKEN_BASE_URL + "/v1/models",
@@ -752,6 +787,82 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // agtoken 统一视频接口透传（豆包 Seedance 等异步视频模型）：提交任务 + 按任务号轮询，
+  // 请求格式与上游 /v1/video/generations 保持一致，不做任何字段转换。
+  if (pathname === "/api/agtoken/video-generate" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 128 * 1024 * 1024);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey("agtoken") || "";
+      delete payload._apiKey;
+      const { status, body: resBody } = await proxyRequest(
+        "POST",
+        AGTOKEN_BASE_URL + "/v1/video/generations",
+        { Authorization: `Bearer ${apiKey}` },
+        JSON.stringify(payload),
+        300000
+      );
+      console.log(`[AGToken] /v1/video/generations -> ${status}`);
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "agtoken 视频任务提交失败: " + err.message } }));
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/agtoken/video-task/") && req.method === "GET") {
+    try {
+      const taskId = decodeURIComponent(pathname.slice("/api/agtoken/video-task/".length));
+      if (!/^[A-Za-z0-9._:-]{1,200}$/.test(taskId)) throw new Error("任务编号格式不正确");
+      const apiKey = requestApiKey("agtoken") || "";
+      const { status, body: resBody } = await proxyRequest(
+        "GET",
+        AGTOKEN_BASE_URL + "/v1/video/generations/" + encodeURIComponent(taskId),
+        { Authorization: `Bearer ${apiKey}` },
+        null,
+        60000
+      );
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: "视频任务查询失败: " + err.message } }));
+    }
+    return;
+  }
+
+  // 视频结果落盘：把上游返回的临时视频链接（约 24 小时有效）下载到 download/videos，
+  // 节点只保存文件名，播放地址由前端按运行模式拼装（浏览器 /download/videos/…，桌面 canvasflow-videos.local）。
+  if (pathname === "/api/download-video" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 1024 * 1024);
+      const { url: videoUrl, fileName: requestedName } = JSON.parse(body.toString());
+      if (!/^https:\/\//i.test(String(videoUrl || ""))) throw new Error("视频链接不是有效的 https 地址");
+      const videosDir = path.join(dataRoot, "download", "videos");
+      fs.mkdirSync(videosDir, { recursive: true });
+      const safeName = String(requestedName || "").replace(/[\\/:*?"<>|]/g, "_").slice(0, 120) || `video-${Date.now()}.mp4`;
+      let fileName = safeName;
+      for (let index = 1; index < 1000; index++) {
+        try {
+          fs.accessSync(path.join(videosDir, fileName));
+          const parsed = path.parse(safeName);
+          fileName = `${parsed.name} (${index})${parsed.ext || ".mp4"}`;
+        } catch (_) { break; }
+      }
+      const bytes = await downloadVideoToBuffer(videoUrl);
+      fs.writeFileSync(path.join(videosDir, fileName), bytes);
+      console.log(`[Video] 已保存 ${fileName}（${(bytes.length / 1024 / 1024).toFixed(1)} MB）`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ fileName, bytes: bytes.length }));
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "视频下载失败: " + err.message } }));
+    }
+    return;
+  }
+
   // AI 对话（chat completions）：按 apiType 分槽透传到两个网关，请求格式互不转换。
   // apimart 走 OpenAI 兼容 /api/v1 前缀（响应为 {code,data} 包装，由前端解包）；
   // agtoken 走标准 /v1。对话是同步长请求（推理模型可达数分钟），超时给足 300 秒。
@@ -761,7 +872,7 @@ async function requestHandler(req, res) {
       const payload = JSON.parse(body.toString());
       const apiType = payload.apiType === "agtoken" ? "agtoken" : "apimart";
       delete payload.apiType;
-      const apiKey = payload._apiKey || requestApiKey() || "";
+      const apiKey = payload._apiKey || requestApiKey(apiType) || "";
       delete payload._apiKey;
       payload.stream = payload.stream === true;
       const headers = { Authorization: `Bearer ${apiKey}` };

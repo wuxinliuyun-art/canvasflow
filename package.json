@@ -1,6 +1,6 @@
 {
   "name": "canvasflow",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "CanvasFlow visual AI image workflow",
   "author": "wuxinliuyun-art",
   "license": "MIT",
@@ -9,5 +9,8 @@
     "start": "dotnet run --project desktop-dotnet/CanvasFlow.Desktop.csproj",
     "start:server": "node server.js",
     "build:windows": "dotnet publish desktop-dotnet/CanvasFlow.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true"
+  },
+  "dependencies": {
+    "three": "0.186.1"
   }
 }

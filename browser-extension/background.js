@@ -106,6 +106,60 @@ async function blobToDataUrl(blob) {
   return `data:${blob.type || "image/png"};base64,${btoa(chunks.join(""))}`;
 }
 
+async function focusCanvasAfterTransfer(port) {
+  const tabs = await chrome.tabs.query({});
+  const canvasTab = tabs.find(tab => {
+    try {
+      const url = new URL(tab.url || "");
+      return ["127.0.0.1", "localhost"].includes(url.hostname) && Number(url.port || 80) === port;
+    } catch { return false; }
+  });
+  if (!canvasTab?.id) return false;
+  await chrome.tabs.update(canvasTab.id, { active: true });
+  if (canvasTab.windowId != null) await chrome.windows.update(canvasTab.windowId, { focused: true });
+  return true;
+}
+
+async function sendTransferToCanvas(payload) {
+  const ports = await resolveServerPorts();
+  const ready = [];
+  for (const port of ports) {
+    const result = await fetchJson(await serverUrl("/api/browser-transfer", port), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "probe" }), signal: AbortSignal.timeout(3000),
+    }).catch(() => null);
+    if (result?.ready) ready.push(port);
+  }
+  if (!ready.length) throw new Error("请先打开新版 CanvasFlow 画布；更新后需重启服务或桌面程序");
+  if (ready.length > 1) throw new Error("发现多个接收实例，请只保留一个 CanvasFlow 实例后重试");
+  const settings = await storageGet("autoFocusAfterTransfer");
+  const autoFocus = settings.autoFocusAfterTransfer === true;
+  const data = await fetchJson(await serverUrl("/api/browser-transfer", ready[0]), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "send", ...payload, autoFocus }),
+  });
+  if (autoFocus) await focusCanvasAfterTransfer(ready[0]).catch(() => false);
+  return data;
+}
+
+const TEXT_TRANSFER_MENU_ID = "canvasflow-send-selected-text";
+function ensureTransferContextMenu() {
+  chrome.contextMenus.remove(TEXT_TRANSFER_MENU_ID, () => {
+    void chrome.runtime.lastError;
+    chrome.contextMenus.create({ id: TEXT_TRANSFER_MENU_ID, title: "发送选中文字到 CanvasFlow", contexts: ["selection"], documentUrlPatterns: ["http://*/*", "https://*/*"] });
+  });
+}
+chrome.runtime.onInstalled.addListener(ensureTransferContextMenu);
+chrome.runtime.onStartup.addListener(ensureTransferContextMenu);
+ensureTransferContextMenu();
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== TEXT_TRANSFER_MENU_ID || !info.selectionText?.trim()) return;
+  sendTransferToCanvas({ kind: "text", text: info.selectionText, sourceUrl: info.pageUrl || tab?.url || "" })
+    .then(() => tab?.id != null && chrome.tabs.sendMessage(tab.id, { type: "canvasflowTransferNotice", text: "选中文字已送达画布" }).catch(() => {}))
+    .catch(error => tab?.id != null && chrome.tabs.sendMessage(tab.id, { type: "canvasflowTransferNotice", text: `传送失败：${error.message}`, error: true }).catch(() => {}));
+});
+
 // match pattern → 正则(仅用于判定 manifest 是否已覆盖某 URL,本扩展的 pattern 都是精确主机)
 function globToRegExp(pattern) {
   return new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
@@ -156,16 +210,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message?.type) {
       case "resumeBrowserQueue": { await chrome.storage.local.remove("browserQueuePaused"); sendResponse({ok:true}); return; }
       case "getSettings": {
-        const stored = await storageGet(["serverPort", "autoPort"]);
+        const stored = await storageGet(["serverPort", "autoPort", "autoFocusAfterTransfer"]);
         sendResponse({
           ok: true,
           serverPort: validPort(stored.serverPort) || "",
           autoPort: validPort(stored.autoPort) || "",
           defaultPort: DEFAULT_PORT,
+          autoFocusAfterTransfer: stored.autoFocusAfterTransfer === true,
         });
         return;
       }
       case "setSettings": {
+        if (Object.prototype.hasOwnProperty.call(message, "autoFocusAfterTransfer")) {
+          await chrome.storage.local.set({ autoFocusAfterTransfer: message.autoFocusAfterTransfer === true });
+        }
+        if (!Object.prototype.hasOwnProperty.call(message, "serverPort")) { sendResponse({ ok: true }); return; }
         const raw = String(message.serverPort ?? "").trim();
         if (!raw) {
           // 清空 = 回到纯自动发现
@@ -247,21 +306,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // 站点 CDN 图片(如 googleusercontent)由后台抓取:content 脚本受页面 CORS 限制,后台不受
       case "sendImageToCanvas": {
         if (!sender.tab || !/^https?:/.test(sender.url || "")) throw new Error("图片须从网页发送");
-        const ports = await resolveServerPorts();
-        const ready = [];
-        for (const port of ports) {
-          const result = await fetchJson(await serverUrl("/api/browser-transfer", port), {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "probe" }), signal: AbortSignal.timeout(3000),
-          }).catch(() => null);
-          if (result?.ready) ready.push(port);
-        }
-        if (!ready.length) throw new Error("请先打开新版 CanvasFlow 画布；更新后需重启服务或桌面程序");
-        if (ready.length > 1) throw new Error("发现多个接收实例，请只保留一个 CanvasFlow 实例后重试");
-        const data = await fetchJson(await serverUrl("/api/browser-transfer", ready[0]), {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "send", image: message.image }),
-        });
+        const data = await sendTransferToCanvas({ kind: "image", image: message.image, sourceUrl: sender.tab.url || sender.url || "" });
         sendResponse({ ok: true, data });
         return;
       }

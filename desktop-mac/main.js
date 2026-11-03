@@ -191,6 +191,9 @@ async function restartServerWithContentRoot(newContentRoot) {
     dataRoot,
     port: Number(process.env.CANVASFLOW_PORT) || 5173,
     contentRoot: newContentRoot,
+    // server.js 兜底取 key：桌面模式前端在 /api/generate、/api/chat/completions 等路由
+    // 不携带 key，由宿主按 apiType 分槽从 secrets.json 提供（对齐 Windows DesktopApi）
+    getApiKey: readApiKey,
   });
   const previous = serverInstance;
   serverPort = instance.port;
@@ -574,7 +577,8 @@ app.whenReady().then(async () => {
   psInterop.init({ dataRoot, appRoot: __dirname, getContentRoot: () => webUpdate.currentContentRoot });
   for (const folder of ["data", "download", "export", "projects"]) fs.mkdirSync(path.join(dataRoot, folder), { recursive: true });
 
-  const instance = await startCanvasFlowServer({ dataRoot, port: Number(process.env.CANVASFLOW_PORT) || 5173, contentRoot });
+  // getApiKey：见 restartServerWithContentRoot 内注释——桌面模式前端不带 key 的路由由此兜底
+  const instance = await startCanvasFlowServer({ dataRoot, port: Number(process.env.CANVASFLOW_PORT) || 5173, contentRoot, getApiKey: readApiKey });
   serverInstances.push(instance);
   serverPort = instance.port;
   serverUrl = instance.url;

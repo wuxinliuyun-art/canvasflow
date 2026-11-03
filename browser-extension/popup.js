@@ -48,6 +48,11 @@ $("savePort").addEventListener("click", async () => {
   }
 });
 
+$("autoFocusAfterTransfer").addEventListener("change", async event => {
+  const result = await chrome.runtime.sendMessage({ type: "setSettings", autoFocusAfterTransfer: event.target.checked }).catch(error => ({ ok: false, error: error.message }));
+  if (!result?.ok) setStatus(result?.error || "设置保存失败", "bad");
+});
+
 $("calibrate").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url?.startsWith("http")) { setStatus("请在 AI 站点的网页标签页上使用校准", "bad"); return; }
@@ -81,6 +86,7 @@ $("clearCalibration").addEventListener("click", async () => {
 (async () => {
   const settings = await chrome.runtime.sendMessage({ type: "getSettings" });
   $("port").value = settings?.serverPort ?? "";
+  $("autoFocusAfterTransfer").checked = settings?.autoFocusAfterTransfer === true;
   $("port").placeholder = settings?.autoPort ? `自动（当前 ${settings.autoPort}）` : "自动发现";
   await ping({ quiet: true });
   refreshCalibrationInfo();

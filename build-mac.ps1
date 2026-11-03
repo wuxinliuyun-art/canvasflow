@@ -3,6 +3,12 @@
 # 而是 zip→zip 流式转写：改条目名（Electron.app→CanvasFlow.app、Helper 全套改名、icns 替换）、
 # 修改 Info.plist、替换 Resources/app 为仓库前端与 desktop-mac 壳源码，权限位原样保留。
 # 产物：release/mac/CanvasFlow-<版本>-mac.zip（x64）与 CanvasFlow-<版本>-arm64-mac.zip。
+# 重要：转写过程中修改了 Info.plist / 包名 / Helper 名，Electron 官方 zip 里预置的 ad-hoc 签名随之失效。
+# x64 无强制代码签名，产物可直接启动；arm64（Apple Silicon）强制代码签名，未经 Mac 重签名的包双击
+# 会被系统拒开（"已损坏，无法打开"）。分发 arm64 包前必须在 macOS 上解压后执行：
+#   codesign --force --deep -s - CanvasFlow.app
+# 再用 Finder 双击 / ditto -x -k / zip 重新压缩（不得用 Python zipfile 重打包，会丢符号链接与权限位）。
+# 2026-10 的 CanvasFlow-2.7.4-arm64-mac.zip（重签名版）即按此流程产出。
 # 用法：powershell -File build-mac.ps1 [-Arch both|x64|arm64] [-Mirror npmmirror] [-Version 2.7.3]
 param(
     [string]$Version = "",
@@ -42,6 +48,8 @@ $appFiles = @(
     @{ src = Join-Path $projectRoot "styles.css";             entry = "app/styles.css" },
     @{ src = Join-Path $projectRoot "canvas-runtime.js";      entry = "app/canvas-runtime.js" },
     @{ src = Join-Path $projectRoot "model-catalog.js";       entry = "app/model-catalog.js" },
+    @{ src = Join-Path $projectRoot "assets\vendor\three\three.module.js"; entry = "app/assets/vendor/three/three.module.js" },
+    @{ src = Join-Path $projectRoot "assets\vendor\three\three.core.js"; entry = "app/assets/vendor/three/three.core.js" },
     @{ src = Join-Path $projectRoot "LICENSE";                entry = "app/LICENSE" },
     @{ src = Join-Path $projectRoot "PRIVACY.md";             entry = "app/PRIVACY.md" },
     @{ src = Join-Path $projectRoot "拓展脚本规范.md";         entry = "app/拓展脚本规范.md" },
@@ -232,8 +240,13 @@ function Build-Arch {
             $newName = Convert-EntryName -Name $name
             if ($name -eq "Electron.app/Contents/Info.plist") {
                 $xml = (New-Object System.IO.StreamReader($entry.Open(), $utf8)).ReadToEnd()
+                # 移除 ElectronAsarIntegrity：default_app.asar 已被跳过，该封条指向不存在的文件，
+                # 留着在 Mac 重签名后有校验隐患（对齐 2026-10 arm64 修复版已验证的 plist 形态）
+                $xml = [regex]::Replace($xml, '(?s)\s*<key>ElectronAsarIntegrity</key>\s*<dict>.*?</dict>\s*</dict>', '')
                 $mainPlist = Set-PlistValues -Xml $xml -Values @{
                     CFBundleDisplayName = "CanvasFlow"; CFBundleName = "CanvasFlow"; CFBundleExecutable = "CanvasFlow"
+                    # 图标文件已改名为 icon.icns（见 Convert-EntryName），引用必须同步，否则 Dock 图标不生效
+                    CFBundleIconFile = "icon.icns"
                     CFBundleIdentifier = "com.canvasflow.desktop"
                     CFBundleShortVersionString = $Version; CFBundleVersion = $Version
                     LSMinimumSystemVersion = "13.0"

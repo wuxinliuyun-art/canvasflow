@@ -18,12 +18,18 @@ module.exports = function browserTransfer(payload) {
     if (items.get(payload.id)?.receiver === payload.receiver) items.delete(payload.id);
     return { ok: true };
   }
-  if (payload.action !== "send") throw new Error("未知图片传送操作");
+  if (payload.action !== "send") throw new Error("未知网页传送操作");
   if (!ready) throw new Error("请先打开 CanvasFlow 画布");
-  const image = payload.image;
-  if (typeof image !== "string" || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/.test(image) || image.length > 14000000) throw new Error("图片格式不支持或超过 10MB");
-  if (items.size >= 8) throw new Error("待接收图片过多，请回画布后重试");
+  const kind = payload.kind === "text" ? "text" : "image";
+  const sourceUrl = typeof payload.sourceUrl === "string" && /^https?:\/\//i.test(payload.sourceUrl) ? payload.sourceUrl.slice(0, 4096) : "";
+  const value = kind === "text" ? payload.text : payload.image;
+  if (kind === "text") {
+    if (typeof value !== "string" || !value.trim() || value.length > 200000) throw new Error("文字为空或超过 20 万字");
+  } else if (typeof value !== "string" || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/.test(value) || value.length > 14000000) {
+    throw new Error("图片格式不支持或超过 10MB");
+  }
+  if (items.size >= 8) throw new Error("待接收内容过多，请回画布后重试");
   const id = require("crypto").randomUUID();
-  items.set(id, { id, image, receiver, createdAt: now });
+  items.set(id, { id, kind, ...(kind === "text" ? { text: value } : { image: value }), sourceUrl, receiver, createdAt: now });
   return { ok: true, id };
 };

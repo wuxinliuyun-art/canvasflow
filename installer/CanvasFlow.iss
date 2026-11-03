@@ -30,6 +30,9 @@ UninstallDisplayIcon={app}\app\CanvasFlow.exe
 WizardStyle=modern
 SetupIconFile=..\assets\canvasflow.ico
 
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
+
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "export\*,data\*,download\*,projects\*,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。预设源码在仓库 extensions-presets\image-to-pptx，发布前由 build-dotnet.cmd 拷入 PublishDir

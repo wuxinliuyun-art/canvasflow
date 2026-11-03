@@ -1,6 +1,8 @@
 using System.Threading;
 using System.Windows;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CanvasFlow.Desktop;
 
@@ -9,6 +11,7 @@ public partial class App : System.Windows.Application
     private Mutex? _mutex;
     private bool _ownsMutex;
     private EventWaitHandle? _activateEvent;
+    private string _instanceScope = "";
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -30,14 +33,15 @@ public partial class App : System.Windows.Application
                 "CanvasFlow 界面错误", MessageBoxButton.OK, MessageBoxImage.Warning);
             args.Handled = true;
         };
-        _mutex = new Mutex(true, "Local\\CanvasFlow.Desktop.Net8", out var first);
+        _instanceScope = InstallationScope();
+        _mutex = new Mutex(true, $"Local\\CanvasFlow.Desktop.{_instanceScope}", out var first);
         _ownsMutex = first;
         if (!first)
         {
             // 已有实例在运行：发激活信号让现有窗口到前台，不再弹窗打扰
             try
             {
-                using var activate = System.Threading.EventWaitHandle.OpenExisting("Local\\CanvasFlow.Desktop.Activate");
+                using var activate = System.Threading.EventWaitHandle.OpenExisting($"Local\\CanvasFlow.Desktop.Activate.{_instanceScope}");
                 activate.Set();
             }
             catch (System.Threading.WaitHandleCannotBeOpenedException) { }
@@ -51,7 +55,7 @@ public partial class App : System.Windows.Application
 
     private void StartActivationListener()
     {
-        _activateEvent = new EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, "Local\\CanvasFlow.Desktop.Activate", out _);
+        _activateEvent = new EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, $"Local\\CanvasFlow.Desktop.Activate.{_instanceScope}", out _);
         var listener = new Thread(() =>
         {
             while (_activateEvent.WaitOne())
@@ -61,6 +65,15 @@ public partial class App : System.Windows.Application
         })
         { IsBackground = true };
         listener.Start();
+    }
+
+    private static string InstallationScope()
+    {
+        var installDirectory = Path.GetFullPath(AppContext.BaseDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .ToUpperInvariant();
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(installDirectory));
+        return Convert.ToHexString(hash.AsSpan(0, 16));
     }
 
     private void ShowExistingWindow()
