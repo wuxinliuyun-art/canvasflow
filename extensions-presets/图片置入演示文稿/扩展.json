@@ -1,6 +1,6 @@
 {
   "id": "image-to-pptx",
-  "name": "图片置入PPTX",
+  "name": "图片置入演示文稿",
   "version": "1.0.0",
   "description": "把多张图片逐页铺满，生成 16:9 的 PPTX 文件（输出为文件，自动保存）",
   "entry": "图片排pptx.py",

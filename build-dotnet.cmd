@@ -23,17 +23,16 @@ if errorlevel 1 exit /b 1
 
 for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"
 
-rem -- Preset extension: image-to-pptx lives in the repo (extensions-presets\image-to-pptx) so CI builds the complete installer too; the large upscale one is distributed separately.
+rem -- Copy the Windows installer presets from the repository.
 rem -- Keep this script pure ASCII: the Chinese display folder name and file names inside the preset are preserved by the filesystem, and the DestDir mapping lives in CanvasFlow.iss.
 set "EXT_SOURCE=%PROJECT_ROOT%extensions-presets"
 set "EXT_PRESETS=%PUBLISH_DIR%\extensions-presets"
 if exist "%EXT_PRESETS%" rmdir /s /q "%EXT_PRESETS%"
-if exist "%EXT_SOURCE%\image-to-pptx" (
-  mkdir "%EXT_PRESETS%" 2>nul
-  xcopy "%EXT_SOURCE%\image-to-pptx" "%EXT_PRESETS%\image-to-pptx\" /e /i /y >nul
-  echo Preset extension copied: image-to-pptx
-) else (
-  echo [warn] preset extension not found: %EXT_SOURCE%\image-to-pptx
+for /d %%E in ("%EXT_SOURCE%\*") do (
+  if exist "%%~fE\*.json" if not exist "%%~fE\rembg-LICENSE.txt" (
+    xcopy "%%~fE" "%EXT_PRESETS%\%%~nxE\" /e /i /y >nul
+    if errorlevel 1 exit /b 1
+  )
 )
 
 rem -- Release rule: ship an empty export folder, never pack user exports

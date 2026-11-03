@@ -34,10 +34,12 @@ SetupIconFile=..\assets\canvasflow.ico
 Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Files]
-Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "export\*,data\*,download\*,projects\*,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
-; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。预设源码在仓库 extensions-presets\image-to-pptx，发布前由 build-dotnet.cmd 拷入 PublishDir
-Source: "{#PublishDir}\extensions-presets\image-to-pptx\*"; DestDir: "{app}\拓展\图片置入pptx"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "extensions-presets\*,export\*,data\*,download\*,projects\*,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
+; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。预设源码在仓库 extensions-presets\图片置入演示文稿，发布前由 build-dotnet.cmd 拷入 PublishDir
+Source: "{#PublishDir}\extensions-presets\图片置入演示文稿\*"; DestDir: "{app}\拓展\图片置入pptx"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 Source: "..\拓展脚本规范.md"; DestDir: "{app}\拓展"; Flags: ignoreversion uninsneveruninstall
+Source: "{#PublishDir}\extensions-presets\高清放大\*"; DestDir: "{app}\拓展\图片放大白场"; Excludes: "input\*,output\*,_work\*,_staging*\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "{#PublishDir}\extensions-presets\图片矢量化\*"; DestDir: "{app}\拓展\图片矢量化"; Excludes: "input\*,output\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 
 ; Program files are replaced by [Files]. Keep legacy folders and all user documents.
 

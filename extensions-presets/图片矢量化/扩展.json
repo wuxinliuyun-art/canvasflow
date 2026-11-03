@@ -1,0 +1,47 @@
+{
+  "id": "image-vectorize",
+  "name": "图片矢量化",
+  "version": "1.2.0",
+  "description": "将扁平插画统一到长边 4096 像素后描成 SVG，支持轮廓拟合、近色合并和叠层拆分。",
+  "entry": "矢量化.py",
+  "input": "images",
+  "output": "files",
+  "params": [
+    {
+      "key": "fitOutline",
+      "label": "轮廓拟合",
+      "type": "toggle",
+      "default": false
+    },
+    {
+      "key": "fitStrength",
+      "label": "拟合强度",
+      "type": "select",
+      "options": [
+        "保留细节",
+        "标准",
+        "更平滑"
+      ],
+      "default": "标准"
+    },
+    {
+      "key": "mergeStrength",
+      "label": "近色合并",
+      "type": "select",
+      "options": [
+        "关闭",
+        "随拟合",
+        "轻度",
+        "加强"
+      ],
+      "default": "随拟合"
+    },
+    {
+      "key": "editableLayers",
+      "label": "叠层拆分",
+      "type": "toggle",
+      "default": false
+    }
+  ],
+  "timeout": 1800
+}

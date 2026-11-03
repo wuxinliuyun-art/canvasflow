@@ -221,7 +221,7 @@ const UI_EN = {
   "撤销": "Undo", "重做": "Redo", "复制选中节点": "Copy selected nodes", "粘贴节点、文字或图片": "Paste nodes, text, or images",
   "裁剪": "Crop", "应用裁剪": "Apply crop", "拖框选择需要保留的区域": "Drag to select the area to keep", "拖框选择保留区域，再点击应用裁剪": "Drag to select the area to keep, then apply the crop", "置入": "Insert", "返回": "Back", "画笔": "Brush", "橡皮擦": "Eraser", "箭头": "Arrow", "方框": "Box", "绘制工具": "Drawing tools", "置入图片": "Insert image", "从画布置入": "Insert from canvas", "左右镜像": "Flip horizontal", "上下镜像": "Flip vertical", "编辑图片": "Edit image", "绘制、置入或镜像图片": "Paint, insert, or flip images", "松开置入 · 移开取消": "Release to insert · Move away to cancel",
   "填色": "Fill", "填色：点击区域填入颜色，可跨过草图细线": "Fill: click a region to fill it; thin sketch lines can be crossed", "容差": "Tolerance", "忽略细线": "Ignore thin lines", "保留线稿": "Keep line art",
-  "颜色差异在此范围内的相邻像素视为同一区域": "Neighboring pixels within this color difference count as the same region", "区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界": "Lines inside the region no wider than this (hatching, guide lines) are filled over too; thicker dark strokes act as boundaries", "填色层以正片叠底合成，线稿透过颜色可见；关闭则为实色覆盖（对全部填色生效）": "The fill layer is blended with multiply so line art shows through; turn off for solid cover (applies to all fills)",
+  "颜色差异在此范围内的相邻像素视为同一区域": "Neighboring pixels within this color difference count as the same region", "区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界": "Lines inside the region no wider than this (hatching, guide lines) are filled over too; thicker dark strokes act as boundaries", "覆盖原色时保留深色线稿；关闭则以实色覆盖填色区域（对全部填色生效）": "Replace the original color while preserving dark line art. Turn off for solid fill (applies to all fills).",
   "点击要填色的区域；拖动容差或忽略细线可实时调整本次填色": "Click the region to fill; drag Tolerance or Ignore thin lines to adjust this fill live",
   "将选中节点设为多任务": "Create a multi-task node from selected nodes", "右键多任务节点": "Right-click a multi-task node",
   "取消多任务，还原内部节点和连线": "Dissolve multi-task and restore contained nodes and edges", "Shift + 点击": "Shift + Click",
@@ -464,7 +464,6 @@ Object.assign(UI_EN, {
   "还没有变量，请创建一个全局变量。": "No variables yet. Create a global variable.",
   "没有可导入的图文、多个节点或变量": "No text, images, node sets, or variables to import",
   "拓展信息缺失，请删除后从右键菜单重新添加。": "Extension information is missing. Delete this node and add it again from the context menu.",
-  "合并全部连线为输入": "Combine all connections into one input",
   "未检测到扩展服务": "Extension service not detected",
   "拓展文件夹中没有可用拓展": "No extensions available in the extensions folder",
   "生成中...": "Generating...",
@@ -629,6 +628,9 @@ const state = {
 let onboardingSeenVersion = 0;
 
 let globalLibrary = loadGlobalLibrary();
+let editorPaletteId = "";
+const paletteWidgets = new Map();
+const paletteDragType = "application/x-canvasflow-palette-color";
 let pendingLibraryImport = null;
 let editingTextTemplate = null;
 let editingVariableDefinitionId = "";
@@ -667,10 +669,16 @@ function acquireAiApiSlot(label = "AI任务") {
   });
 }
 
-function emptyLibrary() { return { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: true, builtinMultiNodeSeedVersion: BUILTIN_MULTI_NODE_SEED_VERSION, builtinMultiNodeRemovedIds: [] }; }
+function emptyLibrary() { return { palettes: [], textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: true, builtinMultiNodeSeedVersion: BUILTIN_MULTI_NODE_SEED_VERSION, builtinMultiNodeRemovedIds: [] }; }
 function normalizeLibrary(lib) {
   const source = lib || {};
   return {
+    palettes: Array.isArray(source.palettes) ? source.palettes.filter(item => item?.id && Array.isArray(item.colors)).map(item => ({
+      id: String(item.id), name: String(item.name || "未命名调色盘"),
+      colors: item.colors.filter(color => /^#[0-9a-f]{6}$/i.test(color?.hex)).map(color => ({
+        hex: color.hex.toUpperCase(), share: Number.isFinite(color.share) ? color.share : null,
+      })),
+    })) : [],
     textTemplates: Array.isArray(source.textTemplates) ? source.textTemplates.filter(item => item?.id !== "builtin_text_local_to_panorama_v1").map(normalizeTemplate) : [],
     imageMaterials: Array.isArray(source.imageMaterials) ? source.imageMaterials.map(normalizeTemplate) : [],
     multiNodeTemplates: Array.isArray(source.multiNodeTemplates) ? source.multiNodeTemplates.map(normalizeMultiNodeTemplate) : [],
@@ -704,7 +712,7 @@ function loadGlobalLibrary() {
   try {
     const stored = localStorage.getItem(GLOBAL_LIBRARY_KEY);
     return stored === null
-      ? { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: false, builtinMultiNodeSeedVersion: 0, builtinMultiNodeRemovedIds: [] }
+      ? { palettes: [], textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [], builtinDefaultsInitialized: false, builtinMultiNodeSeedVersion: 0, builtinMultiNodeRemovedIds: [] }
       : normalizeLibrary(JSON.parse(stored));
   }
   catch (e) { console.error("[加载] 全局素材库读取失败", e); return emptyLibrary(); }
@@ -2054,7 +2062,8 @@ function nodeHeightForType(type) {
     : type === "ai-video" ? VIDEO_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
-      : type === "tool-node" ? TOOL_NODE_HEIGHT
+    : type === "palette" ? 640
+    : type === "tool-node" ? TOOL_NODE_HEIGHT
       : type === "image" ? IMAGE_NODE_HEIGHT
         : type === "chat" ? CHAT_NODE_HEIGHT
         : type === "browser-image" ? BROWSER_NODE_HEIGHT
@@ -2252,7 +2261,7 @@ function buildNodeObject(type, position, width, height) {
 }
 
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
-  const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : NODE_WIDTH);
+  const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : type === "palette" ? 300 : NODE_WIDTH);
   const height = placementOptions.height || nodeHeightForType(type);
   let position = placementOptions.avoidOverlap === false
     ? { x: snap(x), y: snap(y) }
@@ -2701,13 +2710,55 @@ function toggleDisabled(ids, disabled = null) {
   render();
 }
 
+const CLIPBOARD_NODES_HTML_MARK = "canvasflow-nodes-v1";
+
+// 节点复制数据序列化进系统剪贴板的 text/html 注释：多实例多开时页面内存
+// state.clipboard 不共享，靠这段隐藏 HTML 注释在实例之间传递节点数据。
+function encodeCanvasflowNodesHtml(payload) {
+  try {
+    if (!payload || (!payload.nodes?.length && !payload.edges?.length)) return "";
+    return `<!--${CLIPBOARD_NODES_HTML_MARK}:${btoa(unescape(encodeURIComponent(JSON.stringify(payload))))}-->`;
+  } catch (err) {
+    return "";
+  }
+}
+
+function decodeCanvasflowNodesHtml(html) {
+  try {
+    const raw = typeof html === "string" ? html : "";
+    const prefix = `<!--${CLIPBOARD_NODES_HTML_MARK}:`;
+    const start = raw.indexOf(prefix);
+    if (start < 0) return null;
+    const end = raw.indexOf("-->", start + prefix.length);
+    if (end < 0) return null;
+    const payload = JSON.parse(decodeURIComponent(escape(atob(raw.slice(start + prefix.length, end)))));
+    if (!payload || !Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) return null;
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
 function copySelection(clearSystemClipboard = true) {
   const nodes = state.nodes.filter(n => state.selected.has(n.id)).map(stripCopiedImage);
   state.clipboard = {
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
   };
-  if (clearSystemClipboard && navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {});
+  if (clearSystemClipboard) {
+    // 右键菜单复制没有事件 clipboardData 可用，走 navigator 写入；失败时退回清空文本。
+    const writeNative = () => { if (navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {}); };
+    const html = encodeCanvasflowNodesHtml(state.clipboard);
+    if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      try {
+        navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }) })]).catch(writeNative);
+      } catch (err) {
+        writeNative();
+      }
+    } else {
+      writeNative();
+    }
+  }
   toast(`已复制 ${nodes.length} 个节点`);
 }
 
@@ -2999,7 +3050,6 @@ function addToolNode(ext, x = 160, y = 120) {
   node.toolValues = {};
   for (const param of node.toolMeta.params) node.toolValues[param.key] = param.default;
   node.toolStatus = null;
-  node.keepCombinedInputs = true; // 默认：所有连线图片合并为 input/
   pushHistory();
   render();
   return node;
@@ -3013,7 +3063,12 @@ function toolMimeFromName(name) {
 function toolNodeBody(node) {
   const meta = node.toolMeta;
   if (!meta) return `<div class="tool-node-desc">拓展信息缺失，请删除后从右键菜单重新添加。</div>`;
-  const controls = (meta.params || []).map(param => {
+  const params = meta.params || [];
+  const whitePoint = node.toolValues?.whitePoint ?? params.find(param => param.key === "whitePoint")?.default;
+  const controls = params.filter(param =>
+    !(meta.id === "image-vectorize" && param.key === "preset")
+      && (!isLinkedUpscaleNode(node) || param.key !== "strength" || whitePoint)
+  ).map(param => {
     const value = node.toolValues?.[param.key] ?? param.default;
     const label = `<span class="tool-param-label">${escapeHtml(param.label || param.key)}</span>`;
     const attrs = `data-role="tool-param" data-key="${escapeHtml(param.key)}"`;
@@ -3034,8 +3089,7 @@ function toolNodeBody(node) {
   const status = node.toolStatus
     ? `<div class="tool-node-status tool-status-${node.toolStatus.state}">${escapeHtml(node.toolStatus.message || "")}</div>`
     : "";
-  const mergeToggle = `<label class="tool-param tool-merge-row" title="开启：所有连线的图片（含文件夹/多任务）合并进 input/；关闭：只取第一条连线"><input type="checkbox" data-role="tool-merge" ${node.keepCombinedInputs !== false ? "checked" : ""}><span>合并全部连线为输入</span></label>`;
-  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div>${mergeToggle}<div class="tool-node-params${meta.columns === 2 ? " cols-2" : ""}">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
+  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div><div class="tool-node-params${meta.columns === 2 ? " cols-2" : ""}">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
 }
 
 async function runToolNode(nodeId) {
@@ -3047,10 +3101,8 @@ async function runToolNode(nodeId) {
   renderNodes();
   try {
     const collected = collectUpstreamForAI(nodeId, buildIncomingIndex());
-    // 默认「合并全部连线为输入」：扇入的多条线全部打平（组节点图片一并纳入），
-    // 去重后一起写入 input/；关闭开关则只取第一条连线（与 AI 节点单分支语义一致）。
     let refs;
-    if (node.keepCombinedInputs !== false) {
+    if (node.toolMeta.id === "image-to-pptx") {
       const seen = new Set();
       refs = [];
       for (const branch of [...collected.branches.map(item => item.images), ...(collected.groupImages.length ? [collected.groupImages] : [])]) {
@@ -3098,6 +3150,7 @@ async function runToolNode(nodeId) {
     const data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
     if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
 
+    const outputNodeIds = [];
     let seq = 0;
     for (const image of data.images || []) {
       seq++;
@@ -3107,9 +3160,13 @@ async function runToolNode(nodeId) {
       imgNode.fileName = image.name || `tool_${seq}.png`;
       imgNode.mime = mime;
       imgNode.toolSourceNodeId = node.id;
+      outputNodeIds.push(imgNode.id);
       await externalizeImageField(imgNode, "image", "imageAssetId", imgNode.fileName);
     }
     let savedPaths = [];
+    if (node.toolMeta.id === "image-vectorize") {
+      data.files?.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
     if ((data.files || []).length) {
       // 直接走服务器落盘到 export/拓展输出/，不走 saveFiles（其 zipExport 默认分支会把文件打包成 zip 下载到浏览器下载目录，用户找不到）
       const baseFolder = state.settings.exportFolderLabel || "export";
@@ -3130,6 +3187,18 @@ async function runToolNode(nodeId) {
         savedPaths = (data.files || []).map(file => `${baseDir}/拓展输出/${file.name}`);
       }
     }
+    if (node.toolMeta.id === "image-vectorize") {
+      for (const [index, file] of (data.files || []).entries()) {
+        if (!/\.svg$/i.test(file.name)) continue;
+        const preview = addNode("image", node.x + NODE_WIDTH + 40, node.y + seq * IMAGE_NODE_VERTICAL_STEP, false);
+        preview.mime = "image/svg+xml";
+        preview.image = `data:${preview.mime};base64,${file.data}`;
+        preview.fileName = String(savedPaths[index] || file.name).split(/[\\/]/).pop();
+        preview.toolSourceNodeId = node.id;
+        seq++;
+      }
+    }
+    if (isLinkedUpscaleNode(node)) node.toolOutputNodeIds = outputNodeIds;
     node.toolOutputFiles = savedPaths;
     node.toolStatus = {
       state: "done",
@@ -3858,11 +3927,21 @@ function openAngleEditor(nodeId) {
   updateEditor();
 }
 
+function isLinkedUpscaleNode(node) {
+  return node?.type === "tool-node" && ["upscale-white-point", "realesrgan-upscale"].includes(node.toolMeta?.id);
+}
+
+function linkedUpscaleOutputs(node) {
+  return (node.toolOutputNodeIds || []).map(findNode).filter(output =>
+    output?.type === "image" && !output.disabled && output.toolSourceNodeId === node.id
+      && (output.image || output.imageAssetId));
+}
+
 function collectUpstreamForAI(nodeId, incoming) {
   incoming = incoming || buildIncomingIndex();
   const result = { texts: [], images: [], groupImages: [], groupTexts: [], orderedRefs: [], branches: [] };
   const aiNode = findNode(nodeId);
-  const keepCombined = aiNode?.keepCombinedInputs === true;
+  const keepCombined = aiNode?.type !== "tool-node" && aiNode?.keepCombinedInputs === true;
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
@@ -3879,6 +3958,10 @@ function collectUpstreamForAI(nodeId, incoming) {
     nextVisited.add(id);
     const n = findNode(id);
     if (!n || n.disabled) return [];
+    if (isLinkedUpscaleNode(n)) {
+      const images = linkedUpscaleOutputs(n).map(output => imageRef(output, output.image, output.imageAssetId));
+      return images.length ? [{ texts: [], images }] : [];
+    }
     if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image" || n.type === "local-sd") {
       // AI/角度/浏览器生图节点截断:取其已生成图片作为参考,不再向上追溯
       if (n.generatedImage) return [{ texts: [], images: [imageRef(n, n.generatedImage, n.generatedAssetId)] }];
@@ -3993,6 +4076,10 @@ function directScreenshotNodeInputs(nodeId) {
     visited.add(id);
     const node = findNode(id);
     if (!node || node.disabled) return;
+    if (isLinkedUpscaleNode(node)) {
+      for (const output of linkedUpscaleOutputs(node)) visit(output.id);
+      return;
+    }
     const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
     if (node.type === "text") {
       const expandedText = String(expandTextNodeVariables(node) || "").trim();
@@ -7015,7 +7102,7 @@ function syncContentDrivenNodeHeights() {
   els.nodes.querySelectorAll(".node").forEach(nodeElement => {
     const node = findNode(nodeElement.dataset.id);
     // 文字节点与对话节点高度固定:对话节点历史区内部滚动,不随内容撑高
-    if (!node || node.type === "text" || node.type === "chat") return;
+    if (!node || node.type === "text" || node.type === "chat" || node.type === "palette") return;
     const head = nodeElement.querySelector(":scope > .node-head");
     const body = nodeElement.querySelector(":scope > .node-body");
     if (!body) return;
@@ -7225,9 +7312,9 @@ function browserNodeBody(node) {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
-  const outPort = (node.type === "output" || node.type === "screenshot-input" || node.type === "tool-node") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
+  const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
     body = `${textVariableStripHtml(node)}<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
@@ -7312,6 +7399,8 @@ function nodeTemplate(node) {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "ai-video") {
     body = videoNodeBody(node);
+  } else if (node.type === "palette") {
+    body = paletteMarkup(node);
   } else if (node.type === "tool-node") {
     body = toolNodeBody(node);
   } else if (node.type === "chat") {
@@ -7338,7 +7427,7 @@ function nodeTemplate(node) {
   const head = node.type === "variable"
     ? `<div class="node-head variable-node-head"><span class="variable-node-title">变量节点</span></div>`
     : `<div class="node-head"><span>${title}</span>${node._assetIssue ? `<span class="node-asset-flag" title="${escapeHtml(node._assetIssue)}">!</span>` : ""}</div>`;
-  return `${inPort}${outPort}${head}<div class="node-body">${body}</div>`;
+  return `${inPort}${outPort}${head}<div class="node-body">${body}</div>${node.type === "palette" ? '<span class="resize-handle" title="拖拽缩放调色盘"></span>' : ""}`;
 }
 
 function escapeHtml(s) {
@@ -7991,7 +8080,7 @@ function updateCompositeHover(dragState) {
 }
 
 function edgeInsertableNode(node) {
-  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "tool-node";
+  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "palette" && (node.type !== "tool-node" || isLinkedUpscaleNode(node));
 }
 
 // 文字节点重合合并:两段文案按画布位置从左到右(同列按从上到下)拼接,并入被叠节点,删除拖动节点;
@@ -8141,6 +8230,7 @@ function clearNodeRelease() {
 }
 
 els.viewport.addEventListener("wheel", ev => {
+  if (ev.target.closest(".palette-widget")) return;
   ev.preventDefault();
   clearNodeRelease();
   const before = screenToWorld(ev.clientX, ev.clientY);
@@ -8170,7 +8260,7 @@ els.viewport.addEventListener("mousedown", ev => {
   if (ev.target.closest(".edge-hit")) return; // 点击连线不做任何操作，交给 dblclick / contextmenu
   const port = ev.target.closest(".port");
   const nodeEl = ev.target.closest(".node");
-  const interactive = ev.target.closest("textarea,button,input,select,video,[contenteditable='true'],[data-role='text-inline-edit']");
+  const interactive = ev.target.closest("textarea,button,input,select,video,summary,[contenteditable='true'],[data-role='text-inline-edit']");
   if (!interactive) els.viewport.focus();
   if (port && port.dataset.port === "out") {
     const node = findNode(nodeEl.dataset.id);
@@ -8240,8 +8330,8 @@ window.addEventListener("mousemove", ev => {
     const node = findNode(drag.nodeId);
     if (node) {
       const scale = state.view.scale;
-      node.w = Math.max(180, drag.sw + (ev.clientX - drag.sx) / scale);
-      const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : node.type === "angle-image" ? ANGLE_NODE_HEIGHT : 120;
+      node.w = Math.max(node.type === "palette" ? 220 : 180, drag.sw + (ev.clientX - drag.sx) / scale);
+      const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : node.type === "angle-image" ? ANGLE_NODE_HEIGHT : node.type === "palette" ? 200 : 120;
       node.h = Math.max(minHeight, drag.sh + (ev.clientY - drag.sy) / scale);
       const el = document.querySelector(`.node[data-id="${node.id}"]`);
       if (el) {
@@ -8602,11 +8692,8 @@ els.nodes.addEventListener("change", ev => {
       node.toolValues = node.toolValues || {};
       node.toolValues[ev.target.dataset.key] = ev.target.dataset.paramType === "toggle" ? ev.target.checked : ev.target.value;
       pushHistory();
+      if (isLinkedUpscaleNode(node) && ev.target.dataset.key === "whitePoint") renderNodes();
       return;
-    }
-    if (role === "tool-merge") {
-      node.keepCombinedInputs = ev.target.checked;
-      pushHistory();
     }
     return;
   }
@@ -9475,6 +9562,7 @@ function startLightboxPaint() {
   setLightboxPaintMode("idle");
   updateLightboxPaintUndo();
   lightboxPainting = true;
+  renderEditorPalette();
   els.lightbox.classList.add("is-editing");
   els.lightboxImg.classList.add("hidden");
   canvas.classList.remove("hidden");
@@ -9495,6 +9583,7 @@ function cancelLightboxPaint() {
   clearLightboxCrop();
   clearCompositeHover();
   lightboxPainting = false;
+  document.getElementById("editorPalette").classList.add("hidden");
   lightboxDrawing = false;
   hideLightboxEraserRing();
   lightboxPaintActions = [];
@@ -9530,11 +9619,17 @@ function paintCanvasPoint(ev) {
 function updateLightboxPaintDisplaySize() {
   const canvas = els.lightboxPaintCanvas;
   if (!lightboxPainting || !canvas.width || !canvas.height) return;
-  const maxWidth = Math.max(1, window.innerWidth * .9);
+  const palette = document.getElementById("editorPalette");
+  const wide = window.innerWidth >= 768;
+  const paletteWidth = palette.offsetWidth;
+  const maxWidth = Math.max(1, wide
+    ? Math.min(window.innerWidth * .9, window.innerWidth - 2 * (paletteWidth + 40))
+    : window.innerWidth * .9);
   const maxHeight = Math.max(1, window.innerHeight * .82);
   const displayScale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
   canvas.style.width = `${Math.max(1, Math.round(canvas.width * displayScale))}px`;
   canvas.style.height = `${Math.max(1, Math.round(canvas.height * displayScale))}px`;
+  palette.style.setProperty("--editor-palette-left", `${Math.max(16, Math.round((window.innerWidth - canvas.width * displayScale) / 2 - paletteWidth - 24))}px`);
   canvas.style.maxWidth = "none";
   canvas.style.maxHeight = "none";
   canvas.style.transform = `translate(${lightboxViewOffset.x}px, ${lightboxViewOffset.y}px) scale(${lightboxViewZoom})`;
@@ -9560,8 +9655,8 @@ function setLightboxPaintMode(mode) {
   const annotateColor = lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
   els.lightboxPaintFill.classList.toggle("active", isFill);
   els.lightboxPaintSizeField.classList.toggle("hidden", isFill);
-  els.lightboxFillToleranceField.classList.toggle("hidden", !isFill);
-  els.lightboxFillLineWidthField.classList.toggle("hidden", !isFill);
+  if (!isFill) commitLightboxLastFill();
+  syncLightboxFillControls();
   els.lightboxFillKeepLinesField.classList.toggle("hidden", !isFill);
   if (isFill) syncLightboxFillControls();
   $("lightboxPaintPointer").classList.toggle("active", lightboxPaintMode === "idle" || lightboxPaintMode === "transform");
@@ -9586,8 +9681,10 @@ function positionLightboxMirrorTools() {
   if (!lightboxPainting || els.lightboxMirrorTools.classList.contains("hidden")) return;
   requestAnimationFrame(() => {
     const rect = els.lightboxPaintCanvas.getBoundingClientRect();
-    els.lightboxMirrorTools.style.left = `${Math.min(window.innerWidth - 50, rect.right + 10)}px`;
-    els.lightboxMirrorTools.style.top = `${rect.top + rect.height / 2}px`;
+    const tools = els.lightboxMirrorTools;
+    const halfHeight = tools.offsetHeight / 2;
+    tools.style.left = `${Math.max(8, Math.min(window.innerWidth - tools.offsetWidth - 8, rect.right + 8))}px`;
+    tools.style.top = `${Math.max(halfHeight + 8, Math.min(window.innerHeight - halfHeight - 56, rect.top + rect.height / 2))}px`;
   });
 }
 
@@ -9674,7 +9771,18 @@ function getLightboxFillLayer() {
   if (!lightboxFillLayerDirty) return lightboxFillLayer;
   const context = lightboxFillLayer.getContext("2d");
   context.clearRect(0, 0, lightboxFillLayer.width, lightboxFillLayer.height);
-  for (const fill of lightboxFillActions) if (fill.layer) context.drawImage(fill.layer, 0, 0);
+  for (const fill of lightboxFillActions) {
+    if (fill.mode === "eraser") {
+      const first = fill.points[0];
+      if (fill.points.length === 1) drawLightboxPaintSegment(context, fill, first, { x: first.x + .01, y: first.y + .01 });
+      for (let index = 1; index < fill.points.length; index++) {
+        drawLightboxPaintSegment(context, fill, fill.points[index - 1], fill.points[index]);
+      }
+      continue;
+    }
+    const layer = lightboxFillSettings.keepLines && fill.inkLayer ? fill.inkLayer : fill.layer;
+    if (layer) context.drawImage(layer, 0, 0);
+  }
   lightboxFillLayerDirty = false;
   return lightboxFillLayer;
 }
@@ -9714,11 +9822,7 @@ function renderLightboxPaintComposite() {
   context.clearRect(0, 0, canvas.width, canvas.height);
   drawLightboxBaseLayers(context);
   if (lightboxFillActions.length) {
-    // 单一填色层整体合成：正片叠底时线稿透过颜色保持可见，覆盖模式为实色
-    context.save();
-    context.globalCompositeOperation = lightboxFillSettings.keepLines ? "multiply" : "source-over";
     context.drawImage(getLightboxFillLayer(), 0, 0);
-    context.restore();
   }
   context.drawImage(lightboxPaintOverlay, 0, 0);
   if (lightboxPaintMode === "transform" && lightboxPlacedSelected && lightboxPlacedImage) drawLightboxPlacedSelection(context);
@@ -9933,8 +10037,13 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
     return;
   }
   lightboxPaintCurrentAction = { mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p] };
-  lightboxPaintActions.push(lightboxPaintCurrentAction);
-  drawLightboxPaintSegment(lightboxPaintOverlay.getContext("2d"), lightboxPaintCurrentAction, p, { x: p.x + .01, y: p.y + .01 });
+  if (lightboxPaintMode === "eraser") {
+    lightboxFillActions.push(lightboxPaintCurrentAction);
+    markLightboxFillLayerDirty();
+  } else {
+    lightboxPaintActions.push(lightboxPaintCurrentAction);
+    drawLightboxPaintSegment(lightboxPaintOverlay.getContext("2d"), lightboxPaintCurrentAction, p, { x: p.x + .01, y: p.y + .01 });
+  }
   renderLightboxPaintComposite();
   updateLightboxPaintUndo();
 });
@@ -9961,8 +10070,9 @@ els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
     return;
   }
   const previous = lightboxPaintCurrentAction.points[lightboxPaintCurrentAction.points.length - 1];
+  const layer = lightboxPaintCurrentAction.mode === "eraser" ? getLightboxFillLayer() : lightboxPaintOverlay;
   lightboxPaintCurrentAction.points.push(p);
-  drawLightboxPaintSegment(lightboxPaintOverlay.getContext("2d"), lightboxPaintCurrentAction, previous, p);
+  drawLightboxPaintSegment(layer.getContext("2d"), lightboxPaintCurrentAction, previous, p);
   renderLightboxPaintComposite();
 });
 els.lightboxPaintCanvas.addEventListener("pointermove", ev => syncLightboxEraserRing(ev.clientX, ev.clientY));
@@ -9994,8 +10104,10 @@ function finishLightboxPointerAction(ev) {
       return;
     }
     pushLightboxEditUndo(() => {
-      const index = lightboxPaintActions.lastIndexOf(action);
-      if (index >= 0) lightboxPaintActions.splice(index, 1);
+      const actions = action.mode === "eraser" ? lightboxFillActions : lightboxPaintActions;
+      const index = actions.lastIndexOf(action);
+      if (index >= 0) actions.splice(index, 1);
+      if (action.mode === "eraser") markLightboxFillLayerDirty();
     });
     if (action.kind === "arrow" && ev.type === "pointerup") {
       lightboxPaintCurrentAction = null;
@@ -10030,7 +10142,7 @@ els.lightboxPaintSize.addEventListener("input", () => {
 });
 // ===== 填色（魔棒式区域填充）=====
 // 流程：按容差二值化 → 按“忽略细线”半径膨胀可通行区（浅色细线被吸收，深色硬线保持阻挡）→ 扫描线连通填充 → 闭运算填满区域内细线 → 生成颜色层。
-// 所有填色写入同一颜色层（后填覆盖先填，不叠色），整层按“保留线稿”以正片叠底或实色合成；上一次填色在滑块变动时可实时重算。
+// 所有填色写入同一颜色层（后填覆盖先填，不叠色），按“保留线稿”选择保留深色笔画的覆盖层或实色覆盖层；上一次填色在滑块变动时可实时重算。
 
 let lightboxFillBusy = false;
 let lightboxFillHintShown = false;
@@ -10038,6 +10150,7 @@ let lightboxFillHintShown = false;
 function resetLightboxFillState() {
   lightboxFillActions = [];
   lightboxLastFill = null;
+  $("lightboxFillAdjustment").classList.add("hidden");
   lightboxFillBusy = false;
   lightboxFillLayer.width = 0;
   lightboxFillLayer.height = 0;
@@ -10047,16 +10160,23 @@ function resetLightboxFillState() {
 }
 
 function syncLightboxFillControls() {
-  els.lightboxFillTolerance.value = lightboxFillSettings.tolerance;
-  els.lightboxFillLineWidth.value = lightboxFillSettings.lineWidth;
+  $("lightboxFillAdjustment").classList.toggle("hidden", !lightboxLastFill || lightboxPaintMode !== "fill");
+  els.lightboxFillTolerance.value = (lightboxLastFill?.tolerance ?? lightboxFillSettings.tolerance);
+  els.lightboxFillLineWidth.value = (lightboxLastFill?.lineWidth ?? lightboxFillSettings.lineWidth);
   els.lightboxFillKeepLines.checked = lightboxFillSettings.keepLines;
-  els.lightboxFillToleranceValue.textContent = String(lightboxFillSettings.tolerance);
-  els.lightboxFillLineWidthValue.textContent = `${lightboxFillSettings.lineWidth}px`;
+  els.lightboxFillToleranceValue.textContent = String((lightboxLastFill?.tolerance ?? lightboxFillSettings.tolerance));
+  els.lightboxFillLineWidthValue.textContent = `${(lightboxLastFill?.lineWidth ?? lightboxFillSettings.lineWidth)}px`;
 }
 
 // 结束“上一次填色”的实时调整，释放其缓存的源像素与掩膜
 function commitLightboxLastFill() {
   if (!lightboxLastFill) return;
+  if (lightboxFillReapplyTimer) {
+    clearTimeout(lightboxFillReapplyTimer);
+    lightboxFillReapplyTimer = 0;
+    reapplyLightboxLastFill();
+  }
+  $("lightboxFillAdjustment").classList.add("hidden");
   lightboxLastFill.source = null;
   lightboxLastFill.mask = null;
   lightboxLastFill = null;
@@ -10182,10 +10302,74 @@ function computeLightboxFillMask(source, seedX, seedY, settings) {
   const hardSq = hard * hard * 3;
   const withinTolerance = new Uint8Array(total);
   const hardLine = new Uint8Array(total);
+  const seedChromaX = 2 * sr - sg - sb;
+  const seedChromaY = Math.sqrt(3) * (sg - sb);
+  const seedChromaSq = seedChromaX ** 2 + seedChromaY ** 2;
+  const useHue = sa >= 128 && Math.max(sr, sg, sb) - Math.min(sr, sg, sb) >= 32;
+  const seedHigh = Math.max(sr, sg, sb);
+  const minimumSaturation = Math.min(0.24, (seedHigh - Math.min(sr, sg, sb)) / Math.max(1, seedHigh));
+  const hueCosSq = Math.cos((8 + settings.tolerance * 0.24) * Math.PI / 180) ** 2;
+  const lightness = p => (54 * data[p] + 183 * data[p + 1] + 19 * data[p + 2]) / 256;
+  const seedLight = lightness(seed);
+  const useNeutralMaterial = !useHue && sa >= 128 && seedLight >= 128;
+  const useDarkMaterial = !useHue && sa >= 128 && seedLight < 96;
+  const darkMaterialCeiling = Math.min(112, seedLight + 18 + settings.tolerance * 0.65);
+  const materialLightFloor = Math.max(52, seedLight * (0.54 - settings.tolerance * 0.006));
+  const rowStride = width * 4;
   for (let i = 0, p = 0; i < total; i++, p += 4) {
     const dr = data[p] - sr, dg = data[p + 1] - sg, db = data[p + 2] - sb;
     const distanceSq = dr * dr + dg * dg + db * db;
     const alphaClose = Math.abs(data[p + 3] - sa) <= tolerance;
+    if (useDarkMaterial) {
+      const light = lightness(p);
+      const column = i % width;
+      const row = Math.floor(i / width);
+      const high = Math.max(data[p], data[p + 1], data[p + 2]);
+      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
+      // Keep silhouette edges independent of the tolerance and thin-line sliders.
+      const edge = (column > 0 && column < width - 1 &&
+        Math.abs(lightness(p - 4) - lightness(p + 4)) >= 36) ||
+        (row > 0 && row < height - 1 &&
+          Math.abs(lightness(p - rowStride) - lightness(p + rowStride)) >= 36);
+      if (p === seed || (alphaClose && data[p + 3] >= 128 && light <= darkMaterialCeiling && spread <= 28 && !edge)) {
+        withinTolerance[i] = 1;
+      } else {
+        hardLine[i] = 1;
+      }
+      continue;
+    }
+    if (useHue && alphaClose) {
+      const chromaX = 2 * data[p] - data[p + 1] - data[p + 2];
+      const chromaY = Math.sqrt(3) * (data[p + 1] - data[p + 2]);
+      const chromaSq = chromaX ** 2 + chromaY ** 2;
+      const projection = chromaX * seedChromaX + chromaY * seedChromaY;
+      const light = lightness(p);
+      // A bright reflection can carry very little pigment, while a dark seam
+      // can retain the same hue as the panels it separates.
+      const high = Math.max(data[p], data[p + 1], data[p + 2]);
+      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
+      const saturationFloor = light >= 190 ? 0.03 : minimumSaturation;
+      const sameHue = light >= 12 && spread >= Math.max(6, high * saturationFloor) && projection > 0 &&
+        projection ** 2 >= chromaSq * seedChromaSq * hueCosSq;
+      const column = i % width;
+      const row = Math.floor(i / width);
+      const seam = i * 4 !== seed && (
+        (column > 0 && column < width - 1 &&
+          Math.min(lightness(p - 4), lightness(p + 4)) - light >= 30) ||
+        (row > 0 && row < height - 1 &&
+          Math.min(lightness(p - rowStride), lightness(p + rowStride)) - light >= 30)
+      );
+      if (sameHue && !seam) withinTolerance[i] = 1;
+      else hardLine[i] = 1;
+      continue;
+    }
+    if (useNeutralMaterial && alphaClose) {
+      const high = Math.max(data[p], data[p + 1], data[p + 2]);
+      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
+      if (lightness(p) >= materialLightFloor && spread <= Math.max(24, high * 0.2)) withinTolerance[i] = 1;
+      else hardLine[i] = 1;
+      continue;
+    }
     if (distanceSq <= toleranceSq && alphaClose) withinTolerance[i] = 1;
     else if (distanceSq > hardSq || !alphaClose) hardLine[i] = 1;
   }
@@ -10196,7 +10380,20 @@ function computeLightboxFillMask(source, seedX, seedY, settings) {
   dilateBinaryMask(withinTolerance, width, height, radius, passable, scratch);
   if (radius > 0) for (let i = 0; i < total; i++) if (hardLine[i]) passable[i] = 0;
   let filled = new Uint8Array(total);
-  floodFillMask(passable, width, height, seedX, seedY, filled);
+  const seamRadius = useHue || useNeutralMaterial || useDarkMaterial ? Math.max(2, Math.min(8, Math.round(Math.min(width, height) / 280))) : 0;
+  if (seamRadius) {
+    const core = new Uint8Array(total);
+    erodeBinaryMask(passable, width, height, seamRadius, core, scratch);
+    if (core[seed >> 2]) {
+      floodFillMask(core, width, height, seedX, seedY, filled);
+      dilateBinaryMask(filled, width, height, seamRadius, core, scratch);
+      for (let i = 0; i < total; i++) filled[i] = core[i] & passable[i];
+    } else {
+      floodFillMask(passable, width, height, seedX, seedY, filled);
+    }
+  } else {
+    floodFillMask(passable, width, height, seedX, seedY, filled);
+  }
   if (radius > 0) {
     // 闭运算（先膨胀后腐蚀）：把区域内部两侧都已填色、宽度不超过 2×radius 的线条（辅助线、排线、硬线）一并填满，
     // 得到整块实心区域；外轮廓两侧只有一侧填色，腐蚀会把它还原，不会漏到相邻区域
@@ -10204,11 +10401,107 @@ function computeLightboxFillMask(source, seedX, seedY, settings) {
     erodeBinaryMask(passable, width, height, radius, filled, scratch);
   }
   let count = 0;
-  for (let i = 0; i < total; i++) count += filled[i];
+  for (let i = 0; i < total; i++) {
+    if (useDarkMaterial && hardLine[i]) filled[i] = 0;
+    count += filled[i];
+  }
   return { mask: filled, count };
 }
 
-function buildLightboxFillLayer(mask, width, height, color) {
+function extractLightboxLinePixels(image, strength, cleanup) {
+  const { width, height, data } = image;
+  const threshold = 36 + cleanup * 0.65;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4;
+      const left = (y * width + Math.max(0, x - 1)) * 4;
+      const right = (y * width + Math.min(width - 1, x + 1)) * 4;
+      const top = (Math.max(0, y - 1) * width + x) * 4;
+      const bottom = (Math.min(height - 1, y + 1) * width + x) * 4;
+      let edge = 0;
+      for (let c = 0; c < 3; c++) {
+        const dx = data[right + c] - data[left + c];
+        const dy = data[bottom + c] - data[top + c];
+        edge = Math.max(edge, Math.abs(dx) + Math.abs(dy));
+      }
+      const high = Math.max(data[p], data[p + 1], data[p + 2]);
+      const low = Math.min(data[p], data[p + 1], data[p + 2]);
+      const ink = high < 96 && high - low < 24 ? 255 - high : 0;
+      const value = Math.max(0, Math.max(edge, ink) - threshold) * (0.8 + strength / 35);
+      image.linePixels[p] = image.linePixels[p + 1] = image.linePixels[p + 2] = 255 - Math.min(255, value);
+      image.linePixels[p + 3] = 255;
+    }
+  }
+}
+
+function makeLightboxLineArt(source, width, height, strength, cleanup) {
+  const output = document.createElement("canvas");
+  output.width = width;
+  output.height = height;
+  const ctx = output.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(source, 0, 0, width, height);
+  const input = ctx.getImageData(0, 0, width, height);
+  const lines = ctx.createImageData(width, height);
+  extractLightboxLinePixels({ width, height, data: input.data, linePixels: lines.data }, strength, cleanup);
+  ctx.putImageData(lines, 0, 0);
+  return output;
+}
+
+document.getElementById("lightboxLineArtBtn").addEventListener("click", () => {
+  if (!lightboxPainting || document.querySelector(".line-art-dialog")) return;
+  const source = lightboxEditBase || els.lightboxImg;
+  const canvas = els.lightboxPaintCanvas;
+  const { width, height } = canvas;
+  const ratio = Math.min(1, 800 / Math.max(width, height));
+  const dialog = document.createElement("dialog");
+  dialog.className = "palette-mask-dialog line-art-dialog";
+  dialog.setAttribute("aria-label", "提取线稿");
+  dialog.innerHTML = `<h2>提取线稿</h2><div class="quick-palette-row">
+    <label>线条强度 <input type="range" min="0" max="100" value="55"></label>
+    <label>去杂纹 <input type="range" min="0" max="100" value="40"></label>
+    </div><div class="palette-mask-surface"></div><p role="status">预览提取结果</p>
+    <div class="quick-palette-row"><button type="button" data-line-action="apply">应用线稿</button><button type="button" data-line-action="cancel">取消</button></div>`;
+  const inputs = [...dialog.querySelectorAll("input")];
+  const settings = () => inputs.map(input => Number(input.value));
+  const surface = dialog.querySelector(".palette-mask-surface");
+  let frame = 0;
+  const preview = () => {
+    frame = 0;
+    surface.replaceChildren(makeLightboxLineArt(source, Math.max(1, Math.round(width * ratio)), Math.max(1, Math.round(height * ratio)), ...settings()));
+  };
+  dialog.addEventListener("input", () => { if (!frame) frame = requestAnimationFrame(preview); });
+  dialog.addEventListener("close", () => { cancelAnimationFrame(frame); dialog.remove(); }, { once: true });
+  dialog.addEventListener("click", event => {
+    const action = event.target.closest("[data-line-action]")?.dataset.lineAction;
+    if (action === "cancel") dialog.close();
+    if (action !== "apply" || !lightboxPainting) return;
+    try {
+      const previous = lightboxEditBase;
+      const lines = makeLightboxLineArt(source, width, height, ...settings());
+      commitLightboxLastFill();
+      lightboxEditBase = lines;
+      pushLightboxEditUndo(() => { lightboxEditBase = previous; });
+      setLightboxPaintMode("fill");
+      renderLightboxPaintComposite();
+      dialog.close();
+    } catch (error) {
+      dialog.querySelector("[role=status]").textContent = `提取失败：${error.message}`;
+    }
+  });
+  try {
+    preview();
+    document.body.append(dialog);
+    dialog.showModal();
+  } catch (error) {
+    dialog.remove();
+    toast(`提取线稿失败：${error.message}`);
+  }
+});
+
+function buildLightboxFillLayer(mask, source, seed, color) {
+  const { width, height, data } = source;
   const layer = document.createElement("canvas");
   layer.width = width;
   layer.height = height;
@@ -10216,15 +10509,41 @@ function buildLightboxFillLayer(mask, width, height, color) {
   const image = context.createImageData(width, height);
   const [r, g, b] = parseHexColor(color);
   const pixels = image.data;
+  const seedOffset = (seed.y * width + seed.x) * 4;
+  const luminance = p => (data[p] * 54 + data[p + 1] * 183 + data[p + 2] * 19) / 256;
+  const seedLuma = luminance(seedOffset);
   for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
     if (!mask[i]) continue;
-    pixels[p] = r;
-    pixels[p + 1] = g;
-    pixels[p + 2] = b;
+    const delta = data[seedOffset + 3] && data[p + 3] ? luminance(p) - seedLuma : 0;
+    const shade = delta < 0 ? delta / Math.max(1, seedLuma) : 0;
+    const highlight = delta > 0 ? delta / Math.max(1, 255 - seedLuma) : 0;
+    pixels[p] = r * (1 + shade) + (255 - r) * highlight;
+    pixels[p + 1] = g * (1 + shade) + (255 - g) * highlight;
+    pixels[p + 2] = b * (1 + shade) + (255 - b) * highlight;
     pixels[p + 3] = 255;
   }
   context.putImageData(image, 0, 0);
-  return layer;
+  const seedLight = Math.max(data[seedOffset], data[seedOffset + 1], data[seedOffset + 2]);
+  let hasInk = false;
+  for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
+    if (!mask[i] || data[p + 3] < 128) continue;
+    const light = Math.max(data[p], data[p + 1], data[p + 2]);
+    const dark = Math.min(data[p], data[p + 1], data[p + 2]);
+    if (light > 96 || light - dark > 24 || seedLight - light < 48) continue;
+    const strength = (1 - light / 255);
+    pixels[p] = Math.round(pixels[p] * (1 - strength) + data[p] * strength);
+    pixels[p + 1] = Math.round(pixels[p + 1] * (1 - strength) + data[p + 1] * strength);
+    pixels[p + 2] = Math.round(pixels[p + 2] * (1 - strength) + data[p + 2] * strength);
+    hasInk = true;
+  }
+  if (hasInk) {
+    const inkLayer = document.createElement("canvas");
+    inkLayer.width = width;
+    inkLayer.height = height;
+    inkLayer.getContext("2d").putImageData(image, 0, 0);
+    return { layer, inkLayer };
+  }
+  return { layer, inkLayer: null };
 }
 
 async function applyLightboxFillAt(point) {
@@ -10243,7 +10562,8 @@ async function applyLightboxFillAt(point) {
     const { tolerance, lineWidth } = lightboxFillSettings;
     const { mask, count } = computeLightboxFillMask(source, x, y, { tolerance, lineWidth });
     if (count <= 0) return;
-    const action = { kind: "fill", seed: { x, y }, color, tolerance, lineWidth, layer: buildLightboxFillLayer(mask, source.width, source.height, color), source, mask };
+    const seed = { x, y };
+    const action = { kind: "fill", seed, color, tolerance, lineWidth, ...buildLightboxFillLayer(mask, source, seed, color), source, mask };
     lightboxFillActions.push(action);
     markLightboxFillLayerDirty();
     pushLightboxEditUndo(() => {
@@ -10254,6 +10574,7 @@ async function applyLightboxFillAt(point) {
     });
     // 在 push 之后标记，允许随后拖动滑块/改色实时重算本次填色
     lightboxLastFill = action;
+    syncLightboxFillControls();
     renderLightboxPaintComposite();
     if (!lightboxFillHintShown) {
       lightboxFillHintShown = true;
@@ -10281,40 +10602,33 @@ function scheduleLightboxFillReapply() {
 function reapplyLightboxLastFill() {
   const action = lightboxLastFill;
   if (!action || !action.source || !lightboxFillActions.includes(action)) return;
-  const color = els.lightboxPaintColor.value;
-  const { tolerance, lineWidth } = lightboxFillSettings;
-  const needsMask = tolerance !== action.tolerance || lineWidth !== action.lineWidth;
-  if (needsMask) {
-    action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
-    action.tolerance = tolerance;
-    action.lineWidth = lineWidth;
-  } else if (color === action.color) {
-    return;
-  }
-  action.color = color;
-  action.layer = buildLightboxFillLayer(action.mask, action.source.width, action.source.height, color);
+  // 只有容差/忽略细线会实时重算上一次填色的范围；颜色在点击时即定格，之后改颜色只影响下一笔
+  const tolerance = Number(els.lightboxFillTolerance.value);
+  const lineWidth = Number(els.lightboxFillLineWidth.value);
+  if (tolerance === action.tolerance && lineWidth === action.lineWidth) return;
+  action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
+  action.tolerance = tolerance;
+  action.lineWidth = lineWidth;
+  Object.assign(action, buildLightboxFillLayer(action.mask, action.source, action.seed, action.color));
   markLightboxFillLayerDirty();
   renderLightboxPaintComposite();
 }
 
 els.lightboxPaintFill.onclick = () => setLightboxPaintMode("fill");
 els.lightboxFillTolerance.addEventListener("input", () => {
-  lightboxFillSettings.tolerance = Number(els.lightboxFillTolerance.value);
-  els.lightboxFillToleranceValue.textContent = String(lightboxFillSettings.tolerance);
+  els.lightboxFillToleranceValue.textContent = String(els.lightboxFillTolerance.value);
   scheduleLightboxFillReapply();
 });
 els.lightboxFillLineWidth.addEventListener("input", () => {
-  lightboxFillSettings.lineWidth = Number(els.lightboxFillLineWidth.value);
-  els.lightboxFillLineWidthValue.textContent = `${lightboxFillSettings.lineWidth}px`;
+  els.lightboxFillLineWidthValue.textContent = `${els.lightboxFillLineWidth.value}px`;
   scheduleLightboxFillReapply();
 });
+$("lightboxFillAdjustmentDone").onclick = commitLightboxLastFill;
 els.lightboxFillKeepLines.addEventListener("change", () => {
   // 保留线稿是整个填色层的合成模式，切换即时生效于全部填色，无需重算掩膜
   lightboxFillSettings.keepLines = els.lightboxFillKeepLines.checked;
+  markLightboxFillLayerDirty();
   if (lightboxPainting) renderLightboxPaintComposite();
-});
-els.lightboxPaintColor.addEventListener("input", () => {
-  if (lightboxPaintMode === "fill") scheduleLightboxFillReapply();
 });
 
 async function placeImageInLightbox(source) {
@@ -10467,6 +10781,7 @@ els.lightboxPrev.onclick = lightboxPrev;
 els.lightboxNext.onclick = lightboxNext;
 els.lightbox.querySelector(".lightbox-bg").onclick = () => { if (!lightboxPainting) hideLightbox(); };
 els.lightbox.addEventListener("wheel", ev => {
+  if (ev.target.closest(".editor-quick-palette")) return;
   if (ev.target.closest("#lightboxArrowNote")) { ev.stopPropagation(); return; }
   if (lightboxPainting) {
     ev.preventDefault();
@@ -10913,7 +11228,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       showMenu(ev.clientX, ev.clientY, items);
       return;
     }
-    items.push(["添加文字节点", () => addNode("text", p.x, p.y)]);
+    items.push(["添加文字节点", () => addNode("text", p.x, p.y)], ["添加调色盘", () => addNode("palette", p.x, p.y)]);
     items.push(
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
@@ -11076,9 +11391,11 @@ window.addEventListener("copy", ev => {
   if (ev.target.closest?.(".canvas-annotation")) return; // 标注编辑中的复制走原生行为
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
+  copySelection(false);
   ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
   ev.clipboardData.setData("text/plain", "");
-  copySelection(false);
+  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
+  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
 });
 
 window.addEventListener("paste", async ev => {
@@ -11102,6 +11419,14 @@ window.addEventListener("paste", async ev => {
   if (internalNodeCopy && state.clipboard?.nodes?.length) {
     ev.preventDefault();
     pasteNodes(state.clipboard);
+    return;
+  }
+  // 其他实例/标签页复制的节点：数据藏在系统剪贴板 text/html 的注释里
+  const crossCopy = decodeCanvasflowNodesHtml(data?.getData("text/html"));
+  if (crossCopy && (crossCopy.nodes.length || crossCopy.edges.length)) {
+    ev.preventDefault();
+    state.clipboard = crossCopy; // 落地到本实例，右键"粘贴节点"与重复 Ctrl+V 继续可用
+    pasteNodes(crossCopy);
     return;
   }
   if (hasExternalContent && await createNodeFromClipboard(ev)) {
@@ -11553,10 +11878,12 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("cut", ev => {
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
-  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
-  ev.clipboardData.setData("text/plain", "");
   const ids = new Set(state.selected);
   copySelection(false);
+  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
+  ev.clipboardData.setData("text/plain", "");
+  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
+  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
   deleteNodes(ids);
 });
 
@@ -12301,6 +12628,8 @@ async function dataUrlToThumbnailDataUrl(dataUrl, maxSize = 420) {
 
 async function externalizeImageField(holder, field, assetField, fallbackName) {
   const dataUrl = holder?.[field];
+  // Keep vector previews intact through saves and reloads.
+  if (field === "image" && holder.mime === "image/svg+xml" && dataUrl?.startsWith("data:image/svg+xml;base64,")) return false;
   // Capture the original PNG prompt before replacing image bytes with a WebP thumbnail.
   if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
     const prompt = String(readGenerationMetadataFromPng(dataUrl)?.prompt || "").trim();
@@ -14252,3 +14581,478 @@ async function pollBrowserImageTransfers() {
 setInterval(pollBrowserImageTransfers, 2500);
 pollBrowserImageTransfers();
 window.addEventListener("focus", pollBrowserImageTransfers);
+
+
+// Global color palettes and reference-image sampling.
+function paletteFor(node) {
+  return globalLibrary.palettes.find(item => item.id === (node ? node.paletteId : editorPaletteId));
+}
+
+function paletteCardInk(hex) {
+  const luminance = hex.slice(1).match(/../g).reduce((sum, part, channel) => {
+    const value = parseInt(part, 16) / 255;
+    const linear = value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    return sum + linear * [0.2126, 0.7152, 0.0722][channel];
+  }, 0);
+  return luminance >= 0.65 ? "dark" : "light";
+}
+
+function paletteHue(hex) {
+  const [r, g, b] = hex.slice(1).match(/../g).map(part => parseInt(part, 16));
+  const max = Math.max(r, g, b);
+  const delta = max - Math.min(r, g, b);
+  if (!delta) return 360;
+  const sector = max === r ? (g - b) / delta : max === g ? 2 + (b - r) / delta : 4 + (r - g) / delta;
+  return (sector * 60 + 360) % 360;
+}
+
+const paletteFamilies = {
+  all: ["全部色系", 0, 360], red: ["红色系", -15, 15], warm: ["橙黄色系", 20, 55],
+  green: ["绿色系", 80, 150], blue: ["青蓝色系", 180, 240], purple: ["紫色系", 260, 300],
+  pink: ["粉色系", 310, 340], earth: ["棕色系", 15, 45], gray: ["黑白灰", 0, 360],
+};
+const paletteLevels = { all: "不限", low: "低", mid: "中", high: "高" };
+
+function paletteWidget(owner) {
+  if (!paletteWidgets.has(owner)) {
+    const widget = { family: "all", saturation: "all", lightness: "all", layout: "strip", colors: [], selected: "" };
+    paletteWidgets.set(owner, widget);
+    generateWidgetPalette(widget);
+  }
+  return paletteWidgets.get(owner);
+}
+
+function generateWidgetPalette(widget) {
+  const [, from, to] = paletteFamilies[widget.family];
+  const hue = from + Math.random() * (to - from);
+  const [sMin, sMax] = widget.family === "gray" ? [0, 0] :
+    ({ low: [12, 38], mid: [40, 70], high: [70, 100] }[widget.saturation] ||
+      ({ earth: [20, 50], pink: [40, 80] }[widget.family] || [24, 80]));
+  const [lMin, lMax] = { low: [10, 35], mid: [40, 70], high: [70, 95] }[widget.lightness] || [10, 90];
+  widget.colors = Array.from({ length: 6 }, (_, i) => {
+    const h = (Math.min(to, Math.max(from, hue + (i - 2.5) * 5)) + 360) % 360;
+    const s = (sMin + Math.random() * (sMax - sMin)) / 100;
+    const l = (lMin + i * (lMax - lMin) / 5) / 100;
+    const v = l + s * Math.min(l, 1 - l);
+    return paletteHsvHex([h, v ? 200 * (1 - l / v) : 0, v * 100]);
+  });
+  widget.selected = widget.colors[0];
+}
+
+function widgetOptions(options, selected) {
+  return Object.entries(options).map(([value, text]) =>
+    `<option value="${value}" ${value === selected ? "selected" : ""}>${Array.isArray(text) ? text[0] : text}</option>`).join("");
+}
+
+function widgetResults(widget, draggable) {
+  return widget.colors.map((hex, index) =>
+    `<button type="button" data-palette-action="sample" draggable="${draggable}" data-color="${hex}" data-ink="${paletteCardInk(hex)}" style="--swatch-color:${hex};--palette-enter-delay:${index * 36}ms" aria-label="选择 ${hex}" aria-pressed="${hex === widget.selected}"><span>${String(index + 1).padStart(2, "0")}</span><span>${hex}</span></button>`).join("");
+}
+
+function widgetInspector(hex) {
+  const rgb = hex.slice(1).match(/../g).map(part => parseInt(part, 16));
+  const key = 1 - Math.max(...rgb) / 255;
+  const cmyk = [...rgb.map(value => key === 1 ? 0 : (1 - value / 255 - key) / (1 - key)), key].map(value => Math.round(value * 100));
+  return `<span>HEX <b>${hex}</b></span><span>RGB <b>${rgb.join(", ")}</b></span><span>CMYK <b>${cmyk.join(", ")}</b></span>`;
+}
+
+function updatePaletteWidget(root, widget) {
+  root.dataset.layout = widget.layout;
+  const results = root.querySelector(".palette-widget-results");
+  results.dataset.layout = widget.layout;
+  results.innerHTML = widgetResults(widget, root.dataset.paletteOwner === "editor");
+  root.querySelector(".palette-widget-inspector").innerHTML = widgetInspector(widget.selected);
+  for (const button of root.querySelectorAll('[data-palette-action="layout"]')) {
+    button.setAttribute("aria-pressed", String(button.dataset.layout === widget.layout));
+  }
+}
+
+function paletteMarkup(node) {
+  const palette = paletteFor(node);
+  const owner = node?.id || "editor";
+  const widget = paletteWidget(owner);
+  return `<div class="quick-palette palette-widget" data-palette-owner="${escapeHtml(owner)}" data-layout="${widget.layout}">
+    <header class="palette-widget-header">
+      <div><strong>智能灵感调色盘</strong><small>按条件生成与收藏颜色</small></div>
+      <div class="palette-widget-layouts" role="group" aria-label="配色展示方式">${[
+        ["stack", "纵条", "M3 3h10v4H3z M3 9h10v4H3z"],
+        ["strip", "横条", "M3 3h4v10H3z M9 3h4v10H9z"],
+        ["cards", "卡片", "M3 3h4v4H3z M9 3h4v4H9z M3 9h4v4H3z M9 9h4v4H9z"],
+      ].map(([key, label, path]) => `<button type="button" data-palette-action="layout" data-layout="${key}" aria-label="${label}" title="${label}" aria-pressed="${key === widget.layout}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor"/></svg></button>`).join("")}</div>
+    </header>
+    <div class="quick-palette-heading"><select data-palette-action="select" aria-label="选择调色盘"><option value="">选择调色盘</option>${globalLibrary.palettes.map(item =>
+      `<option value="${escapeHtml(item.id)}" ${item.id === palette?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>
+      <button type="button" class="palette-widget-icon" data-palette-action="copy" aria-label="复制全套 HEX" title="复制全套 HEX"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1" fill="none" stroke="currentColor"/><path d="M3 10V4a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor"/></svg></button>
+      <button type="button" class="palette-widget-icon" data-palette-action="delete" aria-label="删除当前方案" title="删除当前方案" ${palette ? "" : "disabled"}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8h5.6l.7-8M7 7v3m2-3v3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      ${node ? '<button data-palette-action="extract">提取颜色</button>' : ""}</div>
+    <section class="palette-widget-saved"><div class="palette-widget-head"><strong>已选颜色 <span>${palette?.colors.length || 0}</span></strong><span class="palette-widget-custom"><button type="button" data-palette-action="custom">＋ 自定义</button><input type="color" data-palette-custom aria-label="自定义颜色" tabindex="-1"></span>${window.EyeDropper || node ? '<button type="button" data-palette-action="eyedropper">吸管</button>' : ""}<button type="button" data-palette-action="clear-colors" ${palette?.colors.length ? "" : "disabled"}>清空</button></div>
+    <div class="quick-palette-colors">${(palette?.colors || []).map((color, index) => ({ color, index, hue: paletteHue(color.hex) })).sort((a, b) => a.hue - b.hue).map(({ color, index }) => `<div class="quick-palette-chip">
+      <button type="button" data-palette-action="pick" data-color="${color.hex}" data-ink="${paletteCardInk(color.hex)}" style="--swatch-color:${color.hex}" draggable="${!node}" title="${color.hex}${color.share == null ? "" : ` / ${(color.share * 100).toFixed(1)}%`}" aria-label="使用 ${color.hex}" aria-pressed="${color.hex === widget.selected}"><span class="quick-palette-code">${color.hex}</span></button>
+      <button type="button" data-palette-action="remove" data-index="${index}" aria-label="删除颜色 ${color.hex}">×</button></div>`).join("")}</div>
+    ${palette?.colors.length ? "" : '<p>点击生成的色块收藏颜色</p>'}</section>
+    <section class="palette-widget-filters"><label>色系<select data-palette-filter="family">${widgetOptions(paletteFamilies, widget.family)}</select></label>
+      <div><label>饱和度<select data-palette-filter="saturation">${widgetOptions(paletteLevels, widget.saturation)}</select></label>
+      <label>明度<select data-palette-filter="lightness">${widgetOptions(paletteLevels, widget.lightness)}</select></label></div>
+      <button type="button" data-palette-action="generate">按条件生成配色条</button></section>
+    <div class="palette-widget-results" data-layout="${widget.layout}">${widgetResults(widget, !node)}</div>
+    <section class="palette-widget-details"><div class="palette-widget-head"><strong>颜色详情</strong></div><div class="palette-widget-inspector" aria-live="polite">${widgetInspector(widget.selected)}</div></section>
+    ${node ? `<details class="quick-palette-manage"${palette ? "" : " open"}><summary>管理方案</summary>
+      <div class="quick-palette-row"><input data-palette-name aria-label="调色盘名称" placeholder="调色盘名称" value="${escapeHtml(palette?.name || "")}"><button data-palette-action="new">新建</button></div>
+      ${palette ? '<div class="quick-palette-row"><button data-palette-action="rename">重命名</button></div>' : ""}</details>` : ""}
+  </div>`;
+}
+
+function renderEditorPalette() {
+  const panel = document.getElementById("editorPalette");
+  if (!lightboxPainting) return;
+  panel.classList.remove("hidden");
+  panel.querySelector(".quick-palette-body").innerHTML = paletteMarkup();
+}
+
+function refreshPalettes() {
+  saveGlobalLibrary();
+  renderNodes();
+  renderEditorPalette();
+}
+
+function choosePalette(node, id, select) {
+  if (node) {
+    node.paletteId = id;
+    pushHistory();
+    if (select) {
+      const widget = select.closest(".palette-widget");
+      widget.outerHTML = paletteMarkup(node);
+    } else {
+      renderNodes();
+    }
+  } else {
+    editorPaletteId = id;
+    renderEditorPalette();
+  }
+}
+
+function paletteHsvHex([h, s, v]) {
+  return "#" + [5, 3, 1].map(offset => {
+    const k = (offset + h / 60) % 6;
+    return Math.round(255 * v / 100 * (1 - s / 100 * Math.max(0, Math.min(k, 4 - k, 1))))
+      .toString(16).padStart(2, "0");
+  }).join("").toUpperCase();
+}
+
+function extractPaletteColors(pixels, mask, limit = 8) {
+  const buckets = new Map();
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (!pixels[i + 3] || mask[i + 3] > 0) continue;
+    const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const bucket = buckets.get(key) || [0, 0, 0, 0];
+    bucket[0] += r; bucket[1] += g; bucket[2] += b; bucket[3]++;
+    buckets.set(key, bucket);
+  }
+  const samples = [...buckets.values()].map(([r, g, b, n]) => ({ rgb: [r / n, g / n, b / n], n })).sort((a, b) => b.n - a.n);
+  if (!samples.length) return [];
+  const distance = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  const centers = [samples[0].rgb];
+  while (centers.length < limit) {
+    let best = null, score = 0;
+    for (const sample of samples) {
+      const weighted = Math.min(...centers.map(center => distance(sample.rgb, center))) * Math.sqrt(sample.n);
+      if (weighted > score) { best = sample; score = weighted; }
+    }
+    if (!best) break;
+    centers.push(best.rgb);
+  }
+  let groups;
+  for (let iteration = 0; iteration < 10; iteration++) {
+    groups = centers.map(() => [0, 0, 0, 0]);
+    for (const { rgb, n } of samples) {
+      let nearest = 0;
+      for (let i = 1; i < centers.length; i++) if (distance(rgb, centers[i]) < distance(rgb, centers[nearest])) nearest = i;
+      const group = groups[nearest];
+      rgb.forEach((value, channel) => { group[channel] += value * n; });
+      group[3] += n;
+    }
+    groups.forEach(([r, g, b, n], i) => { if (n) centers[i] = [r / n, g / n, b / n]; });
+  }
+  const total = groups.reduce((sum, group) => sum + group[3], 0);
+  return groups.filter(group => group[3]).sort((a, b) => b[3] - a[3]).map(([r, g, b, n]) => ({
+    hex: "#" + [r, g, b].map(value => Math.round(value / n).toString(16).padStart(2, "0")).join("").toUpperCase(),
+    share: n / total,
+  }));
+}
+
+async function openPaletteExtraction(node, onPick) {
+  const collected = collectUpstreamForAI(node.id);
+  const ref = collected.images[0] || collected.groupImages[0];
+  if (!ref) { toast("请先连接一张参考图"); return; }
+  const source = await materializeReferenceImage(ref);
+  if (!source) throw new Error("参考图无法读取");
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  if (findNode(node.id) !== node || document.querySelector(".palette-mask-dialog")) return;
+  const dialog = document.createElement("dialog");
+  dialog.className = "palette-mask-dialog";
+  dialog.setAttribute("aria-label", "参考图取色");
+  dialog.innerHTML = `<h2>参考图取色</h2><div class="quick-palette-row">
+    <label>画笔 <select aria-label="蒙版工具"><option value="exclude">排除背景</option><option value="restore">恢复取色</option></select></label>
+    <label>大小 <input type="range" min="8" max="96" value="32" aria-label="蒙版画笔大小"></label>
+    <button data-mask="clear">清空蒙版</button></div>
+    <div class="palette-mask-surface"><canvas aria-label="参考图"></canvas><canvas aria-label="取色蒙版"></canvas></div>
+    <p role="status">涂抹要排除的区域，再提取颜色。</p><div class="palette-mask-result"></div>
+    <div class="quick-palette-row"><input aria-label="新调色盘名称" placeholder="新调色盘名称">
+    <button data-mask="sample">提取颜色</button><button data-mask="save" disabled>保存为新方案</button>
+    <button data-mask="replace" disabled>替换当前方案</button><button data-mask="close">关闭</button></div>`;
+  const [base, mask] = dialog.querySelectorAll("canvas");
+  const scale = Math.min(1, 512 / Math.max(image.naturalWidth, image.naturalHeight));
+  base.width = mask.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  base.height = mask.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const sourceContext = base.getContext("2d", { willReadFrequently: true });
+  const maskContext = mask.getContext("2d", { willReadFrequently: true });
+  sourceContext.drawImage(image, 0, 0, base.width, base.height);
+  const pixels = sourceContext.getImageData(0, 0, base.width, base.height).data;
+  if (onPick) {
+    dialog.querySelector("h2").textContent = "参考图吸管";
+    for (const row of dialog.querySelectorAll(".quick-palette-row")) row.remove();
+    dialog.querySelector("[role=status]").textContent = "点击参考图上的颜色，按 Esc 退出。";
+    mask.addEventListener("click", event => {
+      const rect = mask.getBoundingClientRect();
+      const x = Math.min(base.width - 1, Math.max(0, Math.floor((event.clientX - rect.left) * base.width / rect.width)));
+      const y = Math.min(base.height - 1, Math.max(0, Math.floor((event.clientY - rect.top) * base.height / rect.height)));
+      const offset = (y * base.width + x) * 4;
+      if (!pixels[offset + 3]) return;
+      const hex = "#" + [...pixels.slice(offset, offset + 3)].map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+      dialog.close();
+      onPick(hex);
+    });
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => dialog.remove(), { once: true });
+    dialog.showModal();
+    return;
+  }
+  let colors = [], previous = null, pointer = null;
+  const status = dialog.querySelector("[role=status]");
+  const save = dialog.querySelector('[data-mask="save"]');
+  const replace = dialog.querySelector('[data-mask="replace"]');
+  function invalidate() {
+    colors = [];
+    save.disabled = replace.disabled = true;
+    dialog.querySelector(".palette-mask-result").replaceChildren();
+    status.textContent = "蒙版已更新，可以重新提取颜色。";
+  }
+  function paint(event) {
+    const rect = mask.getBoundingClientRect();
+    const point = [(event.clientX - rect.left) * mask.width / rect.width, (event.clientY - rect.top) * mask.height / rect.height];
+    const from = previous || point;
+    maskContext.globalCompositeOperation = dialog.querySelector("select").value === "restore" ? "destination-out" : "source-over";
+    maskContext.lineCap = "round";
+    maskContext.lineWidth = Number(dialog.querySelector('input[type="range"]').value);
+    maskContext.strokeStyle = maskContext.fillStyle = getComputedStyle(dialog).getPropertyValue("--danger").trim();
+    maskContext.beginPath();
+    if (previous) {
+      maskContext.moveTo(...from); maskContext.lineTo(...point); maskContext.stroke();
+    } else {
+      maskContext.arc(...point, maskContext.lineWidth / 2, 0, 2 * Math.PI); maskContext.fill();
+    }
+    previous = point;
+  }
+  mask.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || pointer !== null) return;
+    invalidate();
+    pointer = event.pointerId;
+    mask.setPointerCapture(pointer);
+    paint(event);
+  });
+  mask.addEventListener("pointermove", event => { if (event.pointerId === pointer) paint(event); });
+  mask.addEventListener("lostpointercapture", () => { pointer = previous = null; });
+  dialog.addEventListener("click", event => {
+    const action = event.target.closest("[data-mask]")?.dataset.mask;
+    if (action === "close") dialog.close();
+    if (action === "clear") { maskContext.clearRect(0, 0, mask.width, mask.height); invalidate(); }
+    if (action === "sample") {
+      colors = extractPaletteColors(pixels, maskContext.getImageData(0, 0, mask.width, mask.height).data);
+      status.textContent = colors.length ? `提取到 ${colors.length} 个颜色` : "没有可取色像素，请修整蒙版。";
+      dialog.querySelector(".palette-mask-result").innerHTML = colors.map(color =>
+        `<span class="quick-palette-chip"><span style="--swatch-color:${color.hex}"></span>${color.hex} · ${(color.share * 100).toFixed(1)}%</span>`).join("");
+      save.disabled = !colors.length;
+      replace.disabled = !colors.length || !paletteFor(node);
+    }
+    if ((action === "save" || action === "replace") && colors.length && findNode(node.id) === node) {
+      const palette = paletteFor(node);
+      if (action === "replace") {
+        if (!palette) return;
+        palette.colors = colors;
+      } else {
+        const name = dialog.querySelector('input[placeholder]').value.trim() || "参考图调色盘";
+        const id = uid("palette");
+        globalLibrary.palettes.push({ id, name, colors });
+        choosePalette(node, id);
+      }
+      refreshPalettes();
+      dialog.close();
+    }
+  });
+  document.body.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.showModal();
+}
+
+function saveWidgetColor(node, widget, hex) {
+  let palette = paletteFor(node);
+  if (palette?.colors.some(color => color.hex === hex)) return false;
+  if (!palette) {
+    palette = { id: uid("palette"), name: "我的配色", colors: [] };
+    globalLibrary.palettes.push(palette);
+    choosePalette(node, palette.id);
+  }
+  widget.selected = hex;
+  palette.colors.push({ hex, share: null });
+  refreshPalettes();
+  return true;
+}
+
+document.addEventListener("change", event => {
+  const root = event.target.closest(".palette-widget");
+  if (!root) return;
+  const owner = root.dataset.paletteOwner;
+  const node = owner === "editor" ? null : findNode(owner);
+  const widget = paletteWidget(owner);
+  if (event.target.matches("[data-palette-filter]")) {
+    widget[event.target.dataset.paletteFilter] = event.target.value;
+    return;
+  }
+  if (event.target.matches("[data-palette-custom]")) {
+    saveWidgetColor(node, widget, event.target.value.toUpperCase());
+    return;
+  }
+  if (!event.target.matches('[data-palette-action="select"]')) return;
+  choosePalette(node, event.target.value, event.target);
+});
+
+document.addEventListener("click", event => {
+  const button = event.target.closest("button[data-palette-action]");
+  if (!button) return;
+  const root = button.closest(".quick-palette");
+  const node = root.dataset.paletteOwner === "editor" ? null : findNode(root.dataset.paletteOwner);
+  const palette = paletteFor(node);
+  const widget = paletteWidget(root.dataset.paletteOwner);
+  const name = root.querySelector("[data-palette-name]")?.value.trim() || "";
+  switch (button.dataset.paletteAction) {
+    case "generate":
+      generateWidgetPalette(widget);
+      updatePaletteWidget(root, widget);
+      return;
+    case "layout":
+      widget.layout = button.dataset.layout;
+      updatePaletteWidget(root, widget);
+      return;
+    case "custom":
+      {
+        const picker = root.querySelector("[data-palette-custom]");
+        picker.value = widget.selected;
+        if (picker.showPicker) picker.showPicker();
+        else picker.click();
+      }
+      return;
+    case "eyedropper": {
+      const picked = hex => {
+        if (node && findNode(node.id) !== node) return;
+        widget.selected = hex;
+        if (!saveWidgetColor(node, widget, hex)) {
+          root.querySelector(".palette-widget-inspector").innerHTML = widgetInspector(hex);
+          for (const item of root.querySelectorAll("[data-color][aria-pressed]")) item.setAttribute("aria-pressed", String(item.dataset.color === hex));
+        }
+        if (!node && lightboxPainting) {
+          els.lightboxPaintColor.value = hex;
+          setLightboxPaintMode("fill");
+        }
+        toast(`已取色 ${hex}`);
+      };
+      const fallback = () => {
+        if (node) openPaletteExtraction(node, picked).catch(error => toast(`参考图取色失败：${error.message}`));
+        else toast("屏幕吸管无法启动，请使用自定义选色");
+      };
+      if (!window.EyeDropper) { fallback(); return; }
+      try {
+        const pending = new window.EyeDropper().open();
+        toast("点击屏幕上的颜色取色，按 Esc 取消");
+        pending.then(({ sRGBHex }) => picked(sRGBHex.toUpperCase())).catch(error => {
+          if (error.name !== "AbortError") fallback();
+        });
+      } catch {
+        fallback();
+      }
+      return;
+    }
+    case "clear-colors":
+      if (!palette || !window.confirm("清空当前方案的颜色？")) return;
+      palette.colors = [];
+      break;
+    case "copy":
+      navigator.clipboard.writeText(widget.colors.join(", ")).then(() => toast("已复制全套 HEX"), () => toast("复制失败"));
+      return;
+    case "sample":
+    case "pick": {
+      const hex = button.dataset.color;
+      widget.selected = hex;
+      if (!node && lightboxPainting) {
+        els.lightboxPaintColor.value = hex;
+        setLightboxPaintMode("fill");
+      }
+      if (button.dataset.paletteAction !== "sample" || !saveWidgetColor(node, widget, hex)) {
+        for (const item of root.querySelectorAll("[data-color][aria-pressed]")) item.setAttribute("aria-pressed", String(item.dataset.color === hex));
+        root.querySelector(".palette-widget-inspector").innerHTML = widgetInspector(hex);
+      }
+      return;
+    }
+    case "new": {
+      const id = uid("palette");
+      globalLibrary.palettes.push({ id, name: name || "未命名调色盘", colors: [] });
+      choosePalette(node, id);
+      break;
+    }
+    case "rename":
+      if (!palette || !name) return;
+      palette.name = name;
+      break;
+    case "delete":
+      if (!palette || !window.confirm(`删除全局调色盘「${palette.name}」？`)) return;
+      globalLibrary.palettes = globalLibrary.palettes.filter(item => item !== palette);
+      choosePalette(node, "");
+      break;
+    case "remove":
+      if (!palette) return;
+      palette.colors.splice(Number(button.dataset.index), 1);
+      break;
+    case "extract":
+      if (node) openPaletteExtraction(node).catch(error => toast(`取色失败：${error.message}`));
+      return;
+    default: return;
+  }
+  refreshPalettes();
+});
+
+document.getElementById("editorPaletteToggle").addEventListener("click", event => {
+  const body = document.querySelector("#editorPalette .quick-palette-body");
+  const hidden = body.classList.toggle("hidden");
+  event.currentTarget.setAttribute("aria-expanded", String(!hidden));
+  updateLightboxPaintDisplaySize();
+});
+document.getElementById("editorPalette").addEventListener("dragstart", event => {
+  const button = event.target.closest('button[draggable="true"][data-color]');
+  if (button) event.dataTransfer.setData(paletteDragType, button.dataset.color);
+});
+els.lightboxPaintCanvas.addEventListener("dragover", event => {
+  if (lightboxPainting && event.dataTransfer.types.includes(paletteDragType)) event.preventDefault();
+});
+els.lightboxPaintCanvas.addEventListener("drop", event => {
+  const hex = event.dataTransfer.getData(paletteDragType);
+  if (!lightboxPainting || !/^#[0-9A-F]{6}$/i.test(hex)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const point = paintCanvasPoint(event);
+  if (point.x < 0 || point.y < 0 || point.x >= els.lightboxPaintCanvas.width || point.y >= els.lightboxPaintCanvas.height) return;
+  els.lightboxPaintColor.value = hex;
+  setLightboxPaintMode("fill");
+  applyLightboxFillAt(point);
+});
