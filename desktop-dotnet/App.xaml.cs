@@ -30,14 +30,15 @@ public partial class App : System.Windows.Application
                 "CanvasFlow 界面错误", MessageBoxButton.OK, MessageBoxImage.Warning);
             args.Handled = true;
         };
-        _mutex = new Mutex(true, "Local\\CanvasFlow.Desktop.Net8", out var first);
+        var key = InstancePathKey();
+        _mutex = new Mutex(true, $"Local\\CanvasFlow.Desktop.Net8.{key}", out var first);
         _ownsMutex = first;
         if (!first)
         {
-            // 已有实例在运行：发激活信号让现有窗口到前台，不再弹窗打扰
+            // 同目录已有实例在运行：发激活信号让现有窗口到前台，不再弹窗打扰
             try
             {
-                using var activate = System.Threading.EventWaitHandle.OpenExisting("Local\\CanvasFlow.Desktop.Activate");
+                using var activate = System.Threading.EventWaitHandle.OpenExisting($"Local\\CanvasFlow.Desktop.Activate.{key}");
                 activate.Set();
             }
             catch (System.Threading.WaitHandleCannotBeOpenedException) { }
@@ -51,7 +52,7 @@ public partial class App : System.Windows.Application
 
     private void StartActivationListener()
     {
-        _activateEvent = new EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, "Local\\CanvasFlow.Desktop.Activate", out _);
+        _activateEvent = new EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, $"Local\\CanvasFlow.Desktop.Activate.{InstancePathKey()}", out _);
         var listener = new Thread(() =>
         {
             while (_activateEvent.WaitOne())
@@ -72,6 +73,17 @@ public partial class App : System.Windows.Application
         window.Activate();
         window.Topmost = true;
         window.Topmost = false;
+    }
+
+    // 双开规则：同一个程序目录只允许一个实例，不同目录的副本可以多开。
+    // 互斥体与激活信号名都拼上程序目录的哈希，路径相同才互斥。
+    private static string InstancePathKey()
+    {
+        var dir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(dir.ToLowerInvariant()));
+        var key = new System.Text.StringBuilder(16);
+        for (var i = 0; i < 8; i++) key.Append(hash[i].ToString("x2"));
+        return key.ToString();
     }
 
     protected override void OnExit(ExitEventArgs e)
