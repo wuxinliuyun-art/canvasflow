@@ -4,9 +4,11 @@
 function localBase(value) {
   const match = /^http:\/\/(localhost|127\.0\.0\.1):(\d{1,5})\/?$/i.exec(String(value).trim());
   if (!match || Number(match[2]) < 1 || Number(match[2]) > 65535) {
-    throw new Error("只支持本机画布地址，例如 http://127.0.0.1:5173");
+    throw new Error("只支持本机画布地址，例如 http://localhost:5173");
   }
-  return "http://" + match[1].toLowerCase() + ":" + Number(match[2]);
+  // Recent UXP hosts reject IP-literal manifest domains. Both accepted inputs
+  // remain loopback-only, but requests must use the localhost permission.
+  return "http://localhost:" + Number(match[2]);
 }
 
 function parseBridge(raw) {
@@ -19,7 +21,7 @@ function parseBridge(raw) {
     throw new Error("桥接文件缺少有效令牌，请重启 CanvasFlow");
   }
   return {
-    base: "http://" + (data.source === "desktop" ? "localhost" : "127.0.0.1") + ":" + port,
+    base: "http://localhost:" + port,
     token: data.source === "desktop" ? data.token : "",
   };
 }
@@ -85,12 +87,12 @@ function createTransport({ fs, store, request = requestJson }) {
     }
     // Same 20-port range as server.js. Only the non-consuming status endpoint is used.
     for (let start = 5173; start <= 5192; start += 4) {
-      const targets = Array.from({ length: 4 }, (_, index) => ({ base: "http://127.0.0.1:" + (start + index), token: "" }));
+      const targets = Array.from({ length: 4 }, (_, index) => ({ base: "http://localhost:" + (start + index), token: "" }));
       const results = await Promise.all(targets.map(target => probe(target)));
       const index = results.indexOf(true);
       if (index >= 0) return targets[index];
     }
-    throw new Error("未找到画布。桌面版请先选择 bridge.json；服务器模式请启动最新 server.js");
+    throw new Error("未找到画布。macOS 请先启动 CanvasFlow；Windows 桌面版请先选择 bridge.json；服务器模式请启动最新 server.js");
   }
 
   async function chooseBridge() {

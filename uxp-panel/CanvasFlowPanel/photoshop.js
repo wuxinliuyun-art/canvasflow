@@ -16,8 +16,34 @@ function base64(buffer) {
   return chunks.join("");
 }
 
+// executeAsModal can drop the rejection message when the callback throws, which
+// surfaced as the literal text "回传失败：undefined" in the panel. Keep selection
+// validation outside the modal so its message never crosses that boundary, and
+// re-check inside only as defence in depth.
+function selectionProblem(kind, source, LayerKind) {
+  if (kind !== "layer") return null;
+  const layers = (source && source.activeLayers) || [];
+  if (layers.length === 1) {
+    return layers[0] && layers[0].kind !== LayerKind.GROUP ? null : "请选中单个图层（不能是图层组）";
+  }
+  return layers.length === 0
+    ? "请先在 PS 中选中一个图层"
+    : "请只选中一个图层后再回传（当前选中 " + layers.length + " 个）";
+}
+
 function createExporter(ps, storage) {
   return async function exportPng(kind) {
+    // Reject before creating a temporary file, so invalid requests leave no artefacts.
+    const opening = ps.app.activeDocument;
+    if (!opening) throw new Error("PS 中没有打开的文档");
+    let problem = null;
+    try {
+      problem = selectionProblem(kind, opening, ps.constants.LayerKind);
+    } catch (_) {
+      // Some hosts refuse layer descriptors outside a modal; the in-modal re-check still applies.
+      problem = null;
+    }
+    if (problem) throw new Error(problem);
     const file = await (await storage.localFileSystem.getTemporaryFolder())
       .createFile("cf-" + Date.now() + ".png", { overwrite: false });
     let name;
@@ -25,10 +51,10 @@ function createExporter(ps, storage) {
       await ps.core.executeAsModal(async context => {
         const source = ps.app.activeDocument;
         if (!source) throw new Error("PS 中没有打开的文档");
+        // The selection can change between the pre-check and the modal.
+        const changed = selectionProblem(kind, source, ps.constants.LayerKind);
+        if (changed) throw new Error(changed);
         const layer = source.activeLayers[0];
-        if (kind === "layer" && (source.activeLayers.length !== 1 || !layer || layer.kind === ps.constants.LayerKind.GROUP)) {
-          throw new Error("请选中单个图层（不能是图层组）");
-        }
         name = source.name;
         let copy;
         try {
@@ -73,4 +99,4 @@ function createExporter(ps, storage) {
   };
 }
 
-module.exports = { base64, createExporter };
+module.exports = { base64, createExporter, selectionProblem };
