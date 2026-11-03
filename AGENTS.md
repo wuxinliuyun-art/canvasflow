@@ -232,7 +232,7 @@
 
 ### 自动抠图拓展仅独立分发（2026-10 用户明确要求）
 
-- `extensions-presets/auto-matting` 与 `dist/自动抠图` 是独立的自动抠图拓展，不随 CanvasFlow 主程序发布。
+- 仓库旁的 `拓展/自动抠图` 与 `dist/自动抠图` 是独立的自动抠图拓展，不随 CanvasFlow 主程序发布。
 - 以后生成完整安装包、便携包、mac 包、界面热更新包时，均不得带入该拓展、BiRefNet 权重、Python 环境、缓存或 `CanvasFlow-自动抠图-通用模型.zip`。
 - 主程序打包继续按资源白名单收集，不得把整个 `extensions-presets` 或 `dist` 目录递归打入；自动抠图包仅在用户单独要求时制作或分发。
 - 分区抠图选择「本地 BiRefNet」时直接复用 `auto-matting-general` 拓展执行接口，由 CanvasFlow 自动启动拓展 Python；不得恢复要求用户预先运行 `127.0.0.1:8790` 服务或启动脚本的流程。多个选区任务必须串行调用该拓展，避免并发清理同一 `input/`、`output/` 目录。

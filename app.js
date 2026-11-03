@@ -431,7 +431,6 @@ Object.assign(UI_EN, {
   "还没有变量，请创建一个全局变量。": "No variables yet. Create a global variable.",
   "没有可导入的图文、多个节点或变量": "No text, images, node sets, or variables to import",
   "拓展信息缺失，请删除后从右键菜单重新添加。": "Extension information is missing. Delete this node and add it again from the context menu.",
-  "合并全部连线为输入": "Combine all connections into one input",
   "未检测到扩展服务": "Extension service not detected",
   "拓展文件夹中没有可用拓展": "No extensions available in the extensions folder",
   "生成中...": "Generating...",
@@ -2922,7 +2921,6 @@ function addToolNode(ext, x = 160, y = 120) {
   node.toolValues = {};
   for (const param of node.toolMeta.params) node.toolValues[param.key] = param.default;
   node.toolStatus = null;
-  node.keepCombinedInputs = true; // 默认：所有连线图片合并为 input/
   pushHistory();
   render();
   return node;
@@ -2936,7 +2934,12 @@ function toolMimeFromName(name) {
 function toolNodeBody(node) {
   const meta = node.toolMeta;
   if (!meta) return `<div class="tool-node-desc">拓展信息缺失，请删除后从右键菜单重新添加。</div>`;
-  const controls = (meta.params || []).map(param => {
+  const params = meta.params || [];
+  const whitePoint = node.toolValues?.whitePoint ?? params.find(param => param.key === "whitePoint")?.default;
+  const controls = params.filter(param =>
+    !(meta.id === "image-vectorize" && param.key === "preset")
+      && (!isLinkedUpscaleNode(node) || param.key !== "strength" || whitePoint)
+  ).map(param => {
     const value = node.toolValues?.[param.key] ?? param.default;
     const label = `<span class="tool-param-label">${escapeHtml(param.label || param.key)}</span>`;
     const attrs = `data-role="tool-param" data-key="${escapeHtml(param.key)}"`;
@@ -2957,8 +2960,7 @@ function toolNodeBody(node) {
   const status = node.toolStatus
     ? `<div class="tool-node-status tool-status-${node.toolStatus.state}">${escapeHtml(node.toolStatus.message || "")}</div>`
     : "";
-  const mergeToggle = `<label class="tool-param tool-merge-row" title="开启：所有连线的图片（含文件夹/多任务）合并进 input/；关闭：只取第一条连线"><input type="checkbox" data-role="tool-merge" ${node.keepCombinedInputs !== false ? "checked" : ""}><span>合并全部连线为输入</span></label>`;
-  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div>${mergeToggle}<div class="tool-node-params${meta.columns === 2 ? " cols-2" : ""}">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
+  return `<div class="tool-node-desc">${escapeHtml(meta.description)}</div><div class="tool-node-params${meta.columns === 2 ? " cols-2" : ""}">${controls}</div>${status}<button class="tool-run-btn" data-role="tool-run" type="button" ${node.toolRunning ? "disabled" : ""}>${node.toolRunning ? "运行中…" : "执行"}</button>`;
 }
 
 async function runToolNode(nodeId) {
@@ -2970,10 +2972,8 @@ async function runToolNode(nodeId) {
   renderNodes();
   try {
     const collected = collectUpstreamForAI(nodeId, buildIncomingIndex());
-    // 默认「合并全部连线为输入」：扇入的多条线全部打平（组节点图片一并纳入），
-    // 去重后一起写入 input/；关闭开关则只取第一条连线（与 AI 节点单分支语义一致）。
     let refs;
-    if (node.keepCombinedInputs !== false) {
+    if (node.toolMeta.id === "image-to-pptx") {
       const seen = new Set();
       refs = [];
       for (const branch of [...collected.branches.map(item => item.images), ...(collected.groupImages.length ? [collected.groupImages] : [])]) {
@@ -3021,6 +3021,7 @@ async function runToolNode(nodeId) {
     const data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
     if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
 
+    const outputNodeIds = [];
     let seq = 0;
     for (const image of data.images || []) {
       seq++;
@@ -3030,9 +3031,13 @@ async function runToolNode(nodeId) {
       imgNode.fileName = image.name || `tool_${seq}.png`;
       imgNode.mime = mime;
       imgNode.toolSourceNodeId = node.id;
+      outputNodeIds.push(imgNode.id);
       await externalizeImageField(imgNode, "image", "imageAssetId", imgNode.fileName);
     }
     let savedPaths = [];
+    if (node.toolMeta.id === "image-vectorize") {
+      data.files?.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
     if ((data.files || []).length) {
       // 直接走服务器落盘到 export/拓展输出/，不走 saveFiles（其 zipExport 默认分支会把文件打包成 zip 下载到浏览器下载目录，用户找不到）
       const baseFolder = state.settings.exportFolderLabel || "export";
@@ -3053,6 +3058,18 @@ async function runToolNode(nodeId) {
         savedPaths = (data.files || []).map(file => `${baseDir}/拓展输出/${file.name}`);
       }
     }
+    if (node.toolMeta.id === "image-vectorize") {
+      for (const [index, file] of (data.files || []).entries()) {
+        if (!/\.svg$/i.test(file.name)) continue;
+        const preview = addNode("image", node.x + NODE_WIDTH + 40, node.y + seq * IMAGE_NODE_VERTICAL_STEP, false);
+        preview.mime = "image/svg+xml";
+        preview.image = `data:${preview.mime};base64,${file.data}`;
+        preview.fileName = String(savedPaths[index] || file.name).split(/[\\/]/).pop();
+        preview.toolSourceNodeId = node.id;
+        seq++;
+      }
+    }
+    if (isLinkedUpscaleNode(node)) node.toolOutputNodeIds = outputNodeIds;
     node.toolOutputFiles = savedPaths;
     node.toolStatus = {
       state: "done",
@@ -3674,11 +3691,21 @@ function openAngleEditor(nodeId) {
   updateEditor();
 }
 
+function isLinkedUpscaleNode(node) {
+  return node?.type === "tool-node" && ["upscale-white-point", "realesrgan-upscale"].includes(node.toolMeta?.id);
+}
+
+function linkedUpscaleOutputs(node) {
+  return (node.toolOutputNodeIds || []).map(findNode).filter(output =>
+    output?.type === "image" && !output.disabled && output.toolSourceNodeId === node.id
+      && (output.image || output.imageAssetId));
+}
+
 function collectUpstreamForAI(nodeId, incoming) {
   incoming = incoming || buildIncomingIndex();
   const result = { texts: [], images: [], groupImages: [], groupTexts: [], orderedRefs: [], branches: [] };
   const aiNode = findNode(nodeId);
-  const keepCombined = aiNode?.keepCombinedInputs === true;
+  const keepCombined = aiNode?.type !== "tool-node" && aiNode?.keepCombinedInputs === true;
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
@@ -3695,6 +3722,10 @@ function collectUpstreamForAI(nodeId, incoming) {
     nextVisited.add(id);
     const n = findNode(id);
     if (!n || n.disabled) return [];
+    if (isLinkedUpscaleNode(n)) {
+      const images = linkedUpscaleOutputs(n).map(output => imageRef(output, output.image, output.imageAssetId));
+      return images.length ? [{ texts: [], images }] : [];
+    }
     if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image") {
       // AI/角度/浏览器生图节点截断:取其已生成图片作为参考,不再向上追溯
       if (n.generatedImage) return [{ texts: [], images: [imageRef(n, n.generatedImage, n.generatedAssetId)] }];
@@ -3809,6 +3840,10 @@ function directScreenshotNodeInputs(nodeId) {
     visited.add(id);
     const node = findNode(id);
     if (!node || node.disabled) return;
+    if (isLinkedUpscaleNode(node)) {
+      for (const output of linkedUpscaleOutputs(node)) visit(output.id);
+      return;
+    }
     const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
     if (node.type === "text") {
       const expandedText = String(expandTextNodeVariables(node) || "").trim();
@@ -6319,7 +6354,7 @@ function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
   const title = node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
-  const outPort = (node.type === "output" || node.type === "screenshot-input" || node.type === "tool-node") ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
+  const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
     body = `${textVariableStripHtml(node)}<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
@@ -7020,7 +7055,7 @@ function updateCompositeHover(dragState) {
 }
 
 function edgeInsertableNode(node) {
-  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "tool-node";
+  return !!node && node.type !== "output" && node.type !== "screenshot-input" && (node.type !== "tool-node" || isLinkedUpscaleNode(node));
 }
 
 // 文字节点重合合并:两段文案按画布位置从左到右(同列按从上到下)拼接,并入被叠节点,删除拖动节点;
@@ -7627,11 +7662,8 @@ els.nodes.addEventListener("change", ev => {
       node.toolValues = node.toolValues || {};
       node.toolValues[ev.target.dataset.key] = ev.target.dataset.paramType === "toggle" ? ev.target.checked : ev.target.value;
       pushHistory();
+      if (isLinkedUpscaleNode(node) && ev.target.dataset.key === "whitePoint") renderNodes();
       return;
-    }
-    if (role === "tool-merge") {
-      node.keepCombinedInputs = ev.target.checked;
-      pushHistory();
     }
     return;
   }
@@ -11126,6 +11158,8 @@ async function dataUrlToThumbnailDataUrl(dataUrl, maxSize = 420) {
 
 async function externalizeImageField(holder, field, assetField, fallbackName) {
   const dataUrl = holder?.[field];
+  // Keep vector previews intact through saves and reloads.
+  if (field === "image" && holder.mime === "image/svg+xml" && dataUrl?.startsWith("data:image/svg+xml;base64,")) return false;
   // Capture the original PNG prompt before replacing image bytes with a WebP thumbnail.
   if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
     const prompt = String(readGenerationMetadataFromPng(dataUrl)?.prompt || "").trim();

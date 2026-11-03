@@ -8,6 +8,7 @@ artifact-build/
 .DS_Store
 *.log
 *.exe
+!/extensions-presets/高清放大/realesrgan-ncnn-vulkan.exe
 export/
 projects/
 download/

@@ -766,11 +766,18 @@ internal sealed class DesktopApi
     }
 
     // ---- 拓展（内置扩展服务）----
-    // 拓展文件夹固定在程序目录旁边（安装版 {安装目录}\拓展，源码版 仓库上级\拓展）。
+    // 源码版从仓库内加载预设，安装版从安装根目录加载已部署的拓展。
     // 桌面端直接承担原 扩展服务.bat 的扫描与执行职责，页面经 apiFetch 调用，无需手动启动服务；
     // 调用约定遵循《拓展脚本规范》：清空 input/ 写入图片 → 以拓展目录为工作目录运行入口脚本 → 收集 output/。
 
-    private string ExtensionsFolder => Path.GetFullPath(Path.Combine(_root, "..", "拓展"));
+    private string ExtensionsFolder
+    {
+        get
+        {
+            var presets = Path.Combine(_root, "extensions-presets");
+            return Directory.Exists(presets) ? presets : Path.Combine(_root, "拓展");
+        }
+    }
 
     private DesktopApiResponse ListExtensions()
     {
@@ -853,7 +860,11 @@ internal sealed class DesktopApi
         AtomicWrite(Path.Combine(directory, "params.json"), (request["params"] as JsonObject ?? new JsonObject()).ToJsonString());
 
         var outputDirectory = Path.Combine(directory, "output");
-        if (Directory.Exists(outputDirectory)) Directory.Delete(outputDirectory, true);
+        if (Directory.Exists(outputDirectory))
+        {
+            foreach (var file in Directory.EnumerateFiles(outputDirectory)) File.Delete(file);
+            foreach (var folder in Directory.EnumerateDirectories(outputDirectory)) Directory.Delete(folder, true);
+        }
         var stopwatch = Stopwatch.StartNew();
         var (pythonFile, pythonPrefix) = ResolvePython();
         var startInfo = new ProcessStartInfo

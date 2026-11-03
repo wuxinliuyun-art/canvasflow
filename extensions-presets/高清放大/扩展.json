@@ -1,0 +1,40 @@
+{
+  "id": "upscale-white-point",
+  "name": "高清放大",
+  "version": "1.1.0",
+  "description": "选择模型和倍率，输出高清图片。白底线稿可开启白色线稿优化。",
+  "entry": "放大Worker.py",
+  "input": "images",
+  "output": "images",
+  "params": [
+    {
+      "key": "model",
+      "label": "放大模型",
+      "type": "select",
+      "options": [
+        "照片 x4",
+        "动漫/插图 x4",
+        "动漫视频 x2",
+        "动漫视频 x3",
+        "动漫视频 x4"
+      ],
+      "default": "动漫/插图 x4"
+    },
+    {
+      "key": "strength",
+      "label": "矫正强度",
+      "type": "slider",
+      "min": 0,
+      "max": 150,
+      "default": 100,
+      "unit": "%"
+    },
+    {
+      "key": "whitePoint",
+      "label": "白色线稿优化",
+      "type": "toggle",
+      "default": false
+    }
+  ],
+  "timeout": 1800
+}

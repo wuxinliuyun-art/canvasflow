@@ -9,8 +9,11 @@ const browserTransfer = require("./modules/browser-transfer-server");
 // Reserve each export atomically so repeated names and concurrent requests keep every result.
 function writeExportFile(requestedPath, bytes) {
   const parsed = path.parse(requestedPath);
+  const sequence = /^\.svg$/i.test(parsed.ext) && /^(\d{6}-\d{4})-([1-9]\d{0,8})$/.exec(parsed.name);
   for (let index = 0; ; index++) {
-    const candidate = index === 0 ? requestedPath : path.join(parsed.dir, `${parsed.name} (${index})${parsed.ext}`);
+    const candidate = index === 0 ? requestedPath : path.join(parsed.dir, sequence
+      ? `${sequence[1]}-${Number(sequence[2]) + index}${parsed.ext}`
+      : `${parsed.name} (${index})${parsed.ext}`);
     let fd;
     try { fd = fs.openSync(candidate, "wx"); }
     catch (error) {
