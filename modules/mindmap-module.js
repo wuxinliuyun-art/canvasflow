@@ -5,7 +5,7 @@
   modules.mindmap = Object.freeze({
     id: "mindmap",
     version: 1,
-    enabled: false,
+    enabled: true,
     label: "思维导图 / 关系图",
     description: "文字、图片、图片文件夹、关系线与编组子画布。",
   });
