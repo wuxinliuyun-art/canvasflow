@@ -9251,18 +9251,13 @@ function scheduleLightboxFillReapply() {
 function reapplyLightboxLastFill() {
   const action = lightboxLastFill;
   if (!action || !action.source || !lightboxFillActions.includes(action)) return;
-  const color = els.lightboxPaintColor.value;
+  // 只有容差/忽略细线会实时重算上一次填色的范围；颜色在点击时即定格，之后改颜色只影响下一笔
   const { tolerance, lineWidth } = lightboxFillSettings;
-  const needsMask = tolerance !== action.tolerance || lineWidth !== action.lineWidth;
-  if (needsMask) {
-    action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
-    action.tolerance = tolerance;
-    action.lineWidth = lineWidth;
-  } else if (color === action.color) {
-    return;
-  }
-  action.color = color;
-  action.layer = buildLightboxFillLayer(action.mask, action.source.width, action.source.height, color);
+  if (tolerance === action.tolerance && lineWidth === action.lineWidth) return;
+  action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
+  action.tolerance = tolerance;
+  action.lineWidth = lineWidth;
+  action.layer = buildLightboxFillLayer(action.mask, action.source.width, action.source.height, action.color);
   markLightboxFillLayerDirty();
   renderLightboxPaintComposite();
 }
@@ -9282,9 +9277,6 @@ els.lightboxFillKeepLines.addEventListener("change", () => {
   // 保留线稿是整个填色层的合成模式，切换即时生效于全部填色，无需重算掩膜
   lightboxFillSettings.keepLines = els.lightboxFillKeepLines.checked;
   if (lightboxPainting) renderLightboxPaintComposite();
-});
-els.lightboxPaintColor.addEventListener("input", () => {
-  if (lightboxPaintMode === "fill") scheduleLightboxFillReapply();
 });
 
 async function placeImageInLightbox(source) {
