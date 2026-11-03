@@ -2604,13 +2604,55 @@ function toggleDisabled(ids, disabled = null) {
   render();
 }
 
+const CLIPBOARD_NODES_HTML_MARK = "canvasflow-nodes-v1";
+
+// 节点复制数据序列化进系统剪贴板的 text/html 注释：多实例多开时页面内存
+// state.clipboard 不共享，靠这段隐藏 HTML 注释在实例之间传递节点数据。
+function encodeCanvasflowNodesHtml(payload) {
+  try {
+    if (!payload || (!payload.nodes?.length && !payload.edges?.length)) return "";
+    return `<!--${CLIPBOARD_NODES_HTML_MARK}:${btoa(unescape(encodeURIComponent(JSON.stringify(payload))))}-->`;
+  } catch (err) {
+    return "";
+  }
+}
+
+function decodeCanvasflowNodesHtml(html) {
+  try {
+    const raw = typeof html === "string" ? html : "";
+    const prefix = `<!--${CLIPBOARD_NODES_HTML_MARK}:`;
+    const start = raw.indexOf(prefix);
+    if (start < 0) return null;
+    const end = raw.indexOf("-->", start + prefix.length);
+    if (end < 0) return null;
+    const payload = JSON.parse(decodeURIComponent(escape(atob(raw.slice(start + prefix.length, end)))));
+    if (!payload || !Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) return null;
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
 function copySelection(clearSystemClipboard = true) {
   const nodes = state.nodes.filter(n => state.selected.has(n.id)).map(stripCopiedImage);
   state.clipboard = {
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
   };
-  if (clearSystemClipboard && navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {});
+  if (clearSystemClipboard) {
+    // 右键菜单复制没有事件 clipboardData 可用，走 navigator 写入；失败时退回清空文本。
+    const writeNative = () => { if (navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {}); };
+    const html = encodeCanvasflowNodesHtml(state.clipboard);
+    if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      try {
+        navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }) })]).catch(writeNative);
+      } catch (err) {
+        writeNative();
+      }
+    } else {
+      writeNative();
+    }
+  }
   toast(`已复制 ${nodes.length} 个节点`);
 }
 
@@ -9998,9 +10040,11 @@ window.addEventListener("copy", ev => {
   if (ev.target.closest?.(".canvas-annotation")) return; // 标注编辑中的复制走原生行为
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
+  copySelection(false);
   ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
   ev.clipboardData.setData("text/plain", "");
-  copySelection(false);
+  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
+  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
 });
 
 window.addEventListener("paste", async ev => {
@@ -10024,6 +10068,14 @@ window.addEventListener("paste", async ev => {
   if (internalNodeCopy && state.clipboard?.nodes?.length) {
     ev.preventDefault();
     pasteNodes(state.clipboard);
+    return;
+  }
+  // 其他实例/标签页复制的节点：数据藏在系统剪贴板 text/html 的注释里
+  const crossCopy = decodeCanvasflowNodesHtml(data?.getData("text/html"));
+  if (crossCopy && (crossCopy.nodes.length || crossCopy.edges.length)) {
+    ev.preventDefault();
+    state.clipboard = crossCopy; // 落地到本实例，右键"粘贴节点"与重复 Ctrl+V 继续可用
+    pasteNodes(crossCopy);
     return;
   }
   if (hasExternalContent && await createNodeFromClipboard(ev)) {
@@ -10475,10 +10527,12 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("cut", ev => {
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
-  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
-  ev.clipboardData.setData("text/plain", "");
   const ids = new Set(state.selected);
   copySelection(false);
+  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
+  ev.clipboardData.setData("text/plain", "");
+  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
+  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
   deleteNodes(ids);
 });
 
