@@ -878,7 +878,10 @@ internal sealed class DesktopApi
             foreach (var folder in Directory.EnumerateDirectories(outputDirectory)) Directory.Delete(folder, true);
         }
         var stopwatch = Stopwatch.StartNew();
-        var (pythonFile, pythonPrefix) = ResolvePython();
+        var bundledPython = Path.Combine(directory, "runtime", "python.exe");
+        var (pythonFile, pythonPrefix) = id == "auto-matting-u2net" && File.Exists(bundledPython)
+            ? (bundledPython, "")
+            : ResolvePython();
         var startInfo = new ProcessStartInfo
         {
             FileName = pythonFile,

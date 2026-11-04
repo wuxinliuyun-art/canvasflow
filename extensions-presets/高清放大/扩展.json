@@ -1,6 +1,6 @@
 {
   "id": "upscale-white-point",
-  "name": "高清放大",
+  "name": "Real-ESRGAN 高清放大",
   "version": "1.1.0",
   "description": "选择模型和倍率，输出高清图片。白底线稿可开启白色线稿优化。",
   "entry": "放大Worker.py",

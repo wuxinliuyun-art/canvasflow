@@ -10047,7 +10047,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
     items.push(
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
-      ["添加对话节点", () => addNode("chat", p.x, p.y)],
       ["添加浏览器生图节点", () => addNode("browser-image", p.x, p.y)],
       ["自定义节点", [
         ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],

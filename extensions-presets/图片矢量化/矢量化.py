@@ -370,7 +370,10 @@ def load_upscaled_rgb(src):
         shared = shared.with_name("高清放大")
     worker = shared / "放大Worker.py"
     if not worker.is_file():
-        raise RuntimeError("找不到图片放大白场拓展")
+        image = load_rgb(src, MAX_SIDE)
+        scale = MAX_SIDE / max(image.size)
+        size = tuple(max(1, round(side * scale)) for side in image.size)
+        return image.resize(size, Image.Resampling.LANCZOS)
     spec = importlib.util.spec_from_file_location("canvasflow_upscale_worker", worker)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
