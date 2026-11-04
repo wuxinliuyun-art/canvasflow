@@ -29,6 +29,8 @@ internal sealed class DesktopApi
     private readonly Action<string, bool> _log;
     private readonly Func<string> _getApiKey;
     private readonly Func<string> _getAgtokenKey;
+    // 自定义对话站点按槽名取 key（"chatcustom:<siteId>"，与 server.js secretProvider 槽名约定一致）
+    private readonly Func<string, string> _getCustomKey;
     private readonly Func<string> _getContentRoot;
     private readonly Action _focusCanvas;
     private readonly HttpClient _http;
@@ -39,12 +41,13 @@ internal sealed class DesktopApi
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Action? focusCanvas = null)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Action? focusCanvas = null, Func<string, string>? getCustomKey = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
         _getApiKey = getApiKey;
         _getAgtokenKey = getAgtokenKey ?? (() => "");
+        _getCustomKey = getCustomKey ?? (_ => "");
         // 界面热更新会把 cep-panel 面板源文件带进内容根，安装面板时必须优先取内容根里的版本
         _getContentRoot = getContentRoot ?? (() => "");
         _focusCanvas = focusCanvas ?? (() => { });
@@ -93,7 +96,7 @@ internal sealed class DesktopApi
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
         or "/api/agtoken/video-generate" or "/api/download-video"
-        or "/api/chat/completions"
+        or "/api/chat/completions" or "/api/chat-custom/models"
         or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/run" or "/api/comfyui/cancel"
         or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
         || path.StartsWith("/api/task/", StringComparison.Ordinal)
@@ -223,7 +226,33 @@ internal sealed class DesktopApi
                     var upstreamKey = string.IsNullOrWhiteSpace(payloadKey) ? _getAgtokenKey() : payloadKey;
                     return await ProxyAgtokenAsync(HttpMethod.Post, "/v1/chat/completions", payload.ToJsonString(), upstreamKey, cancellationToken);
                 }
+                if (apiType == "custom")
+                {
+                    // 自定义 OpenAI 兼容站点：Base URL/站点号随 payload.__chatCustom 携带（转发前必须移除），
+                    // key 优先 body _apiKey（前端两种模式都带），桌面 secrets 兜底走 "chatcustom:<siteId>" 槽
+                    string customBaseUrl = "";
+                    string customSiteId = "";
+                    if (payload.TryGetPropertyValue("__chatCustom", out var customNode) && customNode is JsonObject customObj)
+                    {
+                        customBaseUrl = customObj.TryGetPropertyValue("baseUrl", out var baseUrlNode) ? baseUrlNode?.GetValue<string>() ?? "" : "";
+                        customSiteId = customObj.TryGetPropertyValue("siteId", out var siteIdNode) ? siteIdNode?.GetValue<string>() ?? "" : "";
+                    }
+                    payload.Remove("__chatCustom");
+                    var customKey = string.IsNullOrWhiteSpace(payloadKey) ? _getCustomKey("chatcustom:" + customSiteId) : payloadKey;
+                    var target = NormalizeCustomChatBaseUrl(customBaseUrl);
+                    return await ProxyCustomAsync(HttpMethod.Post, target + "/chat/completions", payload.ToJsonString(), customKey, cancellationToken);
+                }
                 return await ProxyApiAsync(HttpMethod.Post, "/api/v1/chat/completions", payload.ToJsonString(), cancellationToken, httpClient: _agtokenHttp);
+            }
+            if (method == "POST" && path == "/api/chat-custom/models")
+            {
+                // 自定义 OpenAI 兼容站点：拉取模型列表（GET {baseUrl}/models），供设置面板自动填充
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("参数为空");
+                var baseUrl = NormalizeCustomChatBaseUrl(payload.TryGetPropertyValue("baseUrl", out var modelsBaseUrlNode) ? modelsBaseUrlNode?.GetValue<string>() : null);
+                var siteId = payload.TryGetPropertyValue("siteId", out var modelsSiteIdNode) ? modelsSiteIdNode?.GetValue<string>() ?? "" : "";
+                var payloadKey = payload.TryGetPropertyValue("_apiKey", out var modelsKeyNode) ? modelsKeyNode?.GetValue<string>() ?? "" : "";
+                var upstreamKey = string.IsNullOrWhiteSpace(payloadKey) ? _getCustomKey("chatcustom:" + siteId) : payloadKey;
+                return await ProxyCustomAsync(HttpMethod.Get, baseUrl + "/models", null, upstreamKey, cancellationToken);
             }
             if (path == "/api/browser-transfer" && method == "POST")
             {
@@ -425,6 +454,39 @@ internal sealed class DesktopApi
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         {
             throw new HttpRequestException("agtoken 接口连接失败", error);
+        }
+    }
+
+    // 自定义站点 Base URL 规整：去空白与尾部斜杠，校验 http/https（与 server.js normalizeCustomChatBaseUrl 语义一致）
+    private static string NormalizeCustomChatBaseUrl(string? raw)
+    {
+        var baseUrl = (raw ?? "").Trim().TrimEnd('/');
+        if (baseUrl.Length == 0
+            || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidDataException("自定义接口地址无效：需以 http:// 或 https:// 开头，并填到 /v1 一级");
+        return baseUrl;
+    }
+
+    // 自定义 OpenAI 兼容站点直连：不走镜像列表，按用户配置的 Base URL 原样发。
+    // 固定 HTTP/1.1 的理由同 ProxyAgtokenAsync（部分网关/代理在 HTTP/2 长响应结束前关闭流）；复用 600 秒客户端。
+    private async Task<DesktopApiResponse> ProxyCustomAsync(HttpMethod method, string targetUrl, string? body, string apiKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(method, targetUrl);
+            request.Version = HttpVersion.Version11;
+            request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+            if (!string.IsNullOrWhiteSpace(apiKey)) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _log($"[自定义对话] {targetUrl} -> {(int)response.StatusCode}", false);
+            return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        {
+            throw new HttpRequestException("自定义接口连接失败", error);
         }
     }
 

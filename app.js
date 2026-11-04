@@ -612,7 +612,7 @@ const state = {
   selectedAnnotationId: "",
   selected: new Set(),
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -919,6 +919,16 @@ const els = {
   customApiBaseUrlInput: $("customApiBaseUrlInput"),
   customApiHeadersInput: $("customApiHeadersInput"),
   clearKeyBtn: $("clearKeyBtn"),
+  chatSiteSelect: $("chatSiteSelect"),
+  chatSiteKeyArea: $("chatSiteKeyArea"),
+  chatSiteKeyInput: $("chatSiteKeyInput"),
+  chatSiteKeySaveBtn: $("chatSiteKeySaveBtn"),
+  chatSiteKeyClearBtn: $("chatSiteKeyClearBtn"),
+  chatSiteKeyHint: $("chatSiteKeyHint"),
+  chatCustomSiteArea: $("chatCustomSiteArea"),
+  chatModelToggleList: $("chatModelToggleList"),
+  chatCustomSiteList: $("chatCustomSiteList"),
+  chatAddCustomSiteBtn: $("chatAddCustomSiteBtn"),
   balanceDisplay: $("balanceDisplay"),
   balanceRefreshBtn: $("balanceRefreshBtn"),
   lightbox: $("lightbox"),
@@ -1210,13 +1220,15 @@ function saveCurrentPage() {
 function restoreData(data) {
   const runtimeApiKey = desktop ? (state.settings?.apiKey || "") : "";
   const runtimeAgtokenApiKey = desktop ? (state.settings?.agtokenApiKey || "") : "";
+  // 自定义对话站点 key 桌面模式存 secrets（存档剥离），换项目/撤销时同样保运行时值
+  const runtimeChatCustomKeys = desktop ? (state.settings?.chatCustomKeys || {}) : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
   state.annotations = Array.isArray(data.annotations)
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
   state.selectedAnnotationId = "";
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "apimart", customApiBaseUrl: "", customApiHeaders: "", defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
@@ -1237,6 +1249,7 @@ function restoreData(data) {
   if (desktop) {
     state.settings.apiKey = runtimeApiKey;
     state.settings.agtokenApiKey = runtimeAgtokenApiKey;
+    state.settings.chatCustomKeys = runtimeChatCustomKeys || {};
   }
   migrateLegacyMaterials(data);
   state.customLibrary = emptyLibrary();
@@ -3370,20 +3383,131 @@ function modelSupportsQuality(model) {
 
 // AI 对话（chat）节点：模型目录与工具函数。对话与绘图是两套目录、两套网关格式，互不回退。
 // 下拉只显示已填 key 的站点：只填一家只出该站点模型,两家都填才全部显示;都没填时不显示模型，提示填写 API Key。
+// 自定义 OpenAI 兼容站点存 settings.chatCustomSites，key 存 settings.chatCustomKeys（按站点 id；
+// 落盘剥离、桌面模式经 secrets "chatcustom:<siteId>" 槽持久化）；模型 id 形如 "custom:<siteId>:<modelName>"。
+function chatCustomSites() {
+  const sites = state?.settings?.chatCustomSites;
+  if (!Array.isArray(sites)) return [];
+  return sites.filter(site => site && site.id && typeof site.baseUrl === "string");
+}
+
+function chatCustomSiteById(siteId) {
+  return chatCustomSites().find(site => site.id === siteId) || null;
+}
+
+function chatCustomSiteKey(siteId) {
+  const keys = state?.settings?.chatCustomKeys;
+  return keys && typeof keys === "object" ? String(keys[siteId] || "").trim() : "";
+}
+
+function chatModelEnabled(modelId) {
+  const disabled = state?.settings?.chatDisabledModels;
+  return !(Array.isArray(disabled) && disabled.includes(modelId));
+}
+
+// 内置站点的模型列表：settings.chatSiteModels[site] 有值（拉取/手动编辑过的）用之，
+// 否则用目录默认（非 hidden）。拉取与手动增删只改这份列表，勾选开关仍走 chatDisabledModels。
+function chatSiteKeyReady(site) {
+  return String(site === "agtoken" ? state?.settings?.agtokenApiKey : state?.settings?.apiKey || "").trim().length > 0;
+}
+
+function chatBuiltinModelIds(site) {
+  const explicit = state?.settings?.chatSiteModels?.[site];
+  if (Array.isArray(explicit)) return explicit.map(item => String(item || "").trim()).filter(Boolean);
+  return (window.CANVASFLOW_CHAT_CATALOG?.models || [])
+    .filter(model => model.apiType === site && !model.hidden)
+    .map(model => model.id);
+}
+
+function chatSiteModelsCustomized(site) {
+  return Array.isArray(state?.settings?.chatSiteModels?.[site]);
+}
+
+function chatBuiltinModelEntry(site, modelId) {
+  const known = (window.CANVASFLOW_CHAT_CATALOG?.models || []).find(model => model.id === modelId && model.apiType === site);
+  if (known) return known;
+  // 拉取/手动添加的未知模型：默认纯文本（多模态未知时不发参考图，安全侧）
+  return { id: modelId, label: modelId, apiType: site, multimodal: false };
+}
+
+// 自定义站点派生模型条目：就绪条件 = baseUrl + 至少一个模型名（key 可选，本地服务通常无需 key）
+function chatCustomModels() {
+  const models = [];
+  for (const site of chatCustomSites()) {
+    const baseUrl = String(site.baseUrl || "").trim();
+    const names = Array.isArray(site.modelNames) ? site.modelNames.map(item => String(item || "").trim()).filter(Boolean) : [];
+    if (!baseUrl || !names.length) continue;
+    const siteLabel = String(site.name || "").trim() || "自定义站点";
+    for (const name of names) {
+      models.push({
+        id: `custom:${site.id}:${name}`,
+        label: `${siteLabel}·${name}`,
+        apiType: "custom",
+        multimodal: site.multimodal === true,
+        model: name,
+        siteId: site.id,
+      });
+    }
+  }
+  return models;
+}
+
 function chatCatalogModels() {
-  const models = window.CANVASFLOW_CHAT_CATALOG?.models || [];
-  const apimartReady = String(state?.settings?.apiKey || "").trim().length > 0;
-  const agtokenReady = String(state?.settings?.agtokenApiKey || "").trim().length > 0;
-  return models.filter(model => !model.hidden && (model.apiType === "agtoken" ? agtokenReady : apimartReady));
+  const out = [];
+  const seen = new Set();
+  for (const site of ["apimart", "agtoken"]) {
+    if (!chatSiteKeyReady(site)) continue;
+    for (const id of chatBuiltinModelIds(site)) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const entry = chatBuiltinModelEntry(site, id);
+      if (chatModelEnabled(entry.id)) out.push(entry);
+    }
+  }
+  for (const model of chatCustomModels()) {
+    if (seen.has(model.id)) continue;
+    seen.add(model.id);
+    if (chatModelEnabled(model.id)) out.push(model);
+  }
+  return out;
+}
+
+function parseCustomChatModelId(modelId) {
+  const raw = String(modelId || "");
+  if (!raw.startsWith("custom:")) return null;
+  const rest = raw.slice("custom:".length);
+  const sep = rest.indexOf(":");
+  if (sep <= 0) return null;
+  const siteId = rest.slice(0, sep);
+  const modelName = rest.slice(sep + 1).trim();
+  if (!siteId || !modelName) return null;
+  const site = chatCustomSiteById(siteId);
+  if (!site) return null;
+  const siteLabel = String(site.name || "").trim() || "自定义站点";
+  return {
+    id: raw,
+    label: `${siteLabel}·${modelName}`,
+    apiType: "custom",
+    multimodal: site.multimodal === true,
+    model: modelName,
+    siteId,
+  };
 }
 
 function chatModelEntry(modelId) {
+  const custom = parseCustomChatModelId(modelId);
+  if (custom) return custom;
+  const raw = String(modelId || "");
+  // 先查两站点的当前列表（覆盖拉取/手动添加的非目录模型）
+  for (const site of ["apimart", "agtoken"]) {
+    if (chatBuiltinModelIds(site).includes(raw)) {
+      return chatSiteKeyReady(site) ? chatBuiltinModelEntry(site, raw) : null;
+    }
+  }
+  // 目录兜底（含 hidden：老节点存量模型不受列表重构影响）
   const model = (window.CANVASFLOW_CHAT_CATALOG?.models || []).find(item => item.id === modelId) || null;
   if (!model) return null;
-  const ready = model.apiType === "agtoken"
-    ? String(state?.settings?.agtokenApiKey || "").trim().length > 0
-    : String(state?.settings?.apiKey || "").trim().length > 0;
-  return ready ? model : null;
+  return chatSiteKeyReady(model.apiType) ? model : null;
 }
 
 function normalizeChatNode(node) {
@@ -3394,7 +3518,8 @@ function normalizeChatNode(node) {
   node.chatMessages = messages
     .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
     .slice(-CHAT_HISTORY_LIMIT);
-  if (!chatModelEntry(node._chatModel)) node._chatModel = chatCatalogModels()[0]?.id || "";
+  // 回退以"当前可见集合"为准：key 被清、模型被勾选关闭、自定义站点被删，节点都自动切到第一个可用模型
+  if (!chatCatalogModels().some(model => model.id === node._chatModel)) node._chatModel = chatCatalogModels()[0]?.id || "";
   node._chatEnumerated = node._chatEnumerated === true;
   node.chatAttachments = (Array.isArray(node.chatAttachments) ? node.chatAttachments : [])
     .filter(item => item && (typeof item.image === "string" || typeof item.assetId === "string"))
@@ -4247,9 +4372,16 @@ async function sendChatNodeMessage(nodeId, options = {}) {
   const userContent = entry.multimodal && imageDataUrls.length
     ? [{ type: "text", text: requestText }, ...imageDataUrls.map(url => ({ type: "image_url", image_url: { url } }))]
     : requestText;
-  const payload = { apiType: entry.apiType, model: node._chatModel, stream: false, messages: [...history, { role: "user", content: userContent }] };
-  // 服务器/浏览器模式:密钥随请求体按 apiType 分槽携带;桌面模式走 secrets.json,不带 key
-  if (!desktop) payload._apiKey = entry.apiType === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+  const payload = { apiType: entry.apiType, model: entry.apiType === "custom" ? entry.model : node._chatModel, stream: false, messages: [...history, { role: "user", content: userContent }] };
+  // 自定义 OpenAI 兼容站点：Base URL/站点号随请求体携带（服务端转发前移除），上游 model 用真实模型名
+  if (entry.apiType === "custom") {
+    payload.__chatCustom = { baseUrl: String(entry.site?.baseUrl || "").trim(), siteId: entry.siteId };
+    // 自定义站点无既有桌面槽语义，两种模式都随请求体带 key（桌面值来自 secrets 回填）
+    payload._apiKey = chatCustomSiteKey(entry.siteId);
+  } else if (!desktop) {
+    // 服务器/浏览器模式:密钥随请求体按 apiType 分槽携带;桌面模式走 secrets.json,不带 key
+    payload._apiKey = entry.apiType === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+  }
 
   node._chatBusy = true;
   node._chatError = "";
@@ -4277,7 +4409,7 @@ async function sendChatNodeMessage(nodeId, options = {}) {
         ? "当前桌面程序没有对话接口：请保存画布并关闭窗口，再运行「启动CanvasFlow-NET.bat」重新构建启动"
         : "本机服务没有对话接口：请重启「启动CanvasFlow服务.bat」，再用新标签页打开画布");
     }
-    if (!resp.ok || data.error) throw new Error(apiError || `${entry.apiType === "agtoken" ? "AGToken" : "APIMart"} 对话请求失败（HTTP ${resp.status}）`);
+    if (!resp.ok || data.error) throw new Error(apiError || `${entry.apiType === "agtoken" ? "AGToken" : entry.apiType === "custom" ? "自定义接口" : "APIMart"} 对话请求失败（HTTP ${resp.status}）`);
     // apimart 响应为 {code,data} 包装(data 内为标准 OpenAI 结构),agtoken 为标准结构;按 choices 形状自适应解包
     const inner = data && typeof data === "object" && data.data && Array.isArray(data.data.choices) ? data.data : data;
     const reply = chatContentToText(inner?.choices?.[0]?.message?.content);
@@ -4756,17 +4888,22 @@ function publishScreenshotNodeCatalog(force = false) {
   window.chrome.webview.postMessage({ type: "screenshot:node-catalog", nodes });
 }
 
-async function materializeReferenceImage(reference) {
+async function materializeReferenceImage(reference, options = {}) {
   if (typeof reference === "string") return reference;
-  if (desktop && reference?.assetId) {
+  const assetBridge = window.canvasflowDesktop || desktop;
+  if (assetBridge && reference?.assetId) {
     try {
-      const result = await desktop.readAsset(reference.assetId);
+      const result = await assetBridge.readAsset(reference.assetId);
       return result.dataUrl || "";
     } catch (error) {
       const node = reference._nodeId ? findNode(reference._nodeId) : null;
       const inline = String(reference.image || node?.image || node?.generatedImage || "");
       const fallback = inline.startsWith("data:image/") ? inline : "";
       console.warn("[参考图] 素材读取失败", { assetId: reference.assetId, fileName: reference.fileName, usedInline: Boolean(fallback), message: error.message });
+      if (options.requireOriginal) {
+        markNodeAssetIssue(node, `原图素材读取失败，已阻止使用缩略图编辑：${reference.fileName || "未命名图片"}`);
+        throw error;
+      }
       if (fallback) {
         markNodeAssetIssue(node, `素材文件丢失，本次已自动改用内嵌缩略图（清晰度可能降低）；建议重新上传图片：${reference.fileName || "未命名图片"}`);
         return fallback;
@@ -4775,6 +4912,7 @@ async function materializeReferenceImage(reference) {
       throw error;
     }
   }
+  if (reference?.assetId && options.requireOriginal) throw new Error("当前运行方式无法读取素材仓库原图");
   return reference?.image || "";
 }
 
@@ -8945,13 +9083,7 @@ els.nodes.addEventListener("dblclick", async ev => {
     } else {
       await showNodeLightbox(node);
       if (!els.lightbox.classList.contains("hidden") && lightboxImages.length === 1 && lightboxSourceNodeId) {
-        if (!els.lightboxImg.complete || !els.lightboxImg.naturalWidth) {
-          await new Promise(resolve => {
-            els.lightboxImg.addEventListener("load", resolve, { once: true });
-            els.lightboxImg.addEventListener("error", resolve, { once: true });
-          });
-        }
-        startLightboxPaint();
+        await startLightboxPaint();
       }
     }
   }
@@ -9536,18 +9668,24 @@ function hideLightbox() {
   lightboxSourceNodeId = "";
 }
 
-function startLightboxPaint() {
-  if (!lightboxSourceNodeId || !els.lightboxImg.naturalWidth) return;
+async function startLightboxPaint() {
+  if (!lightboxSourceNodeId) return;
+  const sourceUrl = lightboxImages[lightboxIdx];
+  if (!sourceUrl) return;
+  const sourceImage = new Image();
+  sourceImage.src = sourceUrl;
+  await sourceImage.decode();
+  if (!sourceImage.naturalWidth || sourceUrl !== lightboxImages[lightboxIdx]) return;
   lightboxViewZoom = 1;
   lightboxViewOffset = { x: 0, y: 0 };
   lightboxEditBase = null;
   clearLightboxCrop();
   const canvas = els.lightboxPaintCanvas;
-  canvas.width = els.lightboxImg.naturalWidth;
-  canvas.height = els.lightboxImg.naturalHeight;
+  canvas.width = sourceImage.naturalWidth;
+  canvas.height = sourceImage.naturalHeight;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(els.lightboxImg, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
   lightboxPaintOverlay.width = canvas.width;
   lightboxPaintOverlay.height = canvas.height;
   lightboxPaintActions = [];
@@ -9577,6 +9715,7 @@ function cancelLightboxPaint() {
   hideArrowNote(true);
   lightboxViewDrag = null;
   els.lightboxPaintCanvas.style.transform = "";
+  els.lightboxPaintCanvas.style.left = "";
   els.lightboxPaintCanvas.style.maxWidth = "";
   els.lightboxPaintCanvas.style.maxHeight = "";
   lightboxEditBase = null;
@@ -9621,18 +9760,25 @@ function updateLightboxPaintDisplaySize() {
   if (!lightboxPainting || !canvas.width || !canvas.height) return;
   const palette = document.getElementById("editorPalette");
   const wide = window.innerWidth >= 768;
-  const paletteWidth = palette.offsetWidth;
-  const maxWidth = Math.max(1, wide
-    ? Math.min(window.innerWidth * .9, window.innerWidth - 2 * (paletteWidth + 40))
-    : window.innerWidth * .9);
+  const paletteExpanded = wide && !palette.querySelector(".quick-palette-body").classList.contains("hidden");
+  const paletteWidth = paletteExpanded ? palette.offsetWidth : 0;
+  const leftSpace = paletteWidth ? 16 + paletteWidth + 24 : 16;
+  const rightSpace = 16;
+  const maxWidth = Math.max(1, Math.min(window.innerWidth * .9, window.innerWidth - leftSpace - rightSpace));
   const maxHeight = Math.max(1, window.innerHeight * .82);
-  const displayScale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+  // 默认最多按原图 1:1 像素显示，避免小图被自动放大后产生插值模糊。
+  const displayScale = Math.min(1, maxWidth / canvas.width, maxHeight / canvas.height);
   canvas.style.width = `${Math.max(1, Math.round(canvas.width * displayScale))}px`;
   canvas.style.height = `${Math.max(1, Math.round(canvas.height * displayScale))}px`;
-  palette.style.setProperty("--editor-palette-left", `${Math.max(16, Math.round((window.innerWidth - canvas.width * displayScale) / 2 - paletteWidth - 24))}px`);
+  palette.style.setProperty("--editor-palette-left", "16px");
   canvas.style.maxWidth = "none";
   canvas.style.maxHeight = "none";
-  canvas.style.transform = `translate(${lightboxViewOffset.x}px, ${lightboxViewOffset.y}px) scale(${lightboxViewZoom})`;
+  const layoutOffsetX = Math.round((leftSpace - rightSpace) / 2);
+  canvas.style.left = `${layoutOffsetX}px`;
+  const hasViewTransform = lightboxViewZoom !== 1 || lightboxViewOffset.x !== 0 || lightboxViewOffset.y !== 0;
+  canvas.style.transform = hasViewTransform
+    ? `translate(${Math.round(lightboxViewOffset.x)}px, ${Math.round(lightboxViewOffset.y)}px) scale(${lightboxViewZoom})`
+    : "";
   positionLightboxMirrorTools();
   positionArrowNote();
   syncArrowNoteHandles();
@@ -10123,7 +10269,7 @@ els.lightboxPaintCanvas.addEventListener("pointercancel", finishLightboxPointerA
 els.lightboxPaintCanvas.addEventListener("dragstart", ev => ev.preventDefault());
 els.lightboxPaintCanvas.addEventListener("lostpointercapture", finishLightboxPointerAction);
 $("lightboxPaintPointer").onclick = () => setLightboxPaintMode(lightboxPlacedImage ? "transform" : "idle");
-els.lightboxPaintBtn.onclick = startLightboxPaint;
+els.lightboxPaintBtn.onclick = () => startLightboxPaint().catch(error => toast(`原图加载失败：${error.message || "无法读取图片"}`));
 els.lightboxMattingBtn.onclick = () => {
   const node = findNode(lightboxSourceNodeId);
   if (!node) return toast("原图片节点已被删除");
@@ -10714,13 +10860,7 @@ async function openNodeCompositeEditor(baseNode, placedNode) {
     ]);
     if (!baseSource || !placedSource) throw new Error("无法读取参与合成的原图");
     showLightbox(baseSource, baseNode.id);
-    if (!els.lightboxImg.complete || !els.lightboxImg.naturalWidth) {
-      await new Promise((resolve, reject) => {
-        els.lightboxImg.addEventListener("load", resolve, { once: true });
-        els.lightboxImg.addEventListener("error", () => reject(new Error("底图无法读取")), { once: true });
-      });
-    }
-    startLightboxPaint();
+    await startLightboxPaint();
     await placeImageInLightbox(placedSource);
   } catch (error) {
     console.error("[节点叠放合成] 打开失败", { baseNodeId: baseNode?.id, placedNodeId: placedNode?.id, message: error.message });
@@ -11448,28 +11588,26 @@ async function showNodeLightbox(node) {
   try {
     const references = [];
     if (node.type === "group" || node.type === "folder") {
-      for (const image of node.images || []) references.push({ image: image.image, assetId: image.assetId || "" });
+      for (const image of node.images || []) references.push({ image: image.image, assetId: image.assetId || "", fileName: image.fileName || "", _nodeId: node.id });
       for (const item of node.items || []) {
-        if (item.type === "image" && (item.image || item.imageAssetId)) references.push({ image: item.image, assetId: item.imageAssetId || "" });
-        if ((item.type === "ai-image" || item.type === "angle-image") && (item.generatedImage || item.generatedAssetId)) references.push({ image: item.generatedImage, assetId: item.generatedAssetId || "" });
+        if (item.type === "image" && (item.image || item.imageAssetId)) references.push({ image: item.image, assetId: item.imageAssetId || "", fileName: item.fileName || "", _nodeId: node.id });
+        if ((item.type === "ai-image" || item.type === "angle-image") && (item.generatedImage || item.generatedAssetId)) references.push({ image: item.generatedImage, assetId: item.generatedAssetId || "", fileName: item.fileName || "", _nodeId: node.id });
       }
     } else if (node.type === "ai-image" || node.type === "angle-image") {
-      if (node.generatedImage || node.generatedAssetId) references.push({ image: node.generatedImage, assetId: node.generatedAssetId || "" });
+      if (node.generatedImage || node.generatedAssetId) references.push({ image: node.generatedImage, assetId: node.generatedAssetId || "", fileName: node.fileName || "", _nodeId: node.id });
     } else if (node.image || node.imageAssetId) {
-      references.push({ image: node.image, assetId: node.imageAssetId || "" });
+      references.push({ image: node.image, assetId: node.imageAssetId || "", fileName: node.fileName || "", _nodeId: node.id });
     }
     if (!references.length) return;
     const originals = [];
     for (const reference of references) {
-      const original = await materializeReferenceImage(reference);
+      const original = await materializeReferenceImage(reference, { requireOriginal: true });
       if (original) originals.push(original);
     }
     if (originals.length) showLightbox(originals, node.id);
   } catch (error) {
     console.error("[高清预览] 原图读取失败", { nodeId: node.id, message: error.message });
-    const fallback = node.generatedImage || node.image || node.images?.map(image => image.image).filter(Boolean) || [];
-    if ((Array.isArray(fallback) && fallback.length) || (!Array.isArray(fallback) && fallback)) showLightbox(fallback, node.id);
-    toast(`高清原图读取失败：可能是素材文件丢失或目录无权限；已显示缩略图，请检查 data 目录。${error.message || ""}`);
+    toast(`原图读取失败，已阻止使用缩略图编辑。请检查 data 目录或重新上传图片。${error.message || ""}`);
   }
 }
 
@@ -11720,6 +11858,7 @@ function persistPages() {
     if (page.data?.settings) {
       page.data.settings.apiKey = "";
       page.data.settings.agtokenApiKey = "";
+      delete page.data.settings.chatCustomKeys;
     }
     delete page._history;
     delete page._future;
@@ -11751,6 +11890,7 @@ function desktopStateSnapshot() {
     if (page.data?.settings) {
       page.data.settings.apiKey = "";
       page.data.settings.agtokenApiKey = "";
+      delete page.data.settings.chatCustomKeys;
     }
     delete page._history;
     delete page._future;
@@ -11765,6 +11905,7 @@ function autoBackupContent() {
     if (page.data?.settings) {
       page.data.settings.apiKey = "";
       page.data.settings.agtokenApiKey = "";
+      delete page.data.settings.chatCustomKeys;
     }
     delete page._history;
     delete page._future;
@@ -12096,6 +12237,7 @@ function switchSettingsTab(name) {
     refreshMcpStatus();
   }
   if (name === "appearance") syncUiColorInputs();
+  if (name === "aichat") renderChatSettingsTab();
   if (name === "extensions") window.LocalSD?.syncSettings?.();
 }
 
@@ -13063,6 +13205,460 @@ els.customApiHeadersInput.onchange = () => {
   pushHistory();
 };
 
+// ---------- 设置 → AI对话 页签 ----------
+// 站点卡输入走 input/change 委托就地写回（input 只写 state 不压历史、change 冲刷），
+// 不得在输入过程中重渲染站点卡，会打断输入与 IME。
+let chatSettingsSite = "agtoken";
+// 「添加模型」候选面板的展开状态（会话态）：内置站一个开关，自定义站按站点 id 记在 Set
+let chatBuiltinPickerOpen = false;
+const chatCustomPickerOpen = new Set();
+
+// 候选模型选择面板（内置站与自定义站卡共用）：拉取结果不全量进列表，用户搜索+勾选后「添加所选」。
+// 搜索过滤走纯 DOM hidden（input 事件直接改 style），不重渲染、不打断 IME。
+function chatModelPickerHtml(candidates, open) {
+  if (!open) {
+    return '<button type="button" class="apikey-btn" data-picker-toggle>+ 添加模型（从拉取结果选）</button>';
+  }
+  const rows = candidates.map(id => `<label class="check-row compact chat-picker-item" data-pick-model="${escapeHtml(id)}"><input type="checkbox" class="chat-picker-candidate" data-pick-model="${escapeHtml(id)}"><span>${escapeHtml(id)}</span></label>`).join("");
+  return `<div class="chat-model-picker">`
+    + `<div class="chat-picker-head"><strong>添加模型</strong><button type="button" class="chat-model-remove" data-picker-toggle title="收起" aria-label="收起添加面板"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`
+    + '<input type="text" class="chat-picker-search" placeholder="搜索模型名" aria-label="搜索模型名">'
+    + `<div class="chat-picker-list">${rows || '<div class="chat-toggle-hint">还没有拉取过模型列表，或拉取结果都已添加。</div>'}</div>`
+    + '<div class="chat-picker-manual"><input type="text" class="chat-picker-manual-input" placeholder="或手动输入模型名" aria-label="手动输入模型名"></div>'
+    + '<div class="chat-picker-actions"><button type="button" class="apikey-btn" data-pick-add-selected>添加所选</button></div>'
+    + `</div>`;
+}
+
+function chatToggleGroupHtml(label, inner, keyReady) {
+  return `<div class="chat-model-group"><div class="chat-model-group-head">${escapeHtml(label)}${keyReady ? "" : '<span class="chat-toggle-hint">未填写 Key，暂不可用</span>'}</div>${inner}</div>`;
+}
+
+function chatToggleRowHtml(modelId, label, checked, enabled, note = "") {
+  const noteHtml = note ? ` <span class="chat-model-note">${escapeHtml(note)}</span>` : "";
+  return `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(modelId)}" ${checked ? "checked" : ""} ${enabled ? "" : "disabled"}><span>${escapeHtml(label)}${noteHtml}</span></label>`;
+}
+
+function renderChatSiteKeyArea() {
+  // 站点下拉三选一：apimart / agtoken 填 Key，custom 在同一卡片内展开自定义站点列表管理
+  const isCustom = chatSettingsSite === "custom";
+  if (els.chatSiteKeyArea) els.chatSiteKeyArea.classList.toggle("hidden", isCustom);
+  if (els.chatCustomSiteArea) els.chatCustomSiteArea.classList.toggle("hidden", !isCustom);
+  if (isCustom) {
+    renderChatCustomSiteList();
+    return;
+  }
+  if (els.chatSiteKeyInput) els.chatSiteKeyInput.value = chatSettingsSite === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+  if (els.chatSiteKeyHint) {
+    els.chatSiteKeyHint.textContent = chatSettingsSite === "agtoken"
+      ? "接口地址：https://agtoken.vip（OpenAI 兼容，同步直连）；与 APIMart 的 Key 相互独立。"
+      : "API 代理：api.apib.ai / api.aiuxu.com / api.aishuch.com / api.apimart.ai（自动故障转移）。";
+  }
+}
+
+function renderChatModelToggleList() {
+  if (!els.chatModelToggleList) return;
+  const disabled = Array.isArray(state.settings.chatDisabledModels) ? state.settings.chatDisabledModels : [];
+  if (chatSettingsSite === "custom") {
+    // 自定义站点：勾选列表按站点分组；模型名增删在站点卡里管理（textarea/拉取按钮）
+    const groups = [];
+    for (const site of chatCustomSites()) {
+      const names = Array.isArray(site.modelNames) ? site.modelNames.map(item => String(item || "").trim()).filter(Boolean) : [];
+      if (!names.length) continue;
+      const siteReady = String(site.baseUrl || "").trim().length > 0;
+      const siteLabel = String(site.name || "").trim() || "自定义站点";
+      const rows = names.map(name => {
+        const modelId = `custom:${site.id}:${name}`;
+        return chatToggleRowHtml(modelId, `${siteLabel}·${name}${site.multimodal === true ? "（图片）" : ""}`, !disabled.includes(modelId), siteReady);
+      }).join("");
+      groups.push(chatToggleGroupHtml(siteLabel, siteReady ? rows : rows + '<div class="chat-toggle-hint">未填写接口地址，暂不可用</div>', siteReady));
+    }
+    els.chatModelToggleList.innerHTML = groups.join("") || '<div class="chat-toggle-hint">还没有自定义站点。在上方站点下拉选择「自定义站点」添加。</div>';
+    return;
+  }
+  // 内置站点（apimart/agtoken）：只显示当前站点模型；拉取进候选池，从池勾选添加，支持全不选与行内删除
+  const ready = chatSiteKeyReady(chatSettingsSite);
+  const customized = chatSiteModelsCustomized(chatSettingsSite);
+  const currentIds = chatBuiltinModelIds(chatSettingsSite);
+  const rows = currentIds.map(id => {
+    const entry = chatBuiltinModelEntry(chatSettingsSite, id);
+    const label = entry.label || id;
+    return `<div class="chat-model-row">`
+      + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(id)}" ${disabled.includes(id) ? "" : "checked"} ${ready ? "" : "disabled"}><span>${escapeHtml(label)}${entry.note ? ` <span class="chat-model-note">${escapeHtml(entry.note)}</span>` : ""}</span></label>`
+      + `<button type="button" class="chat-model-remove" data-chat-model-delete="${escapeHtml(id)}" title="从列表移除此模型" aria-label="移除模型 ${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
+      + `</div>`;
+  }).join("");
+  const fetched = Array.isArray(state.settings.chatSiteModelsFetched?.[chatSettingsSite]) ? state.settings.chatSiteModelsFetched[chatSettingsSite] : [];
+  const candidates = fetched.filter(id => !currentIds.includes(id));
+  const toolbar = `<div class="chat-model-toolbar">`
+    + `<button type="button" class="apikey-btn" data-chat-site-fetch="${escapeHtml(chatSettingsSite)}">拉取模型列表</button>`
+    + (currentIds.length ? '<button type="button" class="apikey-btn" data-chat-model-disable-all title="全部取消勾选，再勾选需要的模型">全不选</button>' : "")
+    + (customized ? '<button type="button" class="apikey-btn" data-chat-model-reset>恢复默认</button>' : "")
+    + `</div>`;
+  els.chatModelToggleList.innerHTML = toolbar + rows
+    + `<div class="chat-picker-foot">${chatModelPickerHtml(candidates, chatBuiltinPickerOpen)}</div>`
+    + (ready ? "" : '<div class="chat-toggle-hint">未填写 Key，暂不可用；填写后可勾选与拉取。</div>');
+}
+
+// 内置站点拉取上游全量模型：apimart 走 /api/models（透传 /v1/models），agtoken 走 /api/agtoken/models；
+// 桌面模式桥自动从 secrets 注入，浏览器/服务器模式带 X-CanvasFlow-Api-Key 头。
+// 结果进候选池 chatSiteModelsFetched（不直接进列表——中转站动辄上百个模型，由用户勾选添加）。
+async function fetchChatSiteModels(site) {
+  const route = site === "agtoken" ? "/api/agtoken/models" : "/api/models";
+  const key = site === "agtoken" ? (state.settings.agtokenApiKey || "").trim() : (state.settings.apiKey || "").trim();
+  const button = els.chatModelToggleList?.querySelector(`[data-chat-site-fetch="${site}"]`);
+  const original = button ? button.textContent : "";
+  if (button) { button.disabled = true; button.textContent = "拉取中…"; }
+  try {
+    const resp = await apiFetch(route, { headers: key ? { "X-CanvasFlow-Api-Key": key } : {} });
+    const data = await resp.json().catch(() => ({}));
+    const apiError = typeof data.error === "string" ? data.error : data.error?.message;
+    if (!resp.ok || apiError) throw new Error(apiError || `HTTP ${resp.status}`);
+    // OpenAI 标准 {data:[{id}]}；apimart 可能为 {code,data:{data:[...]}} 包装，两级自适应
+    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data?.data?.data) ? data.data.data : [];
+    const ids = list.map(item => String(item?.id || "")).filter(Boolean);
+    if (!ids.length) throw new Error("上游未返回模型列表");
+    state.settings.chatSiteModelsFetched = state.settings.chatSiteModelsFetched && typeof state.settings.chatSiteModelsFetched === "object" ? state.settings.chatSiteModelsFetched : {};
+    state.settings.chatSiteModelsFetched[site] = ids;
+    chatBuiltinPickerOpen = true;
+    pushHistory();
+    renderChatModelToggleList();
+    toast(`已拉取 ${ids.length} 个模型，请勾选需要的加入列表`);
+  } catch (error) {
+    toast(`拉取模型列表失败：${error.message}（可在添加面板手动输入）`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = original; }
+  }
+}
+
+// 候选面板通用行为：收集勾选+手输、更新按钮计数、搜索过滤（纯 DOM，不打断输入）
+function chatUpdatePickerCount(panel) {
+  if (!panel) return;
+  const count = panel.querySelectorAll(".chat-picker-candidate:checked").length;
+  const button = panel.querySelector("[data-pick-add-selected]");
+  if (button) button.textContent = count ? `添加所选（${count}）` : "添加所选";
+}
+
+function chatFilterPicker(panel, query) {
+  const needle = String(query || "").trim().toLowerCase();
+  panel.querySelectorAll(".chat-picker-item").forEach(item => {
+    item.hidden = Boolean(needle) && !String(item.getAttribute("data-pick-model") || "").toLowerCase().includes(needle);
+  });
+}
+
+function chatCollectPickerFresh(panel, existingIds) {
+  const picked = [...panel.querySelectorAll(".chat-picker-candidate:checked")].map(box => box.getAttribute("data-pick-model")).filter(Boolean);
+  const manual = String(panel.querySelector(".chat-picker-manual-input")?.value || "").trim();
+  return [...new Set([...picked, manual].filter(Boolean))].filter(id => !existingIds.includes(id));
+}
+
+// 把候选面板所选加入内置站列表：物化 chatSiteModels + 从黑名单清掉（新加默认启用），加完收起面板
+function chatAddPickedBuiltin(site, panel) {
+  const fresh = chatCollectPickerFresh(panel, chatBuiltinModelIds(site));
+  if (!fresh.length) { toast("请先勾选要添加的模型，或输入新模型名"); return; }
+  if (!state.settings.chatSiteModels || typeof state.settings.chatSiteModels !== "object") state.settings.chatSiteModels = {};
+  state.settings.chatSiteModels[site] = [...chatBuiltinModelIds(site), ...fresh];
+  const disabled = new Set(state.settings.chatDisabledModels || []);
+  fresh.forEach(id => disabled.delete(id));
+  state.settings.chatDisabledModels = [...disabled];
+  chatBuiltinPickerOpen = false;
+  pushHistory();
+  renderChatModelToggleList();
+  renderNodes();
+  toast(`已添加 ${fresh.length} 个模型`);
+}
+
+// 把候选面板所选加入自定义站点的 modelNames（textarea 同步刷新），加完收起该卡面板
+function chatAddPickedCustom(site, panel) {
+  const existing = Array.isArray(site.modelNames) ? site.modelNames : [];
+  const fresh = chatCollectPickerFresh(panel, existing);
+  if (!fresh.length) { toast("请先勾选要添加的模型，或输入新模型名"); return; }
+  site.modelNames = [...existing, ...fresh];
+  chatCustomPickerOpen.delete(site.id);
+  pushHistory();
+  renderChatCustomSiteList();
+  renderChatModelToggleList();
+  renderNodes();
+  toast(`已添加 ${fresh.length} 个模型`);
+}
+
+function renderChatCustomSiteList() {
+  if (!els.chatCustomSiteList) return;
+  const sites = chatCustomSites();
+  if (!sites.length) {
+    els.chatCustomSiteList.innerHTML = '<div class="chat-toggle-hint">还没有自定义站点。点击下方按钮添加，可接入本地 Ollama、中转站等任意 OpenAI 兼容服务。</div>';
+    return;
+  }
+  els.chatCustomSiteList.innerHTML = sites.map(site => {
+    const modelNames = Array.isArray(site.modelNames) ? site.modelNames : [];
+    const fetchedModels = Array.isArray(site.fetchedModels) ? site.fetchedModels : [];
+    const pickCandidates = fetchedModels.filter(id => !modelNames.includes(id));
+    return `
+    <div class="chat-custom-site" data-site-id="${escapeHtml(site.id)}">
+      <div class="chat-custom-site-head">
+        <input type="text" class="chat-site-name" value="${escapeHtml(site.name || "")}" placeholder="站点名称（如 本地Ollama）" aria-label="站点名称">
+        <button type="button" class="apikey-btn danger" data-chat-site-action="delete" title="删除此站点">删除</button>
+      </div>
+      <label>接口地址（Base URL，填到 /v1 一级）
+        <input type="text" class="chat-site-url" value="${escapeHtml(site.baseUrl || "")}" placeholder="例如 http://127.0.0.1:11434/v1">
+      </label>
+      <label>API Key（可选）
+        <input type="password" class="chat-site-key" value="${escapeHtml(chatCustomSiteKey(site.id))}" placeholder="本地服务通常无需填写">
+      </label>
+      <label>模型名（每行一个）
+        <textarea class="chat-site-models" rows="3" placeholder="每行一个模型名">${escapeHtml((Array.isArray(site.modelNames) ? site.modelNames : []).join("\n"))}</textarea>
+      </label>
+      <div class="chat-picker-foot">${chatModelPickerHtml(pickCandidates, chatCustomPickerOpen.has(site.id))}</div>
+      <div class="chat-custom-site-actions">
+        <label class="check-row compact"><input type="checkbox" class="chat-site-multimodal" ${site.multimodal === true ? "checked" : ""}><span>支持图片输入（多模态）</span></label>
+        <button type="button" class="apikey-btn" data-chat-site-action="fetch">获取模型列表</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderChatSettingsTab() {
+  if (!els.chatSiteSelect) return;
+  if (!["apimart", "agtoken", "custom"].includes(chatSettingsSite)) chatSettingsSite = "apimart";
+  els.chatSiteSelect.innerHTML = [
+    '<option value="apimart">APIMart</option>',
+    '<option value="agtoken">AGToken</option>',
+    '<option value="custom">自定义站点</option>',
+  ].join("");
+  els.chatSiteSelect.value = chatSettingsSite;
+  renderChatSiteKeyArea();
+  renderChatModelToggleList();
+  renderChatCustomSiteList();
+}
+
+async function saveChatSiteKey() {
+  const value = els.chatSiteKeyInput.value.trim();
+  if (chatSettingsSite === "agtoken") {
+    state.settings.agtokenApiKey = value;
+    if (desktop) await desktop.saveApiKey(value, "agtoken");
+  } else {
+    state.settings.apiKey = value;
+    if (desktop) await desktop.saveApiKey(value, "apimart");
+  }
+  pushHistory();
+  renderChatModelToggleList();
+  toast(value ? "API Key 已保存" : "API Key 已清除");
+}
+
+async function fetchChatCustomModels(card, site) {
+  const url = String(site.baseUrl || "").trim();
+  if (!url) { toast("请先填写接口地址（填到 /v1 一级）"); return; }
+  const button = card.querySelector('[data-chat-site-action="fetch"]');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "获取中…";
+  try {
+    const resp = await apiFetch("/api/chat-custom/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: url, siteId: site.id, _apiKey: chatCustomSiteKey(site.id) }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    const apiError = typeof data.error === "string" ? data.error : data.error?.message;
+    if (!resp.ok || apiError) throw new Error(apiError || `HTTP ${resp.status}`);
+    const ids = Array.isArray(data.data) ? data.data.map(item => String(item?.id || "")).filter(Boolean) : [];
+    if (!ids.length) throw new Error("上游未返回模型列表");
+    // 进候选池不直接进列表：中转站模型可能上百个，展开面板由用户勾选添加
+    site.fetchedModels = ids;
+    chatCustomPickerOpen.add(site.id);
+    pushHistory();
+    renderChatCustomSiteList();
+    renderChatModelToggleList();
+    toast(`已拉取 ${ids.length} 个模型，请勾选需要的加入列表`);
+  } catch (error) {
+    toast(`获取模型列表失败：${error.message}（可在添加面板手动输入）`);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+if (els.chatSiteSelect) {
+  els.chatSiteSelect.addEventListener("change", () => {
+    chatSettingsSite = els.chatSiteSelect.value || "apimart";
+    chatBuiltinPickerOpen = false;
+    renderChatSiteKeyArea();
+    renderChatModelToggleList();
+  });
+  // 输入即生效：只写运行时 state + 刷新模型列表启停（不压历史、不落 secrets）；
+  // 失焦或点「保存」才走 saveChatSiteKey 持久化，避免每个击键都加密写盘
+  els.chatSiteKeyInput.addEventListener("input", () => {
+    const value = els.chatSiteKeyInput.value.trim();
+    if (chatSettingsSite === "agtoken") state.settings.agtokenApiKey = value;
+    else state.settings.apiKey = value;
+    renderChatModelToggleList();
+  });
+  els.chatSiteKeyInput.addEventListener("change", () => { saveChatSiteKey(); });
+  els.chatSiteKeySaveBtn.addEventListener("click", () => { saveChatSiteKey(); });
+  els.chatSiteKeyClearBtn.addEventListener("click", () => {
+    els.chatSiteKeyInput.value = "";
+    saveChatSiteKey();
+  });
+  els.chatModelToggleList.addEventListener("change", event => {
+    const input = event.target.closest("input[data-chat-model]");
+    if (!input || input.disabled) return;
+    const modelId = input.getAttribute("data-chat-model");
+    const set = new Set(Array.isArray(state.settings.chatDisabledModels) ? state.settings.chatDisabledModels : []);
+    if (input.checked) set.delete(modelId); else set.add(modelId);
+    state.settings.chatDisabledModels = [...set];
+    pushHistory();
+    renderNodes();
+  });
+  els.chatModelToggleList.addEventListener("click", async event => {
+    // 内置站点行删除：从 chatSiteModels 列表移除（首次操作会把目录默认物化成显式列表）
+    const deleteButton = event.target.closest("[data-chat-model-delete]");
+    if (deleteButton && chatSettingsSite !== "custom") {
+      const modelId = deleteButton.getAttribute("data-chat-model-delete");
+      const site = chatSettingsSite;
+      if (!state.settings.chatSiteModels || typeof state.settings.chatSiteModels !== "object") state.settings.chatSiteModels = {};
+      state.settings.chatSiteModels[site] = chatBuiltinModelIds(site).filter(item => item !== modelId);
+      state.settings.chatDisabledModels = (state.settings.chatDisabledModels || []).filter(item => item !== modelId);
+      pushHistory();
+      renderChatModelToggleList();
+      renderNodes();
+      return;
+    }
+    const pickerToggle = event.target.closest("[data-picker-toggle]");
+    if (pickerToggle && chatSettingsSite !== "custom") {
+      chatBuiltinPickerOpen = !chatBuiltinPickerOpen;
+      renderChatModelToggleList();
+      return;
+    }
+    const addSelected = event.target.closest("[data-pick-add-selected]");
+    if (addSelected && chatSettingsSite !== "custom") {
+      const panel = addSelected.closest(".chat-model-picker");
+      if (panel) chatAddPickedBuiltin(chatSettingsSite, panel);
+      return;
+    }
+    // 全不选：当前列表全部取消勾选（黑名单整体加入），方便先清空再挑需要的
+    const disableAll = event.target.closest("[data-chat-model-disable-all]");
+    if (disableAll && chatSettingsSite !== "custom") {
+      const set = new Set(state.settings.chatDisabledModels || []);
+      chatBuiltinModelIds(chatSettingsSite).forEach(id => set.add(id));
+      state.settings.chatDisabledModels = [...set];
+      pushHistory();
+      renderChatModelToggleList();
+      renderNodes();
+      return;
+    }
+    const resetButton = event.target.closest("[data-chat-model-reset]");
+    if (resetButton && chatSettingsSite !== "custom") {
+      if (state.settings.chatSiteModels) delete state.settings.chatSiteModels[chatSettingsSite];
+      pushHistory();
+      renderChatModelToggleList();
+      renderNodes();
+      return;
+    }
+    const fetchButton = event.target.closest("[data-chat-site-fetch]");
+    if (fetchButton) await fetchChatSiteModels(fetchButton.getAttribute("data-chat-site-fetch"));
+  });
+  els.chatModelToggleList.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || !event.target.classList.contains("chat-picker-manual-input")) return;
+    event.preventDefault();
+    const panel = event.target.closest(".chat-model-picker");
+    if (panel) chatAddPickedBuiltin(chatSettingsSite, panel);
+  });
+  els.chatModelToggleList.addEventListener("change", event => {
+    if (event.target.classList.contains("chat-picker-candidate")) {
+      chatUpdatePickerCount(event.target.closest(".chat-model-picker"));
+    }
+  });
+  els.chatModelToggleList.addEventListener("input", event => {
+    if (event.target.classList.contains("chat-picker-search")) {
+      chatFilterPicker(event.target.closest(".chat-model-picker"), event.target.value);
+    }
+  });
+  els.chatCustomSiteList.addEventListener("input", event => {
+    const card = event.target.closest(".chat-custom-site");
+    if (!card) return;
+    const site = chatCustomSiteById(card.getAttribute("data-site-id"));
+    if (!site) return;
+    if (event.target.classList.contains("chat-picker-search")) {
+      chatFilterPicker(event.target.closest(".chat-model-picker"), event.target.value);
+      return;
+    }
+    if (event.target.classList.contains("chat-site-name")) site.name = event.target.value;
+    else if (event.target.classList.contains("chat-site-url")) site.baseUrl = event.target.value.trim();
+    else if (event.target.classList.contains("chat-site-models")) site.modelNames = event.target.value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+    else if (event.target.classList.contains("chat-site-key")) {
+      state.settings.chatCustomKeys = state.settings.chatCustomKeys && typeof state.settings.chatCustomKeys === "object" ? state.settings.chatCustomKeys : {};
+      state.settings.chatCustomKeys[site.id] = event.target.value.trim();
+    }
+  });
+  els.chatCustomSiteList.addEventListener("change", async event => {
+    const card = event.target.closest(".chat-custom-site");
+    if (!card) return;
+    const site = chatCustomSiteById(card.getAttribute("data-site-id"));
+    if (!site) return;
+    if (event.target.classList.contains("chat-picker-candidate")) {
+      chatUpdatePickerCount(event.target.closest(".chat-model-picker"));
+      return;
+    }
+    if (event.target.classList.contains("chat-site-multimodal")) {
+      site.multimodal = event.target.checked === true;
+      pushHistory();
+      renderChatModelToggleList();
+      return;
+    }
+    // 文本输入失焦冲刷：写回 + 压历史；模型名变化同时刷新上方勾选列表
+    if (event.target.classList.contains("chat-site-name")) site.name = event.target.value;
+    else if (event.target.classList.contains("chat-site-url")) site.baseUrl = event.target.value.trim();
+    else if (event.target.classList.contains("chat-site-models")) site.modelNames = event.target.value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+    else if (event.target.classList.contains("chat-site-key")) {
+      state.settings.chatCustomKeys = state.settings.chatCustomKeys && typeof state.settings.chatCustomKeys === "object" ? state.settings.chatCustomKeys : {};
+      state.settings.chatCustomKeys[site.id] = event.target.value.trim();
+      if (desktop) await desktop.saveApiKey(state.settings.chatCustomKeys[site.id], `chatcustom:${site.id}`);
+    }
+    pushHistory();
+    renderChatModelToggleList();
+    if (!event.target.classList.contains("chat-site-key")) renderChatSettingsTab();
+  });
+  els.chatCustomSiteList.addEventListener("click", async event => {
+    const card = event.target.closest(".chat-custom-site");
+    const site = card ? chatCustomSiteById(card.getAttribute("data-site-id")) : null;
+    if (!site) return;
+    const pickerToggle = event.target.closest("[data-picker-toggle]");
+    if (pickerToggle) {
+      if (chatCustomPickerOpen.has(site.id)) chatCustomPickerOpen.delete(site.id); else chatCustomPickerOpen.add(site.id);
+      renderChatCustomSiteList();
+      return;
+    }
+    const addSelected = event.target.closest("[data-pick-add-selected]");
+    if (addSelected) {
+      const panel = addSelected.closest(".chat-model-picker");
+      if (panel) chatAddPickedCustom(site, panel);
+      return;
+    }
+    const button = event.target.closest("[data-chat-site-action]");
+    if (!button) return;
+    if (button.getAttribute("data-chat-site-action") === "delete") {
+      state.settings.chatCustomSites = chatCustomSites().filter(item => item.id !== site.id);
+      if (state.settings.chatCustomKeys) delete state.settings.chatCustomKeys[site.id];
+      chatCustomPickerOpen.delete(site.id);
+      if (desktop) await desktop.saveApiKey("", `chatcustom:${site.id}`);
+      pushHistory();
+      renderChatSettingsTab();
+      renderNodes();
+      toast("已删除自定义站点，使用它的对话节点已回退默认模型");
+    } else if (button.getAttribute("data-chat-site-action") === "fetch") {
+      await fetchChatCustomModels(card, site);
+    }
+  });
+  els.chatAddCustomSiteBtn.addEventListener("click", () => {
+    const site = { id: uid("cs"), name: "", baseUrl: "", modelNames: [], multimodal: false };
+    state.settings.chatCustomSites = [...chatCustomSites(), site];
+    pushHistory();
+    chatSettingsSite = "custom";
+    renderChatSettingsTab();
+    // 新卡片的名称输入框直接聚焦，减少一次点击
+    els.chatCustomSiteList.querySelector(`.chat-custom-site[data-site-id="${CSS.escape(site.id)}"] .chat-site-name`)?.focus();
+  });
+}
+
 els.zipExportToggle.onchange = () => {
   state.settings.zipExport = els.zipExportToggle.checked;
   pushHistory();
@@ -13368,18 +13964,25 @@ els.clearKeyBtn.onclick = async () => {
   if (desktop) {
     await desktop.saveApiKey("", "apimart");
     await desktop.saveApiKey("", "agtoken");
+    // 自定义对话站点的 key 同存 secrets，逐站点清除
+    for (const site of chatCustomSites()) {
+      await desktop.saveApiKey("", `chatcustom:${site.id}`);
+    }
+    state.settings.chatCustomKeys = {};
   }
   // Clear API key from all pages' saved settings
   state.pages.forEach(page => {
     if (page.data && page.data.settings) {
       page.data.settings.apiKey = "";
       page.data.settings.agtokenApiKey = "";
+      delete page.data.settings.chatCustomKeys;
     }
   });
   saveCurrentPage();
   persistPages();
   pushHistory();
   applySettings();
+  renderChatSettingsTab();
   toast("API Key 已从所有页面清除，可安全分享");
 };
 
@@ -14466,6 +15069,7 @@ async function init() {
       const secret = await desktop.getApiKey();
       state.settings.apiKey = secret.apiKey || "";
       state.settings.agtokenApiKey = secret.agtokenApiKey || "";
+      if (secret.chatCustomKeys && typeof secret.chatCustomKeys === "object") state.settings.chatCustomKeys = secret.chatCustomKeys;
     } catch (error) { console.error("[安全存储] API Key 读取失败", error); }
     await flushDesktopAssetMigration();
   }

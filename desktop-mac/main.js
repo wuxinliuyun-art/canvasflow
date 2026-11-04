@@ -96,22 +96,43 @@ function encryptSlot(value, warnings) {
   return plain.toString("base64");
 }
 
+// 内置网关保持两槽；自定义对话站点槽名（"chatcustom:<siteId>"）直接透传，与 Windows ApiKeySlot 一致
+function apiKeySlot(apiType) {
+  const slot = String(apiType || "apimart").toLowerCase();
+  if (slot.startsWith("chatcustom:")) return slot;
+  return slot === "agtoken" ? "agtoken" : "apimart";
+}
+
 function readApiKey(apiType) {
-  const slot = String(apiType || "apimart").toLowerCase() === "agtoken" ? "agtoken" : "apimart";
+  const slot = apiKeySlot(apiType);
   const secrets = readSecretsFile();
   const keys = secrets.keys || {};
   return decryptSlot(keys[slot] || (slot === "apimart" ? secrets.apiKey : ""));
 }
 
+// 枚举全部自定义对话站点槽（键为去前缀后的 siteId），对齐 Windows ReadChatCustomKeys
+function readChatCustomKeys() {
+  const secrets = readSecretsFile();
+  const result = {};
+  for (const [name, encrypted] of Object.entries(secrets.keys || {})) {
+    if (!name.toLowerCase().startsWith("chatcustom:")) continue;
+    const value = decryptSlot(encrypted);
+    if (value) result[name.slice("chatcustom:".length)] = value;
+  }
+  return result;
+}
+
 function saveApiKey(value, apiType) {
-  const slot = String(apiType || "apimart").toLowerCase() === "agtoken" ? "agtoken" : "apimart";
+  const slot = apiKeySlot(apiType);
   const warnings = [];
-  const keys = {
-    apimart: readApiKey("apimart"),
-    agtoken: readApiKey("agtoken"),
-  };
+  // 读现有全部槽（含自定义对话站点的 chatcustom:* 槽），保存一把 key 时不得抹掉其他槽；
+  // v1 兼容：旧文件根级 apiKey 属于 apimart
+  const secrets = readSecretsFile();
+  const keys = {};
+  for (const [name, encrypted] of Object.entries(secrets.keys || {})) keys[name] = decryptSlot(encrypted);
+  if (!keys.apimart && secrets.apiKey) keys.apimart = decryptSlot(secrets.apiKey);
   keys[slot] = String(value ?? "").trim();
-  if (!keys.apimart && !keys.agtoken) {
+  if (!Object.values(keys).some(Boolean)) {
     try { if (fs.existsSync(secretsPath)) fs.rmSync(secretsPath, { force: true }); } catch (_) {}
     return { success: true };
   }
@@ -345,7 +366,7 @@ function registerIpc() {
   ipcMain.handle("desktop:choose-output-folder", (_event, payload) => chooseOutputFolder(payload.currentPath, payload.purpose));
   ipcMain.handle("desktop:choose-library-file", (_event, payload) => chooseLibraryFile(payload.currentPath));
   ipcMain.handle("desktop:choose-image-file", (_event, payload) => chooseImageFile(payload.currentPath));
-  ipcMain.handle("desktop:get-api-key", () => ({ apiKey: readApiKey("apimart"), agtokenApiKey: readApiKey("agtoken") }));
+  ipcMain.handle("desktop:get-api-key", () => ({ apiKey: readApiKey("apimart"), agtokenApiKey: readApiKey("agtoken"), chatCustomKeys: readChatCustomKeys() }));
   ipcMain.handle("desktop:save-api-key", (_event, payload) => saveApiKey(payload.apiKey, payload.apiType));
   ipcMain.handle("desktop:get-ps-path", () => wrapIpc(() => psInterop.getPsPath()));
   ipcMain.handle("desktop:save-ps-path", (_event, payload) => wrapIpc(() => psInterop.savePsPath(payload.path)));

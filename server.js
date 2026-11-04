@@ -345,6 +345,49 @@ async function tryProxyRequest(method, pathStr, headers, body, timeoutMs = 12000
   throw lastError || new Error("所有 API 地址均不可达");
 }
 
+// 自定义 OpenAI 兼容站点的通用透传：proxyRequest 硬编码 https:443，无法访问
+// 本地推理服务（如 Ollama 的 http://127.0.0.1:11434），此函数按协议分流并支持任意端口。
+function proxyRequestAny(method, targetUrl, headers, body, timeoutMs = 120000) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try { parsed = new URL(targetUrl); }
+    catch (error) { reject(new Error("无效的接口地址: " + targetUrl)); return; }
+    const isHttps = parsed.protocol === "https:";
+    if (!isHttps && parsed.protocol !== "http:") {
+      reject(new Error("接口地址仅支持 http/https 协议"));
+      return;
+    }
+    const options = {
+      method,
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      port: parsed.port || (isHttps ? 443 : 80),
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+    };
+    const proxyReq = (isHttps ? https : http).request(options, proxyRes => {
+      const chunks = [];
+      proxyRes.on("data", chunk => chunks.push(chunk));
+      proxyRes.on("end", () => {
+        resolve({ status: proxyRes.statusCode, headers: proxyRes.headers, body: Buffer.concat(chunks) });
+      });
+    });
+    proxyReq.on("error", reject);
+    proxyReq.setTimeout(timeoutMs, () => { proxyReq.destroy(); reject(new Error("timeout")); });
+    if (body) proxyReq.write(body);
+    proxyReq.end();
+  });
+}
+
+// 自定义站点的 Base URL 规整：去空白与尾部斜杠，校验 http/https 协议（Base URL 填到 /v1 一级）。
+function normalizeCustomChatBaseUrl(raw) {
+  const baseUrl = String(raw || "").trim().replace(/\/+$/, "");
+  if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw new Error("自定义接口地址无效：需以 http:// 或 https:// 开头，并填到 /v1 一级");
+  return baseUrl;
+}
+
 // 下载上游视频成片（火山 CDN 链接约 24 小时有效），整段读入后交调用方写盘
 function downloadVideoToBuffer(videoUrl, timeoutMs = 600000) {
   return new Promise((resolve, reject) => {
@@ -425,6 +468,7 @@ async function requestHandler(req, res) {
       for (const page of body.pages) if (page && page.data && page.data.settings) {
         page.data.settings.apiKey = "";
         page.data.settings.agtokenApiKey = "";
+        delete page.data.settings.chatCustomKeys;
       }
       atomicWriteFile(path.join(dataRoot, "data", "app-state.json"), JSON.stringify(body, null, 2));
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -866,23 +910,37 @@ async function requestHandler(req, res) {
     return;
   }
 
-  // AI 对话（chat completions）：按 apiType 分槽透传到两个网关，请求格式互不转换。
+  // AI 对话（chat completions）：按 apiType 分槽透传到两个网关 + 自定义站点，请求格式互不转换。
   // apimart 走 OpenAI 兼容 /api/v1 前缀（响应为 {code,data} 包装，由前端解包）；
-  // agtoken 走标准 /v1。对话是同步长请求（推理模型可达数分钟），超时给足 300 秒。
+  // agtoken 走标准 /v1；custom 走用户自配的 OpenAI 兼容 Base URL（payload.__chatCustom 携带，
+  // 桌面宿主对 custom 槽的 key 经 "chatcustom:<siteId>" 槽名透传给 secretProvider）。
+  // 对话是同步长请求（推理模型可达数分钟），超时给足 300 秒。
   if (pathname === "/api/chat/completions" && req.method === "POST") {
     try {
       const body = await readBody(req);
       const payload = JSON.parse(body.toString());
-      const apiType = payload.apiType === "agtoken" ? "agtoken" : "apimart";
+      const apiType = payload.apiType === "agtoken" || payload.apiType === "custom" ? payload.apiType : "apimart";
       delete payload.apiType;
-      const apiKey = payload._apiKey || requestApiKey(apiType) || "";
+      const customChat = apiType === "custom" ? (payload.__chatCustom || {}) : null;
+      if (customChat) delete payload.__chatCustom;
+      const secretSlot = apiType === "custom" ? `chatcustom:${customChat.siteId || ""}` : apiType;
+      const apiKey = payload._apiKey || requestApiKey(secretSlot) || "";
       delete payload._apiKey;
       payload.stream = payload.stream === true;
-      const headers = { Authorization: `Bearer ${apiKey}` };
+      const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
       let result;
       if (apiType === "agtoken") {
         result = await proxyRequest("POST", AGTOKEN_BASE_URL + "/v1/chat/completions", headers, JSON.stringify(payload), CHAT_TIMEOUT_MS);
         console.log(`[AGToken] /v1/chat/completions -> ${result.status}`);
+      } else if (apiType === "custom") {
+        const baseUrl = normalizeCustomChatBaseUrl(customChat.baseUrl);
+        // 防御性：model 若仍带 "custom:<siteId>:" 完整前缀则剥掉（正常链路前端已剥成真实模型名）
+        if (typeof payload.model === "string") {
+          const stripped = payload.model.replace(/^custom:[^:]+:/, "");
+          if (stripped && stripped !== payload.model) payload.model = stripped;
+        }
+        result = await proxyRequestAny("POST", baseUrl + "/chat/completions", headers, JSON.stringify(payload), CHAT_TIMEOUT_MS);
+        console.log(`[ChatCustom] ${baseUrl}/chat/completions -> ${result.status}`);
       } else {
         result = await tryProxyRequest("POST", "/api/v1/chat/completions", headers, JSON.stringify(payload), CHAT_TIMEOUT_MS);
       }
@@ -891,6 +949,24 @@ async function requestHandler(req, res) {
     } catch (err) {
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { code: 502, message: "对话请求失败: " + err.message } }));
+    }
+    return;
+  }
+
+  // 自定义 OpenAI 兼容站点：拉取模型列表（GET {baseUrl}/models），供设置面板"获取模型列表"自动填充。
+  if (pathname === "/api/chat-custom/models" && req.method === "POST") {
+    try {
+      const payload = JSON.parse((await readBody(req)).toString("utf-8") || "{}");
+      const baseUrl = normalizeCustomChatBaseUrl(payload.baseUrl);
+      const apiKey = String(payload._apiKey || requestApiKey(`chatcustom:${payload.siteId || ""}`) || "");
+      const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+      const result = await proxyRequestAny("GET", baseUrl + "/models", headers, null, 20000);
+      console.log(`[ChatCustom] ${baseUrl}/models -> ${result.status}`);
+      res.writeHead(result.status, { "Content-Type": "application/json" });
+      res.end(result.body);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "获取模型列表失败: " + err.message } }));
     }
     return;
   }

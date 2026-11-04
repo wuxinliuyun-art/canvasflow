@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261104-palette-merge1">
+  <link rel="stylesheet" href="styles.css?v=20261105-chatnote1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -125,6 +125,7 @@
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
           <button class="settings-tab-btn" data-tab="appearance"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6.5A2.5 2.5 0 0 0 21 9.5 9 9 0 0 0 12 3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg></span><span>外观</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
+          <button class="settings-tab-btn" data-tab="aichat"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H10l-5 4v-4H4zM8 9h8M8 12h5"/></svg></span><span>AI对话</span></button>
           <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="variables"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h4M5 12h4M5 18h4M12 6h7M12 12h7M12 18h7"/></svg></span><span>变量库</span></button>
@@ -376,6 +377,40 @@
         </section>
       </div>
 
+      <div class="tab-page hidden" data-tab="aichat">
+        <div class="settings-page-head"><h2>AI 对话</h2><p>管理对话节点的站点、密钥与可用模型；支持接入多个自定义 OpenAI 兼容接口（本地 Ollama、中转站等）。</p></div>
+
+        <section class="settings-card">
+          <div class="ai-section-head">站点与密钥</div>
+          <label for="chatSiteSelect">站点
+            <select id="chatSiteSelect"></select>
+          </label>
+          <div id="chatSiteKeyArea">
+            <label>API Key
+              <div class="apikey-row">
+                <input id="chatSiteKeyInput" type="password" placeholder="输入 API Key">
+                <div class="apikey-actions">
+                  <button id="chatSiteKeySaveBtn" class="apikey-btn" title="保存 API Key">保存</button>
+                  <button id="chatSiteKeyClearBtn" class="apikey-btn danger" title="清除该站点的 API Key">清除</button>
+                </div>
+              </div>
+            </label>
+            <span id="chatSiteKeyHint" class="api-url-hint"></span>
+          </div>
+          <div id="chatCustomSiteArea" class="hidden">
+            <p class="setting-desc">接入任意 OpenAI 兼容服务。接口地址需填到 /v1 一级，例如 http://127.0.0.1:11434/v1；密钥可选（本地服务通常无需填写）。</p>
+            <div id="chatCustomSiteList"></div>
+            <button id="chatAddCustomSiteBtn" class="apikey-btn" type="button">+ 添加自定义站点</button>
+          </div>
+        </section>
+
+        <section class="settings-card">
+          <h3>可用模型</h3>
+          <p class="setting-desc">勾选后才会出现在对话节点的模型下拉中；未填写 Key 的站点暂时不可用。</p>
+          <div id="chatModelToggleList"></div>
+        </section>
+      </div>
+
       <div class="tab-page hidden" data-tab="screenshot">
         <div class="settings-page-head"><h2>截图工具</h2><p>截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。</p></div>
         <section class="settings-card">
@@ -554,12 +589,12 @@
     </div>
   </div>
 
-  <script src="model-catalog.js?v=20261025-model-prune2"></script>
+  <script src="model-catalog.js?v=20261105-agtdefault1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/mindmap-module.js?v=20261104-mindmap-on1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
-  <script src="app.js?v=20261104-palette-merge1"></script>
+  <script src="app.js?v=20261105-agtdefault1"></script>
   <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
 </body>
 </html>

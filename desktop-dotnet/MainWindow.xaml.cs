@@ -231,7 +231,7 @@ public partial class MainWindow : Window
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 Show();
                 Activate();
-            }));
+            }), slot => ReadApiKey(slot));
             // CEP 面板桥：画布开着时，Photoshop 面板经 localhost 桥复用画布的 API 与已保存的 key
             _desktopBridge = new DesktopBridge(_desktopApi, Log, (name, dataUrl) => PostPsReturnImage(name, dataUrl));
             try { _desktopBridge.Start(); }
@@ -519,7 +519,7 @@ public partial class MainWindow : Window
                     }
                     else if (type.GetString() == "desktop:get-api-key")
                     {
-                        PostRpcResult(root, new { apiKey = ReadApiKey("apimart"), agtokenApiKey = ReadApiKey("agtoken") });
+                        PostRpcResult(root, new { apiKey = ReadApiKey("apimart"), agtokenApiKey = ReadApiKey("agtoken"), chatCustomKeys = ReadChatCustomKeys() });
                     }
                     else if (type.GetString() == "desktop:save-api-key")
                     {
@@ -624,7 +624,12 @@ public partial class MainWindow : Window
         File.Move(temporary, AssetsIndexPath, true);
     }
 
-    private static string ApiKeySlot(string apiType) => string.Equals(apiType, "agtoken", StringComparison.OrdinalIgnoreCase) ? "agtoken" : "apimart";
+    // 内置网关保持两槽；自定义对话站点槽名（"chatcustom:<siteId>"）直接透传，与 server.js secretProvider 槽名一致
+    private static string ApiKeySlot(string apiType)
+    {
+        if (!string.IsNullOrEmpty(apiType) && apiType.StartsWith("chatcustom:", StringComparison.OrdinalIgnoreCase)) return apiType;
+        return string.Equals(apiType, "agtoken", StringComparison.OrdinalIgnoreCase) ? "agtoken" : "apimart";
+    }
 
     private string ReadApiKey(string apiType)
     {
@@ -655,27 +660,74 @@ public partial class MainWindow : Window
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SecretsPath)!);
         var slot = ApiKeySlot(apiType);
-        var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        keys["apimart"] = ReadApiKey("apimart");
-        keys["agtoken"] = ReadApiKey("agtoken");
-        keys[slot] = (value ?? "").Trim();
-        if (keys["apimart"].Length == 0 && keys["agtoken"].Length == 0)
+        var newValue = (value ?? "").Trim();
+        // 读现有全部槽（含自定义对话站点的 chatcustom:* 槽），保存一把 key 时不得抹掉其他槽；
+        // 读到的是密文，原样保留，仅本次写入的槽重新加密
+        var encryptedKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(SecretsPath))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
+                if (document.RootElement.TryGetProperty("keys", out var existing))
+                {
+                    foreach (var entry in existing.EnumerateObject())
+                        encryptedKeys[entry.Name] = entry.Value.GetString() ?? "";
+                }
+                // v1 兼容：旧文件根级 apiKey 属于 apimart，归一进 keys 后随写盘固化
+                if (!encryptedKeys.ContainsKey("apimart") && document.RootElement.TryGetProperty("apiKey", out var legacyKey))
+                    encryptedKeys["apimart"] = legacyKey.GetString() ?? "";
+            }
+            catch (Exception readError)
+            {
+                Log($"[安全存储] 旧密钥文件读取失败，将按空密钥重建。详细信息：{readError.Message}", true);
+            }
+        }
+        if (newValue.Length == 0) encryptedKeys.Remove(slot);
+        // 全空（所有槽均无密文且本次写入也为空）时删除文件
+        var hasAnyKey = newValue.Length > 0 || encryptedKeys.Values.Any(v => v.Length > 0);
+        if (!hasAnyKey)
         {
             if (File.Exists(SecretsPath)) File.Delete(SecretsPath);
             return;
         }
         var keyObject = new Dictionary<string, string>();
-        foreach (var pair in keys)
+        foreach (var pair in encryptedKeys)
         {
-            if (pair.Value.Length == 0) continue;
-            var bytes = Encoding.UTF8.GetBytes(pair.Value);
+            if (pair.Value.Length == 0 || string.Equals(pair.Key, slot, StringComparison.OrdinalIgnoreCase)) continue;
+            keyObject[pair.Key] = pair.Value;
+        }
+        if (newValue.Length > 0)
+        {
+            var bytes = Encoding.UTF8.GetBytes(newValue);
             var protectedBytes = ProtectedData.Protect(bytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
-            keyObject[pair.Key] = Convert.ToBase64String(protectedBytes);
+            keyObject[slot] = Convert.ToBase64String(protectedBytes);
         }
         var content = JsonSerializer.Serialize(new { version = 2, keys = keyObject }, new JsonSerializerOptions { WriteIndented = true });
         var temporary = SecretsPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
         File.WriteAllText(temporary, content, Encoding.UTF8);
         File.Move(temporary, SecretsPath, true);
+    }
+
+    // 枚举 secrets 里全部自定义对话站点槽并解密，随 desktop:get-api-key 返回（键为去前缀后的 siteId），
+    // 前端回填 state.settings.chatCustomKeys
+    private Dictionary<string, string> ReadChatCustomKeys()
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            if (!File.Exists(SecretsPath)) return result;
+            using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
+            if (!document.RootElement.TryGetProperty("keys", out var keys)) return result;
+            foreach (var entry in keys.EnumerateObject())
+            {
+                if (!entry.Name.StartsWith("chatcustom:", StringComparison.OrdinalIgnoreCase)) continue;
+                var slotValue = ReadApiKey(entry.Name);
+                if (slotValue.Length > 0) result[entry.Name.Substring("chatcustom:".Length)] = slotValue;
+            }
+        }
+        catch { }
+        return result;
     }
 
     private static string MimeFromExtension(string extension) => extension.ToLowerInvariant() switch

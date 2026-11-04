@@ -6,7 +6,7 @@
     "/api/generate", "/api/midjourney/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
     "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
     "/api/agtoken/video-generate", "/api/download-video",
-    "/api/browser-transfer", "/api/chat/completions", "/api/browser-task/cancel", "/api/browser-task", "/api/browser-task/next", "/api/browser-task/result",
+    "/api/browser-transfer", "/api/chat/completions", "/api/chat-custom/models", "/api/browser-task/cancel", "/api/browser-task", "/api/browser-task/next", "/api/browser-task/result",
     "/api/extensions", "/api/extensions/refresh",
     "/api/comfyui/config", "/api/comfyui/test", "/api/comfyui/workflows/import", "/api/comfyui/workflows/update", "/api/comfyui/workflows/delete", "/api/comfyui/workflows/reorder", "/api/comfyui/run", "/api/comfyui/cancel",
     "/api/cep/status", "/api/cep/install", "/api/cep/uninstall",

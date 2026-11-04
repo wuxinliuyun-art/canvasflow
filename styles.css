@@ -1790,6 +1790,46 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   line-height: 1.5;
 }
 
+/* AI 对话设置页签：模型分组与自定义 OpenAI 兼容站点卡 */
+.chat-model-group { margin-bottom: 12px; }
+.chat-model-group:last-child { margin-bottom: 0; }
+.chat-model-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
+.chat-toggle-hint { color: var(--muted); font-size: 12px; font-weight: 400; }
+.chat-model-toggle { margin: 4px 0; }
+.chat-model-note { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.chat-model-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.chat-model-add { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 180px; }
+.chat-model-add-input { flex: 1; min-width: 0; }
+.chat-model-row { display: flex; align-items: center; gap: 4px; }
+.chat-model-row .chat-model-toggle { flex: 1; min-width: 0; }
+.chat-model-remove {
+  flex: 0 0 auto;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.chat-model-remove svg { display: block; width: 12px; height: 12px; }
+.chat-model-remove:hover { color: var(--danger); background: rgba(255, 59, 48, .08); }
+.chat-picker-foot { margin-top: 12px; }
+.chat-model-picker { margin-top: 8px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 10px; background: var(--surface-2, rgba(127, 127, 127, .06)); }
+.chat-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
+.chat-picker-search, .chat-picker-manual input { width: 100%; }
+.chat-picker-list { max-height: 240px; overflow-y: auto; margin: 8px 0; }
+.chat-picker-item .chat-picker-candidate { flex: 0 0 auto; }
+.chat-picker-manual { margin-top: 4px; }
+.chat-picker-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.chat-custom-site { margin-bottom: 12px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 10px; background: var(--surface-2, rgba(127, 127, 127, .06)); }
+.chat-custom-site-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.chat-custom-site-head .chat-site-name { flex: 1; }
+.chat-custom-site-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+
 .update-settings-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 .update-settings-head h3 { margin-top:0; }
 .update-settings-head .setting-desc { margin:4px 0 0; }
