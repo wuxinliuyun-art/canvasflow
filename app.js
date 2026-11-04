@@ -611,6 +611,9 @@ const state = {
   annotations: [],
   selectedAnnotationId: "",
   selected: new Set(),
+  // 画布节点编组：成员节点带 canvasGroupId，外框按成员范围拟合后缓存在这里
+  canvasGroupFrames: {},
+  selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
   settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
@@ -1180,6 +1183,7 @@ function cloneData() {
     nodes: state.nodes,
     edges: state.edges,
     annotations: state.annotations,
+    canvasGroupFrames: state.canvasGroupFrames,
     settings,
     customLibrary: state.customLibrary,
     view: state.view,
@@ -1224,6 +1228,9 @@ function restoreData(data) {
   const runtimeChatCustomKeys = desktop ? (state.settings?.chatCustomKeys || {}) : "";
   state.nodes = data.nodes || [];
   state.edges = data.edges || [];
+  // 旧工程没有 canvasGroupFrames 字段：留空即可，外框会在渲染时按成员范围重新推导
+  state.canvasGroupFrames = { ...(data.canvasGroupFrames || {}) };
+  state.selectedCanvasGroupId = "";
   state.annotations = Array.isArray(data.annotations)
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
@@ -2607,6 +2614,163 @@ function groupSelection() {
   toast(`已创建多任务 ${nodes.length} 个节点`);
 }
 
+// ── 画布节点编组 ────────────────────────────────────────────────────────────
+// 数据模型：成员节点带 node.canvasGroupId；外框按成员范围拟合，缓存进 state.canvasGroupFrames
+// （随工程存档，用于复制粘贴与旧档兼容）；整组拖动时 selectedCanvasGroupId 记住当前组，
+// 使随后点击组内单个节点能回到"只动这个节点"的语义。
+const CANVAS_GROUP_PAD_X = 16;
+const CANVAS_GROUP_PAD_TOP = 28; // 顶部留给"编组 · N 个节点"标签
+const CANVAS_GROUP_PAD_BOTTOM = 16;
+
+function canvasGroupMembers(groupId) {
+  return state.nodes.filter(node => node.canvasGroupId === groupId);
+}
+
+function expandCanvasGroupIds(ids) {
+  const selected = new Set(ids);
+  const groups = new Set(state.nodes.filter(node => selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId));
+  for (const node of state.nodes) if (groups.has(node.canvasGroupId)) selected.add(node.id);
+  return selected;
+}
+
+function groupCanvasSelection() {
+  const ids = expandCanvasGroupIds(state.selected);
+  if (ids.size < 2) return toast("至少选中 2 个节点才能创建编组");
+  for (const node of state.nodes) if (ids.has(node.id) && node.canvasGroupId) delete state.canvasGroupFrames[node.canvasGroupId];
+  const groupId = uid("canvas-group");
+  for (const node of state.nodes) if (ids.has(node.id)) node.canvasGroupId = groupId;
+  state.selected = ids;
+  state.selectedCanvasGroupId = groupId;
+  canvasGroupBounds(canvasGroupMembers(groupId));
+  pushHistory();
+  render();
+  toast(`已将 ${ids.size} 个节点编组`);
+}
+
+function ungroupCanvasSelection() {
+  const ids = expandCanvasGroupIds(state.selected);
+  let count = 0;
+  for (const node of state.nodes) if (ids.has(node.id) && node.canvasGroupId) {
+    delete state.canvasGroupFrames[node.canvasGroupId];
+    delete node.canvasGroupId;
+    count++;
+  }
+  if (!count) return;
+  state.selected = ids;
+  state.selectedCanvasGroupId = "";
+  pushHistory();
+  render();
+  toast(`已解散编组，保留 ${count} 个节点`);
+}
+
+function canvasGroupNodeRect(node) {
+  return {
+    x: Number(node.x) || 0, y: Number(node.y) || 0,
+    w: Number(node.w) || NODE_WIDTH, h: Number(node.h) || NODE_HEIGHT,
+  };
+}
+
+function canvasGroupBounds(nodes) {
+  if (!nodes.length) return { x: 0, y: 0, w: 0, h: 0 };
+  const rects = nodes.map(canvasGroupNodeRect);
+  const x = Math.min(...rects.map(rect => rect.x)) - CANVAS_GROUP_PAD_X;
+  const y = Math.min(...rects.map(rect => rect.y)) - CANVAS_GROUP_PAD_TOP;
+  const right = Math.max(...rects.map(rect => rect.x + rect.w)) + CANVAS_GROUP_PAD_X;
+  const bottom = Math.max(...rects.map(rect => rect.y + rect.h)) + CANVAS_GROUP_PAD_BOTTOM;
+  const bounds = { x, y, w: right - x, h: bottom - y };
+  const groupId = nodes[0]?.canvasGroupId;
+  if (groupId) (state.canvasGroupFrames ||= {})[groupId] = bounds;
+  return bounds;
+}
+
+// 选中单个节点：整组被选中（或刚拖过外框）时收敛为只选它，避免误动整组
+function selectCanvasNode(id, additive = false) {
+  if (!additive && (!state.selected.has(id) || state.selectedCanvasGroupId)) state.selected = new Set([id]);
+  else if (additive) state.selected.add(id);
+  state.selectedCanvasGroupId = "";
+}
+
+function canvasDragGroupFrames(nodes) {
+  const ids = new Set(nodes.map(node => node.id));
+  const groups = new Set(nodes.map(node => node.canvasGroupId).filter(Boolean));
+  const frames = [];
+  for (const groupId of groups) {
+    const members = canvasGroupMembers(groupId);
+    const bounds = canvasGroupBounds(members);
+    if (members.every(node => ids.has(node.id))) frames.push({ groupId, ...bounds });
+  }
+  return frames;
+}
+
+// 沿单个轴求允许位移：把"成员外扩边"与"整组平移"都限制在组外节点之外。
+// 允许沿已接触的边滑行（tangent），允许反向退出（收缩），正向只走到贴着障碍为止。
+function constrainCanvasGroupDelta(nodes, axis, delta, movingIds, blockedGroups) {
+  if (!delta) return delta;
+  const groups = new Set(nodes.map(node => node.canvasGroupId).filter(Boolean));
+  let allowed = delta;
+  for (const groupId of groups) {
+    const members = canvasGroupMembers(groupId);
+    if (members.length < 2) continue; // 只剩一个成员时等同于普通节点，不再套用整组碰撞
+    const moving = members.filter(node => movingIds.has(node.id)).map(canvasGroupNodeRect);
+    const frame = canvasGroupBounds(members);
+    const horizontal = axis === "x", size = horizontal ? "w" : "h";
+    const otherAxis = horizontal ? "y" : "x", otherSize = horizontal ? "h" : "w";
+    const leading = Math.min(...moving.map(node => node[axis])) - (horizontal ? CANVAS_GROUP_PAD_X : CANVAS_GROUP_PAD_TOP);
+    const trailing = Math.max(...moving.map(node => node[axis] + node[size])) + CANVAS_GROUP_PAD_X;
+    const beforeGroup = allowed;
+    for (const obstacle of state.nodes) {
+      if (obstacle.canvasGroupId === groupId || movingIds.has(obstacle.id)) continue;
+      const box = canvasGroupNodeRect(obstacle);
+      if (frame[otherAxis] > box[otherAxis] + box[otherSize] || frame[otherAxis] + frame[otherSize] < box[otherAxis]) continue;
+      const tangent = frame[otherAxis] === box[otherAxis] + box[otherSize] || frame[otherAxis] + frame[otherSize] === box[otherAxis];
+      const overlapsAxis = frame[axis] < box[axis] + box[size] && frame[axis] + frame[size] > box[axis];
+      if (tangent && overlapsAxis) continue; // 沿接触边滑行，不进入障碍
+      // 接触包含拐角：已经轻微重叠的边也继续挡，但允许反向退出
+      if (delta > 0 && frame[axis] < box[axis] && frame[axis] + frame[size] <= box[axis] + box[size]) {
+        allowed = Math.min(allowed, Math.max(0, box[axis] - trailing));
+      } else if (delta < 0 && frame[axis] + frame[size] > box[axis] + box[size] && frame[axis] >= box[axis]) {
+        allowed = Math.max(allowed, Math.min(0, box[axis] + box[size] - leading));
+      }
+    }
+    if (allowed !== beforeGroup) blockedGroups?.add(groupId);
+  }
+  return allowed;
+}
+
+function moveCanvasDragNodes(dragState, point) {
+  const moving = dragState.original.map(item => findNode(item.id)).filter(Boolean);
+  if (!moving.length) return;
+  const first = dragState.original[0];
+  const involvesGroup = moving.some(node => node.canvasGroupId);
+  if (!involvesGroup) {
+    // 未编组：保持改动前的逐节点吸附行为，避免影响普通多选的既有手感
+    const dx = point.x - dragState.start.x, dy = point.y - dragState.start.y;
+    for (const item of dragState.original) {
+      const node = findNode(item.id);
+      if (!node) continue;
+      node.x = snap(item.x + dx);
+      node.y = snap(item.y + dy);
+    }
+    return;
+  }
+  // 整组：只吸附一次共享位移，组内成员的相对间距/离格偏移原样保留
+  const dx = snap(first.x + point.x - dragState.start.x) - first.x;
+  const dy = snap(first.y + point.y - dragState.start.y) - first.y;
+  const movingIds = new Set(moving.map(node => node.id));
+  dragState.blockedGroups = new Set();
+  for (const [axis, delta] of [["x", dx], ["y", dy]]) {
+    // 从当前实际位置推进，受阻后仍可滑行、反向时立刻解除阻挡
+    const requested = first[axis] + delta - findNode(first.id)[axis];
+    const allowed = constrainCanvasGroupDelta(moving, axis, requested, movingIds, dragState.blockedGroups);
+    for (const node of moving) node[axis] += allowed;
+  }
+  for (const frame of dragState.groupFrames || []) {
+    state.canvasGroupFrames[frame.groupId] = { x: frame.x + dx, y: frame.y + dy, w: frame.w, h: frame.h };
+  }
+  const groups = new Set(dragState.original.map(item => findNode(item.id)?.canvasGroupId).filter(Boolean));
+  for (const groupId of groups) canvasGroupBounds(canvasGroupMembers(groupId));
+}
+
 function ungroupNode(groupId) {
   const group = findNode(groupId);
   if (!group || group.type !== "group") return toast("不是多任务节点");
@@ -2711,6 +2875,12 @@ function deleteNodes(ids) {
   state.nodes = state.nodes.filter(n => !ids.has(n.id));
   state.edges = state.edges.filter(e => !ids.has(e.from.node) && !ids.has(e.to.node));
   state.selected.clear();
+  state.selectedCanvasGroupId = "";
+  // 编组收尾：成员不足 2 个的组自动解散（单个节点不该再受整组碰撞约束），空组连外框一起清掉
+  const memberCounts = new Map();
+  for (const node of state.nodes) if (node.canvasGroupId) memberCounts.set(node.canvasGroupId, (memberCounts.get(node.canvasGroupId) || 0) + 1);
+  for (const groupId of Object.keys(state.canvasGroupFrames || {})) if ((memberCounts.get(groupId) || 0) < 2) delete state.canvasGroupFrames[groupId];
+  for (const node of state.nodes) if (node.canvasGroupId && (memberCounts.get(node.canvasGroupId) || 0) < 2) delete node.canvasGroupId;
   pushHistory();
   render();
 }
@@ -2757,6 +2927,8 @@ function copySelection(clearSystemClipboard = true) {
   state.clipboard = {
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
+    // 整组被完整复制时带上外框，粘贴后保留被撑开的组内空间
+    canvasGroupFrames: Object.fromEntries(canvasDragGroupFrames(nodes).map(({ groupId, ...bounds }) => [groupId, bounds])),
   };
   if (clearSystemClipboard) {
     // 右键菜单复制没有事件 clipboardData 可用，走 navigator 写入；失败时退回清空文本。
@@ -2827,6 +2999,7 @@ function rekeyContainedGraph(nodes, edges) {
 
 function pasteNodes(data, anchor = null) {
   const map = new Map();
+  const groupMap = new Map();
   const pasted = [];
   const minX = Math.min(...data.nodes.map(n => n.x));
   const minY = Math.min(...data.nodes.map(n => n.y));
@@ -2846,6 +3019,15 @@ function pasteNodes(data, anchor = null) {
       h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "angle-image" ? Math.max(Number(n.h) || 0, ANGLE_NODE_HEIGHT) : n.type === "screenshot-input" ? Math.max(Number(n.h) || 0, SCREENSHOT_NODE_HEIGHT) : n.type === "image" ? Math.max(Number(n.h) || 0, 160) : (n.type === "group" || n.type === "folder") ? Math.max(Number(n.h) || 0, GROUP_NODE_HEIGHT) : NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
+    if (n.canvasGroupId && data.nodes.filter(item => item.canvasGroupId === n.canvasGroupId).length > 1) {
+      // 新组 ID，避免和原组混在一起；组内成员保留原始宽高以维持组内布局
+      if (!groupMap.has(n.canvasGroupId)) groupMap.set(n.canvasGroupId, uid("canvas-group"));
+      nn.canvasGroupId = groupMap.get(n.canvasGroupId);
+      nn.w = Number(n.w) || NODE_WIDTH;
+      nn.h = Number(n.h) || nodeHeightForType(n.type);
+    } else {
+      delete nn.canvasGroupId;
+    }
     if (nn.type === "screenshot-input") nn.screenshotSeq = nextScreenshotNodeSequence() + pasted.filter(item => item.type === "screenshot-input").length;
     if (Array.isArray(nn.items)) rekeyContainedGraph(nn.items, nn.internalEdges || []);
     if (Array.isArray(nn.subgraph?.nodes)) rekeyContainedGraph(nn.subgraph.nodes, nn.subgraph.edges || []);
@@ -2854,12 +3036,17 @@ function pasteNodes(data, anchor = null) {
     pasted.push(nn);
   });
   state.nodes.push(...pasted);
+  for (const [oldId, newId] of groupMap) {
+    const bounds = data.canvasGroupFrames?.[oldId];
+    if (bounds) state.canvasGroupFrames[newId] = { ...bounds, x: bounds.x + groupPosition.x - minX, y: bounds.y + groupPosition.y - minY };
+  }
   (data.edges || []).forEach(e => {
     if (map.has(e.from.node) && map.has(e.to.node)) {
       state.edges.push({ id: uid("e"), from: { node: map.get(e.from.node), port: "out" }, to: { node: map.get(e.to.node), port: "in" }, label: e.label || "" });
     }
   });
   state.selected = new Set(pasted.map(n => n.id));
+  state.selectedCanvasGroupId = groupMap.size === 1 && pasted.every(node => node.canvasGroupId === pasted[0].canvasGroupId) ? pasted[0].canvasGroupId : "";
   pushHistory();
   render();
   toast(`已粘贴 ${pasted.length} 个节点`);
@@ -6711,6 +6898,16 @@ function syncNodeGeometry() {
     element.style.width = `${node.w}px`;
     element.style.height = `${node.h}px`;
   }
+  els.nodes.querySelectorAll(".node-group-frame").forEach(frame => {
+    const members = canvasGroupMembers(frame.dataset.groupId);
+    if (members.length < 2) return;
+    const bounds = canvasGroupBounds(members);
+    frame.style.left = `${bounds.x}px`;
+    frame.style.top = `${bounds.y}px`;
+    frame.style.width = `${bounds.w}px`;
+    frame.style.height = `${bounds.h}px`;
+    frame.classList.toggle("is-blocked", !!drag?.blockedGroups?.has(frame.dataset.groupId));
+  });
 }
 
 let viewPersistTimer = 0;
@@ -7209,6 +7406,28 @@ function renderNodes(options = {}) {
   pendingNodeRenderAfterTextEdit = false;
   pendingNodeRenderAfterSelect = false;
   els.nodes.innerHTML = "";
+  // 外框先入 DOM，节点后入，保证节点始终盖在外框之上
+  const canvasGroups = new Map();
+  for (const node of state.nodes) {
+    if (!node.canvasGroupId) continue;
+    if (!canvasGroups.has(node.canvasGroupId)) canvasGroups.set(node.canvasGroupId, []);
+    canvasGroups.get(node.canvasGroupId).push(node);
+  }
+  for (const [groupId, members] of canvasGroups) {
+    if (members.length < 2) continue;
+    const bounds = canvasGroupBounds(members);
+    const frame = document.createElement("div");
+    const selectedClass = members.every(node => state.selected.has(node.id)) ? " is-selected" : "";
+    const blockedClass = drag?.blockedGroups?.has(groupId) ? " is-blocked" : "";
+    frame.className = `node-group-frame${selectedClass}${blockedClass}`;
+    frame.dataset.groupId = groupId;
+    frame.style.left = `${bounds.x}px`;
+    frame.style.top = `${bounds.y}px`;
+    frame.style.width = `${bounds.w}px`;
+    frame.style.height = `${bounds.h}px`;
+    frame.innerHTML = `<span>编组 · ${members.length} 个节点</span>`;
+    els.nodes.appendChild(frame);
+  }
   for (const node of state.nodes) {
     const div = document.createElement("div");
     const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
@@ -7273,6 +7492,10 @@ function syncContentDrivenNodeHeights() {
 function syncSelectedNodeClasses() {
   els.nodes.querySelectorAll(".node").forEach(nodeEl => {
     nodeEl.classList.toggle("selected", state.selected.has(nodeEl.dataset.id));
+  });
+  els.nodes.querySelectorAll(".node-group-frame").forEach(frame => {
+    const members = canvasGroupMembers(frame.dataset.groupId);
+    frame.classList.toggle("is-selected", members.length > 0 && members.every(node => state.selected.has(node.id)));
   });
 }
 
@@ -8410,23 +8633,22 @@ els.viewport.addEventListener("mousedown", ev => {
     const id = nodeEl.dataset.id;
     const node = findNode(id);
     if (!node) return;
-    if (!state.selected.has(id)) state.selected = new Set([id]);
+    selectCanvasNode(id, ev.shiftKey);
     drag = { type: "resize", nodeId: id, sx: ev.clientX, sy: ev.clientY, sw: node.w, sh: node.h };
     syncSelectedNodeClasses();
     return;
   }
   if (nodeEl && interactive) {
     const id = nodeEl.dataset.id;
-    if (!ev.shiftKey && !state.selected.has(id)) state.selected = new Set([id]);
-    else if (ev.shiftKey) state.selected.add(id);
+    selectCanvasNode(id, ev.shiftKey);
     return;
   }
   if (nodeEl && ev.button === 0) {
     const id = nodeEl.dataset.id;
-    if (!ev.shiftKey && !state.selected.has(id)) state.selected = new Set([id]);
-    else if (ev.shiftKey) state.selected.add(id);
+    selectCanvasNode(id, ev.shiftKey);
     const start = screenToWorld(ev.clientX, ev.clientY);
-    drag = { type: "nodes", start, moved: false, original: state.nodes.filter(n => state.selected.has(n.id)).map(n => ({ id: n.id, x: n.x, y: n.y })) };
+    const nodes = state.nodes.filter(n => state.selected.has(n.id));
+    drag = { type: "nodes", start, moved: false, original: nodes.map(n => ({ id: n.id, x: n.x, y: n.y })), groupFrames: canvasDragGroupFrames(nodes) };
     // Keep the preview element alive so a real mouse double-click can reach it.
     // Rebuilding the node here would discard the first click's DOM target.
     clearNodeRelease();
@@ -8438,9 +8660,26 @@ els.viewport.addEventListener("mousedown", ev => {
     drag = { type: "pan", sx: ev.clientX, sy: ev.clientY, vx: state.view.x, vy: state.view.y };
     return;
   }
+  const groupFrame = ev.target.closest(".node-group-frame");
+  if (groupFrame && ev.button === 0) {
+    const nodes = canvasGroupMembers(groupFrame.dataset.groupId);
+    if (nodes.length < 2) return;
+    ev.preventDefault();
+    state.selected = new Set(nodes.map(node => node.id));
+    state.selectedCanvasGroupId = groupFrame.dataset.groupId;
+    drag = { type: "canvas-group", start: screenToWorld(ev.clientX, ev.clientY), moved: false, original: nodes.map(node => ({ id: node.id, x: node.x, y: node.y })), groupFrames: canvasDragGroupFrames(nodes) };
+    selectionDraft = null;
+    els.selectionBox.classList.add("hidden");
+    clearNodeRelease();
+    clearCompositeHover();
+    clearEdgeDropHover();
+    syncSelectedNodeClasses();
+    return;
+  }
   if (ev.button === 0) {
     const p = screenToWorld(ev.clientX, ev.clientY);
     state.selected.clear();
+    state.selectedCanvasGroupId = "";
     selectionDraft = { start: p, end: p };
     updateSelectionBox();
     syncSelectedNodeClasses();
@@ -8468,29 +8707,36 @@ window.addEventListener("mousemove", ev => {
     const node = findNode(drag.nodeId);
     if (node) {
       const scale = state.view.scale;
-      node.w = Math.max(node.type === "palette" ? 220 : 180, drag.sw + (ev.clientX - drag.sx) / scale);
+      const minWidth = node.type === "palette" ? 220 : 180;
+      const width = Math.max(minWidth, drag.sw + (ev.clientX - drag.sx) / scale);
       const minHeight = node.type === "ai-image" ? AI_NODE_HEIGHT : node.type === "angle-image" ? ANGLE_NODE_HEIGHT : node.type === "palette" ? 200 : 120;
-      node.h = Math.max(minHeight, drag.sh + (ev.clientY - drag.sy) / scale);
+      const height = Math.max(minHeight, drag.sh + (ev.clientY - drag.sy) / scale);
+      drag.blockedGroups = new Set();
+      const movingIds = new Set([node.id]);
+      // 编组成员放大同样会撑开外框，因此扩张要受组外节点限制；缩小不受限，可随时回缩
+      const widthDelta = width - node.w;
+      node.w += widthDelta > 0 ? constrainCanvasGroupDelta([node], "x", widthDelta, movingIds, drag.blockedGroups) : widthDelta;
+      const heightDelta = height - node.h;
+      node.h += heightDelta > 0 ? constrainCanvasGroupDelta([node], "y", heightDelta, movingIds, drag.blockedGroups) : heightDelta;
       const el = document.querySelector(`.node[data-id="${node.id}"]`);
       if (el) {
         el.style.width = `${node.w}px`;
         el.style.height = `${node.h}px`;
       }
-      scheduleInteractiveRender({ edges: true, minimap: true });
+      if (node.canvasGroupId) canvasGroupBounds(canvasGroupMembers(node.canvasGroupId));
+      scheduleInteractiveRender({ nodes: true, edges: true, minimap: true });
     }
-  } else if (drag?.type === "nodes") {
+  } else if (drag?.type === "nodes" || drag?.type === "canvas-group") {
     const p = screenToWorld(ev.clientX, ev.clientY);
     const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) < 3 / state.view.scale) return;
     drag.moved = true;
     clearNodeRelease();
-    for (const item of drag.original) {
-      const n = findNode(item.id);
-      n.x = snap(item.x + dx);
-      n.y = snap(item.y + dy);
+    moveCanvasDragNodes(drag, p);
+    if (drag.type === "nodes") {
+      updateCompositeHover(drag);
+      updateEdgeDropHover(drag);
     }
-    updateCompositeHover(drag);
-    updateEdgeDropHover(drag);
     scheduleInteractiveRender({ nodes: true, edges: true, minimap: true });
   } else if (drag?.type === "pan") {
     state.view.x = drag.vx + ev.clientX - drag.sx;
@@ -8530,6 +8776,7 @@ window.addEventListener("mouseup", ev => {
     renderEdges();
   }
   if (drag?.type === "resize") { render(); pushHistory(); }
+  if (drag?.type === "canvas-group" && drag.moved) pushHistory();
   let compositeRequest = null;
   if (drag?.type === "nodes" && compositeHoverReady && compositeHoverTargetId && drag.original.length === 1) {
     const source = findNode(drag.original[0].id);
@@ -8579,6 +8826,7 @@ window.addEventListener("mouseup", ev => {
   if (drag?.type === "annotation" && drag.moved) {
     if (findAnnotation(drag.id)) pushHistory();
   }
+  if (drag?.blockedGroups?.size) scheduleInteractiveRender({ nodes: true });
   clearCompositeHover();
   clearEdgeDropHover();
   clearNodeRelease();
@@ -11289,7 +11537,8 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const items = [
       ...(state.selected.size > 1 ? [["AI绘图", aiDrawAction]] : []),
       ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
-      ...(state.selected.size > 1 ? [["多任务", () => groupSelection()]] : []),
+      ...(state.selected.size > 1 ? [["创建编组", () => groupCanvasSelection()], ["多任务", () => groupSelection()]] : []),
+      ...(state.nodes.some(node => state.selected.has(node.id) && node.canvasGroupId) ? [["解散编组", () => ungroupCanvasSelection()]] : []),
       ["切换启用/停用", () => toggleDisabled(state.selected)],
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
@@ -11327,6 +11576,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     items.push(
       ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
+      ["创建编组", () => groupCanvasSelection()],
       ["多任务", () => groupSelection()],
       ["依次连接", () => connectSelectionInSequence()],
       ["对齐所选节点", () => tidyNodes()],

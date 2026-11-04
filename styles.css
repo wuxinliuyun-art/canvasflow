@@ -2867,6 +2867,30 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .edge { stroke: var(--line); stroke-width: 2; }
 .edge-hit:hover + .edge { stroke: var(--text); stroke-width: 3; }
 
+/* 画布节点编组外框：虚线框住在成员之外，可整组拖动；受阻时边框转警示色 */
+.node-group-frame {
+  position: absolute;
+  border: 1px dashed var(--selected);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--selected) 5%, transparent);
+  pointer-events: auto;
+  cursor: move;
+  user-select: none;
+}
+.node-group-frame span {
+  position: absolute;
+  left: 12px;
+  top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+.node-group-frame.is-selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.node-group-frame.is-blocked { border-color: var(--warning); }
+
 .node {
   border-color: var(--panel-2);
   border-radius: 17px;
