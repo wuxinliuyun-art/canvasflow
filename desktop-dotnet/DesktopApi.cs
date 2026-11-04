@@ -30,6 +30,7 @@ internal sealed class DesktopApi
     private readonly Func<string> _getApiKey;
     private readonly Func<string> _getAgtokenKey;
     private readonly Func<string> _getContentRoot;
+    private readonly Func<string, string, byte[], string>? _registerGeneratedExport;
     private readonly HttpClient _http;
     private readonly HttpClient _agtokenHttp;
     private readonly string _version;
@@ -37,7 +38,7 @@ internal sealed class DesktopApi
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Func<string, string, byte[], string>? registerGeneratedExport = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
@@ -46,6 +47,7 @@ internal sealed class DesktopApi
         // 界面热更新会把 cep-panel 面板源文件带进内容根，安装面板时必须优先取内容根里的版本
         _getContentRoot = getContentRoot ?? (() => "");
         _webUpdateManager = webUpdateManager;
+        _registerGeneratedExport = registerGeneratedExport;
         _http = new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
@@ -712,6 +714,8 @@ internal sealed class DesktopApi
         Directory.CreateDirectory(exportDirectory);
         var exportPrefix = Path.GetFullPath(exportDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var savedFiles = new List<string>();
+        var assetIds = new List<string>();
+        var linkGenerated = folderName == "ai_generated" && request.TryGetProperty("linkGenerated", out var link) && link.ValueKind == JsonValueKind.True;
         foreach (var file in request.GetProperty("files").EnumerateArray())
         {
             var relative = SafeRelativePath(file.GetProperty("name").GetString());
@@ -720,9 +724,17 @@ internal sealed class DesktopApi
             var value = file.GetProperty("data").GetString() ?? "";
             var separator = value.IndexOf(',');
             var bytes = Convert.FromBase64String(separator >= 0 ? value[(separator + 1)..] : value);
-            savedFiles.Add(ExportFileStore.Write(target, bytes));
+            var savedPath = ExportFileStore.Write(target, bytes);
+            savedFiles.Add(savedPath);
+            var assetId = "";
+            if (linkGenerated && _registerGeneratedExport is not null)
+            {
+                try { assetId = _registerGeneratedExport(savedPath, value, bytes); }
+                catch (Exception error) { _log($"[生成图片] 导出索引写入失败：{error.Message}", true); }
+            }
+            assetIds.Add(assetId);
         }
-        return Json(200, new { success = true, path = exportDirectory, files = savedFiles });
+        return Json(200, new { success = true, path = exportDirectory, files = savedFiles, assetIds });
     }
 
     private static void WriteBase64File(string filePath, string value)

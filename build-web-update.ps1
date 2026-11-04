@@ -35,6 +35,7 @@ $files = @(
     "canvas-runtime.js",
     "modules/mindmap-module.js",
     "modules/manual-matting.js",
+    "modules/fill-selection.js",
     "builtin-templates/rerender-style.jpg",
     "builtin-templates/rerender-product.png",
     "builtin-templates/builtin-marker-style.png",

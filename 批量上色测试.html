@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>批量上色测试</title>
+<style>
+:root { color-scheme: light dark; --panel: Canvas; --text: CanvasText; --line: GrayText; --accent: Highlight; }
+body { font: 14px/1.5 "HarmonyOS Sans SC", sans-serif; margin: 16px; background: var(--panel); color: var(--text); }
+header { position: sticky; top: 0; background: var(--panel); padding: 8px 0; border-bottom: 1px solid var(--line); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 8px 0; }
+label { display: inline-flex; align-items: center; gap: 4px; }
+button, input, select { font: inherit; accent-color: var(--accent); }
+#gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; margin-top: 12px; }
+article { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+article p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.image-viewport { overflow: auto; max-height: 72vh; }
+.image-surface { position: relative; }
+.stroke-preview { position: absolute; inset: 0; pointer-events: none; }
+canvas { touch-action: none; display: block; width: 100%; height: auto; cursor: crosshair; }
+</style>
+<header>
+  <h1>批量上色测试</h1>
+  <div class="controls">
+    <label>打开测试图片文件夹 <input id="folder" type="file" webkitdirectory multiple></label>
+    <label>添加图片 <input id="files" type="file" accept="image/*" multiple></label>
+    <label>导入已有遮罩（可选） <input id="masks" type="file" accept="image/*" multiple></label>
+  </div>
+  <div class="controls">
+    <label>抠图服务 <input id="service" type="url" value="http://127.0.0.1:8788"></label>
+    <button id="matte" type="button">自动描摹主体</button>
+  </div>
+  <p id="status" role="status">载入图片后，在每张图上点一下设置取样位置。每张图有独立参数，主体限制默认关闭。</p>
+</header>
+<main id="gallery"></main>
+<template id="imageControls">
+  <div class="controls">
+    <label>模式 <select data-param="mode"><option value="sketch">草图上色</option><option value="material">材质换色</option><option value="smart">智能选区</option><option value="material-experimental">材质选取（实验）</option></select></label>
+    <label>预览 <select data-param="view"><option value="result">上色结果</option><option value="original">原图</option><option value="prepared">前处理</option><option value="cutout">抠图结果</option><option value="foreground">抠图区域（黑白遮罩）</option><option value="selection">点击选区</option></select></label>
+    <label>工具 <select data-param="tool"><option value="point">点选</option><option value="brush">自由笔刷</option><option value="erase">橡皮</option></select></label>
+    <label>笔刷大小 <input data-param="brushSize" type="range" min="4" max="160" value="40"><output></output></label>
+    <label title="松手后识别笔迹经过的区域并裁掉多余笔迹"><input data-param="clipBrush" type="checkbox" checked>自动裁掉溢出</label>
+    <label>缩放 <input data-param="zoom" type="range" min="100" max="400" step="10" value="100"><output></output></label>
+    <label>颜色 <input data-param="color" type="color" value="#426dd0"></label>
+    <label>容差 <input data-param="tolerance" type="range" min="0" max="20" value="5"><output></output></label>
+    <label>忽略细线 <input data-param="thin" type="range" min="0" max="12" value="3"><output></output></label>
+    <label><input data-param="keepInk" type="checkbox" checked>保留线稿</label>
+  </div>
+  <div class="controls">
+    <label><input data-param="prepare" type="checkbox">草图前处理</label>
+    <label>深线阈值 <input data-param="ink" type="range" min="24" max="120" value="85"><output></output></label>
+    <label>补线半径 <input data-param="gap" type="range" min="0" max="6" value="1"><output></output></label>
+    <label title="选区漏到图像边缘时，尝试连接短缺口"><input data-param="sealGaps" type="checkbox" checked>自动封边</label>
+    <label><input data-param="useMask" type="checkbox">限制在主体内</label>
+    <label>遮罩阈值 <input data-param="alpha" type="range" min="1" max="254" value="96"><output></output></label>
+  </div>
+  <div class="controls">
+    <label>载入本图遮罩 <input data-param="maskFile" type="file" accept="image/*"></label>
+    <label>删除点位 <select data-param="pointToDelete" aria-label="要删除的点位"></select></label>
+    <button data-param="deletePoint" type="button">删除</button>
+  </div>
+</template>
+<script src="modules/fill-selection.js?v=20261104-sketch-auto-seal"></script>
+<script>
+"use strict";
+const get = id => document.getElementById(id);
+const items = new Map();
+const masks = new Map();
+let imageDatabase;
+
+function openImageDatabase() {
+  return imageDatabase ??= new Promise((resolve, reject) => {
+    const request = indexedDB.open("canvasflow-fill-lab", 2);
+    request.onupgradeneeded = () => {
+      for (const name of ["images", "masks"]) {
+        if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveTestFile(store, key, file) {
+  const db = await openImageDatabase();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(store, "readwrite");
+    transaction.objectStore(store).put({ key, file });
+    transaction.oncomplete = resolve;
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+async function cacheTestMask(key, file) {
+  masks.set(key, await decode(file));
+  try {
+    await saveTestFile("masks", key, file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function restoreTestImages() {
+  try {
+    const db = await openImageDatabase();
+    const read = store => new Promise((resolve, reject) => {
+      const request = db.transaction(store).objectStore(store).getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const [records, savedMasks] = await Promise.all([read("images"), read("masks")]);
+    await Promise.allSettled(savedMasks.map(async ({ key, file }) => masks.set(key, await decode(file))));
+    if (records.length) await addFiles(records, false);
+  } catch (error) {
+    get("status").textContent = `无法恢复本地测试图片：${error.message}`;
+  }
+}
+const stem = name => name.replace(/\.[^.]+$/, "").toLowerCase();
+let pending = 0;
+
+async function decode(blob, maxEdge = 1600) {
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas;
+}
+
+function schedule() {
+  clearTimeout(pending);
+  pending = setTimeout(render, 100);
+}
+
+function imageMask(canvas, image, threshold) {
+  const scratch = document.createElement("canvas");
+  scratch.width = image.width;
+  scratch.height = image.height;
+  const context = scratch.getContext("2d", { willReadFrequently: true });
+  context.drawImage(canvas, 0, 0, scratch.width, scratch.height);
+  const { data } = context.getImageData(0, 0, scratch.width, scratch.height);
+  let alpha = false;
+  for (let p = 3; p < data.length && !alpha; p += 4) alpha = data[p] < 255;
+  return Uint8Array.from({ length: scratch.width * scratch.height }, (_, i) => data[i * 4 + (alpha ? 3 : 0)] >= threshold);
+}
+
+function render(targets = items.values()) {
+  for (const item of targets) {
+    const get = id => item.controls.querySelector(`[data-param="${id}"]`);
+    const number = id => Number(get(id).value);
+    for (const input of item.controls.querySelectorAll('input[type="range"]')) input.nextElementSibling.value = input.value;
+    const mode = get("mode").value;
+    const clipBrush = get("clipBrush").checked;
+    get("thin").disabled = mode === "material-experimental";
+    const view = get("view").value;
+    const sketch = mode === "sketch";
+    const rgb = get("color").value.slice(1).match(/../g).map(hex => parseInt(hex, 16));
+    const { image, context } = item;
+    const { width, height } = image;
+    const prepared = get("prepare").checked ? prepareSketchSelection(image, number("ink"), number("gap")) : image;
+    const sealedSources = new Map();
+    let sealedCount = 0;
+    let openCount = 0;
+    const maskImage = masks.get(item.key) || masks.get(stem(item.name));
+    const foreground = maskImage ? imageMask(maskImage, image, number("alpha")) : null;
+    const useMask = get("useMask").checked;
+    const maskState = foreground ? "已有抠图结果" : "无遮罩，可点击顶部「自动描摹主体」";
+    const restriction = !useMask ? "主体限制关闭" : !foreground ? "主体限制等待遮罩" : "主体限制开启";
+    const shown = context.createImageData(width, height);
+    shown.data.set(view === "prepared" ? prepared.data : image.data);
+    const size = width * height;
+    const union = new Uint8Array(size);
+    const luma = p => (54 * image.data[p] + 183 * image.data[p + 1] + 19 * image.data[p + 2]) / 256;
+    const points = item.points.map(point => ({
+      ...point,
+      x: Math.min(width - 1, Math.max(0, Math.floor(point.x * width))),
+      y: Math.min(height - 1, Math.max(0, Math.floor(point.y * height))),
+      color: point.color,
+    }));
+    let brushContext;
+    for (const { x, y, color, path, brushSize, tool } of points) {
+      let brushPixels;
+      if (path) {
+        if (!brushContext) {
+          const brushCanvas = document.createElement("canvas");
+          brushCanvas.width = width;
+          brushCanvas.height = height;
+          brushContext = brushCanvas.getContext("2d", { willReadFrequently: true });
+        }
+        brushContext.clearRect(0, 0, width, height);
+        brushContext.lineWidth = brushSize;
+        brushContext.lineCap = brushContext.lineJoin = "round";
+        brushContext.beginPath();
+        brushContext.moveTo(x, y);
+        for (const point of path) brushContext.lineTo(point.x * width, point.y * height);
+        if (path.length === 1) brushContext.lineTo(x + .01, y);
+        brushContext.stroke();
+        brushPixels = brushContext.getImageData(0, 0, width, height).data;
+      }
+      if (tool === "erase") {
+        for (let i = 0; i < size; i++) {
+          const offset = i * 4;
+          if (brushPixels[offset + 3] < 128) continue;
+          union[i] = 0;
+          if (view === "result") shown.data.set(image.data.subarray(offset, offset + 4), offset);
+        }
+        continue;
+      }
+      const selectBoundary = !brushPixels || clipBrush;
+      const seedPoint = selectBoundary && sketch && get("prepare").checked ? findSketchInteriorPoint(prepared, x, y) : { x, y };
+      if (!seedPoint || (selectBoundary && useMask && foreground && !foreground[seedPoint.y * width + seedPoint.x])) continue;
+      const selectRegion = mode === "material-experimental" ? selectMaterialRegion : computeLightboxFillMask;
+      const selectionSettings = {
+        sketch, smart: mode === "smart", tolerance: number("tolerance"), lineWidth: number("thin"),
+        foreground: useMask ? foreground : null,
+      };
+      let mask = null;
+      if (brushPixels && clipBrush && sketch) {
+        mask = new Uint8Array(size);
+        const step = Math.max(1, Math.ceil(path.length / 10));
+        const samples = path.filter((_, index) => index % step === 0);
+        if (samples.at(-1) !== path.at(-1)) samples.push(path.at(-1));
+        const firstRadius = number("gap");
+        const lastRadius = get("sealGaps").checked ? 6 : firstRadius;
+        let usedSeal = false;
+        for (let radius = firstRadius; radius <= lastRadius; radius++) {
+          if (!sealedSources.has(radius)) sealedSources.set(radius, prepareSketchSelection(image, number("ink"), radius));
+          const sealed = sealedSources.get(radius);
+          const tested = new Uint8Array(size);
+          for (const sample of samples) {
+            const px = Math.min(width - 1, Math.floor(sample.x * width));
+            const py = Math.min(height - 1, Math.floor(sample.y * height));
+            const seed = findSketchInteriorPoint(sealed, px, py);
+            if (!seed) continue;
+            const index = seed.y * width + seed.x;
+            if (mask[index] || tested[index] || (useMask && foreground && !foreground[index])) continue;
+            const candidate = computeLightboxFillMask(sealed, seed.x, seed.y, selectionSettings);
+            let brushed = 0;
+            for (let i = 0; i < size; i++) {
+              if (!candidate.mask[i]) continue;
+              tested[i] = 1;
+              if (brushPixels[i * 4 + 3] >= 128) brushed++;
+            }
+            if (!brushed || brushed < candidate.count * .12 || sketchSelectionTouchesBorder(candidate.mask, width, height)) continue;
+            for (let i = 0; i < size; i++) if (candidate.mask[i]) mask[i] = 1;
+            usedSeal ||= radius > firstRadius;
+          }
+        }
+        if (!mask.some(Boolean)) {
+          openCount++;
+          continue;
+        }
+        if (usedSeal) sealedCount++;
+      } else if (selectBoundary) {
+        mask = selectRegion(sketch ? prepared : image, seedPoint.x, seedPoint.y, selectionSettings).mask;
+      }
+      if (mask && !brushPixels && sketch && get("sealGaps").checked && sketchSelectionTouchesBorder(mask, width, height)) {
+        let closed = false;
+        for (let radius = Math.max(1, number("gap")); radius <= 6; radius++) {
+          if (!sealedSources.has(radius)) sealedSources.set(radius, prepareSketchSelection(image, number("ink"), radius));
+          const sealed = sealedSources.get(radius);
+          const point = findSketchInteriorPoint(sealed, x, y);
+          if (!point || (useMask && foreground && !foreground[point.y * width + point.x])) continue;
+          const candidate = computeLightboxFillMask(sealed, point.x, point.y, selectionSettings);
+          if (!candidate.count || sketchSelectionTouchesBorder(candidate.mask, width, height)) continue;
+          mask = candidate.mask;
+          sealedCount++;
+          closed = true;
+          break;
+        }
+        if (!closed) {
+          openCount++;
+        }
+      }
+      if (mask && sketch && get("prepare").checked) {
+        const span = Math.max(8, Math.min(24, Math.round(Math.min(width, height) / 45)));
+        suppressSketchPinholeRegions(mask, width, height, span, span * 6);
+      }
+      const stroke = color ? color.slice(1).match(/../g).map(hex => parseInt(hex, 16)) : rgb;
+      const seed = luma((seedPoint.y * width + seedPoint.x) * 4);
+      for (let i = 0; i < size; i++) {
+        if ((mask && !mask[i]) || (brushPixels && brushPixels[i * 4 + 3] < 128) ||
+            (useMask && foreground && !foreground[i])) continue;
+        union[i] = 1;
+        if (view !== "result") continue;
+        const p = i * 4;
+        const light = luma(p);
+        if (sketch) {
+          writeSketchFillPixel(shown.data, image.data, p, stroke, get("keepInk").checked);
+          continue;
+        }
+        if (get("keepInk").checked && light < 96 && seed - light >= 48) {
+          shown.data.set(image.data.subarray(p, p + 4), p);
+          continue;
+        }
+        const delta = light - seed;
+        for (let c = 0; c < 3; c++) {
+          shown.data[p + c] = delta < 0 ? stroke[c] * (1 + delta / Math.max(1, seed))
+            : stroke[c] + (255 - stroke[c]) * delta / Math.max(1, 255 - seed);
+        }
+      }
+    }
+    for (let i = 0, p = 0; i < size; i++, p += 4) {
+      if (view === "selection" || (view === "foreground" && foreground)) {
+        const value = (view === "foreground" ? foreground[i] : union[i]) ? 255 : 0;
+        shown.data[p] = shown.data[p + 1] = shown.data[p + 2] = value;
+        shown.data[p + 3] = 255;
+      } else if (view === "cutout" && foreground && !foreground[i]) shown.data[p + 3] = 0;
+    }
+    context.putImageData(shown, 0, 0);
+    if (view !== "cutout" && view !== "foreground") {
+      context.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+      context.lineWidth = Math.max(2, width / 320);
+      for (const [index, { x, y, path }] of points.entries()) {
+        if (path) continue;
+        context.beginPath();
+        context.arc(x, y, Math.max(5, width / 120), 0, 2 * Math.PI);
+        context.stroke();
+        context.strokeText(String(index + 1), x + 8, y - 8);
+      }
+    }
+    const count = union.reduce((sum, value) => sum + value, 0);
+    const sealStatus = `${sealedCount ? ` · 已封边 ${sealedCount} 笔` : ""}${openCount ? ` · ${openCount} 笔未找到闭合边界` : ""}`;
+    item.info.textContent = `${width} × ${height} · ${points.length} 笔 · 选中 ${(count / size * 100).toFixed(1)}% · ${maskState} · ${restriction}${sealStatus}`;
+
+  }
+}
+
+async function addFiles(files, persist = true) {
+  let failed = 0;
+  let unsaved = 0;
+  for (const entry of files) {
+    const file = persist ? entry : entry.file;
+    if (!/\.(png|jpe?g|webp|bmp|gif|avif|svg)$/i.test(file.name)) continue;
+    const key = persist ? file.webkitRelativePath || file.name : entry.key;
+    if (items.has(key)) continue;
+    try {
+      const original = await decode(file);
+      const { width, height } = original;
+      const image = original.getContext("2d").getImageData(0, 0, width, height);
+      const article = document.createElement("article");
+      const title = document.createElement("p");
+      const info = document.createElement("p");
+      const canvas = document.createElement("canvas");
+      title.textContent = key;
+      canvas.width = width;
+      canvas.height = height;
+      let points = [];
+      try {
+        const saved = JSON.parse(localStorage.getItem("fill-lab:" + key));
+        points = Array.isArray(saved) ? saved : saved ? [saved] : [];
+      } catch {}
+      const controls = document.createElement("div");
+      controls.append(get("imageControls").content.cloneNode(true));
+      controls.addEventListener("input", schedule);
+      controls.addEventListener("change", schedule);
+      const item = { key, name: file.name, image, original, info, points, controls, context: canvas.getContext("2d") };
+      const control = id => controls.querySelector(`[data-param="${id}"]`);
+      const syncPoints = () => {
+        const picker = control("pointToDelete");
+        picker.replaceChildren(...item.points.map((point, index) => new Option(`第 ${index + 1} 笔 ${point.tool === "erase" ? "橡皮" : point.color || ""}`, index)));
+        picker.selectedIndex = item.points.length - 1;
+        control("deletePoint").disabled = item.points.length === 0;
+      };
+      const savePoints = (renderImmediately = false) => {
+        try { localStorage.setItem("fill-lab:" + key, JSON.stringify(item.points)); } catch {}
+        syncPoints();
+        if (renderImmediately) render([item]);
+        else schedule();
+      };
+      syncPoints();
+      control("mode").addEventListener("change", () => {
+        const mode = control("mode").value;
+        control("tolerance").max = mode === "sketch" ? 20 : 150;
+      });
+      control("deletePoint").addEventListener("click", () => {
+        item.points.splice(Number(control("pointToDelete").value), 1);
+        savePoints();
+      });
+      control("maskFile").addEventListener("change", async event => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          const saved = await cacheTestMask(key, file);
+          control("view").value = "cutout";
+          if (!saved) get("status").textContent = "遮罩已载入，但浏览器未能保存，刷新后需要重新载入。";
+          schedule();
+        } catch (error) {
+          get("status").textContent = `遮罩读取失败：${error.message}`;
+        }
+      });
+      const locate = event => {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+          y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+        };
+      };
+      const surface = document.createElement("div");
+      surface.className = "image-surface";
+      const preview = document.createElement("canvas");
+      preview.className = "stroke-preview";
+      preview.width = width;
+      preview.height = height;
+      preview.setAttribute("aria-hidden", "true");
+      const previewContext = preview.getContext("2d");
+      const originalPattern = previewContext.createPattern(original, "no-repeat");
+      const clearPreview = () => previewContext.clearRect(0, 0, width, height);
+      const previewSegment = (from, to) => {
+        previewContext.lineWidth = item.draft.brushSize;
+        previewContext.lineCap = "round";
+        previewContext.strokeStyle = item.draft.tool === "erase" ? originalPattern : item.draft.color;
+        previewContext.beginPath();
+        previewContext.moveTo(from.x * width, from.y * height);
+        previewContext.lineTo(to.x * width + .01, to.y * height);
+        previewContext.stroke();
+      };
+      control("zoom").addEventListener("input", () => {
+        surface.style.width = `${control("zoom").value}%`;
+      });
+      canvas.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || item.draft) return;
+        const point = locate(event);
+        const tool = control("tool").value;
+        const action = { ...point, tool, color: control("color").value };
+        if (["cutout", "foreground"].includes(control("view").value)) control("view").value = "result";
+        if (tool === "point") {
+          item.points.push(action);
+          savePoints();
+          return;
+        }
+        canvas.setPointerCapture(event.pointerId);
+        item.draft = { ...action, path: [point], brushSize: Number(control("brushSize").value) };
+        item.pointerId = event.pointerId;
+        previewSegment(point, point);
+      });
+      canvas.addEventListener("pointermove", event => {
+        if (!item.draft || event.pointerId !== item.pointerId) return;
+        const point = locate(event);
+        previewSegment(item.draft.path.at(-1), point);
+        item.draft.path.push(point);
+      });
+      canvas.addEventListener("pointerup", event => {
+        if (!item.draft || event.pointerId !== item.pointerId) return;
+        item.draft.path.push(locate(event));
+        item.points.push(item.draft);
+        item.draft = null;
+        savePoints(true);
+        clearPreview();
+      });
+      for (const type of ["pointercancel", "lostpointercapture"]) {
+        canvas.addEventListener(type, event => {
+          if (!item.draft || event.pointerId !== item.pointerId) return;
+          item.draft = null;
+          clearPreview();
+        });
+      }
+      const viewport = document.createElement("div");
+      viewport.className = "image-viewport";
+      surface.append(canvas, preview);
+      viewport.append(surface);
+      article.append(title, info, controls, viewport);
+      get("gallery").append(article);
+      items.set(key, item);
+      if (persist) {
+        try { await saveTestFile("images", key, file); } catch { unsaved++; }
+      }
+    } catch { failed++; }
+  }
+  get("status").textContent = `已加载 ${items.size} 张图片${failed ? `，${failed} 张读取失败` : ""}${unsaved ? `，${unsaved} 张未能保存到本机` : ""}。点击各图设置各自的取样位置。`;
+  schedule();
+}
+
+for (const id of ["folder", "files"]) get(id).addEventListener("change", event => addFiles([...event.target.files]));
+get("masks").addEventListener("change", async event => {
+  let loaded = 0;
+  let unsaved = 0;
+  for (const file of event.target.files) {
+    try {
+      if (!await cacheTestMask(stem(file.name), file)) unsaved++;
+      loaded++;
+    } catch {}
+  }
+  for (const item of items.values()) {
+    if (masks.has(stem(item.name))) item.controls.querySelector('[data-param="view"]').value = "cutout";
+  }
+  get("status").textContent = `已读取 ${loaded} 张遮罩${unsaved ? `，${unsaved} 张未能保存到本机` : ""}。按文件主名匹配图片。`;
+  schedule();
+});
+document.querySelector("header").addEventListener("input", schedule);
+document.querySelector("header").addEventListener("change", schedule);
+get("matte").addEventListener("click", async () => {
+  const button = get("matte");
+  const service = get("service").value.trim().replace(/\/+$/, "");
+  button.disabled = true;
+  let done = 0;
+  let unsaved = 0;
+  const failures = [];
+  try {
+    try {
+      const response = await fetch(service + "/api/extensions", { signal: AbortSignal.timeout(5000) });
+      const result = await response.json();
+      if (!response.ok || !result.extensions?.some(extension => extension.id === "auto-matting-u2net")) {
+        throw new Error("当前服务未识别自动抠图（U²-Net 快速）");
+      }
+    } catch (error) {
+      failures.push(`无法使用 ${service} 的抠图服务。请启动 extensions-presets 里的「扩展服务.bat」，并核对启动窗口显示的端口。详情：${error.message}`);
+      return;
+    }
+    for (const item of [...items.values()]) {
+      get("status").textContent = `正在抠图 ${item.name}`;
+      try {
+        const response = await fetch(service + "/api/extensions/auto-matting-u2net/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images: [{ name: "001.png", data: item.original.toDataURL("image/png").split(",")[1] }], params: { background: "透明" } }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok || !result.images?.[0]?.data) throw new Error(result.error || `HTTP ${response.status}`);
+        const png = Uint8Array.from(atob(result.images[0].data), char => char.charCodeAt(0));
+        if (!await cacheTestMask(item.key, new Blob([png], { type: "image/png" }))) unsaved++;
+        item.controls.querySelector('[data-param="view"]').value = "cutout";
+        schedule();
+        done++;
+      } catch (error) {
+        failures.push(`${item.name} · ${error.message}`);
+      }
+    }
+  } finally {
+    button.disabled = false;
+    get("status").textContent = `抠图完成 ${done} 张${unsaved ? `，${unsaved} 张未能保存到本机` : ""}。${failures.join(" / ")}`;
+    schedule();
+  }
+});
+restoreTestImages();
+</script>
+</html>

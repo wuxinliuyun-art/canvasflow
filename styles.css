@@ -3651,19 +3651,28 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .quick-palette-library:has(.quick-palette-colors:empty) { display: none; }
 .quick-palette-heading { display: flex; align-items: center; gap: 4px; }
 .quick-palette-heading select { flex: 1; min-width: 0; font-weight: 600; }
-.quick-palette-heading .palette-widget-icon { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; }
+.quick-palette-heading .palette-widget-icon, .palette-dialog-heading .palette-widget-icon { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; }
 .palette-widget-icon svg { display: block; width: 16px; height: 16px; }
 .quick-palette :is(button, select, input) { border-color: transparent; background: transparent; box-shadow: none; }
 .quick-palette-heading select { background: var(--panel-2); border-color: var(--line); min-height: 36px; }
+/* 可编辑调色盘名称框（调色盘顶部与参考图取色弹窗共用）：下拉选择，输入即重命名，输新名即新建 */
+.quick-palette-heading input.palette-name-input,
+.palette-dialog-heading input.palette-name-input {
+  flex: 1 1 160px; min-width: 0; min-height: 36px; padding: 4px 8px;
+  color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; font-size: 12px; font-weight: 600; outline: none; cursor: text;
+}
+.quick-palette-heading input.palette-name-input:hover,
+.palette-dialog-heading input.palette-name-input:hover { background: var(--panel-2); }
+.quick-palette-heading input.palette-name-input:focus-visible,
+.palette-dialog-heading input.palette-name-input:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.palette-mask-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .quick-palette :is(button, select, summary):hover { background: var(--panel-2); }
 .quick-palette :is(button, select, input, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .quick-palette button[data-palette-action="extract"] { color: var(--text); background: var(--panel-2); white-space: nowrap; }
 .quick-palette button[data-palette-action="add"]:not(:disabled) { background: var(--accent-soft); color: var(--text); }
 
 .quick-palette-colors:empty { display: none; }
-.quick-palette-manage { padding-top: 4px; }
-.quick-palette-manage summary { color: var(--muted); font-size: 12px; padding: 4px 8px; cursor: pointer; border-radius: 4px; }
-.quick-palette-manage[open] summary { margin-bottom: 4px; }
 .quick-palette button[data-palette-action="delete"] { color: var(--danger); }
 .quick-palette-colors { display: grid; grid-template-columns: repeat(auto-fill, 60px); gap: 4px; max-height: 160px; overflow-y: auto; }
 .quick-palette-colors .quick-palette-chip { position: relative; display: block; min-width: 0; }
@@ -3743,15 +3752,41 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .palette-widget-inspector b { color: var(--text); }
 @keyframes palette-widget-in { from { opacity: 0; transform: var(--palette-enter-transform); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .palette-widget-results button[data-palette-action="sample"] { animation: none; } }
-.editor-quick-palette { position: absolute; z-index: 20; left: var(--editor-palette-left, 16px); top: calc(50% - 24px); transform: translateY(-50%); width: clamp(224px, 16vw, 304px); max-height: calc(100% - 112px); overflow: auto;
-  padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-solid); color: var(--text); }
+/* 垂直位置由 JS 在打开/窗口变化/折叠调色盘时按内容高度定一次（大概居中）；
+   之后容差等调节行增减只向下伸展，底部不够时在 max-height 内滚动，面板不再上下跳动 */
+.lightbox-left-tools { position: absolute; z-index: 20; left: var(--editor-palette-left, 16px); top: 96px; width: clamp(224px, 16vw, 304px); max-height: calc(100% - 32px); overflow: auto; display: flex; flex-direction: column; align-items: start; gap: 8px; }
+.editor-quick-palette, #lightboxPaletteTools {
+  box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-solid); color: var(--text);
+}
+.editor-quick-palette { width: 100%; min-height: 0; overflow: auto; }
 .editor-quick-palette > button { margin-bottom: 4px; }
 .editor-quick-palette:has(.quick-palette-body.hidden) { width: auto; }
+#lightboxPaletteTools { gap: 8px; width: 100%; flex-shrink: 0; }
+#lightboxPaletteTools .lightbox-icon-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; }
+#lightboxPaletteTools button[aria-pressed="true"] { background: var(--selected); }
+#lightboxPaletteTools label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+#lightboxPaletteTools input { min-height: 0; padding: 0; }
+#lightboxPaletteTools label:has(input[type="range"]) { width: 100%; min-height: 28px; gap: 8px; }
+#lightboxPaletteTools input[type="range"] { flex: 1; width: 0; min-width: 0; }
+#lightboxPaletteTools .lightbox-readout { min-width: 32px; text-align: right; }
+#lightboxFillAdjustment { display: grid; justify-items: start; gap: 4px; margin-bottom: 4px; }
 .palette-mask-dialog { color: var(--text); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; padding: 16px; max-width: min(720px, 92vw); max-height: 92vh; }
+.palette-mask-dialog:not(.line-art-dialog) { max-width: min(1080px, 96vw); overflow: auto; }
+.palette-mask-dialog:not(.line-art-dialog) .palette-mask-surface canvas { max-height: 78vh; }
 .palette-mask-dialog::backdrop { background: color-mix(in srgb, var(--panel-solid) 65%, transparent); }
 .palette-mask-dialog h2 { font-size: 16px; margin: 0 0 8px; }
 .palette-mask-dialog p { font-size: 12px; margin: 8px 0; }
 .palette-mask-result { margin-bottom: 8px; }
+.palette-mask-dialog .quick-palette-row select { flex: 1 1 160px; min-width: 0; }
+/* 行内 label 改为 flex 垂直居中：文字与勾选框/下拉/滑块一条水平线（取色与线稿弹窗共用） */
+.palette-mask-dialog .quick-palette-row > label { display: flex; align-items: center; gap: 4px; }
+.palette-mask-dialog .quick-palette-row label.lightbox-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; }
+.palette-mask-dialog .quick-palette-row label.lightbox-check input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.palette-mask-matting-hint { color: var(--muted); font-size: 12px; }
+.palette-mask-result .palette-mask-chip { cursor: pointer; }
+.palette-mask-result .palette-mask-chip:hover { background: var(--panel-2); }
+.palette-mask-result .palette-mask-chip.is-excluded { color: var(--muted); text-decoration: line-through; }
+.palette-mask-result .palette-mask-chip.is-excluded > span { opacity: .35; }
 .palette-mask-surface { display: grid; justify-items: center; margin-top: 8px; }
 .palette-mask-surface canvas { grid-area: 1 / 1; max-width: 100%; max-height: 52vh; object-fit: contain; }
 .palette-mask-surface canvas:last-child { opacity: .55; cursor: crosshair; touch-action: none; }
@@ -3760,5 +3795,5 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .hide-node-titles .node.palette .node-body { max-height: 100%; }
 .node.palette .quick-palette { gap: 8px; }
 @media (max-width: 767px) {
-  .editor-quick-palette { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
+  .lightbox-left-tools { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
 }

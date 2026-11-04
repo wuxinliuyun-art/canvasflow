@@ -8,7 +8,7 @@ function runLocalRegionMatting(task) {
 async function executeLocalRegionMatting(task) {
   const image = task.orderedImages[0].image;
   const input = new Image(); input.src = image; await input.decode();
-  const runUrl = "/api/extensions/auto-matting-general/run";
+  const runUrl = task.mattingEngine === "lite" ? "/api/extensions/auto-matting-u2net/run" : "/api/extensions/auto-matting-general/run";
   const runInit = {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:[{name:"001.png",data:stripDataUrl(image)}],params:{}})};
   const cfg = extensionSettings();
   const base = cfg.serviceUrl.replace(/\/+$/, "");
@@ -50,8 +50,8 @@ async function openImageRegionMatting(node) {
 function enqueueRegionMatting(sourceNodeId, regions, sourceSize, apiType = activeApiType()) {
   const source = findNode(sourceNodeId);
   if (!source) throw new Error("原图片节点已被删除");
-  if (apiType !== "local" && !activeApiKey(apiType).trim()) throw new Error(`当前使用 ${apiType === "agtoken" ? "AGToken" : "APIMart"}，尚未配置 API Key。请到设置 → AI绘图选择该 API 并保存 Key，然后重新确认。`);
-  const localMatting = apiType === "local";
+  const localMatting = apiType === "local" || apiType === "local-lite";
+  if (!localMatting && !activeApiKey(apiType).trim()) throw new Error(`当前使用 ${apiType === "agtoken" ? "AGToken" : "APIMart"}，尚未配置 API Key。请到设置 → AI绘图选择该 API 并保存 Key，然后重新确认。`);
   const hasConflictingTask = aiTaskQueue.items.some(task =>
     task.nodeId === sourceNodeId &&
     task.pageId === state.activePageId &&
@@ -71,7 +71,7 @@ function enqueueRegionMatting(sourceNodeId, regions, sourceSize, apiType = activ
   const tasks = regions.map((region, index) => {
     const reference = {image:region.canvas.toDataURL("image/png"),fileName:`选框${region.id}.png`};
     const task = buildAiQueueTasks({...source,...settings}, {texts:["将图片中主体抠出、透明背景"],images:[reference],orderedRefs:[reference]}, "image-node", runId)[0];
-    return {...task,source:"region-matting",generationSettings:{...settings},localMatting,model:localMatting ? "BiRefNet（本地）" : model,label:`分区抠图 · 选框 ${region.id}`,resultOrder:existing+index,resultCount:existing+regions.length,mattingSourceRect:region.rect.slice(),mattingSourceSize:sourceSize.slice()};
+    return {...task,source:"region-matting",generationSettings:{...settings},localMatting,mattingEngine:localMatting ? (apiType === "local-lite" ? "lite" : "general") : undefined,model:localMatting ? (apiType === "local-lite" ? "U²-Net 快速（本地）" : "BiRefNet（本地）") : model,label:`分区抠图 · 选框 ${region.id}`,resultOrder:existing+index,resultCount:existing+regions.length,mattingSourceRect:region.rect.slice(),mattingSourceSize:sourceSize.slice()};
   });
   source._queueRunId = runId;
   aiTaskQueue.items.push(...tasks);
@@ -139,7 +139,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     <header><strong>手动分区抠图</strong><span>原图上拖动添加选框，选择选框后放大修整</span><button type="button" data-action="close" aria-label="关闭手动抠图">关闭</button></header>
     <div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="图片选框和蒙版编辑区"></canvas><div class="mm-boxes"></div></div></div><p class="mm-status" role="status"></p></div>
     <aside aria-label="选区列表"><strong>原图与选框</strong><div class="mm-list"></div></aside></div>
-    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
+    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option><option value="local-lite">本地 U²-Net 快速</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
   </div>`;
   // Inherit the app's theme and user-customized semantic color variables.
   els.app.append(dialog);
@@ -149,7 +149,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   const status = dialog.querySelector(".mm-status"), zoom = dialog.querySelector(".mm-zoom");
   const modelSelect = dialog.querySelector(".mm-model");
   modelSelect.onchange = () => { submissionError=""; redraw(); };
-  if (draft?.signature === signature && draft.model === "local") modelSelect.value="local";
+  if (draft?.signature === signature && String(draft.model || "").startsWith("local")) modelSelect.value=draft.model;
   let selected = null, mode = "erase", drag = null, busy = false, counter = regions.reduce((max,region)=>Math.max(max,region.id),0), adding = false, submissionError = "", confirmation = null;
   const button = action => dialog.querySelector(`[data-action="${action}"]`);
   function close() {
@@ -228,7 +228,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     button("original").setAttribute("aria-pressed", String(adding));
     status.classList.toggle("is-error", Boolean(submissionError));
     status.setAttribute("role", submissionError ? "alert" : "status");
-    const apiLabel = modelSelect.value === "local" ? "本地 BiRefNet（无需 API Key）" : activeApiType() === "agtoken" ? "AGToken" : "APIMart";
+    const apiLabel = modelSelect.value === "local" ? "本地 BiRefNet（无需 API Key）" : modelSelect.value === "local-lite" ? "本地 U²-Net 快速（无需 API Key）" : activeApiType() === "agtoken" ? "AGToken" : "APIMart";
     const instruction = selected ? `选框 ${selected.id} · ${canvas.width} × ${canvas.height} · 恢复画笔补回原图，擦除画笔移除像素；放大后用滚动条移动视野` : adding ? "拖动添加选框，可与已有选框重叠；右侧选择选框进入局部编辑。" : "拖动绘制选框；点击右侧选框或彩色框进入局部编辑。";
     status.textContent = submissionError || (busy ? "正在将选区加入抠图队列，请稍候…" : `${instruction} 当前 API：${apiLabel}，已选 ${regions.length} 个区域。`);
     fit();
@@ -301,16 +301,18 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   function confirmSubmission(apiType) {
     return new Promise(resolve => {
       const onlineModelLabel = apiType === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5";
+      const lite = apiType === "local-lite";
+      const localLabel = lite ? "本地 U²-Net 快速" : "本地 BiRefNet";
       const panel = dialog.querySelector(".mm-panel");
       const overlay = document.createElement("div");
       overlay.className = "mm-confirm";
       overlay.innerHTML = `<section class="mm-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="mmConfirmTitle" aria-describedby="mmConfirmDescription">
         <h2 id="mmConfirmTitle">确认分区抠图</h2>
-        <p id="mmConfirmDescription">${apiType === "local" ? "将使用本地 BiRefNet 进行抠图，无需 API Key，每个选区生成一张透明 PNG。" : `将使用 ${onlineModelLabel} 进行抠图，每个选区生成一张图片。`}</p>
+        <p id="mmConfirmDescription">${lite ? "将使用本地 U²-Net 快速模型进行抠图，无需 API Key，每个选区生成一张透明 PNG。" : apiType === "local" ? "将使用本地 BiRefNet 进行抠图，无需 API Key，每个选区生成一张透明 PNG。" : `将使用 ${onlineModelLabel} 进行抠图，每个选区生成一张图片。`}</p>
         <dl><div><dt>生成张数</dt><dd>${regions.length} 张（${regions.length} 个选区）</dd></div>
-        <div><dt>使用模型</dt><dd>${apiType === "local" ? "BiRefNet（本地服务当前加载的模型）" : onlineModelLabel}</dd></div>
-        <div><dt>使用 API</dt><dd>${apiType === "local" ? "自动抠图拓展（自动运行）" : apiType === "agtoken" ? "AGToken" : "APIMart"}</dd></div>
-        <div><dt>提示词</dt><dd>${apiType === "local" ? "本地模型直接移除选区背景" : "将图片中主体抠出、透明背景"}</dd></div></dl>
+        <div><dt>使用模型</dt><dd>${lite ? "U²-Net u2netp（本地拓展模型）" : apiType === "local" ? "BiRefNet（本地服务当前加载的模型）" : onlineModelLabel}</dd></div>
+        <div><dt>使用 API</dt><dd>${lite || apiType === "local" ? "自动抠图拓展（自动运行）" : apiType === "agtoken" ? "AGToken" : "APIMart"}</dd></div>
+        <div><dt>提示词</dt><dd>${lite || apiType === "local" ? "本地模型直接移除选区背景" : "将图片中主体抠出、透明背景"}</dd></div></dl>
         <div class="mm-confirm-actions"><button type="button" data-confirm-cancel>返回调整</button><button type="button" class="primary" data-confirm-submit>开始抠图</button></div>
       </section>`;
       const finish = accepted => {
@@ -331,7 +333,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   button("export").onclick = async () => {
     if (busy || confirmation || !regions.length) return;
     submissionError = "";
-    const selectedApiType = modelSelect.value === "local" ? "local" : activeApiType();
+    const selectedApiType = modelSelect.value.startsWith("local") ? modelSelect.value : activeApiType();
     if (!await confirmSubmission(selectedApiType)) return;
     busy=true; redraw();
     try {
@@ -339,7 +341,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
       busy=false; close(); render();
       setTaskQueueOpen(true);
       const onlineModelLabel = apiType === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5";
-      toast(`${apiType === "local" ? "本地 BiRefNet" : onlineModelLabel + " · " + (apiType === "agtoken" ? "AGToken" : "APIMart")} · ${count} 个选区已加入抠图队列`);
+      toast(`${apiType === "local" ? "本地 BiRefNet" : apiType === "local-lite" ? "本地 U²-Net 快速" : onlineModelLabel + " · " + (apiType === "agtoken" ? "AGToken" : "APIMart")} · ${count} 个选区已加入抠图队列`);
       pumpAiTaskQueue();
     } catch (error) {
       submissionError = `无法提交：${error.message || "发生未知错误，请重试"}`;

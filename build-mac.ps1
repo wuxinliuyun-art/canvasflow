@@ -47,6 +47,7 @@ $appFiles = @(
     @{ src = Join-Path $projectRoot "拓展脚本规范.md";         entry = "app/拓展脚本规范.md" },
     @{ src = Join-Path $projectRoot "modules\mindmap-module.js"; entry = "app/modules/mindmap-module.js" },
     @{ src = Join-Path $projectRoot "modules\manual-matting.js"; entry = "app/modules/manual-matting.js" },
+    @{ src = Join-Path $projectRoot "modules\fill-selection.js"; entry = "app/modules/fill-selection.js" },
     # server.js require() 依赖，缺失时 mac 端 server 启动即 MODULE_NOT_FOUND
     @{ src = Join-Path $projectRoot "modules\browser-transfer-server.js"; entry = "app/modules/browser-transfer-server.js" },
     @{ src = Join-Path $projectRoot "browser-extension\manifest.json";    entry = "app/browser-extension/manifest.json" },
