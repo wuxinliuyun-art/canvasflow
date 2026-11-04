@@ -1,0 +1,24 @@
+{
+  "id": "auto-matting-u2net",
+  "name": "自动抠图（U²-Net 快速）",
+  "version": "1.0.0",
+  "description": "基于 U²-Net 项目开源的 u2netp 模型（Qin et al.）与 rembg 推理框架：本地离线去背景、秒级出图、批量透明 PNG；发丝等精细边缘请用自动抠图（BiRefNet 通用模型）",
+  "entry": "轻量抠图.py",
+  "input": "images",
+  "output": "images",
+  "params": [
+    {
+      "key": "background",
+      "label": "背景处理",
+      "type": "select",
+      "options": [
+        "透明",
+        "白色",
+        "黑色"
+      ],
+      "default": "透明"
+    }
+  ],
+  "columns": 1,
+  "timeout": 600
+}

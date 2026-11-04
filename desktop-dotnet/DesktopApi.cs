@@ -33,6 +33,7 @@ internal sealed class DesktopApi
     private readonly Func<string, string> _getCustomKey;
     private readonly Func<string> _getContentRoot;
     private readonly Action _focusCanvas;
+    private readonly Func<string, string, byte[], string>? _registerGeneratedExport;
     private readonly HttpClient _http;
     private readonly HttpClient _agtokenHttp;
     private readonly string _version;
@@ -41,7 +42,7 @@ internal sealed class DesktopApi
     private JsonObject? _releaseCache;
     private DateTimeOffset _releaseCacheAt;
 
-    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Action? focusCanvas = null, Func<string, string>? getCustomKey = null)
+    public DesktopApi(string root, Action<string, bool> log, Func<string> getApiKey, WebUpdateManager webUpdateManager, Func<string>? getAgtokenKey = null, Func<string>? getContentRoot = null, Action? focusCanvas = null, Func<string, string>? getCustomKey = null, Func<string, string, byte[], string>? registerGeneratedExport = null)
     {
         _root = Path.GetFullPath(root);
         _log = log;
@@ -53,6 +54,7 @@ internal sealed class DesktopApi
         _focusCanvas = focusCanvas ?? (() => { });
         _webUpdateManager = webUpdateManager;
         _comfyUiApi = new ComfyUiApi(_root);
+        _registerGeneratedExport = registerGeneratedExport;
         _http = new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
@@ -854,6 +856,8 @@ internal sealed class DesktopApi
         Directory.CreateDirectory(exportDirectory);
         var exportPrefix = Path.GetFullPath(exportDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var savedFiles = new List<string>();
+        var assetIds = new List<string>();
+        var linkGenerated = folderName == "ai_generated" && request.TryGetProperty("linkGenerated", out var link) && link.ValueKind == JsonValueKind.True;
         foreach (var file in request.GetProperty("files").EnumerateArray())
         {
             var relative = SafeRelativePath(file.GetProperty("name").GetString());
@@ -862,9 +866,17 @@ internal sealed class DesktopApi
             var value = file.GetProperty("data").GetString() ?? "";
             var separator = value.IndexOf(',');
             var bytes = Convert.FromBase64String(separator >= 0 ? value[(separator + 1)..] : value);
-            savedFiles.Add(ExportFileStore.Write(target, bytes));
+            var savedPath = ExportFileStore.Write(target, bytes);
+            savedFiles.Add(savedPath);
+            var assetId = "";
+            if (linkGenerated && _registerGeneratedExport is not null)
+            {
+                try { assetId = _registerGeneratedExport(savedPath, value, bytes); }
+                catch (Exception error) { _log($"[生成图片] 导出索引写入失败：{error.Message}", true); }
+            }
+            assetIds.Add(assetId);
         }
-        return Json(200, new { success = true, path = exportDirectory, files = savedFiles });
+        return Json(200, new { success = true, path = exportDirectory, files = savedFiles, assetIds });
     }
 
     private static void WriteBase64File(string filePath, string value)
@@ -912,32 +924,37 @@ internal sealed class DesktopApi
     // 桌面端直接承担原 扩展服务.bat 的扫描与执行职责，页面经 apiFetch 调用，无需手动启动服务；
     // 调用约定遵循《拓展脚本规范》：清空 input/ 写入图片 → 以拓展目录为工作目录运行入口脚本 → 收集 output/。
 
-    private string ExtensionsFolder
+    private IEnumerable<string> ExtensionFolders()
     {
-        get
-        {
-            var presets = Path.Combine(_root, "extensions-presets");
-            return Directory.Exists(presets) ? presets : Path.Combine(_root, "拓展");
-        }
+        yield return Path.Combine(_root, "拓展");
+        yield return Path.Combine(_root, "extensions-presets");
+        yield return Path.Combine(_root, "app", "拓展");
+        yield return Path.Combine(_root, "app", "extensions-presets");
     }
+
+    private static IEnumerable<string> ExtensionDirectories(IEnumerable<string> folders) =>
+        folders.Where(Directory.Exists).SelectMany(folder =>
+            Directory.EnumerateDirectories(folder).OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
 
     private DesktopApiResponse ListExtensions()
     {
         var extensions = new JsonArray();
         var invalid = new JsonArray();
-        var folder = ExtensionsFolder;
-        if (Directory.Exists(folder))
+        var folders = ExtensionFolders().Where(Directory.Exists).ToArray();
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in ExtensionDirectories(folders))
         {
-            foreach (var dir in Directory.EnumerateDirectories(folder).OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            try
             {
-                try { extensions.Add(ReadExtensionManifest(dir)); }
-                catch (Exception error)
-                {
-                    invalid.Add(new JsonObject { ["id"] = Path.GetFileName(dir), ["name"] = Path.GetFileName(dir), ["error"] = error.Message });
-                }
+                var manifest = ReadExtensionManifest(dir);
+                if (seenIds.Add(manifest["id"]!.ToString())) extensions.Add(manifest);
+            }
+            catch (Exception error)
+            {
+                invalid.Add(new JsonObject { ["id"] = Path.GetFileName(dir), ["name"] = Path.GetFileName(dir), ["error"] = error.Message });
             }
         }
-        return Json(200, new { ok = true, extensions, invalid, baseDir = Directory.Exists(folder) ? folder : "" });
+        return Json(200, new { ok = true, extensions, invalid, baseDir = folders.FirstOrDefault() ?? "" });
     }
 
     private JsonObject ReadExtensionManifest(string directory)
@@ -965,9 +982,7 @@ internal sealed class DesktopApi
 
     private string? FindExtensionDirectory(string id)
     {
-        var folder = ExtensionsFolder;
-        if (!Directory.Exists(folder)) return null;
-        foreach (var dir in Directory.EnumerateDirectories(folder))
+        foreach (var dir in ExtensionDirectories(ExtensionFolders()))
         {
             try
             {
@@ -1008,7 +1023,10 @@ internal sealed class DesktopApi
             foreach (var folder in Directory.EnumerateDirectories(outputDirectory)) Directory.Delete(folder, true);
         }
         var stopwatch = Stopwatch.StartNew();
-        var (pythonFile, pythonPrefix) = ResolvePython();
+        var bundledPython = Path.Combine(directory, "runtime", "python.exe");
+        var (pythonFile, pythonPrefix) = id == "auto-matting-u2net" && File.Exists(bundledPython)
+            ? (bundledPython, "")
+            : ResolvePython();
         var startInfo = new ProcessStartInfo
         {
             FileName = pythonFile,

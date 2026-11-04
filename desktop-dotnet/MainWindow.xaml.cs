@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         public string FileName { get; set; } = "";
         public string Mime { get; set; } = "image/png";
         public string RelativePath { get; set; } = "";
+        public string? ExportPath { get; set; }
         public long Size { get; set; }
     }
 
@@ -84,6 +85,7 @@ public partial class MainWindow : Window
           getApiKey: () => invoke("desktop:get-api-key"),
           saveApiKey: (apiKey, apiType) => invoke("desktop:save-api-key", { apiKey: String(apiKey || ""), apiType: String(apiType || "apimart") }),
           storeImage: (dataUrl, fileName, mime, category = "originals", projectName = "") => invoke("desktop:store-image", { dataUrl, fileName, mime, category, projectName }, 60000),
+          clearOriginalCache: ids => invoke("desktop:clear-original-cache", { ids }, 60000),
           readAsset: assetId => invoke("desktop:read-asset", { assetId }, 60000),
           openFileLocation: filePath => invoke("desktop:open-file-location", { filePath: String(filePath || "") }),
           openAssetLocation: assetId => invoke("desktop:open-asset-location", { assetId: String(assetId || "") }),
@@ -231,7 +233,7 @@ public partial class MainWindow : Window
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 Show();
                 Activate();
-            }), slot => ReadApiKey(slot));
+            }), slot => ReadApiKey(slot), RegisterGeneratedExport);
             // CEP 面板桥：画布开着时，Photoshop 面板经 localhost 桥复用画布的 API 与已保存的 key
             _desktopBridge = new DesktopBridge(_desktopApi, Log, (name, dataUrl) => PostPsReturnImage(name, dataUrl));
             try { _desktopBridge.Start(); }
@@ -344,6 +346,11 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, await ReadAssetAsync(root)); }
                         catch (Exception readError) { PostRpcResult(root, error: readError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:clear-original-cache")
+                    {
+                        try { PostRpcResult(root, await Task.Run(() => ClearOriginalCache(root))); }
+                        catch (Exception cacheError) { PostRpcResult(root, error: cacheError.Message); }
                     }
                     else if (type.GetString() == "desktop:open-file-location")
                     {
@@ -603,7 +610,7 @@ public partial class MainWindow : Window
             if (saved is null) return;
             foreach (var item in saved)
             {
-                var fullPath = SafeAssetPath(item.Value.RelativePath);
+                var fullPath = ResolveAssetPath(item.Value);
                 if (Regex.IsMatch(item.Key, "^[a-f0-9]{64}$", RegexOptions.IgnoreCase) && File.Exists(fullPath)) _assets[item.Key] = item.Value;
             }
         }
@@ -615,13 +622,80 @@ public partial class MainWindow : Window
 
     private void SaveAssets()
     {
-        Directory.CreateDirectory(AssetsDirectory);
-        Dictionary<string, AssetRecord> snapshot;
-        lock (_assetLock) snapshot = new Dictionary<string, AssetRecord>(_assets, StringComparer.OrdinalIgnoreCase);
-        var content = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-        var temporary = AssetsIndexPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
-        File.WriteAllText(temporary, content, Encoding.UTF8);
-        File.Move(temporary, AssetsIndexPath, true);
+        lock (_assetLock)
+        {
+            Directory.CreateDirectory(AssetsDirectory);
+            var content = JsonSerializer.Serialize(_assets, new JsonSerializerOptions { WriteIndented = true });
+            var temporary = AssetsIndexPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
+            File.WriteAllText(temporary, content, Encoding.UTF8);
+            File.Move(temporary, AssetsIndexPath, true);
+        }
+    }
+
+    private object ClearOriginalCache(JsonElement request)
+    {
+        var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        CollectAssetReferences(request.GetProperty("ids"), referenced);
+        var originals = Path.Combine(AssetsDirectory, "originals");
+        var deleted = 0;
+        var failed = 0;
+        lock (_assetLock)
+        {
+            if (!Directory.Exists(originals)) return new { deleted, failed };
+            foreach (var directory in new[] { Path.Combine(_root!, "data"), AssetsDirectory, originals })
+                if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("缓存目录包含链接，无法安全清理");
+
+            foreach (var name in new[] { "app-state.json", "custom-library.json" })
+            {
+                var path = Path.Combine(_root!, "data", name);
+                if (!File.Exists(path)) continue;
+                using var document = JsonDocument.Parse(File.ReadAllText(path, Encoding.UTF8), new JsonDocumentOptions { MaxDepth = 256 });
+                CollectAssetReferences(document.RootElement, referenced);
+            }
+
+            var indexedPaths = _assets
+                .Where(item => string.IsNullOrEmpty(item.Value.ExportPath))
+                .ToLookup(item => ResolveAssetPath(item.Value), item => item.Key, StringComparer.OrdinalIgnoreCase);
+            var cutoff = DateTime.UtcNow.AddDays(-7);
+            foreach (var file in new DirectoryInfo(originals).GetFiles())
+            {
+                if (!Regex.IsMatch(file.Name, @"\A[a-f0-9]{64}\.(png|jpe?g|webp|gif)\z", RegexOptions.IgnoreCase)
+                    || (file.Attributes & FileAttributes.ReparsePoint) != 0
+                    || file.CreationTimeUtc >= cutoff || file.LastWriteTimeUtc >= cutoff
+                    || referenced.Contains(Path.GetFileNameWithoutExtension(file.Name))) continue;
+                var indexedIds = indexedPaths[file.FullName];
+                if (indexedIds.Any(referenced.Contains)) continue;
+                try { file.Delete(); }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    failed++;
+                    Log($"[参考图缓存] 删除失败：{file.Name}。{error.Message}", true);
+                    continue;
+                }
+                foreach (var id in indexedIds) _assets.Remove(id);
+                deleted++;
+            }
+            if (deleted > 0) SaveAssets();
+        }
+        return new { deleted, failed };
+    }
+
+    private static void CollectAssetReferences(JsonElement value, HashSet<string> referenced)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in value.EnumerateObject()) CollectAssetReferences(property.Value, referenced);
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in value.EnumerateArray()) CollectAssetReferences(item, referenced);
+                break;
+            case JsonValueKind.String:
+                var id = value.GetString()!;
+                if (id.Length == 64 && id.All(Uri.IsHexDigit)) referenced.Add(id);
+                break;
+        }
     }
 
     // 内置网关保持两槽；自定义对话站点槽名（"chatcustom:<siteId>"）直接透传，与 server.js secretProvider 槽名一致
@@ -780,7 +854,18 @@ public partial class MainWindow : Window
         AssetRecord record;
         lock (_assetLock)
         {
-            if (_assets.TryGetValue(id, out var existing)) return existing;
+            if (_assets.TryGetValue(id, out var existing))
+            {
+                var existingPath = ResolveAssetPath(existing);
+                if (File.Exists(existingPath))
+                {
+                    if (string.IsNullOrEmpty(existing.ExportPath)
+                        && string.Equals(Path.GetDirectoryName(existingPath), Path.Combine(AssetsDirectory, "originals"), StringComparison.OrdinalIgnoreCase))
+                        File.SetLastWriteTimeUtc(existingPath, DateTime.UtcNow);
+                    return existing;
+                }
+                _assets.Remove(id);
+            }
             string relativePath;
             if (category == "generated")
             {
@@ -803,6 +888,23 @@ public partial class MainWindow : Window
         return record;
     }
 
+    private string ResolveAssetPath(AssetRecord asset) =>
+        string.IsNullOrEmpty(asset.ExportPath) ? SafeAssetPath(asset.RelativePath) : Path.GetFullPath(asset.ExportPath);
+
+    private string RegisterGeneratedExport(string path, string dataUrl, byte[] bytes)
+    {
+        var mime = MimeFromExtension(Path.GetExtension(path));
+        if (!dataUrl.StartsWith($"data:{mime};base64,", StringComparison.OrdinalIgnoreCase)) return "";
+        var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
+        var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path + "\n" + contentHash))).ToLowerInvariant();
+        lock (_assetLock)
+        {
+            _assets[id] = new AssetRecord { Id = id, FileName = Path.GetFileName(path), Mime = mime, ExportPath = path, Size = bytes.LongLength };
+        }
+        SaveAssets();
+        return id;
+    }
+
     private async Task<object> ReadAssetAsync(JsonElement request)
     {
         var assetId = request.GetProperty("assetId").GetString() ?? "";
@@ -811,7 +913,7 @@ public partial class MainWindow : Window
         {
             if (!_assets.TryGetValue(assetId, out asset!)) throw new FileNotFoundException("素材不存在，可能已被移动或删除");
         }
-        var filePath = SafeAssetPath(asset.RelativePath);
+        var filePath = ResolveAssetPath(asset);
         var bytes = await File.ReadAllBytesAsync(filePath, _shutdown.Token);
         return new { dataUrl = $"data:{asset.Mime};base64,{Convert.ToBase64String(bytes)}", asset.FileName, asset.Mime };
     }
@@ -832,7 +934,7 @@ public partial class MainWindow : Window
         {
             if (!_assets.TryGetValue(assetId, out asset!)) throw new FileNotFoundException("素材不存在，可能已被移动或删除");
         }
-        return OpenDirectoryOf(SafeAssetPath(asset.RelativePath), "图片素材");
+        return OpenDirectoryOf(ResolveAssetPath(asset), "图片素材");
     }
 
     private object OpenDirectoryOf(string filePath, string label)
@@ -1212,7 +1314,7 @@ public partial class MainWindow : Window
             {
                 if (_assets.TryGetValue(assetId, out var asset) && asset is not null)
                 {
-                    filePath = SafeAssetPath(asset.RelativePath);
+                    filePath = ResolveAssetPath(asset);
                     fileName = asset.FileName;
                 }
             }

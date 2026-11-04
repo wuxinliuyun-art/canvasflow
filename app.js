@@ -968,7 +968,6 @@ const els = {
   lightboxFillLineWidthField: $("lightboxFillLineWidthField"),
   lightboxFillLineWidth: $("lightboxFillLineWidth"),
   lightboxFillLineWidthValue: $("lightboxFillLineWidthValue"),
-  lightboxFillKeepLinesField: $("lightboxFillKeepLinesField"),
   lightboxFillKeepLines: $("lightboxFillKeepLines"),
   executeDialog: $("executeDialog"),
   executeTitle: $("executeTitle"),
@@ -2798,54 +2797,78 @@ function decodeCanvasflowNodesHtml(html) {
   }
 }
 
-function copySelection(clearSystemClipboard = true) {
-  const nodes = state.nodes.filter(n => state.selected.has(n.id)).map(stripCopiedImage);
-  state.clipboard = {
+async function copySelection(event = null) {
+  const nodes = state.nodes.filter(n => state.selected.has(n.id)).map(cloneNodeForClipboard);
+  const payload = {
+    copyId: uid("copy"),
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
     // 整组被完整复制时带上外框，粘贴后保留被撑开的组内空间
     canvasGroupFrames: Object.fromEntries(canvasDragGroupFrames(nodes).map(({ groupId, ...bounds }) => [groupId, bounds])),
   };
-  if (clearSystemClipboard) {
-    // 右键菜单复制没有事件 clipboardData 可用，走 navigator 写入；失败时退回清空文本。
-    const writeNative = () => { if (navigator.clipboard?.writeText) navigator.clipboard.writeText("").catch(() => {}); };
-    const html = encodeCanvasflowNodesHtml(state.clipboard);
-    if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-      try {
-        navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }) })]).catch(writeNative);
-      } catch (err) {
-        writeNative();
-      }
-    } else {
-      writeNative();
-    }
+  if (!desktop && event?.clipboardData) {
+    const html = encodeCanvasflowNodesHtml(payload);
+    if (!html) return false;
+    event.clipboardData.setData("text/html", html);
+    state.clipboard = payload;
+    toast(`已复制 ${nodes.length} 个节点`);
+    return true;
   }
-  toast(`已复制 ${nodes.length} 个节点`);
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      throw new Error("当前环境不支持写入节点剪贴板");
+    }
+    const portable = structuredClone(payload);
+    // Start the clipboard write while the copy gesture still grants access.
+    const htmlBlob = (async () => {
+      if (desktop) {
+        await materializeNodeAssetsForPortableSave(portable.nodes, async ({ assetId }) => {
+          const { dataUrl } = await desktop.readAsset(assetId);
+          if (!dataUrl) throw new Error("素材原图为空");
+          return dataUrl;
+        });
+      }
+      const html = encodeCanvasflowNodesHtml(portable);
+      if (!html) throw new Error("节点数据无法写入剪贴板");
+      return new Blob([html], { type: "text/html" });
+    })();
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": htmlBlob })]);
+    state.clipboard = payload;
+    toast(`已复制 ${nodes.length} 个节点`);
+    return true;
+  } catch (error) {
+    console.warn("[节点复制] 剪贴板写入失败", error);
+    toast("复制失败，请检查原图是否可读取以及剪贴板权限");
+    return false;
+  }
 }
 
-function stripCopiedImage(n) {
+function cloneNodeForClipboard(n) {
   const copy = JSON.parse(JSON.stringify(n));
-  if (copy.type === "ai-image" || copy.type === "angle-image") {
-    copy.generatedImage = null;
-    delete copy.generatedAssetId;
-    copy.taskId = null;
-    copy.generating = false;
-  }
-  if (copy.type === "ai-video") {
-    // 副本指向同一份磁盘文件即可(只读播放),但运行状态必须归零
-    copy.taskId = null;
-    copy.generating = false;
-    copy._aiProgress = null;
-    delete copy._queueRunId;
-    delete copy._pendingVideoUrl;
-  }
-  if (copy.type === "local-sd") {
-    copy.generating = false;
-    copy._sdTaskId = "";
-    copy._sdStatus = "";
-    copy._sdError = "";
-    copy._sdRequestSeq = 0;
-  }
+  // 组合两侧语义:master 的完整重置(图/视频/SD) + 旧线的 walkNodes 层级(编组内嵌套节点同样重置)
+  walkNodes([copy], node => {
+    if (node.type === "ai-image" || node.type === "angle-image") {
+      node.generatedImage = null;
+      delete node.generatedAssetId;
+      node.taskId = null;
+      node.generating = false;
+    }
+    if (node.type === "ai-video") {
+      // 副本指向同一份磁盘文件即可(只读播放),但运行状态必须归零
+      node.taskId = null;
+      node.generating = false;
+      node._aiProgress = null;
+      delete node._queueRunId;
+      delete node._pendingVideoUrl;
+    }
+    if (node.type === "local-sd") {
+      node.generating = false;
+      node._sdTaskId = "";
+      node._sdStatus = "";
+      node._sdError = "";
+      node._sdRequestSeq = 0;
+    }
+  });
   return copy;
 }
 
@@ -4034,7 +4057,7 @@ async function generateAngleImage(nodeId) {
     resultNode.outputPath = savedOutput?.outputPath || "";
     resultNode.aiSourceNodeId = node.id;
     resultNode.angleSourceNodeId = node.id;
-    await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
+    await externalizeImageField(resultNode, "image", "imageAssetId", fileName, savedOutput?.assetId);
     state.edges.push({ id: uid("e"), from: { node: node.id, port: "out" }, to: { node: resultNode.id, port: "in" } });
     node.generating = false;
     node._aiProgress = { status: "done", label: "生成完成", percent: 100, error: "" };
@@ -5442,11 +5465,11 @@ async function saveGeneratedOutput(dataUrl, task, node) {
   const response = await apiFetch("/api/save-export-files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folderName: "ai_generated", baseFolder: task.exportFolder || "export", files: [{ name: projectExportFileName(fileName, task.projectName), data: dataUrl }] }),
+    body: JSON.stringify({ folderName: "ai_generated", linkGenerated: Boolean(node), baseFolder: task.exportFolder || "export", files: [{ name: projectExportFileName(fileName, task.projectName), data: dataUrl }] }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
-  return { fileName, outputPath: result.files?.[0] || "", outputFolder: result.path || "" };
+  return { fileName, outputPath: result.files?.[0] || "", outputFolder: result.path || "", assetId: result.assetIds?.[0] || "" };
 }
 
 async function applyQueuedResult(task, node, rawResultDataUrl) {
@@ -5473,7 +5496,7 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     node.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
     node.generationPrompt = task.prompt || "";
     node.outputPath = saved?.outputPath || "";
-    await externalizeImageField(node, "generatedImage", "generatedAssetId", fileName);
+    await externalizeImageField(node, "generatedImage", "generatedAssetId", fileName, saved?.assetId);
   } else {
     const columns = Math.min(3, Math.max(1, Number(task.resultCount) || 1));
     const resultIndex = Math.max(0, Number(task.resultOrder) || 0);
@@ -5496,7 +5519,7 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     task.resultNodeId = resultNode.id;
     if (!offPage) render();
     try {
-      await externalizeImageField(resultNode, "image", "imageAssetId", fileName);
+      await externalizeImageField(resultNode, "image", "imageAssetId", fileName, saved?.assetId);
     } catch (error) {
       task.warning = `结果已显示，但写入素材仓库失败：${error.message}`;
       console.error("[生成结果] 素材仓库写入失败，保留画布结果", { taskId: task.id, resultNodeId: resultNode.id, message: error.message });
@@ -6379,12 +6402,17 @@ async function generateSingle(node, upstream) {
     node.generating = false;
     node.fileName = `ai_generated_${Date.now()}.png`;
     node.mime = "image/png";
-    await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName);
-    apiFetch("/api/save-export-files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName: "ai_generated", baseFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export", files: [{ name: projectExportFileName(node.fileName, currentPage()?.name || "项目"), data: taggedBase64 }] }),
-    }).catch(() => {});
+    const saved = await saveGeneratedOutput(taggedBase64, {
+      id: node.taskId,
+      projectName: currentPage()?.name || "项目",
+      exportFolder: state.settings.exportFolderLabel || runtimeExportFolder || "export",
+    }, node).catch(error => {
+      console.warn("[生成结果] 输出文件保存失败", error);
+      return null;
+    });
+    node.fileName = saved?.fileName || node.fileName;
+    node.outputPath = saved?.outputPath || "";
+    await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName, saved?.assetId);
     setAiNodeProgress(node, "done", "生成完成", 100);
     clearAiNodeProgressSoon(node);
     setProgress(100, "AI生成完成");
@@ -9354,8 +9382,9 @@ let lightboxViewOffset = { x: 0, y: 0 };
 let lightboxViewDrag = null;
 let lightboxDrawing = false;
 let lightboxPaintMode = "idle";
-const lightboxPaintSizes = { brush: 36, eraser: 36, arrow: 4, rect: 4 };
+const lightboxPaintSizes = { brush: 36, "color-brush": 36, eraser: 36, arrow: 4, rect: 4 };
 const lightboxPaintSizeRanges = {
+  "color-brush": { min: 4, max: 160 },
   brush: { min: 4, max: 120 }, eraser: { min: 4, max: 120 },
   arrow: { min: 1, max: 16 }, rect: { min: 1, max: 16 }
 };
@@ -9373,9 +9402,8 @@ let lightboxEditUndoStack = [];
 let lightboxFillActions = [];
 let lightboxLastFill = null;
 let lightboxFillReapplyTimer = 0;
-const lightboxFillSettings = { tolerance: 40, lineWidth: 3, keepLines: true };
+const lightboxFillSettings = { sketchTolerance: 5, lineWidth: 3, keepLines: true };
 // 硬线余量（百分点）：色差超过 容差+余量 的像素始终阻挡填色；实测草图轮廓≈75–85%、排线≈45–57%、辅助线≈30%
-const LIGHTBOX_FILL_HARD_MARGIN = 15;
 let lightboxEditBase = null;
 let lightboxCropRect = null;
 let lightboxCropDrag = null;
@@ -9825,6 +9853,7 @@ async function startLightboxPaint() {
   els.lightboxImg.classList.add("hidden");
   canvas.classList.remove("hidden");
   updateLightboxPaintDisplaySize();
+  syncLightboxPaletteTop();
   els.lightboxPaintToolbar.classList.remove("hidden");
   els.lightboxMirrorTools.classList.remove("hidden");
   positionLightboxMirrorTools();
@@ -9842,7 +9871,7 @@ function cancelLightboxPaint() {
   clearLightboxCrop();
   clearCompositeHover();
   lightboxPainting = false;
-  document.getElementById("editorPalette").classList.add("hidden");
+  $("lightboxLeftTools").classList.add("hidden");
   lightboxDrawing = false;
   hideLightboxEraserRing();
   lightboxPaintActions = [];
@@ -9878,7 +9907,7 @@ function paintCanvasPoint(ev) {
 function updateLightboxPaintDisplaySize() {
   const canvas = els.lightboxPaintCanvas;
   if (!lightboxPainting || !canvas.width || !canvas.height) return;
-  const palette = document.getElementById("editorPalette");
+  const palette = $("lightboxLeftTools");
   const wide = window.innerWidth >= 768;
   const paletteExpanded = wide && !palette.querySelector(".quick-palette-body").classList.contains("hidden");
   const paletteWidth = paletteExpanded ? palette.offsetWidth : 0;
@@ -9904,9 +9933,26 @@ function updateLightboxPaintDisplaySize() {
   syncArrowNoteHandles();
 }
 
+// 左侧工具面板垂直定位：仅在打开/窗口变化/折叠调色盘时按当前内容高度“大概居中”定一次 top；
+// 之后容差等调节行增减只让面板向下伸展，底部不够时收进 max-height 内部滚动，面板不再上下跳动
+function syncLightboxPaletteTop() {
+  const palette = $("lightboxLeftTools");
+  if (!palette || palette.classList.contains("hidden") || !palette.offsetHeight) return;
+  if (window.innerWidth < 768) { // 移动端断点交给 CSS 固定定位
+    palette.style.removeProperty("top");
+    palette.style.removeProperty("max-height");
+    return;
+  }
+  // 先把高度上限收到“距屏幕上下各留出余量”，再测量、再居中：
+  // 内容再高也只会收进上限内部滚动，top 计算永远不会顶到下限，任何窗口尺寸都能真正居中
+  palette.style.maxHeight = `${Math.max(240, window.innerHeight - 96)}px`;
+  const top = Math.max(24, Math.round((window.innerHeight - palette.offsetHeight) / 2 - 24));
+  palette.style.top = `${top}px`;
+}
+
 function setLightboxPaintMode(mode) {
   clearLightboxCrop();
-  lightboxPaintMode = ["brush", "eraser", "arrow", "rect", "fill", "transform", "crop"].includes(mode) ? mode : "idle";
+  lightboxPaintMode = ["brush", "color-brush", "eraser", "arrow", "rect", "fill", "transform", "crop"].includes(mode) ? mode : "idle";
   lightboxCropBtn.classList.toggle("active", lightboxPaintMode === "crop");
   lightboxCropApply.classList.toggle("hidden", lightboxPaintMode !== "crop");
   els.lightboxPaintCanvas.style.cursor = ["crop", "fill"].includes(lightboxPaintMode) ? "crosshair" : "";
@@ -9918,23 +9964,30 @@ function setLightboxPaintMode(mode) {
     els.lightboxPaintSize.value = lightboxPaintSizes[lightboxPaintMode];
   }
   const isFill = lightboxPaintMode === "fill";
-  const annotateColor = lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
+  const isColorBrush = lightboxPaintMode === "color-brush";
+  const toolColor = $("lightboxToolColor");
+  const colorField = els.lightboxPaintColorField;
+  toolColor.classList.toggle("hidden", !isFill);
+  const colorParent = isFill ? toolColor : els.lightboxPaintOptions;
+  if (colorField.parentElement !== colorParent) colorParent.prepend(colorField);
+  els.lightboxPaintFill.setAttribute("aria-pressed", String(isFill));
+  $("lightboxColorBrush").setAttribute("aria-pressed", String(isColorBrush));
+  const annotateColor = isColorBrush || lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
   els.lightboxPaintFill.classList.toggle("active", isFill);
   els.lightboxPaintSizeField.classList.toggle("hidden", isFill);
   if (!isFill) commitLightboxLastFill();
   syncLightboxFillControls();
-  els.lightboxFillKeepLinesField.classList.toggle("hidden", !isFill);
-  if (isFill) syncLightboxFillControls();
+  $("lightboxFillOptions").classList.toggle("hidden", !isFill);
   $("lightboxPaintPointer").classList.toggle("active", lightboxPaintMode === "idle" || lightboxPaintMode === "transform");
   els.lightboxPaintBrush.classList.toggle("active", lightboxPaintMode === "brush");
   els.lightboxPaintEraser.classList.toggle("active", lightboxPaintMode === "eraser");
   els.lightboxPaintArrow.classList.toggle("active", lightboxPaintMode === "arrow");
   els.lightboxPaintRect.classList.toggle("active", lightboxPaintMode === "rect");
-  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop"].includes(lightboxPaintMode));
+  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop", "fill"].includes(lightboxPaintMode));
   els.lightboxPaintColorField.classList.toggle("hidden", !annotateColor);
   els.lightboxPaintColor.disabled = !annotateColor;
   els.lightboxPaintCanvas.classList.toggle("transform-mode", lightboxPaintMode === "transform");
-  els.lightboxPaintCanvas.classList.toggle("brush-mode", lightboxPaintMode === "brush");
+  els.lightboxPaintCanvas.classList.toggle("brush-mode", isColorBrush || lightboxPaintMode === "brush");
   els.lightboxPaintCanvas.classList.toggle("eraser-mode", lightboxPaintMode === "eraser");
   els.lightboxPaintCanvas.classList.toggle("arrow-mode", lightboxPaintMode === "arrow");
   els.lightboxPaintCanvas.classList.toggle("rect-mode", lightboxPaintMode === "rect");
@@ -9972,7 +10025,7 @@ function hideLightboxEraserRing() {
 function drawLightboxPaintSegment(context, action, from, to) {
   context.save();
   context.globalCompositeOperation = action.mode === "eraser" ? "destination-out" : "source-over";
-  context.strokeStyle = action.color;
+  context.strokeStyle = (lightboxFillSettings.keepLines && action.inkPattern) || action.color;
   context.lineWidth = action.size;
   context.lineCap = "round";
   context.lineJoin = "round";
@@ -10038,7 +10091,7 @@ function getLightboxFillLayer() {
   const context = lightboxFillLayer.getContext("2d");
   context.clearRect(0, 0, lightboxFillLayer.width, lightboxFillLayer.height);
   for (const fill of lightboxFillActions) {
-    if (fill.mode === "eraser") {
+    if (fill.mode === "eraser" || fill.mode === "color-brush") {
       const first = fill.points[0];
       if (fill.points.length === 1) drawLightboxPaintSegment(context, fill, first, { x: first.x + .01, y: first.y + .01 });
       for (let index = 1; index < fill.points.length; index++) {
@@ -10071,15 +10124,15 @@ function drawLightboxBaseLayers(context) {
   }
 }
 
-// 填色取样源 = 底图 + 置入图 + 画笔描边，不含已有填色——重新点击已填色区域即换色，区域判断不受填色影响
-function lightboxFillSourceImageData() {
+// 草图可以用手绘线条划分区域，材质选区只看底图和置入图。
+function lightboxFillSourceImageData(includeSketchLines = false) {
   const canvas = els.lightboxPaintCanvas;
   const offscreen = document.createElement("canvas");
   offscreen.width = canvas.width;
   offscreen.height = canvas.height;
   const context = offscreen.getContext("2d");
   drawLightboxBaseLayers(context);
-  context.drawImage(lightboxPaintOverlay, 0, 0);
+  if (includeSketchLines) context.drawImage(lightboxPaintOverlay, 0, 0);
   return context.getImageData(0, 0, offscreen.width, offscreen.height);
 }
 function renderLightboxPaintComposite() {
@@ -10303,7 +10356,31 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
     return;
   }
   lightboxPaintCurrentAction = { mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p] };
-  if (lightboxPaintMode === "eraser") {
+  if (lightboxPaintMode === "color-brush") {
+    const action = lightboxPaintCurrentAction;
+    try {
+      const source = lightboxFillSourceImageData(true);
+      const tint = document.createElement("canvas");
+      tint.width = source.width;
+      tint.height = source.height;
+      const context = tint.getContext("2d");
+      const pixels = context.createImageData(source.width, source.height);
+      const color = parseHexColor(action.color);
+      for (let offset = 0; offset < pixels.data.length; offset += 4) {
+        writeSketchFillPixel(pixels.data, source.data, offset, color, true);
+        pixels.data[offset + 3] = 255;
+      }
+      context.putImageData(pixels, 0, 0);
+      action.inkPattern = getLightboxFillLayer().getContext("2d").createPattern(tint, "no-repeat");
+      lightboxFillActions.push(action);
+      markLightboxFillLayerDirty();
+    } catch (error) {
+      lightboxPaintCurrentAction = null;
+      lightboxDrawing = false;
+      toast(`上色笔刷无法读取图片：${error.message}`);
+      return;
+    }
+  } else if (lightboxPaintMode === "eraser") {
     lightboxFillActions.push(lightboxPaintCurrentAction);
     markLightboxFillLayerDirty();
   } else {
@@ -10336,7 +10413,7 @@ els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
     return;
   }
   const previous = lightboxPaintCurrentAction.points[lightboxPaintCurrentAction.points.length - 1];
-  const layer = lightboxPaintCurrentAction.mode === "eraser" ? getLightboxFillLayer() : lightboxPaintOverlay;
+  const layer = ["eraser", "color-brush"].includes(lightboxPaintCurrentAction.mode) ? getLightboxFillLayer() : lightboxPaintOverlay;
   lightboxPaintCurrentAction.points.push(p);
   drawLightboxPaintSegment(layer.getContext("2d"), lightboxPaintCurrentAction, previous, p);
   renderLightboxPaintComposite();
@@ -10370,10 +10447,10 @@ function finishLightboxPointerAction(ev) {
       return;
     }
     pushLightboxEditUndo(() => {
-      const actions = action.mode === "eraser" ? lightboxFillActions : lightboxPaintActions;
+      const actions = ["eraser", "color-brush"].includes(action.mode) ? lightboxFillActions : lightboxPaintActions;
       const index = actions.lastIndexOf(action);
       if (index >= 0) actions.splice(index, 1);
-      if (action.mode === "eraser") markLightboxFillLayerDirty();
+      if (actions === lightboxFillActions) markLightboxFillLayerDirty();
     });
     if (action.kind === "arrow" && ev.type === "pointerup") {
       lightboxPaintCurrentAction = null;
@@ -10412,7 +10489,6 @@ els.lightboxPaintSize.addEventListener("input", () => {
 
 let lightboxFillBusy = false;
 let lightboxFillHintShown = false;
-
 function resetLightboxFillState() {
   lightboxFillActions = [];
   lightboxLastFill = null;
@@ -10427,10 +10503,14 @@ function resetLightboxFillState() {
 
 function syncLightboxFillControls() {
   $("lightboxFillAdjustment").classList.toggle("hidden", !lightboxLastFill || lightboxPaintMode !== "fill");
-  els.lightboxFillTolerance.value = (lightboxLastFill?.tolerance ?? lightboxFillSettings.tolerance);
+  const material = lightboxLastFill?.material ?? ($("lightboxFillMode").value === "material");
+  els.lightboxFillTolerance.max = material ? 150 : 20;
+  els.lightboxFillTolerance.value = lightboxLastFill?.tolerance ?? (material ? 65 : lightboxFillSettings.sketchTolerance);
+  els.lightboxFillLineWidthField.classList.toggle("hidden", material);
+  $("lightboxSketchOptions").classList.toggle("hidden", material || lightboxPaintMode !== "fill");
   els.lightboxFillLineWidth.value = (lightboxLastFill?.lineWidth ?? lightboxFillSettings.lineWidth);
   els.lightboxFillKeepLines.checked = lightboxFillSettings.keepLines;
-  els.lightboxFillToleranceValue.textContent = String((lightboxLastFill?.tolerance ?? lightboxFillSettings.tolerance));
+  els.lightboxFillToleranceValue.textContent = els.lightboxFillTolerance.value;
   els.lightboxFillLineWidthValue.textContent = `${(lightboxLastFill?.lineWidth ?? lightboxFillSettings.lineWidth)}px`;
 }
 
@@ -10444,6 +10524,7 @@ function commitLightboxLastFill() {
   }
   $("lightboxFillAdjustment").classList.add("hidden");
   lightboxLastFill.source = null;
+  lightboxLastFill.selectionSource = null;
   lightboxLastFill.mask = null;
   lightboxLastFill = null;
 }
@@ -10453,225 +10534,6 @@ function parseHexColor(hex) {
   const full = value.length === 3 ? value.split("").map(ch => ch + ch).join("") : value.padEnd(6, "0").slice(0, 6);
   const num = parseInt(full, 16);
   return Number.isNaN(num) ? [255, 59, 48] : [(num >> 16) & 255, (num >> 8) & 255, num & 255];
-}
-
-// 二值掩膜的可分离膨胀：半径 radius 内任一像素为 1 则输出 1；tmp 为同尺寸暂存
-function dilateBinaryMask(src, width, height, radius, dst, tmp) {
-  if (radius <= 0) { dst.set(src); return dst; }
-  for (let y = 0; y < height; y++) {
-    const row = y * width;
-    let count = 0;
-    for (let x = 0; x <= Math.min(radius, width - 1); x++) count += src[row + x];
-    for (let x = 0; x < width; x++) {
-      tmp[row + x] = count > 0 ? 1 : 0;
-      const add = x + radius + 1;
-      if (add < width) count += src[row + add];
-      const remove = x - radius;
-      if (remove >= 0) count -= src[row + remove];
-    }
-  }
-  const counts = new Int32Array(width);
-  for (let y = 0; y <= Math.min(radius, height - 1); y++) {
-    const row = y * width;
-    for (let x = 0; x < width; x++) counts[x] += tmp[row + x];
-  }
-  for (let y = 0; y < height; y++) {
-    const row = y * width;
-    const addRow = y + radius + 1 < height ? (y + radius + 1) * width : -1;
-    const removeRow = y - radius >= 0 ? (y - radius) * width : -1;
-    for (let x = 0; x < width; x++) {
-      dst[row + x] = counts[x] > 0 ? 1 : 0;
-      if (addRow >= 0) counts[x] += tmp[addRow + x];
-      if (removeRow >= 0) counts[x] -= tmp[removeRow + x];
-    }
-  }
-  return dst;
-}
-
-// 二值掩膜的可分离腐蚀：半径 radius 内全部为 1 才输出 1；图像边界外视为 1，贴边区域不会被腐蚀掉
-function erodeBinaryMask(src, width, height, radius, dst, tmp) {
-  if (radius <= 0) { dst.set(src); return dst; }
-  for (let y = 0; y < height; y++) {
-    const row = y * width;
-    let count = 0;
-    let span = Math.min(radius, width - 1) + 1;
-    for (let x = 0; x < span; x++) count += src[row + x];
-    for (let x = 0; x < width; x++) {
-      tmp[row + x] = count === span ? 1 : 0;
-      const add = x + radius + 1;
-      if (add < width) { count += src[row + add]; span++; }
-      const remove = x - radius;
-      if (remove >= 0) { count -= src[row + remove]; span--; }
-    }
-  }
-  const counts = new Int32Array(width);
-  let span = Math.min(radius, height - 1) + 1;
-  for (let y = 0; y < span; y++) {
-    const row = y * width;
-    for (let x = 0; x < width; x++) counts[x] += tmp[row + x];
-  }
-  for (let y = 0; y < height; y++) {
-    const row = y * width;
-    const addRow = y + radius + 1 < height ? (y + radius + 1) * width : -1;
-    const removeRow = y - radius >= 0 ? (y - radius) * width : -1;
-    for (let x = 0; x < width; x++) {
-      dst[row + x] = counts[x] === span ? 1 : 0;
-      if (addRow >= 0) counts[x] += tmp[addRow + x];
-      if (removeRow >= 0) counts[x] -= tmp[removeRow + x];
-    }
-    if (addRow >= 0) span++;
-    if (removeRow >= 0) span--;
-  }
-  return dst;
-}
-
-// 扫描线泛洪（4 连通）：在 passable 上从种子出发标记连通区域到 visited，返回像素数
-function floodFillMask(passable, width, height, seedX, seedY, visited) {
-  const total = width * height;
-  const stack = [seedY * width + seedX];
-  let count = 0;
-  while (stack.length) {
-    const index = stack.pop();
-    if (visited[index] || !passable[index]) continue;
-    const row = ((index / width) | 0) * width;
-    let x0 = index - row;
-    let x1 = x0;
-    while (x0 > 0 && passable[row + x0 - 1] && !visited[row + x0 - 1]) x0--;
-    while (x1 < width - 1 && passable[row + x1 + 1] && !visited[row + x1 + 1]) x1++;
-    for (let x = x0; x <= x1; x++) visited[row + x] = 1;
-    count += x1 - x0 + 1;
-    for (let step = -1; step <= 1; step += 2) {
-      const nextRow = row + step * width;
-      if (nextRow < 0 || nextRow >= total) continue;
-      let inRun = false;
-      for (let x = x0; x <= x1; x++) {
-        const candidate = passable[nextRow + x] === 1 && !visited[nextRow + x];
-        if (candidate && !inRun) stack.push(nextRow + x);
-        inRun = candidate;
-      }
-    }
-  }
-  return count;
-}
-
-function computeLightboxFillMask(source, seedX, seedY, settings) {
-  const { width, height, data } = source;
-  const total = width * height;
-  const seed = (seedY * width + seedX) * 4;
-  const sr = data[seed], sg = data[seed + 1], sb = data[seed + 2], sa = data[seed + 3];
-  // 容差 0–100 映射为 0–255 的通道差；比较平方距离避免逐像素开方
-  const tolerance = Math.round(settings.tolerance / 100 * 255);
-  const toleranceSq = tolerance * tolerance * 3;
-  // 硬线：与种子色差超过“容差 + 固定余量”的像素视为实线，无论多细都不可跨越——
-  // 草图里浅色辅助线/排线可被忽略，深色轮廓始终是边界，避免“忽略细线”把填色漏到轮廓外
-  const hard = Math.round(Math.min(100, settings.tolerance + LIGHTBOX_FILL_HARD_MARGIN) / 100 * 255);
-  const hardSq = hard * hard * 3;
-  const withinTolerance = new Uint8Array(total);
-  const hardLine = new Uint8Array(total);
-  const seedChromaX = 2 * sr - sg - sb;
-  const seedChromaY = Math.sqrt(3) * (sg - sb);
-  const seedChromaSq = seedChromaX ** 2 + seedChromaY ** 2;
-  const useHue = sa >= 128 && Math.max(sr, sg, sb) - Math.min(sr, sg, sb) >= 32;
-  const seedHigh = Math.max(sr, sg, sb);
-  const minimumSaturation = Math.min(0.24, (seedHigh - Math.min(sr, sg, sb)) / Math.max(1, seedHigh));
-  const hueCosSq = Math.cos((8 + settings.tolerance * 0.24) * Math.PI / 180) ** 2;
-  const lightness = p => (54 * data[p] + 183 * data[p + 1] + 19 * data[p + 2]) / 256;
-  const seedLight = lightness(seed);
-  const useNeutralMaterial = !useHue && sa >= 128 && seedLight >= 128;
-  const useDarkMaterial = !useHue && sa >= 128 && seedLight < 96;
-  const darkMaterialCeiling = Math.min(112, seedLight + 18 + settings.tolerance * 0.65);
-  const materialLightFloor = Math.max(52, seedLight * (0.54 - settings.tolerance * 0.006));
-  const rowStride = width * 4;
-  for (let i = 0, p = 0; i < total; i++, p += 4) {
-    const dr = data[p] - sr, dg = data[p + 1] - sg, db = data[p + 2] - sb;
-    const distanceSq = dr * dr + dg * dg + db * db;
-    const alphaClose = Math.abs(data[p + 3] - sa) <= tolerance;
-    if (useDarkMaterial) {
-      const light = lightness(p);
-      const column = i % width;
-      const row = Math.floor(i / width);
-      const high = Math.max(data[p], data[p + 1], data[p + 2]);
-      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
-      // Keep silhouette edges independent of the tolerance and thin-line sliders.
-      const edge = (column > 0 && column < width - 1 &&
-        Math.abs(lightness(p - 4) - lightness(p + 4)) >= 36) ||
-        (row > 0 && row < height - 1 &&
-          Math.abs(lightness(p - rowStride) - lightness(p + rowStride)) >= 36);
-      if (p === seed || (alphaClose && data[p + 3] >= 128 && light <= darkMaterialCeiling && spread <= 28 && !edge)) {
-        withinTolerance[i] = 1;
-      } else {
-        hardLine[i] = 1;
-      }
-      continue;
-    }
-    if (useHue && alphaClose) {
-      const chromaX = 2 * data[p] - data[p + 1] - data[p + 2];
-      const chromaY = Math.sqrt(3) * (data[p + 1] - data[p + 2]);
-      const chromaSq = chromaX ** 2 + chromaY ** 2;
-      const projection = chromaX * seedChromaX + chromaY * seedChromaY;
-      const light = lightness(p);
-      // A bright reflection can carry very little pigment, while a dark seam
-      // can retain the same hue as the panels it separates.
-      const high = Math.max(data[p], data[p + 1], data[p + 2]);
-      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
-      const saturationFloor = light >= 190 ? 0.03 : minimumSaturation;
-      const sameHue = light >= 12 && spread >= Math.max(6, high * saturationFloor) && projection > 0 &&
-        projection ** 2 >= chromaSq * seedChromaSq * hueCosSq;
-      const column = i % width;
-      const row = Math.floor(i / width);
-      const seam = i * 4 !== seed && (
-        (column > 0 && column < width - 1 &&
-          Math.min(lightness(p - 4), lightness(p + 4)) - light >= 30) ||
-        (row > 0 && row < height - 1 &&
-          Math.min(lightness(p - rowStride), lightness(p + rowStride)) - light >= 30)
-      );
-      if (sameHue && !seam) withinTolerance[i] = 1;
-      else hardLine[i] = 1;
-      continue;
-    }
-    if (useNeutralMaterial && alphaClose) {
-      const high = Math.max(data[p], data[p + 1], data[p + 2]);
-      const spread = high - Math.min(data[p], data[p + 1], data[p + 2]);
-      if (lightness(p) >= materialLightFloor && spread <= Math.max(24, high * 0.2)) withinTolerance[i] = 1;
-      else hardLine[i] = 1;
-      continue;
-    }
-    if (distanceSq <= toleranceSq && alphaClose) withinTolerance[i] = 1;
-    else if (distanceSq > hardSq || !alphaClose) hardLine[i] = 1;
-  }
-  // 忽略细线：膨胀可通行区，使宽度不超过 2×radius 的浅色线条可被跨过；硬线像素随后恢复为不可通行
-  const radius = Math.ceil(Math.max(0, settings.lineWidth) / 2);
-  const passable = new Uint8Array(total);
-  const scratch = new Uint8Array(total);
-  dilateBinaryMask(withinTolerance, width, height, radius, passable, scratch);
-  if (radius > 0) for (let i = 0; i < total; i++) if (hardLine[i]) passable[i] = 0;
-  let filled = new Uint8Array(total);
-  const seamRadius = useHue || useNeutralMaterial || useDarkMaterial ? Math.max(2, Math.min(8, Math.round(Math.min(width, height) / 280))) : 0;
-  if (seamRadius) {
-    const core = new Uint8Array(total);
-    erodeBinaryMask(passable, width, height, seamRadius, core, scratch);
-    if (core[seed >> 2]) {
-      floodFillMask(core, width, height, seedX, seedY, filled);
-      dilateBinaryMask(filled, width, height, seamRadius, core, scratch);
-      for (let i = 0; i < total; i++) filled[i] = core[i] & passable[i];
-    } else {
-      floodFillMask(passable, width, height, seedX, seedY, filled);
-    }
-  } else {
-    floodFillMask(passable, width, height, seedX, seedY, filled);
-  }
-  if (radius > 0) {
-    // 闭运算（先膨胀后腐蚀）：把区域内部两侧都已填色、宽度不超过 2×radius 的线条（辅助线、排线、硬线）一并填满，
-    // 得到整块实心区域；外轮廓两侧只有一侧填色，腐蚀会把它还原，不会漏到相邻区域
-    dilateBinaryMask(filled, width, height, radius, passable, scratch);
-    erodeBinaryMask(passable, width, height, radius, filled, scratch);
-  }
-  let count = 0;
-  for (let i = 0; i < total; i++) {
-    if (useDarkMaterial && hardLine[i]) filled[i] = 0;
-    count += filled[i];
-  }
-  return { mask: filled, count };
 }
 
 function extractLightboxLinePixels(image, strength, cleanup) {
@@ -10766,70 +10628,85 @@ document.getElementById("lightboxLineArtBtn").addEventListener("click", () => {
   }
 });
 
-function buildLightboxFillLayer(mask, source, seed, color) {
+function buildLightboxFillLayer(mask, source, color, materialSeed = null) {
   const { width, height, data } = source;
   const layer = document.createElement("canvas");
   layer.width = width;
   layer.height = height;
   const context = layer.getContext("2d");
   const image = context.createImageData(width, height);
-  const [r, g, b] = parseHexColor(color);
+  const rgb = parseHexColor(color);
   const pixels = image.data;
-  const seedOffset = (seed.y * width + seed.x) * 4;
-  const luminance = p => (data[p] * 54 + data[p + 1] * 183 + data[p + 2] * 19) / 256;
-  const seedLuma = luminance(seedOffset);
+  if (materialSeed) {
+    const luma = p => (54 * data[p] + 183 * data[p + 1] + 19 * data[p + 2]) / 256;
+    const anchor = luma((materialSeed.y * width + materialSeed.x) * 4);
+    for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
+      if (!mask[i]) continue;
+      const delta = luma(p) - anchor;
+      for (let c = 0; c < 3; c++) {
+        pixels[p + c] = delta < 0 ? rgb[c] * (1 + delta / Math.max(1, anchor))
+          : rgb[c] + (255 - rgb[c]) * delta / Math.max(1, 255 - anchor);
+      }
+      pixels[p + 3] = data[p + 3];
+    }
+    context.putImageData(image, 0, 0);
+    return { layer, inkLayer: null };
+  }
+  const inkLayer = document.createElement("canvas");
+  inkLayer.width = width;
+  inkLayer.height = height;
+  const inkContext = inkLayer.getContext("2d");
+  const inkImage = inkContext.createImageData(width, height);
   for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
     if (!mask[i]) continue;
-    const delta = data[seedOffset + 3] && data[p + 3] ? luminance(p) - seedLuma : 0;
-    const shade = delta < 0 ? delta / Math.max(1, seedLuma) : 0;
-    const highlight = delta > 0 ? delta / Math.max(1, 255 - seedLuma) : 0;
-    pixels[p] = r * (1 + shade) + (255 - r) * highlight;
-    pixels[p + 1] = g * (1 + shade) + (255 - g) * highlight;
-    pixels[p + 2] = b * (1 + shade) + (255 - b) * highlight;
-    pixels[p + 3] = 255;
+    writeSketchFillPixel(pixels, data, p, rgb, false);
+    writeSketchFillPixel(inkImage.data, data, p, rgb, true);
+    pixels[p + 3] = inkImage.data[p + 3] = 255;
   }
   context.putImageData(image, 0, 0);
-  const seedLight = Math.max(data[seedOffset], data[seedOffset + 1], data[seedOffset + 2]);
-  let hasInk = false;
-  for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
-    if (!mask[i] || data[p + 3] < 128) continue;
-    const light = Math.max(data[p], data[p + 1], data[p + 2]);
-    const dark = Math.min(data[p], data[p + 1], data[p + 2]);
-    if (light > 96 || light - dark > 24 || seedLight - light < 48) continue;
-    const strength = (1 - light / 255);
-    pixels[p] = Math.round(pixels[p] * (1 - strength) + data[p] * strength);
-    pixels[p + 1] = Math.round(pixels[p + 1] * (1 - strength) + data[p + 1] * strength);
-    pixels[p + 2] = Math.round(pixels[p + 2] * (1 - strength) + data[p + 2] * strength);
-    hasInk = true;
+  inkContext.putImageData(inkImage, 0, 0);
+  return { layer, inkLayer };
+}
+
+function lightboxSketchMask(source, seed, tolerance, lineWidth, preprocess) {
+  const point = preprocess ? findSketchInteriorPoint(source, seed.x, seed.y) : seed;
+  if (!point) return null;
+  const { mask, count } = computeLightboxFillMask(source, point.x, point.y, { tolerance, lineWidth, sketch: true });
+  if (!count) return null;
+  if (preprocess) {
+    const span = Math.max(8, Math.min(24, Math.round(Math.min(source.width, source.height) / 45)));
+    suppressSketchPinholeRegions(mask, source.width, source.height, span, span * 6);
   }
-  if (hasInk) {
-    const inkLayer = document.createElement("canvas");
-    inkLayer.width = width;
-    inkLayer.height = height;
-    inkLayer.getContext("2d").putImageData(image, 0, 0);
-    return { layer, inkLayer };
-  }
-  return { layer, inkLayer: null };
+  return mask;
 }
 
 async function applyLightboxFillAt(point) {
   if (lightboxFillBusy) return;
+  commitLightboxLastFill();
   const canvas = els.lightboxPaintCanvas;
   const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(point.x)));
   const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(point.y)));
+  const session = lightboxFillActions;
   lightboxFillBusy = true;
   canvas.style.cursor = "progress";
   // 让出一次事件循环以便忙碌光标有机会绘制；不用 requestAnimationFrame——嵌入式 WebView 会把帧节流到秒级
   await new Promise(resolve => setTimeout(resolve, 0));
   try {
     if (!lightboxPainting || lightboxPaintMode !== "fill") return;
-    const source = lightboxFillSourceImageData();
+    if (session !== lightboxFillActions) return;
+    const material = $("lightboxFillMode").value === "material";
+    const source = lightboxFillSourceImageData(!material);
+    const preprocess = !material && $("lightboxSketchPrepare").checked;
+    const selectionSource = preprocess ? prepareSketchSelection(source) : source;
     const color = els.lightboxPaintColor.value;
-    const { tolerance, lineWidth } = lightboxFillSettings;
-    const { mask, count } = computeLightboxFillMask(source, x, y, { tolerance, lineWidth });
-    if (count <= 0) return;
+    const { sketchTolerance, lineWidth } = lightboxFillSettings;
+    const tolerance = material ? 65 : sketchTolerance;
     const seed = { x, y };
-    const action = { kind: "fill", seed, color, tolerance, lineWidth, ...buildLightboxFillLayer(mask, source, seed, color), source, mask };
+    const mask = material ? selectMaterialRegion(source, x, y, { tolerance }).mask
+      : lightboxSketchMask(selectionSource, seed, tolerance, lineWidth, preprocess);
+    if (!mask?.some(Boolean)) return;
+    const action = { kind: "fill", seed, color, tolerance, lineWidth, ...buildLightboxFillLayer(mask, source, color, material ? seed : null),
+      source, selectionSource, mask, preprocess, material };
     lightboxFillActions.push(action);
     markLightboxFillLayerDirty();
     pushLightboxEditUndo(() => {
@@ -10850,8 +10727,10 @@ async function applyLightboxFillAt(point) {
     console.error("[图片编辑] 填色失败", { x, y, message: error.message });
     toast(`填色失败：${error.message || "无法读取图片像素"}`);
   } finally {
-    lightboxFillBusy = false;
-    canvas.style.cursor = lightboxPaintMode === "fill" ? "crosshair" : "";
+    if (session === lightboxFillActions) {
+      lightboxFillBusy = false;
+      canvas.style.cursor = lightboxPaintMode === "fill" ? "crosshair" : "";
+    }
   }
 }
 
@@ -10868,19 +10747,32 @@ function scheduleLightboxFillReapply() {
 function reapplyLightboxLastFill() {
   const action = lightboxLastFill;
   if (!action || !action.source || !lightboxFillActions.includes(action)) return;
-  // 只有容差/忽略细线会实时重算上一次填色的范围；颜色在点击时即定格，之后改颜色只影响下一笔
+  const color = els.lightboxPaintColor.value;
   const tolerance = Number(els.lightboxFillTolerance.value);
   const lineWidth = Number(els.lightboxFillLineWidth.value);
-  if (tolerance === action.tolerance && lineWidth === action.lineWidth) return;
-  action.mask = computeLightboxFillMask(action.source, action.seed.x, action.seed.y, { tolerance, lineWidth }).mask;
+  const selectionChanged = tolerance !== action.tolerance || lineWidth !== action.lineWidth;
+  if (!selectionChanged && color === action.color) return;
+  if (selectionChanged) {
+    action.mask = action.material
+      ? selectMaterialRegion(action.source, action.seed.x, action.seed.y, { tolerance }).mask
+      : lightboxSketchMask(action.selectionSource, action.seed, tolerance, lineWidth, action.preprocess)
+        || new Uint8Array(action.source.width * action.source.height);
+  }
+  action.color = color;
   action.tolerance = tolerance;
   action.lineWidth = lineWidth;
-  Object.assign(action, buildLightboxFillLayer(action.mask, action.source, action.seed, action.color));
+  Object.assign(action, buildLightboxFillLayer(action.mask, action.source, action.color, action.material ? action.seed : null));
   markLightboxFillLayerDirty();
   renderLightboxPaintComposite();
 }
 
+$("lightboxFillMode").onchange = () => {
+  commitLightboxLastFill();
+  syncLightboxFillControls();
+};
 els.lightboxPaintFill.onclick = () => setLightboxPaintMode("fill");
+$("lightboxColorBrush").onclick = () => setLightboxPaintMode("color-brush");
+els.lightboxPaintColor.addEventListener("input", scheduleLightboxFillReapply);
 els.lightboxFillTolerance.addEventListener("input", () => {
   els.lightboxFillToleranceValue.textContent = String(els.lightboxFillTolerance.value);
   scheduleLightboxFillReapply();
@@ -11080,6 +10972,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "ArrowRight") { ev.preventDefault(); lightboxNext(); }
 });
 window.addEventListener("resize", updateLightboxPaintDisplaySize);
+window.addEventListener("resize", syncLightboxPaletteTop);
 
 async function setComposerImage(file) {
   if (!file) return;
@@ -11615,11 +11508,7 @@ window.addEventListener("copy", ev => {
   if (ev.target.closest?.(".canvas-annotation")) return; // 标注编辑中的复制走原生行为
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
-  copySelection(false);
-  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
-  ev.clipboardData.setData("text/plain", "");
-  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
-  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
+  void copySelection(ev);
 });
 
 window.addEventListener("paste", async ev => {
@@ -11649,8 +11538,9 @@ window.addEventListener("paste", async ev => {
   const crossCopy = decodeCanvasflowNodesHtml(data?.getData("text/html"));
   if (crossCopy && (crossCopy.nodes.length || crossCopy.edges.length)) {
     ev.preventDefault();
-    state.clipboard = crossCopy; // 落地到本实例，右键"粘贴节点"与重复 Ctrl+V 继续可用
-    pasteNodes(crossCopy);
+    if (!crossCopy.copyId || crossCopy.copyId !== state.clipboard?.copyId) state.clipboard = crossCopy;
+    pasteNodes(state.clipboard);
+    if (desktop) scheduleDesktopAssetMigration();
     return;
   }
   if (hasExternalContent && await createNodeFromClipboard(ev)) {
@@ -12091,16 +11981,12 @@ window.addEventListener("pagehide", () => {
   }
 });
 
-window.addEventListener("cut", ev => {
+window.addEventListener("cut", async ev => {
   if (ev.target.matches("textarea,input,select") || !state.selected.size || !ev.clipboardData) return;
   ev.preventDefault();
   const ids = new Set(state.selected);
-  copySelection(false);
-  ev.clipboardData.setData("application/x-canvasflow-nodes", "1");
-  ev.clipboardData.setData("text/plain", "");
-  const payloadHtml = encodeCanvasflowNodesHtml(state.clipboard);
-  if (payloadHtml) ev.clipboardData.setData("text/html", payloadHtml);
-  deleteNodes(ids);
+  const pageId = state.activePageId;
+  if (await copySelection(ev) && state.activePageId === pageId) deleteNodes(ids);
 });
 
 function loadPagesFromStorage(savedState = null) {
@@ -12829,7 +12715,7 @@ async function dataUrlToThumbnailDataUrl(dataUrl, maxSize = 420) {
   return fileToThumbnailDataUrl(await response.blob(), maxSize);
 }
 
-async function externalizeImageField(holder, field, assetField, fallbackName) {
+async function externalizeImageField(holder, field, assetField, fallbackName, exportAssetId) {
   const dataUrl = holder?.[field];
   // Keep vector previews intact through saves and reloads.
   if (field === "image" && holder.mime === "image/svg+xml" && dataUrl?.startsWith("data:image/svg+xml;base64,")) return false;
@@ -12842,8 +12728,11 @@ async function externalizeImageField(holder, field, assetField, fallbackName) {
   const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || holder.mime || "image/png";
   const generated = field === "generatedImage" || field === "result" || holder.aiSourceNodeId || holder.angleSourceNodeId;
   const projectName = generated ? (readGenerationMetadataFromPng(dataUrl)?.["CanvasFlow.Project"] || currentPage()?.name || "项目") : "";
-  const stored = await desktop.storeImage(dataUrl, holder.fileName || fallbackName, mime, generated ? "generated" : "originals", projectName);
-  const assetId = stored.id || stored.Id || "";
+  let assetId = exportAssetId;
+  if (!assetId) {
+    const stored = await desktop.storeImage(dataUrl, holder.fileName || fallbackName, mime, generated ? "generated" : "originals", projectName);
+    assetId = stored.id || stored.Id || "";
+  }
   if (!assetId) throw new Error("桌面素材仓库没有返回素材编号");
   holder[assetField] = assetId;
   holder[field] = await dataUrlToThumbnailDataUrl(dataUrl);
@@ -13725,6 +13614,36 @@ els.zipExportToggle.onchange = () => {
   pushHistory();
 };
 
+const clearOriginalCacheBtn = document.querySelector("#clearOriginalCacheBtn");
+if (window.canvasflowDesktop?.clearOriginalCache) {
+  document.querySelector("#originalCacheCard").classList.remove("hidden");
+  clearOriginalCacheBtn.onclick = async () => {
+    clearOriginalCacheBtn.disabled = true;
+    try {
+      saveCurrentPage();
+      const ids = new Set();
+      const seen = new WeakSet();
+      const pending = [state.pages, state.history, state.future, state.graphStack, state.clipboard, globalLibrary];
+      while (pending.length) {
+        const value = pending.pop();
+        if (typeof value === "string" && /^[a-f0-9]{64}$/i.test(value)) {
+          ids.add(value.toLowerCase());
+        } else if (value && typeof value === "object" && !seen.has(value)) {
+          seen.add(value);
+          for (const child of Object.values(value)) pending.push(child);
+        }
+      }
+      const { deleted, failed } = await window.canvasflowDesktop.clearOriginalCache([...ids]);
+      toast(failed ? `已清理 ${deleted} 张参考图，${failed} 张清理失败` :
+        deleted ? `已清理 ${deleted} 张参考图` : "没有符合条件的参考图缓存");
+    } catch (error) {
+      toast(`清理缓存失败：${error.message}`);
+    } finally {
+      clearOriginalCacheBtn.disabled = false;
+    }
+  };
+}
+
 els.projectExportFolderToggle.onchange = () => {
   state.settings.projectExportFolder = els.projectExportFolderToggle.checked;
   pushHistory();
@@ -14238,36 +14157,36 @@ els.loadJson.onchange = async () => {
   els.loadJson.value = "";
 };
 
-async function materializeNodeAssetsForPortableSave(nodes) {
+async function materializeNodeAssetsForPortableSave(nodes, readImage = materializeReferenceImage) {
   for (const node of nodes || []) {
     if (node.imageAssetId) {
-      node.image = await materializeReferenceImage({ assetId: node.imageAssetId, image: node.image });
+      node.image = await readImage({ assetId: node.imageAssetId, image: node.image });
       delete node.imageAssetId;
     }
     if (node.generatedAssetId) {
-      node.generatedImage = await materializeReferenceImage({ assetId: node.generatedAssetId, image: node.generatedImage });
+      node.generatedImage = await readImage({ assetId: node.generatedAssetId, image: node.generatedImage });
       delete node.generatedAssetId;
     }
     for (const image of node.images || []) {
       if (image.assetId) {
-        image.image = await materializeReferenceImage(image);
+        image.image = await readImage(image);
         delete image.assetId;
       }
     }
     for (const attachment of node.chatAttachments || []) {
       if (attachment.assetId) {
-        attachment.image = await materializeReferenceImage(attachment);
+        attachment.image = await readImage(attachment);
         delete attachment.assetId;
       }
     }
     for (const task of node.batchTasks || []) {
       if (task.resultAssetId) {
-        task.result = await materializeReferenceImage({ assetId: task.resultAssetId, image: task.result });
+        task.result = await readImage({ assetId: task.resultAssetId, image: task.result });
         delete task.resultAssetId;
       }
     }
-    if (Array.isArray(node.items)) await materializeNodeAssetsForPortableSave(node.items);
-    if (Array.isArray(node.subgraph?.nodes)) await materializeNodeAssetsForPortableSave(node.subgraph.nodes);
+    if (Array.isArray(node.items)) await materializeNodeAssetsForPortableSave(node.items, readImage);
+    if (Array.isArray(node.subgraph?.nodes)) await materializeNodeAssetsForPortableSave(node.subgraph.nodes, readImage);
   }
 }
 
@@ -15346,8 +15265,8 @@ function paletteMarkup(node) {
         ["cards", "卡片", "M3 3h4v4H3z M9 3h4v4H9z M3 9h4v4H3z M9 9h4v4H9z"],
       ].map(([key, label, path]) => `<button type="button" data-palette-action="layout" data-layout="${key}" aria-label="${label}" title="${label}" aria-pressed="${key === widget.layout}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor"/></svg></button>`).join("")}</div>
     </header>
-    <div class="quick-palette-heading"><select data-palette-action="select" aria-label="选择调色盘"><option value="">选择调色盘</option>${globalLibrary.palettes.map(item =>
-      `<option value="${escapeHtml(item.id)}" ${item.id === palette?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>
+    <div class="quick-palette-heading"><input class="palette-name-input" data-palette-action="name" list="palette-names-${escapeHtml(owner)}" value="${escapeHtml(palette?.name || "")}" placeholder="选择或输入名称" aria-label="选择调色盘，输入名称可重命名或新建" autocomplete="off"><datalist id="palette-names-${escapeHtml(owner)}">${globalLibrary.palettes.map(item =>
+      `<option value="${escapeHtml(item.name)}">`).join("")}</datalist>
       <button type="button" class="palette-widget-icon" data-palette-action="copy" aria-label="复制全套 HEX" title="复制全套 HEX"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1" fill="none" stroke="currentColor"/><path d="M3 10V4a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor"/></svg></button>
       <button type="button" class="palette-widget-icon" data-palette-action="delete" aria-label="删除当前方案" title="删除当前方案" ${palette ? "" : "disabled"}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8h5.6l.7-8M7 7v3m2-3v3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       ${node ? '<button data-palette-action="extract">提取颜色</button>' : ""}</div>
@@ -15362,16 +15281,18 @@ function paletteMarkup(node) {
       <button type="button" data-palette-action="generate">按条件生成配色条</button></section>
     <div class="palette-widget-results" data-layout="${widget.layout}">${widgetResults(widget, !node)}</div>
     <section class="palette-widget-details"><div class="palette-widget-head"><strong>颜色详情</strong></div><div class="palette-widget-inspector" aria-live="polite">${widgetInspector(widget.selected)}</div></section>
-    ${node ? `<details class="quick-palette-manage"${palette ? "" : " open"}><summary>管理方案</summary>
-      <div class="quick-palette-row"><input data-palette-name aria-label="调色盘名称" placeholder="调色盘名称" value="${escapeHtml(palette?.name || "")}"><button data-palette-action="new">新建</button></div>
-      ${palette ? '<div class="quick-palette-row"><button data-palette-action="rename">重命名</button></div>' : ""}</details>` : ""}
   </div>`;
 }
 
 function renderEditorPalette() {
   const panel = document.getElementById("editorPalette");
   if (!lightboxPainting) return;
-  panel.classList.remove("hidden");
+  $("lightboxLeftTools").classList.remove("hidden");
+  // 打开编辑时默认选中一个调色盘（上次用的失效则取第一个有颜色的，再退而取第一个），免手动选择
+  if (!paletteFor(null) && globalLibrary.palettes.length) {
+    const withColors = globalLibrary.palettes.find(item => item.colors.length);
+    editorPaletteId = (withColors || globalLibrary.palettes[0]).id;
+  }
   panel.querySelector(".quick-palette-body").innerHTML = paletteMarkup();
 }
 
@@ -15395,6 +15316,11 @@ function choosePalette(node, id, select) {
     editorPaletteId = id;
     renderEditorPalette();
   }
+}
+
+function findPaletteByName(name) {
+  const key = String(name || "").trim().toLowerCase();
+  return key ? globalLibrary.palettes.find(item => item.name.trim().toLowerCase() === key) || null : null;
 }
 
 function paletteHsvHex([h, s, v]) {
@@ -15447,6 +15373,26 @@ function extractPaletteColors(pixels, mask, limit = 8) {
   }));
 }
 
+// 调用抠图拓展（自动抠图 U²-Net 快速 / 本地 BiRefNet 通用）生成透明背景主体图，供参考图取色只提取产品颜色
+async function runExtensionMatting(dataUrl, extensionId) {
+  const route = `/api/extensions/${encodeURIComponent(extensionId)}/run`;
+  const init = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      images: [{ name: "001.png", data: dataUrl.split(",")[1] }],
+      params: { background: "透明" },
+    }),
+  };
+  const response = desktop?.apiRequest
+    ? await apiFetch(route, init)
+    : await fetch(extensionSettings().serviceUrl.replace(/\/+$/, "") + route, init);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const result = await response.json();
+  if (!result.ok || !result.images?.[0]?.data) throw new Error(result.error || "没有返回抠图结果");
+  return `data:image/png;base64,${result.images[0].data}`;
+}
+
 async function openPaletteExtraction(node, onPick) {
   const collected = collectUpstreamForAI(node.id);
   const ref = collected.images[0] || collected.groupImages[0];
@@ -15457,18 +15403,32 @@ async function openPaletteExtraction(node, onPick) {
   image.src = source;
   await image.decode();
   if (findNode(node.id) !== node || document.querySelector(".palette-mask-dialog")) return;
+  // 抠图拓展可用性：已安装且未停用时提供「自动抠图去背景」（优先 U²-Net 快速，其次 BiRefNet 通用）
+  let mattingId = "";
+  await fetchToolExtensions();
+  if (toolExtensionCache.online) {
+    const cfg = extensionSettings();
+    const ids = toolExtensionCache.list.filter(ext => ext?.id && !cfg.disabled.includes(ext.id)).map(ext => ext.id);
+    mattingId = ids.includes("auto-matting-u2net") ? "auto-matting-u2net"
+      : ids.includes("auto-matting-general") ? "auto-matting-general" : "";
+  }
   const dialog = document.createElement("dialog");
   dialog.className = "palette-mask-dialog";
   dialog.setAttribute("aria-label", "参考图取色");
-  dialog.innerHTML = `<h2>参考图取色</h2><div class="quick-palette-row">
-    <label>画笔 <select aria-label="蒙版工具"><option value="exclude">排除背景</option><option value="restore">恢复取色</option></select></label>
-    <label>大小 <input type="range" min="8" max="96" value="32" aria-label="蒙版画笔大小"></label>
-    <button data-mask="clear">清空蒙版</button></div>
+  dialog.innerHTML = `<h2>参考图取色</h2>
+    ${mattingId ? '<div class="quick-palette-row"><label class="lightbox-check"><input type="checkbox" data-mask="matting" checked>自动抠图去背景</label><span class="palette-mask-matting-hint">只提取主体颜色，首次运行需加载模型</span></div>' : ""}
+    <div class="quick-palette-row">
+      <label>画笔 <select data-mask-tool aria-label="蒙版工具"><option value="exclude">排除背景</option><option value="restore">恢复取色</option></select></label>
+      <label>大小 <input data-mask-size type="range" min="8" max="96" value="32" aria-label="蒙版画笔大小"></label>
+      <button data-mask="clear">清空蒙版</button></div>
     <div class="palette-mask-surface"><canvas aria-label="参考图"></canvas><canvas aria-label="取色蒙版"></canvas></div>
-    <p role="status">涂抹要排除的区域，再提取颜色。</p><div class="palette-mask-result"></div>
-    <div class="quick-palette-row"><input aria-label="新调色盘名称" placeholder="新调色盘名称">
-    <button data-mask="sample">提取颜色</button><button data-mask="save" disabled>保存为新方案</button>
-    <button data-mask="replace" disabled>替换当前方案</button><button data-mask="close">关闭</button></div>`;
+    <p role="status">点击「提取颜色」取色，再点击色块划线排除不需要的颜色。</p><div class="palette-mask-result"></div>
+    <div class="palette-mask-actions hidden"><button data-mask="add" hidden>加入当前方案</button><button data-mask="replace" hidden>替换当前方案</button><button data-mask="save" hidden>保存为新方案</button></div>
+    <div class="quick-palette-row palette-dialog-heading"><input class="palette-name-input" data-mask="name" list="palette-mask-names" value="${escapeHtml(paletteFor(node)?.name || "")}" placeholder="选择或输入方案名称" aria-label="选择调色盘方案，输入名称可重命名或新建" autocomplete="off"><datalist id="palette-mask-names">${globalLibrary.palettes.map(item =>
+      `<option value="${escapeHtml(item.name)}">`).join("")}</datalist>
+    <button type="button" class="palette-widget-icon" data-mask="copy" aria-label="复制当前方案 HEX" title="复制当前方案 HEX" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1" fill="none" stroke="currentColor"/><path d="M3 10V4a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor"/></svg></button>
+    <button type="button" class="palette-widget-icon" data-mask="delete" aria-label="删除当前方案" title="删除当前方案" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8h5.6l.7-8M7 7v3m2-3v3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button data-mask="sample">提取颜色</button><button data-mask="close">关闭</button></div>`;
   const [base, mask] = dialog.querySelectorAll("canvas");
   const scale = Math.min(1, 512 / Math.max(image.naturalWidth, image.naturalHeight));
   base.width = mask.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -15476,7 +15436,7 @@ async function openPaletteExtraction(node, onPick) {
   const sourceContext = base.getContext("2d", { willReadFrequently: true });
   const maskContext = mask.getContext("2d", { willReadFrequently: true });
   sourceContext.drawImage(image, 0, 0, base.width, base.height);
-  const pixels = sourceContext.getImageData(0, 0, base.width, base.height).data;
+  let pixels = sourceContext.getImageData(0, 0, base.width, base.height).data;
   if (onPick) {
     dialog.querySelector("h2").textContent = "参考图吸管";
     for (const row of dialog.querySelectorAll(".quick-palette-row")) row.remove();
@@ -15496,23 +15456,93 @@ async function openPaletteExtraction(node, onPick) {
     dialog.showModal();
     return;
   }
-  let colors = [], previous = null, pointer = null;
+  let colors = [], excluded = new Set();
   const status = dialog.querySelector("[role=status]");
+  const result = dialog.querySelector(".palette-mask-result");
+  const sample = dialog.querySelector('[data-mask="sample"]');
   const save = dialog.querySelector('[data-mask="save"]');
   const replace = dialog.querySelector('[data-mask="replace"]');
-  function invalidate() {
-    colors = [];
-    save.disabled = replace.disabled = true;
-    dialog.querySelector(".palette-mask-result").replaceChildren();
-    status.textContent = "蒙版已更新，可以重新提取颜色。";
+  const nameInput = dialog.querySelector('[data-mask="name"]');
+  const copyHex = dialog.querySelector('[data-mask="copy"]');
+  const removePaletteBtn = dialog.querySelector('[data-mask="delete"]');
+  const actionsRow = dialog.querySelector(".palette-mask-actions");
+  const add = dialog.querySelector('[data-mask="add"]');
+  const mattingToggle = dialog.querySelector('[data-mask="matting"]');
+  const hint = mattingToggle
+    ? "点击「提取颜色」取色；涂抹图片可排除区域，点击色块划线可排除颜色。"
+    : "点击「提取颜色」取色，再点击色块划线排除不需要的颜色。";
+  let cutoutImage = null, mattingBusy = false, mattingStarted = false, showingCutout = false, previous = null, pointer = null;
+  // 名称框状态：精确匹配方案 = 选中（可加入/替换，复制/删除可用）；未匹配 = 新方案名（保存为新方案）
+  let committedPalette = paletteFor(node) || null;
+  function matchedPalette() {
+    return findPaletteByName(nameInput.value);
   }
-  function paint(event) {
+  function syncDialogDatalist() {
+    dialog.querySelector("#palette-mask-names").innerHTML = globalLibrary.palettes.map(item => `<option value="${escapeHtml(item.name)}">`).join("");
+  }
+  function syncActionButtons(keptCount = colors.filter(color => !excluded.has(color.hex)).length) {
+    const matched = matchedPalette();
+    sample.disabled = mattingBusy;
+    copyHex.disabled = mattingBusy || !matched;
+    removePaletteBtn.disabled = mattingBusy || !matched;
+    const showActions = keptCount > 0 && !mattingBusy;
+    add.hidden = !showActions || !matched;
+    replace.hidden = !showActions || !matched;
+    save.hidden = !showActions || Boolean(matched);
+    actionsRow.classList.toggle("hidden", !showActions);
+  }
+  function invalidate(text = hint) {
+    colors = [];
+    excluded.clear();
+    maskContext.clearRect(0, 0, mask.width, mask.height);
+    result.replaceChildren();
+    syncActionButtons(0);
+    status.textContent = text;
+  }
+  function renderMaskResult() {
+    const kept = colors.filter(color => !excluded.has(color.hex));
+    status.textContent = !colors.length ? "没有可取色像素，请换一张参考图。"
+      : kept.length ? `提取到 ${colors.length} 个颜色，点击色块划线排除不需要的（保留 ${kept.length} 个）`
+      : "全部颜色已划线排除，点击色块可恢复。";
+    result.innerHTML = colors.map(color => {
+      const off = excluded.has(color.hex);
+      return `<button type="button" class="quick-palette-chip palette-mask-chip${off ? " is-excluded" : ""}" data-hex="${color.hex}" aria-pressed="${String(!off)}" title="${off ? "点击恢复该颜色" : "点击划线排除该颜色"}"><span style="--swatch-color:${color.hex}"></span>${color.hex} · ${(color.share * 100).toFixed(1)}%</button>`;
+    }).join("");
+    syncActionButtons(kept.length);
+  }
+  nameInput.addEventListener("input", () => syncActionButtons());
+  nameInput.addEventListener("change", () => {
+    const name = nameInput.value.trim();
+    const matched = findPaletteByName(name);
+    if (matched) {
+      committedPalette = matched;
+    } else if (name && committedPalette) {
+      committedPalette.name = name; // 对已选方案改文字 = 输入即重命名
+      refreshPalettes();
+      syncDialogDatalist();
+    } else {
+      committedPalette = null;
+    }
+    nameInput.value = committedPalette ? committedPalette.name : name;
+    syncActionButtons();
+  });
+  function redrawBase(img) {
+    const imgScale = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+    base.width = mask.width = Math.max(1, Math.round(img.naturalWidth * imgScale));
+    base.height = mask.height = Math.max(1, Math.round(img.naturalHeight * imgScale));
+    sourceContext.drawImage(img, 0, 0, base.width, base.height);
+    pixels = sourceContext.getImageData(0, 0, base.width, base.height).data;
+    showingCutout = Boolean(cutoutImage) && img === cutoutImage;
+    invalidate();
+  }
+  // 涂抹排除蒙版（手动微调）：默认排除画笔涂抹处，可切换为恢复取色
+  function paintMask(event) {
     const rect = mask.getBoundingClientRect();
     const point = [(event.clientX - rect.left) * mask.width / rect.width, (event.clientY - rect.top) * mask.height / rect.height];
     const from = previous || point;
-    maskContext.globalCompositeOperation = dialog.querySelector("select").value === "restore" ? "destination-out" : "source-over";
+    maskContext.globalCompositeOperation = dialog.querySelector("[data-mask-tool]").value === "restore" ? "destination-out" : "source-over";
     maskContext.lineCap = "round";
-    maskContext.lineWidth = Number(dialog.querySelector('input[type="range"]').value);
+    maskContext.lineWidth = Number(dialog.querySelector("[data-mask-size]").value);
     maskContext.strokeStyle = maskContext.fillStyle = getComputedStyle(dialog).getPropertyValue("--danger").trim();
     maskContext.beginPath();
     if (previous) {
@@ -15524,36 +15554,103 @@ async function openPaletteExtraction(node, onPick) {
   }
   mask.addEventListener("pointerdown", event => {
     if (event.button !== 0 || pointer !== null) return;
-    invalidate();
+    invalidate("蒙版已更新，可以重新提取颜色。");
     pointer = event.pointerId;
     mask.setPointerCapture(pointer);
-    paint(event);
+    paintMask(event);
   });
-  mask.addEventListener("pointermove", event => { if (event.pointerId === pointer) paint(event); });
+  mask.addEventListener("pointermove", event => { if (event.pointerId === pointer) paintMask(event); });
   mask.addEventListener("lostpointercapture", () => { pointer = previous = null; });
+  // 自动抠图：拓展可用时默认执行，把产品抠出来只提取主体颜色；不需要可取消勾选
+  async function runMatting() {
+    if (mattingStarted || !mattingId) return;
+    mattingStarted = true;
+    mattingBusy = true;
+    status.textContent = "正在调用抠图拓展去除背景（首次运行需加载模型）…";
+    syncActionButtons(colors.filter(color => !excluded.has(color.hex)).length);
+    try {
+      const cutout = new Image();
+      cutout.src = await runExtensionMatting(source, mattingId);
+      await cutout.decode();
+      cutoutImage = cutout;
+    } catch (error) {
+      console.warn("[取色] 自动抠图失败", error);
+      toast(`自动抠图失败：${error.message}，已改用原图提取`);
+      mattingToggle.checked = false;
+    } finally {
+      mattingBusy = false;
+      if (cutoutImage && mattingToggle.checked) redrawBase(cutoutImage);
+      else {
+        status.textContent = hint;
+        syncActionButtons(colors.filter(color => !excluded.has(color.hex)).length);
+      }
+    }
+  }
+  mattingToggle?.addEventListener("change", () => {
+    const wantCutout = mattingToggle.checked;
+    if (wantCutout === showingCutout) return;
+    if (wantCutout && !cutoutImage) { runMatting(); return; }
+    redrawBase(wantCutout ? cutoutImage : image);
+  });
+  status.textContent = hint;
+  if (mattingToggle?.checked) runMatting();
   dialog.addEventListener("click", event => {
+    const chip = event.target.closest(".palette-mask-chip");
+    if (chip) {
+      const hex = chip.dataset.hex;
+      if (excluded.has(hex)) excluded.delete(hex); else excluded.add(hex);
+      renderMaskResult();
+      return;
+    }
     const action = event.target.closest("[data-mask]")?.dataset.mask;
     if (action === "close") dialog.close();
-    if (action === "clear") { maskContext.clearRect(0, 0, mask.width, mask.height); invalidate(); }
+    if (action === "clear") invalidate();
     if (action === "sample") {
       colors = extractPaletteColors(pixels, maskContext.getImageData(0, 0, mask.width, mask.height).data);
-      status.textContent = colors.length ? `提取到 ${colors.length} 个颜色` : "没有可取色像素，请修整蒙版。";
-      dialog.querySelector(".palette-mask-result").innerHTML = colors.map(color =>
-        `<span class="quick-palette-chip"><span style="--swatch-color:${color.hex}"></span>${color.hex} · ${(color.share * 100).toFixed(1)}%</span>`).join("");
-      save.disabled = !colors.length;
-      replace.disabled = !colors.length || !paletteFor(node);
+      excluded.clear();
+      renderMaskResult();
     }
-    if ((action === "save" || action === "replace") && colors.length && findNode(node.id) === node) {
-      const palette = paletteFor(node);
-      if (action === "replace") {
-        if (!palette) return;
-        palette.colors = colors;
-      } else {
-        const name = dialog.querySelector('input[placeholder]').value.trim() || "参考图调色盘";
-        const id = uid("palette");
-        globalLibrary.palettes.push({ id, name, colors });
-        choosePalette(node, id);
-      }
+    const kept = colors.filter(color => !excluded.has(color.hex));
+    const target = matchedPalette();
+    if (action === "copy" && target) {
+      navigator.clipboard.writeText(target.colors.map(color => color.hex).join(", ")).then(() => toast("已复制方案 HEX"), () => toast("复制失败"));
+      return;
+    }
+    if (action === "delete" && target && window.confirm(`删除全局调色盘「${target.name}」？`)) {
+      globalLibrary.palettes = globalLibrary.palettes.filter(item => item !== target);
+      if (paletteFor(node)?.id === target.id) choosePalette(node, "");
+      committedPalette = null;
+      nameInput.value = "";
+      syncDialogDatalist();
+      refreshPalettes();
+      syncActionButtons(kept.length);
+      return;
+    }
+    if (action === "add" && kept.length && target && findNode(node.id) === node) {
+      const existing = new Set(target.colors.map(color => color.hex));
+      const fresh = kept.filter(color => !existing.has(color.hex));
+      if (!fresh.length) { toast("当前方案已包含这些颜色"); return; }
+      target.colors.push(...fresh);
+      editorPaletteId = target.id;
+      choosePalette(node, target.id);
+      refreshPalettes();
+      dialog.close();
+      return;
+    }
+    if (action === "save" && kept.length && !target && findNode(node.id) === node) {
+      const name = nameInput.value.trim() || "参考图调色盘";
+      const id = uid("palette");
+      globalLibrary.palettes.push({ id, name, colors: kept });
+      editorPaletteId = id;
+      choosePalette(node, id);
+      refreshPalettes();
+      dialog.close();
+      return;
+    }
+    if (action === "replace" && kept.length && target && findNode(node.id) === node) {
+      target.colors = kept;
+      editorPaletteId = target.id;
+      choosePalette(node, target.id);
       refreshPalettes();
       dialog.close();
     }
@@ -15561,13 +15658,16 @@ async function openPaletteExtraction(node, onPick) {
   document.body.append(dialog);
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
   dialog.showModal();
+  // 锁定打开时的宽度：提取结果只让面板变高，不变宽
+  dialog.style.width = `${dialog.getBoundingClientRect().width}px`;
 }
 
 function saveWidgetColor(node, widget, hex) {
   let palette = paletteFor(node);
   if (palette?.colors.some(color => color.hex === hex)) return false;
   if (!palette) {
-    palette = { id: uid("palette"), name: "我的配色", colors: [] };
+    palette = { id: uid("palette"), name: (widget.pendingName || "").trim() || "我的配色", colors: [] };
+    widget.pendingName = "";
     globalLibrary.palettes.push(palette);
     choosePalette(node, palette.id);
   }
@@ -15591,8 +15691,26 @@ document.addEventListener("change", event => {
     saveWidgetColor(node, widget, event.target.value.toUpperCase());
     return;
   }
-  if (!event.target.matches('[data-palette-action="select"]')) return;
-  choosePalette(node, event.target.value, event.target);
+  if (!event.target.matches('[data-palette-action="name"]')) return;
+  {
+    // 名称框提交：精确匹配方案 = 选中；对当前方案改文字 = 重命名；全新名称 = 记住，收藏颜色时用作新方案名
+    const name = event.target.value.trim();
+    const matched = findPaletteByName(name);
+    if (matched) {
+      widget.pendingName = "";
+      if (matched !== palette) choosePalette(node, matched.id, event.target);
+    } else if (name && palette) {
+      palette.name = name;
+      widget.pendingName = "";
+      refreshPalettes();
+    } else if (name) {
+      widget.pendingName = name;
+    } else if (palette) {
+      choosePalette(node, "", event.target);
+    } else {
+      widget.pendingName = "";
+    }
+  }
 });
 
 document.addEventListener("click", event => {
@@ -15602,7 +15720,6 @@ document.addEventListener("click", event => {
   const node = root.dataset.paletteOwner === "editor" ? null : findNode(root.dataset.paletteOwner);
   const palette = paletteFor(node);
   const widget = paletteWidget(root.dataset.paletteOwner);
-  const name = root.querySelector("[data-palette-name]")?.value.trim() || "";
   switch (button.dataset.paletteAction) {
     case "generate":
       generateWidgetPalette(widget);
@@ -15630,7 +15747,8 @@ document.addEventListener("click", event => {
         }
         if (!node && lightboxPainting) {
           els.lightboxPaintColor.value = hex;
-          setLightboxPaintMode("fill");
+          if (lightboxPaintMode !== "color-brush") setLightboxPaintMode("fill");
+          scheduleLightboxFillReapply();
         }
         toast(`已取色 ${hex}`);
       };
@@ -15663,7 +15781,8 @@ document.addEventListener("click", event => {
       widget.selected = hex;
       if (!node && lightboxPainting) {
         els.lightboxPaintColor.value = hex;
-        setLightboxPaintMode("fill");
+        if (lightboxPaintMode !== "color-brush") setLightboxPaintMode("fill");
+        scheduleLightboxFillReapply();
       }
       if (button.dataset.paletteAction !== "sample" || !saveWidgetColor(node, widget, hex)) {
         for (const item of root.querySelectorAll("[data-color][aria-pressed]")) item.setAttribute("aria-pressed", String(item.dataset.color === hex));
@@ -15671,16 +15790,6 @@ document.addEventListener("click", event => {
       }
       return;
     }
-    case "new": {
-      const id = uid("palette");
-      globalLibrary.palettes.push({ id, name: name || "未命名调色盘", colors: [] });
-      choosePalette(node, id);
-      break;
-    }
-    case "rename":
-      if (!palette || !name) return;
-      palette.name = name;
-      break;
     case "delete":
       if (!palette || !window.confirm(`删除全局调色盘「${palette.name}」？`)) return;
       globalLibrary.palettes = globalLibrary.palettes.filter(item => item !== palette);
@@ -15703,6 +15812,7 @@ document.getElementById("editorPaletteToggle").addEventListener("click", event =
   const hidden = body.classList.toggle("hidden");
   event.currentTarget.setAttribute("aria-expanded", String(!hidden));
   updateLightboxPaintDisplaySize();
+  syncLightboxPaletteTop();
 });
 document.getElementById("editorPalette").addEventListener("dragstart", event => {
   const button = event.target.closest('button[draggable="true"][data-color]');
@@ -15718,6 +15828,7 @@ els.lightboxPaintCanvas.addEventListener("drop", event => {
   event.stopPropagation();
   const point = paintCanvasPoint(event);
   if (point.x < 0 || point.y < 0 || point.x >= els.lightboxPaintCanvas.width || point.y >= els.lightboxPaintCanvas.height) return;
+  commitLightboxLastFill();
   els.lightboxPaintColor.value = hex;
   setLightboxPaintMode("fill");
   applyLightboxFillAt(point);

@@ -418,6 +418,11 @@
         <section class="settings-card"><h3>生成图片保存</h3><label class="check-row"><input id="projectExportFolderToggle" type="checkbox"><span>以项目名称创建文件夹导出（生成图片保存到 ai_generated\项目名\ 子文件夹）</span></label></section>
         <section class="settings-card"><h3>导出方式</h3><label class="check-row"><input id="zipExportToggle" type="checkbox"><span>导出时打包成 ZIP 下载（关闭则逐个文件保存到导出文件夹）</span></label></section>
         <section class="settings-card"><h3>项目文件夹</h3><div class="project-folder-label">保存位置</div><div id="projectFolderInput" class="project-folder-display" role="status">projects（项目文件夹）</div><div class="export-folder-actions"><button id="chooseProjectFolderBtn" class="primary">修改位置</button><button id="openProjectFolderBtn">打开文件夹</button><button id="copyProjectPathBtn">复制路径</button></div></section>
+        <section id="originalCacheCard" class="settings-card hidden">
+          <h3>参考图缓存</h3>
+          <div class="project-folder-label">清理超过 7 天且没有画布引用的参考原图。</div>
+          <div class="export-folder-actions"><button id="clearOriginalCacheBtn" type="button">清除缓存</button></div>
+        </section>
       </div>
 
         </div>
@@ -489,10 +494,36 @@
   <div id="lightbox" class="lightbox hidden">
     <div class="lightbox-bg"></div>
     <img id="lightboxImg" class="lightbox-img" alt="">
-    <aside id="editorPalette" class="editor-quick-palette hidden" aria-label="调色盘">
-      <button id="editorPaletteToggle" type="button" aria-expanded="true" aria-controls="editorPaletteBody">调色盘</button>
-      <div id="editorPaletteBody" class="quick-palette-body"></div>
-    </aside>
+    <div id="lightboxLeftTools" class="lightbox-left-tools hidden">
+      <aside id="editorPalette" class="editor-quick-palette" aria-label="调色盘">
+        <button id="editorPaletteToggle" type="button" aria-expanded="true" aria-controls="editorPaletteBody">调色盘</button>
+        <div id="editorPaletteBody" class="quick-palette-body"></div>
+      </aside>
+      <div id="lightboxPaletteTools" class="quick-palette" role="group" aria-label="换色工具">
+        <div class="quick-palette-row">
+          <button id="lightboxPaintFill" class="lightbox-icon-btn" type="button" title="上色" aria-label="上色" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 11-7-7-7 7a2 2 0 0 0 0 3l4 4a2 2 0 0 0 3 0l7-7ZM7 3l5 5M4 12h13M22 18a2 2 0 0 1-4 0c0-1 2-3 2-3s2 2 2 3Z"/></svg></button>
+          <button id="lightboxColorBrush" class="lightbox-icon-btn" type="button" title="自由上色笔刷" aria-label="自由上色笔刷" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 14 8-10a2 2 0 0 1 3 3L11 17M10 14c-4-1-5 3-5 4s-1 2-2 2c5 1 8 0 8-3M14 7l3 3"/></svg></button>
+        </div>
+        <div id="lightboxToolColor" class="quick-palette-row hidden"></div>
+        <div id="lightboxFillOptions" class="hidden">
+          <label>上色模式
+            <select id="lightboxFillMode">
+              <option value="sketch">草图上色</option>
+              <option value="material">材质选取（实验）</option>
+            </select>
+          </label>
+          <div id="lightboxFillAdjustment" class="lightbox-toolbar-section hidden" role="group" aria-label="微调当前选区">
+          <label id="lightboxFillToleranceField" title="颜色差异在此范围内的相邻像素视为同一区域">容差 <input id="lightboxFillTolerance" type="range" min="0" max="20" value="5"><span id="lightboxFillToleranceValue" class="lightbox-readout">5</span></label>
+          <label id="lightboxFillLineWidthField" title="区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界">忽略细线 <input id="lightboxFillLineWidth" type="range" min="0" max="12" value="3"><span id="lightboxFillLineWidthValue" class="lightbox-readout">3px</span></label>
+            <button id="lightboxFillAdjustmentDone" type="button">完成微调</button>
+          </div>
+        </div>
+        <div id="lightboxSketchOptions" class="hidden">
+          <label class="lightbox-check"><input id="lightboxSketchPrepare" type="checkbox">草图前处理</label>
+          <label class="lightbox-check"><input id="lightboxFillKeepLines" type="checkbox" checked>保留线稿</label>
+        </div>
+      </div>
+    </div>
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
     <div id="lightboxArrowNote" class="lightbox-arrow-note hidden" role="group" aria-label="箭头说明">
       <textarea id="lightboxArrowText" rows="2" maxlength="500" placeholder="输入箭头说明" aria-label="箭头说明文字"></textarea>
@@ -524,16 +555,9 @@
         <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
-        <button id="lightboxPaintFill" class="lightbox-icon-btn" type="button" title="填色：点击区域填入颜色，可跨过草图细线" aria-label="填色"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></g></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
           <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
-          <div id="lightboxFillAdjustment" class="lightbox-toolbar-section hidden" role="group" aria-label="微调当前选区">
-          <label id="lightboxFillToleranceField" title="颜色差异在此范围内的相邻像素视为同一区域">容差 <input id="lightboxFillTolerance" type="range" min="0" max="100" value="40"><span id="lightboxFillToleranceValue" class="lightbox-readout">40</span></label>
-          <label id="lightboxFillLineWidthField" title="区域内不超过此宽度的线条（排线、辅助线）会被一并填满；更粗的深色实线作为边界">忽略细线 <input id="lightboxFillLineWidth" type="range" min="0" max="12" value="3"><span id="lightboxFillLineWidthValue" class="lightbox-readout">3px</span></label>
-            <button id="lightboxFillAdjustmentDone" type="button">完成微调</button>
-          </div>
-          <label id="lightboxFillKeepLinesField" class="hidden lightbox-check" title="覆盖原色时保留深色线稿；关闭则以实色覆盖填色区域（对全部填色生效）"><input id="lightboxFillKeepLines" type="checkbox" checked>保留线稿</label>
         </div>
       </div>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
@@ -574,6 +598,7 @@
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
+  <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
   <script src="app.js?v=20261105-chatui1"></script>
   <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
 </body>

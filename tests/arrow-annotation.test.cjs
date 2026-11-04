@@ -22,7 +22,7 @@ function fixture(saved = null) {
   }
   const $ = id => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
   const canvas = { width: 800, height: 600, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) };
-  const c = { $, document: { activeElement: null, createElement: element, createTextNode: text => text },
+  const c = { $, ARROW_NOTE_ENABLED: true, document: { activeElement: null, createElement: element, createTextNode: text => text },
     window: { innerWidth: 900, innerHeight: 700, addEventListener() {} },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
     els: { lightbox: element(), lightboxPaintCanvas: canvas, lightboxPaintToolbar: element() },

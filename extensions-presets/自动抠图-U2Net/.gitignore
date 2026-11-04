@@ -1,0 +1,6 @@
+# 运行时产物，随分发 zip 提供，不入库（重建方法见 README）
+runtime/
+input/
+output/
+params.json
+处理日志.log
