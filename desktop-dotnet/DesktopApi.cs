@@ -782,32 +782,37 @@ internal sealed class DesktopApi
     // 桌面端直接承担原 扩展服务.bat 的扫描与执行职责，页面经 apiFetch 调用，无需手动启动服务；
     // 调用约定遵循《拓展脚本规范》：清空 input/ 写入图片 → 以拓展目录为工作目录运行入口脚本 → 收集 output/。
 
-    private string ExtensionsFolder
+    private IEnumerable<string> ExtensionFolders()
     {
-        get
-        {
-            var presets = Path.Combine(_root, "extensions-presets");
-            return Directory.Exists(presets) ? presets : Path.Combine(_root, "拓展");
-        }
+        yield return Path.Combine(_root, "拓展");
+        yield return Path.Combine(_root, "extensions-presets");
+        yield return Path.Combine(_root, "app", "拓展");
+        yield return Path.Combine(_root, "app", "extensions-presets");
     }
+
+    private static IEnumerable<string> ExtensionDirectories(IEnumerable<string> folders) =>
+        folders.Where(Directory.Exists).SelectMany(folder =>
+            Directory.EnumerateDirectories(folder).OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
 
     private DesktopApiResponse ListExtensions()
     {
         var extensions = new JsonArray();
         var invalid = new JsonArray();
-        var folder = ExtensionsFolder;
-        if (Directory.Exists(folder))
+        var folders = ExtensionFolders().Where(Directory.Exists).ToArray();
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in ExtensionDirectories(folders))
         {
-            foreach (var dir in Directory.EnumerateDirectories(folder).OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            try
             {
-                try { extensions.Add(ReadExtensionManifest(dir)); }
-                catch (Exception error)
-                {
-                    invalid.Add(new JsonObject { ["id"] = Path.GetFileName(dir), ["name"] = Path.GetFileName(dir), ["error"] = error.Message });
-                }
+                var manifest = ReadExtensionManifest(dir);
+                if (seenIds.Add(manifest["id"]!.ToString())) extensions.Add(manifest);
+            }
+            catch (Exception error)
+            {
+                invalid.Add(new JsonObject { ["id"] = Path.GetFileName(dir), ["name"] = Path.GetFileName(dir), ["error"] = error.Message });
             }
         }
-        return Json(200, new { ok = true, extensions, invalid, baseDir = Directory.Exists(folder) ? folder : "" });
+        return Json(200, new { ok = true, extensions, invalid, baseDir = folders.FirstOrDefault() ?? "" });
     }
 
     private JsonObject ReadExtensionManifest(string directory)
@@ -835,9 +840,7 @@ internal sealed class DesktopApi
 
     private string? FindExtensionDirectory(string id)
     {
-        var folder = ExtensionsFolder;
-        if (!Directory.Exists(folder)) return null;
-        foreach (var dir in Directory.EnumerateDirectories(folder))
+        foreach (var dir in ExtensionDirectories(ExtensionFolders()))
         {
             try
             {
