@@ -37,11 +37,7 @@ const EDGE_DROP_DWELL_MS = 500;
 const NODE_RELEASE_HOLD_MS = 500;
 const STORAGE_KEY = "webimage.pages.v2";
 const { desktop, apiFetch } = window.CanvasFlowRuntime;
-const featureModules = window.CanvasFlowModules || {};
 
-function mindmapFeatureEnabled() {
-  return featureModules.mindmap?.enabled === true;
-}
 
 let runtimeExportFolder = "export";
 let runtimeProjectFolder = "projects";
@@ -626,7 +622,6 @@ const state = {
   clipboard: null,
   exportDirHandle: null,
   dirty: false,
-  graphStack: [],
 };
 let onboardingSeenVersion = 0;
 
@@ -1037,12 +1032,6 @@ const els = {
   updateActions: $("updateActions"),
   installWebUpdateBtn: $("installWebUpdateBtn"),
   releasePageLink: $("releasePageLink"),
-  mindmapBreadcrumb: $("mindmapBreadcrumb"),
-  mindmapBackBtn: $("mindmapBackBtn"),
-  mindmapBreadcrumbText: $("mindmapBreadcrumbText"),
-  projectModeDialog: $("projectModeDialog"),
-  projectModeCloseBtn: $("projectModeCloseBtn"),
-  projectModeCancelBtn: $("projectModeCancelBtn"),
   taskQueueBtn: $("taskQueueBtn"),
   taskQueueBadge: $("taskQueueBadge"),
   taskQueuePanel: $("taskQueuePanel"),
@@ -1130,7 +1119,7 @@ function prepareImportedProjects(data, fallbackName) {
     const originalId = imported.id;
     imported.id = pageId();
     imported.name = uniqueImportedProjectName(imported.name || fallbackName, usedNames);
-    imported.mode = imported.mode === "mindmap" ? "mindmap" : "ai";
+    imported.mode = "ai";
     imported.groupId = groupIdMap.get(imported.groupId) || UNGROUPED_GROUP_ID;
     imported.data = imported.data && typeof imported.data === "object" ? imported.data : blankPage(imported.name, imported.mode).data;
     imported._history = [];
@@ -1145,7 +1134,7 @@ function blankPage(name = "未命名", mode = "ai") {
   return {
     id: pageId(),
     name,
-    mode: mode === "mindmap" ? "mindmap" : "ai",
+    mode: "ai",
     data: {
       nodes: [],
       edges: [],
@@ -1196,24 +1185,9 @@ function currentPage() {
   return state.pages.find(p => p.id === state.activePageId);
 }
 
-function currentProjectMode() {
-  return mindmapFeatureEnabled() && currentPage()?.mode === "mindmap" ? "mindmap" : "ai";
-}
-
-function isMindmapMode() {
-  return currentProjectMode() === "mindmap";
-}
-
 function rootDataFromActiveGraph() {
-  let data = cloneData();
-  for (let index = state.graphStack.length - 1; index >= 0; index--) {
-    const entry = state.graphStack[index];
-    const parent = JSON.parse(JSON.stringify(entry.parentData));
-    const group = (parent.nodes || []).find(node => node.id === entry.groupId);
-    if (group) group.subgraph = data;
-    data = parent;
-  }
-  return data;
+  // 思维导图编组子画布已移除：当前画布即根画布
+  return cloneData();
 }
 
 function saveCurrentPage() {
@@ -1260,6 +1234,13 @@ function restoreData(data) {
   }
   migrateLegacyMaterials(data);
   state.customLibrary = emptyLibrary();
+  // 思维导图编组（mind-group 子画布）已下线：老画布里的存量编组节点连同其连线一并剔除
+  const legacyGroupIds = new Set(state.nodes.filter(node => node.type === "mind-group").map(node => node.id));
+  if (legacyGroupIds.size) {
+    state.nodes = state.nodes.filter(node => !legacyGroupIds.has(node.id));
+    state.edges = state.edges.filter(edge => !legacyGroupIds.has(edge.from.node) && !legacyGroupIds.has(edge.to.node));
+    console.warn(`[旧编组] 思维导图编组功能已下线，已移除 ${legacyGroupIds.size} 个编组节点`);
+  }
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
   walkNodes(state.nodes, node => normalizeAiNodeSettings(node, legacyAiSettings));
   walkNodes(state.nodes, node => { if (node.type === "variable") normalizeVariableNode(node); });
@@ -1332,7 +1313,6 @@ function markDirty() {
 }
 
 function resetGraphNavigation() {
-  state.graphStack = [];
 }
 
 function pushHistory() {
@@ -1437,7 +1417,7 @@ function applyUiColors() {
 }
 
 function applySettings() {
-  els.app.className = `app theme-${state.settings.theme} mode-${isMindmapMode() ? "mindmap" : "ai"}${state.settings.hideNodeTitles ? " hide-node-titles" : ""}`;
+  els.app.className = `app theme-${state.settings.theme} mode-ai${state.settings.hideNodeTitles ? " hide-node-titles" : ""}`;
   document.documentElement.style.colorScheme = state.settings.theme;
   applyUiColors();
   if (!["grid", "cross", "dots"].includes(state.settings.canvasBackground)) state.settings.canvasBackground = "grid";
@@ -2089,7 +2069,6 @@ function nodeHeightForType(type) {
         : type === "browser-image" ? BROWSER_NODE_HEIGHT
         : type === "local-sd" ? 430
         : type === "folder" ? GROUP_NODE_HEIGHT
-          : type === "mind-group" ? NODE_HEIGHT
         : type === "group" ? GROUP_NODE_HEIGHT
           : NODE_HEIGHT;
 }
@@ -2249,8 +2228,6 @@ function buildNodeObject(type, position, width, height) {
     images: (type === "group" || type === "folder") ? [] : undefined,
     items: null,
     internalEdges: null,
-    subgraph: type === "mind-group" ? { nodes: [], edges: [], settings: { ...state.settings }, customLibrary: emptyLibrary(), view: { x: 120, y: 90, scale: 1 }, nextNode: 1, nextEdge: 1 } : undefined,
-    label: type === "mind-group" ? "编组" : "",
     seq: 0,
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
@@ -2471,108 +2448,7 @@ async function createNodesFromMultiTemplate(template, x, y) {
   }
 }
 
-function createMindmapGroup() {
-  const nodeIds = new Set([...state.selected].filter(id => !!findNode(id)));
-  if (nodeIds.size < 2) return toast("至少选中 2 个节点才能创建编组");
-  const nodes = state.nodes.filter(node => nodeIds.has(node.id));
-  const internalEdges = state.edges.filter(edge => nodeIds.has(edge.from.node) && nodeIds.has(edge.to.node));
-  const externalInEdges = state.edges.filter(edge => nodeIds.has(edge.to.node) && !nodeIds.has(edge.from.node));
-  const externalOutEdges = state.edges.filter(edge => nodeIds.has(edge.from.node) && !nodeIds.has(edge.to.node));
-  const cx = nodes.reduce((sum, node) => sum + node.x, 0) / nodes.length;
-  const cy = nodes.reduce((sum, node) => sum + node.y, 0) / nodes.length;
-  const group = addNode("mind-group", cx - NODE_WIDTH / 2, cy - NODE_HEIGHT / 2, false, { avoidOverlap: false });
-  group.label = `编组 ${nodes.length}`;
-  group.subgraph = {
-    nodes: JSON.parse(JSON.stringify(nodes)),
-    edges: JSON.parse(JSON.stringify(internalEdges)),
-    settings: { ...state.settings, apiKey: "" },
-    customLibrary: emptyLibrary(),
-    view: { x: 120, y: 90, scale: 1 },
-    nextNode: state.nextNode,
-    nextEdge: state.nextEdge,
-  };
-  state.nodes = state.nodes.filter(node => !nodeIds.has(node.id));
-  state.edges = state.edges.filter(edge => !nodeIds.has(edge.from.node) && !nodeIds.has(edge.to.node));
-  for (const edge of externalInEdges) {
-    if (!state.edges.some(item => item.from.node === edge.from.node && item.to.node === group.id)) {
-      state.edges.push({ id: uid("e"), from: { node: edge.from.node, port: "out" }, to: { node: group.id, port: "in" }, label: edge.label || "" });
-    }
-  }
-  for (const edge of externalOutEdges) {
-    if (!state.edges.some(item => item.from.node === group.id && item.to.node === edge.to.node)) {
-      state.edges.push({ id: uid("e"), from: { node: group.id, port: "out" }, to: { node: edge.to.node, port: "in" }, label: edge.label || "" });
-    }
-  }
-  state.selected = new Set([group.id]);
-  pushHistory();
-  render();
-  toast(`已创建编组，包含 ${nodes.length} 个节点`);
-}
-
-function enterMindmapGroup(groupId) {
-  if (!isMindmapMode()) return;
-  const group = findNode(groupId);
-  if (!group || group.type !== "mind-group") return;
-  const parentData = cloneData();
-  state.graphStack.push({ groupId, label: group.label || "编组", parentData });
-  restoreData(group.subgraph || { nodes: [], edges: [], settings: parentData.settings, view: { x: 120, y: 90, scale: 1 }, nextNode: state.nextNode, nextEdge: state.nextEdge });
-  state.history = [cloneData()];
-  state.future = [];
-  centerViewOnContent();
-  updateUndoRedo();
-  console.info("[思维导图] 已进入编组子画布", { groupId, depth: state.graphStack.length });
-}
-
-function exitMindmapGroup() {
-  const entry = state.graphStack.pop();
-  if (!entry) return;
-  const childData = cloneData();
-  const parentData = JSON.parse(JSON.stringify(entry.parentData));
-  const group = (parentData.nodes || []).find(node => node.id === entry.groupId);
-  if (group) group.subgraph = childData;
-  restoreData(parentData);
-  state.history = [cloneData()];
-  state.future = [];
-  updateUndoRedo();
-  markDirty();
-  console.info("[思维导图] 已返回上一级画布", { groupId: entry.groupId, depth: state.graphStack.length });
-}
-
-function ungroupMindmapNode(groupId) {
-  const group = findNode(groupId);
-  if (!group || group.type !== "mind-group" || !group.subgraph) return toast("该节点不是编组");
-  const incoming = state.edges.filter(edge => edge.to.node === groupId);
-  const outgoing = state.edges.filter(edge => edge.from.node === groupId);
-  const restoredNodes = JSON.parse(JSON.stringify(group.subgraph.nodes || []));
-  const restoredEdges = JSON.parse(JSON.stringify(group.subgraph.edges || []));
-  state.nodes = state.nodes.filter(node => node.id !== groupId);
-  state.edges = state.edges.filter(edge => edge.from.node !== groupId && edge.to.node !== groupId);
-  state.nodes.push(...restoredNodes);
-  state.edges.push(...restoredEdges);
-  if (restoredNodes.length) {
-    const first = restoredNodes[0];
-    const last = restoredNodes[restoredNodes.length - 1];
-    for (const edge of incoming) state.edges.push({ id: uid("e"), from: { ...edge.from }, to: { node: first.id, port: "in" }, label: edge.label || "" });
-    for (const edge of outgoing) state.edges.push({ id: uid("e"), from: { node: last.id, port: "out" }, to: { ...edge.to }, label: edge.label || "" });
-  }
-  state.selected = new Set(restoredNodes.map(node => node.id));
-  pushHistory();
-  render();
-  toast("已解散编组");
-}
-
-function renameMindmapGroup(groupId) {
-  const group = findNode(groupId);
-  if (!group || group.type !== "mind-group") return;
-  const value = prompt(translateUiString("编组名称"), group.label || "编组");
-  if (value === null || !value.trim()) return;
-  group.label = value.trim().slice(0, 60);
-  pushHistory();
-  render();
-}
-
 function groupSelection() {
-  if (isMindmapMode()) return createMindmapGroup();
   const nodeIds = new Set([...state.selected].filter(id => {
     const n = findNode(id);
     return n && n.type !== "output";
@@ -6833,13 +6709,6 @@ function segmentsIntersect(p1, p2, p3, p4) {
 }
 
 function render() {
-  els.app.classList.toggle("mode-mindmap", isMindmapMode());
-  els.app.classList.toggle("mode-ai", !isMindmapMode());
-  const activeGroup = state.graphStack[state.graphStack.length - 1];
-  els.mindmapBreadcrumb?.classList.toggle("hidden", !activeGroup);
-  if (els.mindmapBreadcrumbText && activeGroup) {
-    els.mindmapBreadcrumbText.textContent = state.graphStack.map(entry => entry.label || "编组").join(" / ");
-  }
   applySettings();
   normalizeNodeSizes();
   applyView();
@@ -6927,7 +6796,7 @@ function applyView() {
 }
 
 function projectModeName(mode) {
-  return mode === "mindmap" ? "思维导图" : "AI 绘图";
+  return "AI 绘图";
 }
 
 function projectButtonMarkup(page) {
@@ -7042,7 +6911,7 @@ function renderPageTabs() {
 }
 
 function projectPanelVisiblePages(groupId) {
-  return state.pages.filter(page => projectGroupId(page) === groupId && (page.mode !== "mindmap" || mindmapFeatureEnabled()));
+  return state.pages.filter(page => projectGroupId(page) === groupId);
 }
 
 
@@ -7673,7 +7542,7 @@ function browserNodeBody(node) {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "mind-group" ? (node.label || "编组") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
@@ -7695,10 +7564,7 @@ function nodeTemplate(node) {
       const output = variableNodeOutput(node);
       body = `<div class="variable-node-rows">${rows}</div><div class="variable-node-add-wrap"><button data-role="variable-add-row" class="variable-add-row" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加一行</span></button></div><div class="variable-node-output">${escapeHtml(output || "暂无组合数据")}</div>`;
     }
-  } else if (node.type === "mind-group") {
-    const count = node.subgraph?.nodes?.length || 0;
-    body = `<div class="mind-group-icon" title="双击进入编组"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="9" y="14" width="6" height="6" rx="1.5"/><path d="M7 10v2h10v-2M12 12v2"/></svg></div><div class="mind-group-summary">${count} 个节点 · 双击进入</div>`;
-  } else if (node.type === "folder") {
+
     const total = node.images?.length || 0;
     let thumbs = "";
     for (let i = 0; i < Math.min(total, 8); i++) thumbs += `<img src="${node.images[i].image}" alt="" draggable="false">`;
@@ -7807,15 +7673,12 @@ function renderEdges() {
     hit.setAttribute("d", d);
     hit.dataset.edgeId = e.id;    hit.addEventListener("dblclick", ev => {
       ev.stopPropagation();
-      if (isMindmapMode()) renameEdge(e.id);
-      else removeEdge(e.id);
+      removeEdge(e.id);
     });
     hit.addEventListener("contextmenu", ev => {
       ev.preventDefault();
       ev.stopPropagation();
-      showMenu(ev.clientX, ev.clientY, isMindmapMode()
-        ? [["编辑连线名称", () => renameEdge(e.id)], ["删除连线", () => removeEdge(e.id)]]
-        : [["取消连线", () => removeEdge(e.id)]]);
+      showMenu(ev.clientX, ev.clientY, [["取消连线", () => removeEdge(e.id)]]);
     });
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const dropReady = edgeDropArmed && e.id === edgeDropTargetId;
@@ -7827,17 +7690,6 @@ function renderEdges() {
     path.setAttribute("d", d);
     els.edges.appendChild(hit);
     els.edges.appendChild(path);
-    if (isMindmapMode() && e.label) {
-      const fromPoint = portPoint(a, "out");
-      const toPoint = portPoint(b, "in");
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("class", "edge-label");
-      label.setAttribute("x", String((fromPoint.x + toPoint.x) / 2));
-      label.setAttribute("y", String((fromPoint.y + toPoint.y) / 2));
-      label.textContent = e.label;
-      label.addEventListener("dblclick", event => { event.stopPropagation(); renameEdge(e.id); });
-      els.edges.appendChild(label);
-    }
   }
   if (connectDraft) {
     const draftTarget = { x: connectDraft.end.x, y: connectDraft.end.y - NODE_HEIGHT / 2, w: 0, h: NODE_HEIGHT };
@@ -8359,10 +8211,10 @@ function autoAddAiNodes() {
 
 function connectSelectionInSequence() {
   const selectedSources = state.nodes
-    .filter(n => state.selected.has(n.id) && (isMindmapMode() || (!n.disabled && (n.type === "text" || n.type === "variable" || n.type === "image" || n.type === "ai-image"))));
+    .filter(n => state.selected.has(n.id) && (!n.disabled && (n.type === "text" || n.type === "variable" || n.type === "image" || n.type === "ai-image")));
   const byCanvasOrder = (a, b) => a.x - b.x || a.y - b.y || a.created - b.created;
   const sources = selectedSources.sort(byCanvasOrder);
-  if (sources.length < 2) return toast(isMindmapMode() ? "请至少选择 2 个节点" : "请至少选择 2 个文字、变量、图片或 AI 绘图节点");
+  if (sources.length < 2) return toast("请至少选择 2 个文字、变量、图片或 AI 绘图节点");
 
   const selectedIds = new Set(sources.map(n => n.id));
   const desiredPairs = new Set();
@@ -9292,13 +9144,6 @@ els.nodes.addEventListener("load", ev => {
 }, true);
 
 els.nodes.addEventListener("dblclick", async ev => {
-  const mindGroupElement = ev.target.closest(".node.mind-group");
-  if (mindGroupElement) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    enterMindmapGroup(mindGroupElement.dataset.id);
-    return;
-  }
   const promptEl = ev.target.closest('[data-role="angle-prompt"]');
   if (promptEl) {
     ev.preventDefault();
@@ -9314,7 +9159,7 @@ els.nodes.addEventListener("dblclick", async ev => {
     selection.addRange(range);
     return;
   }
-  if (ev.target.closest(".image-preview") || ev.target.closest(".ai-preview") || ev.target.closest(".group-preview") || ev.target.closest(".mind-group-icon")) {
+  if (ev.target.closest(".image-preview") || ev.target.closest(".ai-preview") || ev.target.closest(".group-preview")) {
     ev.preventDefault();
     ev.stopPropagation();
     const nodeEl = ev.target.closest(".node");
@@ -9322,9 +9167,7 @@ els.nodes.addEventListener("dblclick", async ev => {
     const node = findNode(nodeEl.dataset.id);
     if (!node) return;
     if (state.settings.editOnOverlap === false && nodeImageReference(node) && imageNodeOverlapsOthers(node)) return;
-    if (node.type === "mind-group") {
-      enterMindmapGroup(node.id);
-    } else if ((node.type === "group" || node.type === "folder") && node.images && node.images.length) {
+    if ((node.type === "group" || node.type === "folder") && node.images && node.images.length) {
       await showNodeLightbox(node);
     } else if (node.type === "group" && node.items) {
       await showNodeLightbox(node);
@@ -11505,22 +11348,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const id = nodeEl.dataset.id;
     if (!state.selected.has(id)) state.selected = new Set([id]);
     const selectedNode = findNode(id);
-    if (isMindmapMode()) {
-      const mindmapItems = [
-        ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image") ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
-        ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
-        ...generationKeywordMenuItems(selectedNode),
-        ...(state.selected.size > 1 ? [["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()]] : []),
-        ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
-        ...(selectedNode?.type === "mind-group" ? [["进入编组", () => enterMindmapGroup(id)], ["重命名编组", () => renameMindmapGroup(id)], ["解散编组", () => ungroupMindmapNode(id)]] : []),
-        ["断开连接", () => disconnectEdges(state.selected)],
-        ["复制节点", () => copySelection()],
-        ["删除节点", () => deleteNodes(state.selected)],
-      ];
-      showMenu(ev.clientX, ev.clientY, mindmapItems);
-      renderNodes();
-      return;
-    }
     const isGroupWithItems = selectedNode?.type === "group" && (selectedNode?.items || (selectedNode?.images && selectedNode?.images.length));
     const extensionSources = state.nodes.filter(node => state.selected.has(node.id) && (
       (node.type === "image" && (node.image || node.imageAssetId)) ||
@@ -11564,14 +11391,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
     showMenu(ev.clientX, ev.clientY, items);
     renderNodes();
   } else if (state.selected.size > 1) {
-    if (isMindmapMode()) {
-      const items = [];
-      if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
-      items.push(["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()], ["创建编组", () => groupSelection()], ["依次连接", () => connectSelectionInSequence()], ["对齐所选节点", () => tidyNodes()]);
-      items.push(["断开连接", () => disconnectEdges(state.selected)], ["批量删除", () => deleteNodes(state.selected)]);
-      showMenu(ev.clientX, ev.clientY, items);
-      return;
-    }
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     items.push(
@@ -11600,24 +11419,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const textTemplates = libraryItems("text");
     const imageTemplates = libraryItems("image");
     const multiTemplates = libraryItems("multi");
-    if (isMindmapMode()) {
-      items.push(
-        ["添加文字节点", () => addNode("text", p.x, p.y)],
-        ["添加图片节点", () => addNode("image", p.x, p.y)],
-        ["添加图片文件夹", () => {
-          if (window.chrome?.webview) window.chrome.webview.postMessage({ type: "pick-image-folder" });
-          else els.composerFolderInput.click();
-        }],
-        ["自定义节点", [
-          ["自定义文字", textTemplates.length ? textTemplates.map(template => [template.name, () => createNodeFromTemplate("text", template, p.x, p.y)]) : [["暂无素材", null]]],
-          ["自定义图片", imageTemplates.length ? imageTemplates.map(template => [template.name, () => createNodeFromTemplate("image", template, p.x, p.y)]) : [["暂无素材", null]]],
-          ["自定义组件", multiTemplates.length ? multiTemplates.map(template => [template.name, () => createNodesFromMultiTemplate(template, p.x, p.y)]) : [["暂无素材", null]]],
-        ]],
-        ["节点对齐", () => tidyNodes()],
-      );
-      showMenu(ev.clientX, ev.clientY, items);
-      return;
-    }
     items.push(["添加文字节点", () => addNode("text", p.x, p.y)], ["添加调色盘", () => addNode("palette", p.x, p.y)]);
     items.push(
       ["添加图片节点", () => addNode("image", p.x, p.y)],
@@ -11993,25 +11794,16 @@ function createNewPage(mode = "ai", groupId = null) {
   updateUndoRedo();
   markDirty();
   render();
-  toast(mode === "mindmap" ? "已新建思维导图项目" : "已新建 AI 绘图项目");
+  toast("已新建 AI 绘图项目");
   const foreign = countForeignUnsettledTasks();
   if (foreign) toast(`其他项目仍有 ${foreign} 个任务运行中，完成后结果会自动落回原项目`);
 }
 
 function newPage(groupId = null) {
   // 任务不再阻止新建项目:运行中的任务完成后自动落回原项目(pageId 定位)
-  if (!mindmapFeatureEnabled()) {
-    createNewPage("ai", groupId);
-    return;
-  }
-  state._pendingNewPageGroupId = groupId;
-  els.projectModeDialog.classList.remove("hidden");
-  window.setTimeout(() => els.projectModeDialog.querySelector('[data-project-mode="ai"]')?.focus(), 0);
+  createNewPage("ai", groupId);
 }
 
-function closeProjectModeDialog() {
-  els.projectModeDialog.classList.add("hidden");
-}
 
 function requestDeletePage(id) {
   // 删除前先切到该项目画布让用户看清内容，再弹窗确认；明显删不了的直接提示，不做切换
@@ -12021,7 +11813,7 @@ function requestDeletePage(id) {
     toast("该项目仍有未完成任务，请等任务完成或先取消再删除");
     return;
   }
-  const visiblePages = state.pages.filter(item => item.mode !== "mindmap" || mindmapFeatureEnabled());
+  const visiblePages = state.pages;
   if (visiblePages.length <= 1) {
     toast("至少保留一个项目");
     return;
@@ -12040,7 +11832,7 @@ function deletePage(id) {
     toast("该项目仍有未完成任务，请等任务完成或先取消再删除");
     return;
   }
-  const visiblePages = state.pages.filter(page => page.mode !== "mindmap" || mindmapFeatureEnabled());
+  const visiblePages = state.pages;
   if (visiblePages.length <= 1) {
     toast("至少保留一个项目");
     return;
@@ -12053,7 +11845,7 @@ function deletePage(id) {
   state._deletedPage = { page: removed, index: idx };
   if (state.activePageId === id) {
     resetGraphNavigation();
-    const fallbackPages = state.pages.filter(page => page.mode !== "mindmap" || mindmapFeatureEnabled());
+    const fallbackPages = state.pages;
     state.activePageId = (fallbackPages[Math.min(idx, fallbackPages.length - 1)] || fallbackPages[0]).id;
     const page = currentPage();
     if (page) restoreData(page.data);
@@ -12069,7 +11861,7 @@ function switchPage(id) {
   if (id === state.activePageId) return;
   // 任务运行中允许切换:非激活页的任务完成后由 pageId 定位落回原项目
   const targetPage = state.pages.find(page => page.id === id);
-  if (!targetPage || (targetPage.mode === "mindmap" && !mindmapFeatureEnabled())) return;
+  if (!targetPage) return;
   saveCurrentPage();
   savePageHistory();
   resetGraphNavigation();
@@ -12284,12 +12076,12 @@ function loadPagesFromStorage(savedState = null) {
     if (!savedState && !raw) return false;
     const saved = savedState || JSON.parse(raw);
     if (!Array.isArray(saved.pages) || !saved.pages.length) return false;
-    state.pages = saved.pages.map(page => ({ ...page, mode: page.mode === "mindmap" ? "mindmap" : "ai" }));
+    state.pages = saved.pages.map(page => ({ ...page, mode: "ai" }));
     normalizeGroups(saved.groups);
     state.activePageId = saved.activePageId || state.pages[0].id;
     state.nextPageNum = saved.nextPageNum || (state.pages.length + 1);
     let page = currentPage();
-    if (!page || (page.mode === "mindmap" && !mindmapFeatureEnabled())) page = state.pages.find(item => item.mode !== "mindmap");
+    if (!page) page = state.pages[0];
     if (!page) {
       page = blankPage(`项目${state.nextPageNum++}`, "ai");
       state.pages.push(page);
@@ -12324,18 +12116,6 @@ async function loadDesktopState() {
 
 
 $("newCanvasBtn").onclick = newPage;
-els.mindmapBackBtn.onclick = exitMindmapGroup;
-els.projectModeCloseBtn.onclick = closeProjectModeDialog;
-els.projectModeCancelBtn.onclick = closeProjectModeDialog;
-els.projectModeDialog.addEventListener("click", event => {
-  if (event.target === els.projectModeDialog) closeProjectModeDialog();
-  const modeButton = event.target.closest?.("[data-project-mode]");
-  if (!modeButton) return;
-  const mode = modeButton.dataset.projectMode === "mindmap" ? "mindmap" : "ai";
-  closeProjectModeDialog();
-  createNewPage(mode, state._pendingNewPageGroupId || null);
-  state._pendingNewPageGroupId = null;
-});
 $("saveJsonBtn").onclick = saveJson;
 $("loadJsonBtn").onclick = () => els.loadJson.click();
 $("autoOutputBtn").onclick = autoAddAiNodes;
@@ -12983,9 +12763,7 @@ function openFolderImportDialog(entries, folderName = "") {
     ? `${folderName || "Selected folder"} · ${imageEntries.length} images`
     : `${folderName || "所选文件夹"} · ${imageEntries.length} 张图片`;
   const hint = els.folderImportDialog.querySelector(".folder-import-hint");
-  if (hint) hint.textContent = isMindmapMode()
-    ? "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。"
-    : "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。";
+  if (hint) hint.textContent = "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。";
   els.folderImportDialog.classList.remove("hidden");
   window.setTimeout(() => els.folderImportConfirmBtn.focus(), 0);
 }
@@ -13155,7 +12933,7 @@ async function createGroupFromFolderFiles(imageEntries, folderName = "") {
     if (index % 2 === 0) await nextPaint();
   }
   const center = visibleWorldCenter();
-  const nodeType = isMindmapMode() ? "folder" : "group";
+  const nodeType = "group";
   const node = addNode(nodeType, center.x - NODE_WIDTH / 2, center.y - NODE_HEIGHT / 2, false);
   node.images = preparedImages;
   if (nodeType === "folder") node.folderName = folderName || "图片文件夹";
@@ -14396,11 +14174,12 @@ els.loadJson.onchange = async () => {
   const imported = prepareImportedProjects(data, fallbackName);
   if (!imported.pages.length) throw new Error("项目文件中没有可打开的项目");
   state.groups.push(...imported.groups);
+  imported.pages.forEach(page => { page.mode = "ai"; });
   state.pages.push(...imported.pages);
   normalizeGroups();
   let page = state.pages.find(item => item.id === imported.activePageId);
-  if (!page || (page.mode === "mindmap" && !mindmapFeatureEnabled())) {
-    page = imported.pages.find(item => item.mode !== "mindmap");
+  if (!page) {
+    page = imported.pages[0];
   }
   if (!page) {
     page = blankPage(`项目${state.nextPageNum++}`, "ai");

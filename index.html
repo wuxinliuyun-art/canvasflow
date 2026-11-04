@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261105-chatnote1">
+  <link rel="stylesheet" href="styles.css?v=20261105-mindmap-off1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -28,11 +28,6 @@
         </button>
       </div>
     </header>
-
-    <div id="mindmapBreadcrumb" class="mindmap-breadcrumb hidden" aria-label="编组导航">
-      <button id="mindmapBackBtn" type="button" title="返回上一级">←</button>
-      <span id="mindmapBreadcrumbText">编组</span>
-    </div>
 
     <div id="progressPanel" class="progress-panel hidden">
       <div class="progress-row">
@@ -465,20 +460,6 @@
         </div>
       </div>
     </div>
-    <div id="projectModeDialog" class="project-mode-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="projectModeTitle">
-      <div class="project-mode-panel">
-        <div class="project-mode-head">
-          <div><span>新建项目</span><strong id="projectModeTitle">选择项目模式</strong></div>
-          <button id="projectModeCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <p>项目创建后将固定使用所选模式，避免 AI 工作流和关系图数据混在一起。</p>
-        <div class="project-mode-options">
-          <button type="button" data-project-mode="ai"><strong>AI 绘图画板</strong><span>组合文字、参考图和 AI 绘图节点</span></button>
-          <button type="button" data-project-mode="mindmap"><strong>思维导图 / 关系图</strong><span>整理文字、图片、文件夹和编组关系</span></button>
-        </div>
-        <div class="project-mode-actions"><button id="projectModeCancelBtn" type="button">取消</button></div>
-      </div>
-    </div>
   </div>
 
   <div id="onboardingTour" class="onboarding-tour hidden" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
@@ -591,10 +572,9 @@
 
   <script src="model-catalog.js?v=20261105-agtdefault1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
-  <script src="modules/mindmap-module.js?v=20261104-mindmap-on1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
-  <script src="app.js?v=20261105-agtdefault1"></script>
+  <script src="app.js?v=20261105-mindmap-off1"></script>
   <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
 </body>
 </html>
