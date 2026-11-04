@@ -270,7 +270,7 @@
 
 ## 中长期规划 / TODO
 
-### 思维导图自定义属性卡（后续版本，第一版不实现）
+### 思维导图自定义属性卡（后续版本，第一版不实现；2026-11-05 思维导图模式已整体下线，属性卡若做需先恢复模式或改挂画布节点）
 
 - 属性卡只用于思维导图模式；每张卡代表一个产品或对象，按模板填写功能、风格、材质等信息。
 - 设置的素材库新增全局“属性模板”：模板包含名称、用户可调整的彩色标记、版本号和可增删排序的属性；属性类型支持自由文本、下拉单选和多项勾选，选项可以任意增删。
@@ -281,6 +281,12 @@
 - 其他项目不得被后台自动修改；切换到含旧模板版本属性卡的项目时再提示用户同步。删除模板时，已有属性卡转为独立状态并保留全部结构、颜色和值。
 - 属性卡数据需保存模板编号、模板快照、模板版本、同步状态、颜色、字段结构和值；文本值为字符串，单选值为字符串，多选值为字符串数组。
 
+
+### 画布编组与碰撞约束（PR #6，2026-11-05 已合入；思维导图模式同日整体下线）
+
+- 规则：**唯一编组实现 = PR #6 的画布编组**（`canvasGroupId` + `canvasGroupFrames`）：多选右键「创建编组」（`groupCanvasSelection`）、虚线外框按成员范围拟合、整组拖动与单成员独立操作共存、**碰撞约束**（`constrainCanvasGroupDelta` 逐轴扫掠求解，碰撞优先于网格吸附，受阻外框转警示色，节点 resize 放大同样受组外节点限制、缩小不受限）、复制粘贴统一重建组 ID、删除成员自动退出编组、旧工程缺字段按成员范围重推外框。测试 `tests/canvas-group-collision.test.cjs`（28 场景，从 app.js 切片真实源码在 vm 中运行）必须保持通过。PR 冲突合并先例：resize 分支两边语义组合=保留本地调色盘节点尺寸钳制（palette 220/200）+ 引入碰撞约束。
+- **思维导图模式（mode="mindmap"）已于 2026-11-05 整体移除**（用户明确要求）：modules/mindmap-module.js 已删、新建项目不再弹模式选择（直接建 AI 画板，projectModeDialog DOM/绑定全删）、mindmapBreadcrumb 面包屑删除、mind-group 子画布编组五函数（create/enter/exit/ungroup/rename）与 graphStack 子画布栈全部移除、`rootDataFromActiveGraph` 退化为直接 cloneData、全部 isMindmapMode 分支内联为 ai 侧行为。`groupSelection` 现在只有「多任务」（group 节点）语义——**它与新编组是两个东西，勿混**。老画布存量 mind-group 节点在 restoreData 里随连线剔除并 console.warn；存量页 mode 一律归一为 "ai"（载入 12179 归一、手动导入 14291 push 前归一）。
+- 避免：右键菜单/拖动/复制粘贴路径上新增逻辑时，注意新编组（canvasGroupId）与「多任务」（group 节点）并存——右键同时出现「创建编组」与「多任务」是预期行为；不要再引入 mindmap/module 模块开关或模式分支；`?v=` 已递增为 app/styles `20261105-mindmap-off1`（index.html 里 mindmap-module script 标签已删除，别从旧版恢复）。
 
 ### 拖回导出图的关键词提取（generationPrompt 记录，2026-10）
 

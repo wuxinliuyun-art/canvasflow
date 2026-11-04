@@ -4546,7 +4546,7 @@ function renderChatWorkspace() {
   backdrop.className = chatOverlayClass("chat-workspace-backdrop");
   backdrop.dataset.nodeId = node.id;
   backdrop.innerHTML = `<section class="chat-workspace" role="dialog" aria-modal="true" aria-label="AI 对话工作区">`
-    + `<header class="chat-workspace-head"><div><strong>AI 对话</strong><span>消息随当前画布保存</span></div><button type="button" data-chat-workspace-close aria-label="关闭对话工作区"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>`
+    + `<header class="chat-workspace-head"><div class="chat-workspace-title"><span class="chat-workspace-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/></svg></span><div><strong>AI 对话</strong><span>消息随当前画布保存</span></div></div><button type="button" data-chat-workspace-close aria-label="关闭对话工作区"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>`
     + `<div class="chat-workspace-body">${chatNodeBody(node, true)}</div>`
     + `</section>`;
   if (!existing) document.body.appendChild(backdrop);
@@ -4564,16 +4564,38 @@ function openChatWorkspace(nodeId) {
   window.requestAnimationFrame(() => document.querySelector(".chat-workspace textarea[data-role='chat-text']")?.focus());
 }
 
-function openChatHtmlPreview(node, messageIndex) {
+function openChatHtmlPreview(node, messageIndex, initialMode = "preview") {
   const html = extractHtmlDocument(node?.chatMessages?.[messageIndex]?.content);
   if (!html) return toast("没有识别到完整 HTML 文档");
   const backdrop = document.createElement("div");
   backdrop.className = chatOverlayClass("chat-html-preview-backdrop");
-  backdrop.innerHTML = `<section class="chat-html-preview-dialog" role="dialog" aria-modal="true" aria-label="HTML 网页预览"><header><div><strong>网页预览</strong><span>内容运行在隔离沙箱中</span></div><button type="button" aria-label="关闭网页预览"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header><iframe title="HTML 网页完整预览" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></section>`;
+  backdrop.innerHTML = `<section class="chat-html-preview-dialog" role="dialog" aria-modal="true" aria-label="HTML 网页预览与代码">`
+    + `<header><div><strong>HTML 网页</strong><span data-html-view-description></span></div><div class="chat-html-view-actions" role="group" aria-label="HTML 查看方式">`
+    + `<button type="button" data-html-view="preview">预览</button><button type="button" data-html-view="code">代码</button><button type="button" data-html-copy-code>复制代码</button>`
+    + `<button type="button" data-html-view-close aria-label="关闭 HTML 查看器"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>`
+    + `<iframe title="HTML 网页完整预览" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>`
+    + `<textarea class="chat-html-code" aria-label="完整 HTML 代码" readonly spellcheck="false"></textarea></section>`;
   const close = () => backdrop.remove();
-  backdrop.querySelector("button").addEventListener("click", close);
+  const frame = backdrop.querySelector("iframe");
+  const code = backdrop.querySelector(".chat-html-code");
+  const description = backdrop.querySelector("[data-html-view-description]");
+  const setMode = mode => {
+    const codeMode = mode === "code";
+    frame.hidden = codeMode;
+    code.hidden = !codeMode;
+    description.textContent = codeMode ? "完整源码（只读）" : "内容运行在隔离沙箱中";
+    backdrop.querySelectorAll("[data-html-view]").forEach(button => button.classList.toggle("is-active", button.dataset.htmlView === mode));
+  };
+  backdrop.querySelector("[data-html-view-close]").addEventListener("click", close);
+  backdrop.querySelectorAll("[data-html-view]").forEach(button => button.addEventListener("click", () => setMode(button.dataset.htmlView)));
+  backdrop.querySelector("[data-html-copy-code]").addEventListener("click", async () => {
+    if (await copyTextValue(html)) toast("已复制 HTML 代码");
+    else toast("复制失败，请在代码视图中手动选择复制");
+  });
   backdrop.addEventListener("mousedown", event => { if (event.target === backdrop) close(); });
-  backdrop.querySelector("iframe").srcdoc = html;
+  frame.srcdoc = html;
+  code.value = html;
+  setMode(initialMode === "code" ? "code" : "preview");
   document.body.appendChild(backdrop);
 }
 
@@ -4787,6 +4809,10 @@ document.addEventListener("click", event => {
   if (!node) return closeChatWorkspace();
   if (action.dataset.role === "chat-html-open") {
     openChatHtmlPreview(node, Number(action.dataset.messageIndex));
+    return;
+  }
+  if (action.dataset.role === "chat-html-code") {
+    openChatHtmlPreview(node, Number(action.dataset.messageIndex), "code");
     return;
   }
   if (action.dataset.role === "chat-html-edit") {
@@ -7458,7 +7484,7 @@ function extractHtmlDocument(text) {
 function chatHtmlPreviewCard(message, index) {
   if (message.role !== "assistant" || !extractHtmlDocument(message.content)) return "";
   return `<section class="chat-html-card" aria-label="HTML 网页操作">`
-    + `<div class="chat-html-card-head"><div><strong>HTML 网页</strong><span>完整文档已生成</span></div><span class="chat-html-card-actions"><button type="button" data-role="chat-html-open" data-message-index="${index}">预览</button><button type="button" data-role="chat-html-edit" data-message-index="${index}">编辑</button></span></div>`
+    + `<div class="chat-html-card-head"><div><strong>HTML 网页</strong><span>完整文档已生成</span></div><span class="chat-html-card-actions"><button type="button" data-role="chat-html-open" data-message-index="${index}">预览</button><button type="button" data-role="chat-html-code" data-message-index="${index}">代码</button><button type="button" data-role="chat-html-edit" data-message-index="${index}">编辑</button></span></div>`
     + `</section>`;
 }
 
@@ -7474,14 +7500,17 @@ function chatMessageContentHtml(message) {
 
 function chatMessagesHtml(node, busy) {
   const messages = node.chatMessages || [];
-  if (!messages.length) return `<div class="chat-empty-state">开始一段新对话。历史消息会随画布保存。</div>`;
+  if (!messages.length) return `<div class="chat-empty-state"><span class="chat-empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3ZM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span><strong>开始一段新对话</strong><span>输入消息与 AI 对话，历史随画布保存。</span></div>`;
   const lastAssistantIndex = messages.findLastIndex(message => message.role === "assistant");
   return messages.map((message, index) => {
     const role = message.role === "assistant" ? "assistant" : "user";
     const label = role === "assistant" ? "AI" : "你";
     const imageNote = role === "user" && Number(message.imageCount) > 0 ? `<span class="chat-message-images">${Number(message.imageCount)} 张图片</span>` : "";
+    const avatar = role === "assistant"
+      ? `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/></svg></span>`
+      : `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></span>`;
     return `<article class="chat-message is-${role}" data-message-index="${index}">`
-      + `<div class="chat-message-head"><strong>${label}</strong>${imageNote}<div class="chat-message-actions">${chatMessageActions(message, index, lastAssistantIndex, busy, Number(messages[index - 1]?.imageCount) > 0)}</div></div>`
+      + `<div class="chat-message-head">${avatar}<strong>${label}</strong>${imageNote}<div class="chat-message-actions">${chatMessageActions(message, index, lastAssistantIndex, busy, Number(messages[index - 1]?.imageCount) > 0)}</div></div>`
       + chatMessageContentHtml(message)
       + chatHtmlPreviewCard(message, index)
       + `</article>`;
@@ -7509,12 +7538,11 @@ function chatNodeBody(node, expanded = false) {
     : `<label class="chat-enumerate-toggle" title="批量提示词：要求 AI 按 a. b. 序号输出；收到回复后可手动拆成文字节点"><input type="checkbox" data-role="chat-enumerate-toggle" ${node._chatEnumerated ? "checked" : ""} ${busy ? "disabled" : ""}><span>批量</span></label>`
       + `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
   return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
-    + imageModelPricingHtml(entry, node, entry?.apiType)
     + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
     + `<div class="chat-messages" role="log" aria-label="对话记录">${chatMessagesHtml(node, busy)}</div>`
     + `<div class="chat-composer"><textarea data-role="chat-text" placeholder="输入新消息，Enter 发送；Shift+Enter 换行" ${busy ? "disabled" : ""}>${escapeHtml(node.chatDraft || "")}</textarea>`
     + chatAttachmentBar(node, entry, busy)
-    + `<button class="chat-composer-send" data-role="chat-send" type="button" title="发送" aria-label="发送消息" ${busy ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6"/></svg></button></div>`
+    + `<button class="chat-composer-send" data-role="chat-send" type="button" title="发送" aria-label="发送消息" ${busy ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>`
     + `<span class="resize-handle" title="拖拽缩放"></span>`;
 }
 
@@ -9043,6 +9071,7 @@ els.nodes.addEventListener("click", async ev => {
   if (actionRole === "chat-send" && node.type === "chat") sendChatNodeMessage(node.id);
   if (actionRole === "chat-expand" && node.type === "chat") openChatWorkspace(node.id);
   if (actionRole === "chat-html-open" && node.type === "chat") openChatHtmlPreview(node, Number(action.dataset.messageIndex));
+  if (actionRole === "chat-html-code" && node.type === "chat") openChatHtmlPreview(node, Number(action.dataset.messageIndex), "code");
   if (actionRole === "chat-html-edit" && node.type === "chat") openChatHtmlEditor(node, Number(action.dataset.messageIndex));
   if (actionRole === "chat-message-copy" && node.type === "chat") {
     const message = node.chatMessages?.[Number(action.dataset.messageIndex)];
@@ -11159,8 +11188,12 @@ async function copyTextValue(value) {
   const text = String(value || "").trim();
   if (!text) return false;
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      // WebView、非安全来源或剪贴板权限被拒绝时继续使用兼容复制。
+    }
   }
   const field = document.createElement("textarea");
   field.value = text;

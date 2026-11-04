@@ -29,8 +29,8 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(styles, /\.chat-messages\s*\{/);
   assert.match(styles, /\.chat-message\.is-user/);
   assert.match(styles, /\.chat-message-actions/);
-  assert.match(index, /styles\.css\?v=20261105-mindmap-off1/);
-  assert.match(index, /app\.js\?v=20261105-mindmap-off1/);
+  assert.match(index, /styles\.css\?v=20261105-chatui1/);
+  assert.match(index, /app\.js\?v=20261105-chatui1/);
   assert.match(styles, /\.chat-compact-card\s*\{/);
   assert.match(styles, /\.chat-compact-summary\s*\{/);
   assert.doesNotMatch(styles, /chat-compact-card-stats/);
@@ -45,15 +45,26 @@ test("complete HTML replies get sandboxed previews", () => {
   assert.match(app, /sandbox="allow-scripts"/);
   assert.match(app, /referrerpolicy="no-referrer"/);
   assert.match(app, /data-role="chat-html-open"/);
+  assert.match(app, /data-role="chat-html-code"/);
+  assert.match(app, /data-html-copy-code/);
+  assert.match(app, /class="chat-html-code"/);
   assert.match(app, /完整文档已生成/);
   assert.doesNotMatch(app, /data-chat-html-preview=/);
-  assert.doesNotMatch(app, /class="chat-html-source"/);
   const start = app.indexOf("function extractHtmlDocument(text)");
-  const end = app.indexOf("\n}\n\nfunction chatHtmlPreviewCard", start) + 2;
+  const end = app.indexOf("function chatHtmlPreviewCard", start);
   const context = {};
-  vm.runInNewContext(`${app.slice(start, end)}; this.extractHtmlDocument = extractHtmlDocument;`, context);
+  vm.runInNewContext(`${app.slice(start, end).trim()}; this.extractHtmlDocument = extractHtmlDocument;`, context);
   assert.match(context.extractHtmlDocument("说明\n```html\n<!doctype html><html><body>作品集</body></html>\n```"), /<body>作品集<\/body>/);
   assert.equal(context.extractHtmlDocument("```html\n<div>只有片段</div>\n```"), "");
+});
+
+test("clipboard copy falls back when the modern API is rejected", () => {
+  const start = app.indexOf("async function copyTextValue(value)");
+  const end = app.indexOf("async function copyGeneratedFilePath", start);
+  const source = app.slice(start, end);
+  assert.match(source, /try\s*\{[\s\S]*navigator\.clipboard\.writeText/);
+  assert.match(source, /catch \(_\)/);
+  assert.match(source, /document\.execCommand\("copy"\)/);
 });
 
 test("chat can expand into a dedicated workspace", () => {
