@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261104-paint-anchor2">
+  <link rel="stylesheet" href="styles.css?v=20261105-update-quiet">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -153,6 +153,7 @@
         <section class="settings-card update-settings-card">
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
+          <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <details class="update-notes">
             <summary class="update-notes-title">v2.7.3 更新说明</summary>
@@ -525,7 +526,18 @@
   <script src="canvas-runtime.js?v=20261017-modelsync1"></script>
   <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
   <script src="modules/fill-selection.js?v=20261104-material-experimental-canvas"></script>
-  <script src="app.js?v=20261104-v277"></script>
+  <dialog id="updatePromptDialog" class="update-prompt-dialog" aria-labelledby="updatePromptTitle">
+    <form method="dialog">
+      <h2 id="updatePromptTitle">发现新版本</h2>
+      <p id="updatePromptMessage"></p>
+      <div class="update-prompt-actions">
+        <button id="updatePromptQuiet" value="quiet">免打扰</button>
+        <button value="later" autofocus>稍后</button>
+        <button id="updatePromptConfirm" class="primary" value="update">立即更新</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="app.js?v=20261105-update-quiet"></script>
   <script src="modules/manual-matting.js?v=20261104-u2net-engine"></script>
 </body>
 </html>

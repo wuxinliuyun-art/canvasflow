@@ -1591,6 +1591,19 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .update-actions a:hover { text-decoration:underline; }
 .update-actions .primary { padding:8px 14px; border-radius:9px; color: var(--accent-ink); background: var(--accent); }
 .update-actions .primary:hover { text-decoration:none; filter:brightness(1.08); }
+.update-prompt-dialog {
+  width: min(480px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-solid);
+  color: var(--text);
+}
+.update-prompt-dialog::backdrop { background: color-mix(in srgb, var(--text) 36%, transparent); }
+.update-prompt-dialog h2 { margin: 0 0 8px; font-size: 16px; }
+.update-prompt-dialog p { margin: 0 0 16px; font-size: 14px; }
+.update-prompt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .update-notes { margin-top:12px; padding:10px 12px; border:1px solid var(--panel-2); border-radius:10px; color:var(--muted); font-size:12px; line-height:1.6; }
 .update-notes-title { margin-bottom:4px; color:var(--text); font-weight:650; cursor:pointer; list-style:none; }
 .update-notes-title::-webkit-details-marker { display:none; }

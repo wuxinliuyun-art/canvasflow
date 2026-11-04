@@ -140,6 +140,8 @@ const UI_EN = {
   "桌面版已内置拓展服务，刷新按钮会重新检索拓展文件夹；仅服务器运行模式需要手动双击拓展文件夹里的 扩展服务.bat。": "The desktop app has a built-in extension service; Refresh rescans the extensions folder. Only server mode needs 扩展服务.bat started manually.",
   "拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。": "Drag to reorder — the order applies to the canvas right-click Extensions menu; disabled extensions are hidden from the menu.",
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
+  "启动更新提醒免打扰": "Mute startup update reminders", "发现新版本": "Update available",
+  "免打扰": "Mute reminders", "稍后": "Later", "立即更新": "Update now",
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
@@ -10613,6 +10615,29 @@ function updateText(zh, en) {
   return uiLanguage === "en" ? en : zh;
 }
 
+const UPDATE_QUIET_KEY = "canvasflow-update-quiet";
+
+function updateRemindersMuted() {
+  return localStorage.getItem(UPDATE_QUIET_KEY) === "1";
+}
+
+function setUpdateRemindersMuted(muted) {
+  localStorage.setItem(UPDATE_QUIET_KEY, muted ? "1" : "0");
+  $("updateQuietToggle").checked = muted;
+}
+
+function showStartupUpdatePrompt(message, canHotUpdate) {
+  const dialog = $("updatePromptDialog");
+  $("updatePromptMessage").textContent = message;
+  $("updatePromptConfirm").textContent = canHotUpdate
+    ? updateText("立即更新", "Update now") : updateText("打开下载页", "Open download page");
+  dialog.returnValue = "";
+  return new Promise(resolve => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+    dialog.showModal();
+  });
+}
+
 function renderCheckedUpdateStatus(data = lastUpdateCheckResult) {
   if (!data || !els.updateStatus) return;
   els.updateStatus.textContent = data.hasUpdate
@@ -10636,7 +10661,7 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
     els.releasePageLink.href = data.pageUrl || "https://github.com/wuxinliuyun-art/canvasflow/releases";
     renderCheckedUpdateStatus(data);
     console.info("[自动更新] 检查完成", { current: data.currentVersion, latest: data.latestVersion, hasUpdate: data.hasUpdate, asset: data.asset && data.asset.name });
-    if (data.hasUpdate && (!silent || prompt)) {
+    if (data.hasUpdate && (!silent || (prompt && !updateRemindersMuted()))) {
       const canHotUpdate = data.canHotUpdate && Boolean(desktop?.applyWebUpdate);
       const message = canHotUpdate
         ? updateText(
@@ -10647,7 +10672,10 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
           `发现新版本 ${data.latestVersion}（当前 ${data.currentVersion}），需要下载完整安装包。现在打开下载页面吗？`,
           `Version ${data.latestVersion} is available (current: ${data.currentVersion}) and requires the full installer. Open the download page now?`
         );
-      if (window.confirm(message)) {
+      const action = silent ? await showStartupUpdatePrompt(message, canHotUpdate)
+        : window.confirm(message) ? "update" : "later";
+      if (action === "quiet") setUpdateRemindersMuted(true);
+      if (action === "update") {
         if (canHotUpdate) await applyWebUpdate({ confirmed: true });
         else els.releasePageLink.click();
       }
@@ -11624,6 +11652,8 @@ document.querySelectorAll("[data-ui-language]").forEach(button => {
 });
 
 if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
+$("updateQuietToggle").checked = updateRemindersMuted();
+$("updateQuietToggle").onchange = event => setUpdateRemindersMuted(event.target.checked);
 if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
 
 function populateDefaultModelOptions() {
