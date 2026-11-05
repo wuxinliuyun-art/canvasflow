@@ -1201,6 +1201,30 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .chat-workspace-head button:focus-visible, .chat-html-preview-dialog header button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .chat-workspace-head svg, .chat-html-preview-dialog header svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .chat-workspace-body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 8px; padding: 16px; overflow: hidden; }
+.chat-session-strip { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.chat-session-tabs { display: flex; min-width: 0; flex: 1 1 auto; gap: 4px; overflow-x: auto; scrollbar-width: thin; }
+.chat-session-tab { display: flex; min-width: 120px; max-width: 220px; flex: 0 1 180px; align-items: center; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.chat-session-tab.is-active { border-color: var(--primary); background: var(--accent-soft); }
+.chat-session-tab > button:first-child { min-width: 0; flex: 1 1 auto; overflow: hidden; padding: 8px; border: 0; color: var(--text); background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.chat-session-tab > button:last-child { width: 32px; height: 32px; flex: 0 0 32px; padding: 0; border: 0; color: var(--muted); background: transparent; cursor: pointer; }
+.chat-session-tab > button:hover, .chat-session-tab > button:focus-visible { color: var(--text); }
+.chat-session-tab > button:focus-visible, .chat-session-add:focus-visible, .chat-session-history-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.chat-session-add, .chat-session-history-toggle { height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--node-control); cursor: pointer; }
+.chat-session-add { width: 36px; flex: 0 0 36px; padding: 0; font-size: 18px; }
+.chat-history-panel { display: flex; min-height: 0; max-height: 280px; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.chat-history-panel > label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.chat-history-panel input { min-width: 0; flex: 1 1 auto; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--node-control); font-size: 14px; }
+.chat-history-list { display: flex; min-height: 0; flex-direction: column; gap: 4px; overflow-y: auto; }
+.chat-history-item { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: var(--radius); }
+.chat-history-item.is-active { background: var(--accent-soft); }
+.chat-history-item > button { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 4px; padding: 8px; border: 0; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
+.chat-history-item > button strong, .chat-history-item > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-history-item > button span { color: var(--muted); font-size: 12px; }
+.chat-history-item > div { display: flex; gap: 4px; }
+.chat-history-item > div button { padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); background: var(--node-control); cursor: pointer; }
+.chat-history-item > div button:last-child { color: var(--danger); }
+.chat-history-empty { padding: 16px; color: var(--muted); text-align: center; }
+.chat-session-rename-input { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--primary); border-radius: var(--radius); color: var(--text); background: var(--node-control); font-size: 14px; }
 .chat-workspace-body .chat-node-error { order: 1; }
 .chat-workspace-body .chat-messages { order: 2; padding: 0; }
 .chat-workspace-body .chat-message-content { font-size: 14px; line-height: 1.7; }
@@ -1853,16 +1877,16 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   cursor: pointer;
 }
 .chat-model-remove svg { display: block; width: 12px; height: 12px; }
-.chat-model-remove:hover { color: var(--danger); background: rgba(255, 59, 48, .08); }
+.chat-model-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .chat-picker-foot { margin-top: 12px; }
-.chat-model-picker { margin-top: 8px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 10px; background: var(--surface-2, rgba(127, 127, 127, .06)); }
+.chat-model-picker { margin-top: 8px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 8px; background: color-mix(in srgb, var(--panel-2) 24%, transparent); }
 .chat-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
 .chat-picker-search, .chat-picker-manual input { width: 100%; }
 .chat-picker-list { max-height: 240px; overflow-y: auto; margin: 8px 0; }
 .chat-picker-item .chat-picker-candidate { flex: 0 0 auto; }
 .chat-picker-manual { margin-top: 4px; }
 .chat-picker-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
-.chat-custom-site { margin-bottom: 12px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 10px; background: var(--surface-2, rgba(127, 127, 127, .06)); }
+.chat-custom-site { margin-bottom: 12px; padding: 12px; border: 1px solid var(--panel-2); border-radius: 8px; background: color-mix(in srgb, var(--panel-2) 24%, transparent); }
 .chat-custom-site-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .chat-custom-site-head .chat-site-name { flex: 1; }
 .chat-custom-site-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
@@ -4141,3 +4165,8 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 @media (max-width: 767px) {
   .lightbox-left-tools { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
 }
+
+.update-prompt-dialog::backdrop { background: color-mix(in srgb, var(--text) 36%, transparent); }
+.update-prompt-dialog h2 { margin: 0 0 8px; font-size: 16px; }
+.update-prompt-dialog p { margin: 0 0 16px; font-size: 14px; }
+.update-prompt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

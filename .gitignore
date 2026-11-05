@@ -16,6 +16,7 @@ data/
 .opencode/
 desktop-dotnet/bin/
 desktop-dotnet/obj/
+desktop-dotnet/binverify-*/
 background-removal-worker/bin/
 background-removal-worker/obj/
 .codex-build/
@@ -26,3 +27,6 @@ temp-env-before-repair.json
 /CanvasFlow-*.zip
 .tmp-language-check/
 recovery/
+/tmp/
+图片放大工具.zip
+自动抠图.zip

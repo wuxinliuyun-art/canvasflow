@@ -2236,6 +2236,8 @@ function buildNodeObject(type, position, width, height) {
     chatText: type === "chat" ? "" : undefined,
     chatDraft: type === "chat" ? "" : undefined,
     chatAttachments: type === "chat" ? [] : undefined,
+    chatSessions: type === "chat" ? [] : undefined,
+    activeChatSessionId: type === "chat" ? "" : undefined,
     _browserSite: type === "browser-image" ? BROWSER_SITES[0].id : undefined,
     _browserOrigin: type === "browser-image" ? "" : undefined,
     _sdMode: type === "local-sd" ? "txt2img" : undefined,
@@ -3596,10 +3598,84 @@ function chatModelEntry(modelId) {
   return chatSiteKeyReady(model.apiType) ? model : null;
 }
 
+function createChatSession(node, overrides = {}) {
+  const now = Date.now();
+  const session = { id: uid("chat-session"), title: "新对话", closed: false, model: node?._chatModel || chatCatalogModels()[0]?.id || "", enumerated: false, messages: [], text: "", draft: "", attachments: [], createdAt: now, updatedAt: now, ...overrides };
+  session.title = String(session.title || "新对话").trim() || "新对话";
+  return session;
+}
+
+function chatSessionTitleFromMessages(messages) {
+  const first = (messages || []).find(message => message?.role === "user" && String(message.content || "").trim());
+  if (!first) return "";
+  const text = String(first.content).replace(/\s+/g, " ").trim();
+  return text.length > 18 ? `${text.slice(0, 18)}…` : text;
+}
+
+function normalizeChatSession(session, node) {
+  const now = Date.now();
+  const fallbackId = session?.id || uid("chat-session");
+  const fallbackModel = node?._chatModel || chatCatalogModels()[0]?.id || "";
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  return { ...session, id: String(fallbackId), title: String(session?.title || "新对话").trim() || "新对话", closed: session?.closed === true, model: String(session?.model || fallbackModel), enumerated: session?.enumerated === true, messages: messages.filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim()).slice(-CHAT_HISTORY_LIMIT), text: String(session?.text || ""), draft: String(session?.draft || ""), attachments: Array.isArray(session?.attachments) ? session.attachments : [], createdAt: Number(session?.createdAt) || now, updatedAt: Number(session?.updatedAt) || now };
+}
+
+function activeChatSession(node) {
+  return node?.chatSessions?.find(session => session.id === node.activeChatSessionId) || null;
+}
+
+function allChatAttachments(node) {
+  const attachments = [...(node?.chatAttachments || [])];
+  for (const session of node?.chatSessions || []) attachments.push(...(session.attachments || []));
+  return attachments.filter((item, index, items) => item && items.indexOf(item) === index);
+}
+
+function saveActiveChatSession(node, touch = false) {
+  const session = activeChatSession(node);
+  if (!session) return null;
+  session.model = node._chatModel || "";
+  session.enumerated = node._chatEnumerated === true;
+  session.messages = node.chatMessages || [];
+  session.text = node.chatText || "";
+  session.draft = node.chatDraft || "";
+  session.attachments = node.chatAttachments || [];
+  if (touch) session.updatedAt = Date.now();
+  return session;
+}
+
+function loadChatSession(node, sessionId) {
+  const session = node.chatSessions?.find(item => item.id === sessionId);
+  if (!session) return false;
+  node.activeChatSessionId = session.id;
+  session.closed = false;
+  node._chatModel = session.model || chatCatalogModels()[0]?.id || "";
+  node._chatEnumerated = session.enumerated === true;
+  node.chatMessages = session.messages;
+  node.chatText = session.text;
+  node.chatDraft = session.draft;
+  node.chatAttachments = session.attachments;
+  node._chatError = "";
+  return true;
+}
+
+function ensureChatSessions(node) {
+  if (!Array.isArray(node.chatSessions) || !node.chatSessions.length) {
+    const migrated = createChatSession(node, { title: chatSessionTitleFromMessages(node.chatMessages) || "对话 1", model: node._chatModel, enumerated: node._chatEnumerated === true, messages: Array.isArray(node.chatMessages) ? node.chatMessages : [], text: node.chatText || "", draft: node.chatDraft || "", attachments: Array.isArray(node.chatAttachments) ? node.chatAttachments : [] });
+    node.chatSessions = [migrated];
+    node.activeChatSessionId = migrated.id;
+  } else {
+    saveActiveChatSession(node);
+    node.chatSessions = node.chatSessions.map(session => normalizeChatSession(session, node));
+    if (!node.chatSessions.some(session => session.id === node.activeChatSessionId)) node.activeChatSessionId = node.chatSessions.find(session => !session.closed)?.id || node.chatSessions[0].id;
+    loadChatSession(node, node.activeChatSessionId);
+  }
+}
+
 function normalizeChatNode(node) {
   // 尺寸不强制:节点支持拖拽缩放(与文字节点一致),只钳制最小值;新建默认 380×380
   node.w = Math.max(280, Number(node.w) || CHAT_NODE_WIDTH);
   node.h = Math.max(220, Number(node.h) || CHAT_NODE_HEIGHT);
+  ensureChatSessions(node);
   const messages = Array.isArray(node.chatMessages) ? node.chatMessages : [];
   node.chatMessages = messages
     .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
@@ -3630,6 +3706,7 @@ function normalizeChatNode(node) {
   }
   node.chatDraft = String(node.chatDraft || "");
   node._chatError = String(node._chatError || "");
+  saveActiveChatSession(node);
   // 注意:这里不重置 _chatBusy/_chatAbort——模板每次渲染都会走本函数,
   // 运行时状态只能由存档加载路径清掉(见 loadProject 的 walkNodes)
   return node;
@@ -4512,6 +4589,8 @@ async function sendChatNodeMessage(nodeId, options = {}) {
     // 关键词区原样保留,结果区整体替换为最新回复(不累加);下游/截图收集只取最后一条分隔线之后的结果
     node.chatText = typed ? `${typed}\n\n${CHAT_RESULT_DIVIDER}\n\n${reply}` : reply;
     node._chatError = "";
+    const session = saveActiveChatSession(node, true);
+    if (session && (/^对话\s+\d+$/.test(session.title) || session.title === "新对话")) session.title = chatSessionTitleFromMessages(node.chatMessages) || session.title;
     pushHistory();
   } catch (error) {
     if (node._chatRequestId !== requestId) return;
@@ -4594,7 +4673,7 @@ function openChatHtmlPreview(node, messageIndex, initialMode = "preview") {
   backdrop.className = chatOverlayClass("chat-html-preview-backdrop");
   backdrop.innerHTML = `<section class="chat-html-preview-dialog" role="dialog" aria-modal="true" aria-label="HTML 网页预览与代码">`
     + `<header><div><strong>HTML 网页</strong><span data-html-view-description></span></div><div class="chat-html-view-actions" role="group" aria-label="HTML 查看方式">`
-    + `<button type="button" data-html-view="preview">预览</button><button type="button" data-html-view="code">代码</button><button type="button" data-html-copy-code>复制代码</button>`
+    + `<button type="button" data-html-view="preview">预览</button><button type="button" data-html-view="code">代码</button><button type="button" data-html-copy-code>复制代码</button><button type="button" data-html-save>保存 HTML</button>`
     + `<button type="button" data-html-view-close aria-label="关闭 HTML 查看器"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>`
     + `<iframe title="HTML 网页完整预览" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>`
     + `<textarea class="chat-html-code" aria-label="完整 HTML 代码" readonly spellcheck="false"></textarea></section>`;
@@ -4615,11 +4694,29 @@ function openChatHtmlPreview(node, messageIndex, initialMode = "preview") {
     if (await copyTextValue(html)) toast("已复制 HTML 代码");
     else toast("复制失败，请在代码视图中手动选择复制");
   });
+  backdrop.querySelector("[data-html-save]").addEventListener("click", () => saveChatHtmlFile(html));
   backdrop.addEventListener("mousedown", event => { if (event.target === backdrop) close(); });
   frame.srcdoc = html;
   code.value = html;
   setMode(initialMode === "code" ? "code" : "preview");
   document.body.appendChild(backdrop);
+}
+
+function saveChatHtmlFile(html) {
+  const source = String(html || "").trim();
+  if (!source) return false;
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+  const url = URL.createObjectURL(new Blob([source], { type: "text/html;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `CanvasFlow-网页-${stamp}.html`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("HTML 已保存到本地下载目录");
+  return true;
 }
 
 let chatHtmlEditorState = null;
@@ -4659,9 +4756,12 @@ function buildChatHtmlEditorPreview(html) {
   const doc = chatHtmlEditorDocument(html);
   doc.querySelectorAll('meta[http-equiv="Content-Security-Policy" i]').forEach(item => item.remove());
   [...doc.body.querySelectorAll("*")].forEach((element, index) => element.setAttribute("data-cf-edit-id", String(index)));
+  const appStyle = getComputedStyle(document.documentElement);
+  const editorPrimary = appStyle.getPropertyValue("--primary").trim();
+  const editorInverseText = appStyle.getPropertyValue("--inverse-text").trim();
   const bridge = doc.createElement("script");
   bridge.setAttribute("data-cf-editor-bridge", "1");
-  bridge.textContent = `(()=>{if(window.__cfVisualEditor)return;window.__cfVisualEditor=true;let selected=null,hover=null;const root=document.createElement('div'),hoverBox=document.createElement('div'),selectedBox=document.createElement('div'),label=document.createElement('div');root.style.cssText='position:fixed;inset:0;z-index:2147483646;pointer-events:none';hoverBox.style.cssText='position:fixed;display:none;border:2px dashed #3b82f6;pointer-events:none';selectedBox.style.cssText='position:fixed;display:none;border:2px solid #2563eb;pointer-events:none';label.style.cssText='position:fixed;display:none;padding:2px 6px;border-radius:4px;background:#2563eb;color:#fff;font:12px/1.5 sans-serif;pointer-events:none';root.append(hoverBox,selectedBox,label);(document.body||document.documentElement).append(root);const draw=(box,el)=>{if(!el){box.style.display='none';return}const r=el.getBoundingClientRect();box.style.display='block';box.style.left=r.left+'px';box.style.top=r.top+'px';box.style.width=r.width+'px';box.style.height=r.height+'px'};const tick=()=>{draw(hoverBox,hover===selected?null:hover);draw(selectedBox,selected);if(selected){const r=selected.getBoundingClientRect();label.style.display='block';label.style.left=Math.max(0,r.left)+'px';label.style.top=Math.max(0,r.top-22)+'px';label.textContent=selected.tagName.toLowerCase()}else label.style.display='none';requestAnimationFrame(tick)};document.addEventListener('mousemove',e=>{hover=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null},true);document.addEventListener('click',e=>{const el=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null;if(!el)return;e.preventDefault();e.stopPropagation();selected=el;const style=getComputedStyle(el);parent.postMessage({type:'cf-html-element-selected',id:Number(el.getAttribute('data-cf-edit-id')),tag:el.tagName.toLowerCase(),text:el.children.length?'':el.textContent||'',isImage:el.tagName==='IMG',src:el.getAttribute('src')||'',style:{color:style.color,backgroundColor:style.backgroundColor,fontSize:style.fontSize,fontWeight:style.fontWeight,textAlign:style.textAlign,borderRadius:style.borderRadius,width:style.width,height:style.height}},'*')},true);document.addEventListener('submit',e=>e.preventDefault(),true);tick()})()`;
+  bridge.textContent = `(()=>{if(window.__cfVisualEditor)return;window.__cfVisualEditor=true;const primary=${JSON.stringify(editorPrimary)},inverseText=${JSON.stringify(editorInverseText)};let selected=null,hover=null;const root=document.createElement('div'),hoverBox=document.createElement('div'),selectedBox=document.createElement('div'),label=document.createElement('div');root.style.cssText='position:fixed;inset:0;z-index:299;pointer-events:none';hoverBox.style.cssText='position:fixed;display:none;border:2px dashed '+primary+';pointer-events:none';selectedBox.style.cssText='position:fixed;display:none;border:2px solid '+primary+';pointer-events:none';label.style.cssText='position:fixed;display:none;padding:2px 6px;border-radius:4px;background:'+primary+';color:'+inverseText+';font:12px/1.5 inherit;pointer-events:none';root.append(hoverBox,selectedBox,label);(document.body||document.documentElement).append(root);const draw=(box,el)=>{if(!el){box.style.display='none';return}const r=el.getBoundingClientRect();box.style.display='block';box.style.left=r.left+'px';box.style.top=r.top+'px';box.style.width=r.width+'px';box.style.height=r.height+'px'};const tick=()=>{draw(hoverBox,hover===selected?null:hover);draw(selectedBox,selected);if(selected){const r=selected.getBoundingClientRect();label.style.display='block';label.style.left=Math.max(0,r.left)+'px';label.style.top=Math.max(0,r.top-22)+'px';label.textContent=selected.tagName.toLowerCase()}else label.style.display='none';requestAnimationFrame(tick)};document.addEventListener('mousemove',e=>{hover=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null},true);document.addEventListener('click',e=>{const el=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null;if(!el)return;e.preventDefault();e.stopPropagation();selected=el;const style=getComputedStyle(el);parent.postMessage({type:'cf-html-element-selected',id:Number(el.getAttribute('data-cf-edit-id')),tag:el.tagName.toLowerCase(),text:el.children.length?'':el.textContent||'',isImage:el.tagName==='IMG',src:el.getAttribute('src')||'',style:{color:style.color,backgroundColor:style.backgroundColor,fontSize:style.fontSize,fontWeight:style.fontWeight,textAlign:style.textAlign,borderRadius:style.borderRadius,width:style.width,height:style.height}},'*')},true);document.addEventListener('submit',e=>e.preventDefault(),true);tick()})()`;
   doc.body.appendChild(bridge);
   return serializeEditedHtml(doc, html);
 }
@@ -4819,7 +4919,7 @@ function openChatHtmlEditor(node, messageIndex) {
   window.requestAnimationFrame(() => frame.focus());
 }
 
-document.addEventListener("click", event => {
+document.addEventListener("click", async event => {
   const backdrop = event.target.closest?.(".chat-workspace-backdrop");
   if (!backdrop) return;
   if (event.target.closest("[data-chat-workspace-close]") || event.target === backdrop) {
@@ -4842,6 +4942,11 @@ document.addEventListener("click", event => {
     openChatHtmlEditor(node, Number(action.dataset.messageIndex));
     return;
   }
+  // 对话节点专属控件直接分发:紧凑卡上没有同名控件,转发到画布会落空（附件按钮失联的根因）
+  if (node.type === "chat" && action.dataset.role?.startsWith("chat-")) {
+    await handleChatNodeAction(node, action.dataset.role, action);
+    return;
+  }
   let selector = `.node[data-id="${CSS.escape(node.id)}"] [data-role="${CSS.escape(action.dataset.role)}"]`;
   if (action.dataset.messageIndex !== undefined) selector += `[data-message-index="${CSS.escape(action.dataset.messageIndex)}"]`;
   if (action.dataset.attachmentId !== undefined) selector += `[data-attachment-id="${CSS.escape(action.dataset.attachmentId)}"]`;
@@ -4850,25 +4955,81 @@ document.addEventListener("click", event => {
 
 document.addEventListener("input", event => {
   const backdrop = event.target.closest?.(".chat-workspace-backdrop");
-  if (!backdrop || event.target.dataset.role !== "chat-text") return;
+  if (!backdrop) return;
   const node = findNode(backdrop.dataset.nodeId);
   if (!node) return;
+  if (event.target.dataset.role === "chat-history-search") {
+    node._chatHistoryQuery = event.target.value;
+    syncChatNodeBody(node);
+    document.querySelector('.chat-workspace [data-role="chat-history-search"]')?.focus();
+    return;
+  }
+  if (event.target.dataset.role !== "chat-text") return;
   node.chatDraft = event.target.value;
+  saveActiveChatSession(node, true);
   const compactInput = els.nodes.querySelector(`.node[data-id="${CSS.escape(node.id)}"] textarea[data-role="chat-text"]`);
   if (compactInput) compactInput.value = node.chatDraft;
   markDirty();
 });
 
-document.addEventListener("change", event => {
+document.addEventListener("change", async event => {
   const backdrop = event.target.closest?.(".chat-workspace-backdrop");
   const role = event.target.dataset?.role;
   if (!backdrop || (role !== "chat-model" && role !== "chat-enumerate-toggle")) return;
   const node = findNode(backdrop.dataset.nodeId);
+  if (!node) return;
   const compactControl = node && els.nodes.querySelector(`.node[data-id="${CSS.escape(node.id)}"] [data-role="${CSS.escape(role)}"]`);
-  if (!compactControl) return;
-  if (role === "chat-model") compactControl.value = event.target.value;
-  else compactControl.checked = event.target.checked;
-  compactControl.dispatchEvent(new Event("change", { bubbles: true }));
+  if (compactControl) {
+    if (role === "chat-model") compactControl.value = event.target.value;
+    else compactControl.checked = event.target.checked;
+    compactControl.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+  // 紧凑卡上没有同名控件时直接写回节点（与画布 change 委托同款语义）
+  if (role === "chat-model") {
+    await changeChatNodeModel(node, event.target.value);
+  } else {
+    // 批量提示词开关:只落盘不渲染(checkbox 自身持态),下次回车发送即生效
+    node._chatEnumerated = event.target.checked;
+    saveActiveChatSession(node, true);
+    markDirty();
+  }
+});
+
+document.addEventListener("dblclick", event => {
+  const tab = event.target.closest?.(".chat-session-tab");
+  const backdrop = tab?.closest(".chat-workspace-backdrop");
+  if (!tab || !backdrop) return;
+  const node = findNode(backdrop.dataset.nodeId);
+  const opener = tab.querySelector('[data-role="chat-session-open"]');
+  if (node && opener) handleChatNodeAction(node, "chat-session-rename", opener);
+});
+
+document.addEventListener("dragstart", event => {
+  const tab = event.target.closest?.(".chat-session-tab");
+  if (!tab) return;
+  event.dataTransfer?.setData("text/x-canvasflow-chat-session", tab.dataset.chatSessionId || "");
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+});
+
+document.addEventListener("dragover", event => {
+  if (event.target.closest?.(".chat-session-tab")) event.preventDefault();
+});
+
+document.addEventListener("drop", event => {
+  const target = event.target.closest?.(".chat-session-tab");
+  const backdrop = target?.closest(".chat-workspace-backdrop");
+  const sourceId = event.dataTransfer?.getData("text/x-canvasflow-chat-session");
+  if (!target || !backdrop || !sourceId || sourceId === target.dataset.chatSessionId) return;
+  event.preventDefault();
+  const node = findNode(backdrop.dataset.nodeId);
+  if (!node) return;
+  const from = node.chatSessions.findIndex(session => session.id === sourceId);
+  const to = node.chatSessions.findIndex(session => session.id === target.dataset.chatSessionId);
+  if (from < 0 || to < 0) return;
+  const [session] = node.chatSessions.splice(from, 1);
+  node.chatSessions.splice(to, 0, session);
+  pushHistory(); syncChatNodeBody(node);
 });
 
 document.addEventListener("keydown", event => {
@@ -7512,7 +7673,7 @@ function extractHtmlDocument(text) {
 function chatHtmlPreviewCard(message, index) {
   if (message.role !== "assistant" || !extractHtmlDocument(message.content)) return "";
   return `<section class="chat-html-card" aria-label="HTML 网页操作">`
-    + `<div class="chat-html-card-head"><div><strong>HTML 网页</strong><span>完整文档已生成</span></div><span class="chat-html-card-actions"><button type="button" data-role="chat-html-open" data-message-index="${index}">预览</button><button type="button" data-role="chat-html-code" data-message-index="${index}">代码</button><button type="button" data-role="chat-html-edit" data-message-index="${index}">编辑</button></span></div>`
+    + `<div class="chat-html-card-head"><div><strong>HTML 网页</strong><span>完整文档已生成</span></div><span class="chat-html-card-actions"><button type="button" data-role="chat-html-open" data-message-index="${index}">预览</button><button type="button" data-role="chat-html-code" data-message-index="${index}">代码</button><button type="button" data-role="chat-html-save" data-message-index="${index}">保存</button><button type="button" data-role="chat-html-edit" data-message-index="${index}">编辑</button></span></div>`
     + `</section>`;
 }
 
@@ -7545,6 +7706,24 @@ function chatMessagesHtml(node, busy) {
   }).join("");
 }
 
+function chatSessionTabsHtml(node) {
+  const open = (node.chatSessions || []).filter(session => !session.closed);
+  const tabs = open.map(session => `<div class="chat-session-tab${session.id === node.activeChatSessionId ? " is-active" : ""}" draggable="true" data-chat-session-id="${escapeHtml(session.id)}"><button type="button" data-role="chat-session-open" data-session-id="${escapeHtml(session.id)}" title="${escapeHtml(session.title)}">${escapeHtml(session.title)}</button><button type="button" data-role="chat-session-close" data-session-id="${escapeHtml(session.id)}" aria-label="关闭对话 ${escapeHtml(session.title)}">×</button></div>`).join("");
+  return `<div class="chat-session-strip"><button class="chat-session-history-toggle" type="button" data-role="chat-session-history" aria-label="打开聊天历史" title="聊天历史">历史</button><div class="chat-session-tabs" role="tablist" aria-label="对话标签">${tabs}</div><button class="chat-session-add" type="button" data-role="chat-session-add" aria-label="新建对话" title="新建对话">+</button></div>`;
+}
+
+function chatSessionHistoryHtml(node) {
+  if (!node._chatHistoryOpen) return "";
+  const query = String(node._chatHistoryQuery || "").trim().toLowerCase();
+  const sessions = [...(node.chatSessions || [])].sort((a, b) => b.updatedAt - a.updatedAt).filter(session => !query || session.title.toLowerCase().includes(query));
+  const items = sessions.map(session => {
+    const model = chatModelEntry(session.model)?.label || session.model || "未选择模型";
+    const time = new Date(session.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return `<div class="chat-history-item${session.id === node.activeChatSessionId ? " is-active" : ""}" data-session-id="${escapeHtml(session.id)}"><button type="button" data-role="chat-session-open" data-session-id="${escapeHtml(session.id)}"><strong>${escapeHtml(session.title)}</strong><span>${escapeHtml(model)} · ${escapeHtml(time)}</span></button><div><button type="button" data-role="chat-session-rename" data-session-id="${escapeHtml(session.id)}">改名</button><button type="button" data-role="chat-session-delete" data-session-id="${escapeHtml(session.id)}">删除</button></div></div>`;
+  }).join("") || `<div class="chat-history-empty">没有匹配的对话</div>`;
+  return `<aside class="chat-history-panel" aria-label="聊天历史"><label><span>搜索历史</span><input type="search" data-role="chat-history-search" value="${escapeHtml(node._chatHistoryQuery || "")}" placeholder="搜索对话名称"></label><div class="chat-history-list">${items}</div></aside>`;
+}
+
 function chatNodeBody(node, expanded = false) {
   normalizeChatNode(node);
   const busy = node._chatBusy === true;
@@ -7565,7 +7744,9 @@ function chatNodeBody(node, expanded = false) {
     ? `<button class="chat-tool-btn is-busy" data-role="chat-stop" type="button" title="停止生成" aria-label="停止生成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>`
     : `<label class="chat-enumerate-toggle" title="批量提示词：要求 AI 按 a. b. 序号输出；收到回复后可手动拆成文字节点"><input type="checkbox" data-role="chat-enumerate-toggle" ${node._chatEnumerated ? "checked" : ""} ${busy ? "disabled" : ""}><span>批量</span></label>`
       + `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
-  return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
+  return chatSessionTabsHtml(node)
+    + chatSessionHistoryHtml(node)
+    + `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
     + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
     + `<div class="chat-messages" role="log" aria-label="对话记录">${chatMessagesHtml(node, busy)}</div>`
     + `<div class="chat-composer"><textarea data-role="chat-text" placeholder="输入新消息，Enter 发送；Shift+Enter 换行" ${busy ? "disabled" : ""}>${escapeHtml(node.chatDraft || "")}</textarea>`
@@ -8820,6 +9001,7 @@ els.nodes.addEventListener("input", ev => {
   // 对话输入框只保存本轮草稿,不作为节点输出；不触发渲染以免打断输入/IME。
   if (ev.target.dataset.role === "chat-text") {
     node.chatDraft = ev.target.value;
+    saveActiveChatSession(node, true);
     markDirty();
   }
   // 浏览器生图:提示词与自定义网址只落盘不渲染(保住输入焦点)
@@ -8900,7 +9082,7 @@ els.nodes.addEventListener("focusout", ev => {
   releaseNodeSelectLock(ev.target);
 });
 
-els.nodes.addEventListener("change", ev => {
+els.nodes.addEventListener("change", async ev => {
   const nodeEl = ev.target.closest(".node");
   const node = nodeEl ? findNode(nodeEl.dataset.id) : null;
   const role = ev.target.dataset.role;
@@ -8960,14 +9142,13 @@ els.nodes.addEventListener("change", ev => {
   }
   if (node.type === "chat") {
     if (role === "chat-model") {
-      node._chatModel = ev.target.value;
-      node._chatError = "";
-      pushHistory(); render();
+      await changeChatNodeModel(node, ev.target.value);
       return;
     }
     if (role === "chat-enumerate-toggle") {
       // 批量提示词开关:只落盘不渲染(checkbox 自身持态),下次回车发送即生效
       node._chatEnumerated = ev.target.checked;
+      saveActiveChatSession(node, true);
       markDirty();
       return;
     }
@@ -9038,6 +9219,164 @@ els.nodes.addEventListener("change", ev => {
   }
 });
 
+async function changeChatNodeModel(node, nextModel) {
+  if (!node || node.type !== "chat" || !nextModel || nextModel === node._chatModel) return;
+  const previous = chatModelEntry(node._chatModel);
+  const next = chatModelEntry(nextModel);
+  const hasHistory = Boolean(node.chatMessages?.length);
+  if (hasHistory && previous?.apiType && next?.apiType && previous.apiType !== next.apiType) {
+    const keepHistory = await showCanvasDialog({ title: "切换对话站点", message: "继续当前对话会把已有聊天历史发送给新站点。你也可以新建一份空对话。", confirmText: "当前对话继续", cancelText: "新建对话" });
+    if (!keepHistory) {
+      saveActiveChatSession(node, true);
+      const session = createChatSession(node, { title: `对话 ${node.chatSessions.length + 1}`, model: nextModel });
+      node.chatSessions.push(session);
+      loadChatSession(node, session.id);
+      pushHistory(); syncChatNodeBody(node);
+      return;
+    }
+  }
+  node._chatModel = nextModel;
+  node._chatError = "";
+  saveActiveChatSession(node, true);
+  pushHistory(); render();
+}
+
+// 对话节点动作分发:画布节点点击与对话工作区点击共用（工作区不在 .node 内,紧凑卡上也没有这些控件,不能走中继点击）
+async function handleChatNodeAction(node, actionRole, action) {
+  if (!node || node.type !== "chat") return;
+  if (actionRole === "chat-session-history") {
+    node._chatHistoryOpen = !node._chatHistoryOpen;
+    syncChatNodeBody(node);
+    return;
+  }
+  if (actionRole === "chat-session-add") {
+    if (node._chatBusy) return toast("请等当前回复完成后再新建对话");
+    saveActiveChatSession(node, true);
+    const session = createChatSession(node, { title: `对话 ${node.chatSessions.length + 1}` });
+    node.chatSessions.push(session);
+    loadChatSession(node, session.id);
+    pushHistory(); syncChatNodeBody(node);
+    return;
+  }
+  if (actionRole === "chat-session-open") {
+    if (node._chatBusy) return toast("请等当前回复完成后再切换对话");
+    if (action.dataset.sessionId === node.activeChatSessionId) return;
+    saveActiveChatSession(node, true);
+    if (loadChatSession(node, action.dataset.sessionId)) { pushHistory(); syncChatNodeBody(node); }
+    return;
+  }
+  if (actionRole === "chat-session-close") {
+    if (node._chatBusy && action.dataset.sessionId === node.activeChatSessionId) return toast("请先停止或等待当前回复完成");
+    saveActiveChatSession(node, true);
+    const session = node.chatSessions.find(item => item.id === action.dataset.sessionId);
+    if (!session) return;
+    session.closed = true;
+    let next = node.chatSessions.find(item => !item.closed && item.id !== session.id);
+    if (!next) { next = createChatSession(node, { title: `对话 ${node.chatSessions.length + 1}` }); node.chatSessions.push(next); }
+    if (session.id === node.activeChatSessionId) loadChatSession(node, next.id);
+    pushHistory(); syncChatNodeBody(node);
+    return;
+  }
+  if (actionRole === "chat-session-rename") {
+    const session = node.chatSessions.find(item => item.id === action.dataset.sessionId);
+    const host = action.closest(".chat-history-item, .chat-session-tab");
+    if (!session || !host || host.querySelector(".chat-session-rename-input")) return;
+    const input = document.createElement("input");
+    input.className = "chat-session-rename-input";
+    input.value = session.title;
+    input.setAttribute("aria-label", "对话名称");
+    const target = host.querySelector("strong") || host.querySelector('[data-role="chat-session-open"]');
+    target.replaceWith(input);
+    let finished = false;
+    const finish = save => {
+      if (finished) return;
+      finished = true;
+      const value = input.value.trim();
+      if (save && value) { session.title = value; session.updatedAt = Date.now(); pushHistory(); }
+      else if (save && !value) toast("对话名称不能为空");
+      syncChatNodeBody(node);
+    };
+    input.addEventListener("keydown", event => { if (event.key === "Enter") finish(true); if (event.key === "Escape") finish(false); });
+    input.addEventListener("blur", () => finish(Boolean(input.value.trim())), { once: true });
+    input.focus(); input.select();
+    return;
+  }
+  if (actionRole === "chat-session-delete") {
+    const session = node.chatSessions.find(item => item.id === action.dataset.sessionId);
+    if (!session) return;
+    if (node._chatBusy && session.id === node.activeChatSessionId) return toast("请先停止或等待当前回复完成");
+    const confirmed = await showCanvasDialog({ title: "删除对话", message: `将永久删除“${session.title}”及其聊天记录。`, confirmText: "删除", cancelText: "取消" });
+    if (!confirmed) return;
+    node.chatSessions = node.chatSessions.filter(item => item.id !== session.id);
+    let next = node.chatSessions.find(item => !item.closed);
+    if (!next) { next = createChatSession(node, { title: "新对话" }); node.chatSessions.push(next); }
+    if (session.id === node.activeChatSessionId) loadChatSession(node, next.id);
+    pushHistory(); syncChatNodeBody(node);
+    return;
+  }
+  if (actionRole === "chat-attachment-add") uploadChatAttachments(node);
+  if (actionRole === "chat-attachment-remove") {
+    normalizeChatNode(node);
+    node.chatAttachments = node.chatAttachments.filter(item => item.id !== action.dataset.attachmentId);
+    node._chatError = "";
+    saveActiveChatSession(node, true);
+    pushHistory();
+    syncChatNodeBody(node);
+  }
+  if (actionRole === "chat-attachment-clear") {
+    node.chatAttachments = [];
+    node._chatError = "";
+    saveActiveChatSession(node, true);
+    pushHistory();
+    syncChatNodeBody(node);
+  }
+  if (actionRole === "chat-send") sendChatNodeMessage(node.id);
+  if (actionRole === "chat-expand") openChatWorkspace(node.id);
+  if (actionRole === "chat-html-open") openChatHtmlPreview(node, Number(action.dataset.messageIndex));
+  if (actionRole === "chat-html-code") openChatHtmlPreview(node, Number(action.dataset.messageIndex), "code");
+  if (actionRole === "chat-html-save") {
+    const html = extractHtmlDocument(node.chatMessages?.[Number(action.dataset.messageIndex)]?.content);
+    if (!saveChatHtmlFile(html)) toast("没有识别到完整 HTML 文档");
+  }
+  if (actionRole === "chat-html-edit") openChatHtmlEditor(node, Number(action.dataset.messageIndex));
+  if (actionRole === "chat-message-copy") {
+    const message = node.chatMessages?.[Number(action.dataset.messageIndex)];
+    if (message && await copyTextValue(message.content)) toast("已复制消息");
+  }
+  if (actionRole === "chat-message-retry") {
+    sendChatNodeMessage(node.id, { retryAssistantIndex: Number(action.dataset.messageIndex) });
+  }
+  if (actionRole === "chat-message-split" && node.type === "chat") {
+    const message = node.chatMessages?.[Number(action.dataset.messageIndex)];
+    const items = message?.role === "assistant" ? parseNumberedChatItems(message.content) : null;
+    if (!items) toast("这条回复没有至少两项 a. b. 编号内容");
+    else {
+      createChatPromptTextNodes(node, items);
+      pushHistory();
+      toast(`已拆分为 ${items.length} 个文字节点`);
+    }
+  }
+  if (actionRole === "chat-stop" && node._chatBusy) {
+    // 桌面桥无法中断进行中的请求:立即回到可输入状态,迟到的结果由请求序列号丢弃
+    node._chatCancelled = true;
+    node._chatAbort?.abort();
+    node._chatBusy = false;
+    node._chatError = "已停止生成";
+    syncChatNodeBody(node);
+  }
+  if (actionRole === "chat-clear") {
+    const confirmed = await showCanvasDialog({ title: "清空当前对话", message: "将删除当前对话的全部消息和待发图片，保留对话名称与模型。", confirmText: "清空", cancelText: "取消" });
+    if (confirmed) {
+      node.chatMessages = [];
+      node.chatText = "";
+      node.chatAttachments = [];
+      node._chatError = "";
+      saveActiveChatSession(node, true);
+      pushHistory(); render();
+    }
+  }
+}
+
 els.nodes.addEventListener("click", async ev => {
   const nodeEl = ev.target.closest(".node");
   if (!nodeEl) return;
@@ -9082,59 +9421,7 @@ els.nodes.addEventListener("click", async ev => {
     delete node.generatedAssetId;
     pushHistory(); render();
   }
-  if (actionRole === "chat-attachment-add" && node.type === "chat") uploadChatAttachments(node);
-  if (actionRole === "chat-attachment-remove" && node.type === "chat") {
-    normalizeChatNode(node);
-    node.chatAttachments = node.chatAttachments.filter(item => item.id !== action.dataset.attachmentId);
-    node._chatError = "";
-    pushHistory();
-    syncChatNodeBody(node);
-  }
-  if (actionRole === "chat-attachment-clear" && node.type === "chat") {
-    node.chatAttachments = [];
-    node._chatError = "";
-    pushHistory();
-    syncChatNodeBody(node);
-  }
-  if (actionRole === "chat-send" && node.type === "chat") sendChatNodeMessage(node.id);
-  if (actionRole === "chat-expand" && node.type === "chat") openChatWorkspace(node.id);
-  if (actionRole === "chat-html-open" && node.type === "chat") openChatHtmlPreview(node, Number(action.dataset.messageIndex));
-  if (actionRole === "chat-html-code" && node.type === "chat") openChatHtmlPreview(node, Number(action.dataset.messageIndex), "code");
-  if (actionRole === "chat-html-edit" && node.type === "chat") openChatHtmlEditor(node, Number(action.dataset.messageIndex));
-  if (actionRole === "chat-message-copy" && node.type === "chat") {
-    const message = node.chatMessages?.[Number(action.dataset.messageIndex)];
-    if (message && await copyTextValue(message.content)) toast("已复制消息");
-  }
-  if (actionRole === "chat-message-retry" && node.type === "chat") {
-    sendChatNodeMessage(node.id, { retryAssistantIndex: Number(action.dataset.messageIndex) });
-  }
-  if (actionRole === "chat-message-split" && node.type === "chat") {
-    const message = node.chatMessages?.[Number(action.dataset.messageIndex)];
-    const items = message?.role === "assistant" ? parseNumberedChatItems(message.content) : null;
-    if (!items) toast("这条回复没有至少两项 a. b. 编号内容");
-    else {
-      createChatPromptTextNodes(node, items);
-      pushHistory();
-      toast(`已拆分为 ${items.length} 个文字节点`);
-    }
-  }
-  if (actionRole === "chat-stop" && node.type === "chat" && node._chatBusy) {
-    // 桌面桥无法中断进行中的请求:立即回到可输入状态,迟到的结果由请求序列号丢弃
-    node._chatCancelled = true;
-    node._chatAbort?.abort();
-    node._chatBusy = false;
-    node._chatError = "已停止生成";
-    syncChatNodeBody(node);
-  }
-  if (actionRole === "chat-clear" && node.type === "chat") {
-    const confirmed = await showCanvasDialog({ title: "清空对话", message: "将删除这个节点中的全部聊天消息，输入框草稿会保留。", confirmText: "清空", cancelText: "取消" });
-    if (confirmed) {
-      node.chatMessages = [];
-      node.chatText = "";
-      node._chatError = "";
-      pushHistory(); render();
-    }
-  }
+  if (node && node.type === "chat") await handleChatNodeAction(node, actionRole, action);
   if (actionRole === "variable-add-row") {
     normalizeVariableNode(node);
     node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
@@ -9317,6 +9604,7 @@ async function uploadChatAttachments(node) {
       node.chatAttachments.push(attachment);
     }
     node._chatError = "";
+    saveActiveChatSession(node, true);
     pushHistory();
     syncChatNodeBody(node);
     if (files.length > selected.length) toast(`最多保留 ${CHAT_MAX_REFERENCE_IMAGES} 张对话附件`);
@@ -11912,6 +12200,30 @@ function updateText(zh, en) {
   return uiLanguage === "en" ? en : zh;
 }
 
+// 更新提醒免打扰（自 2.7.8 界面包移植）：localStorage 全局开关，只静音启动自动弹窗，手动"检查更新"不受影响
+const UPDATE_QUIET_KEY = "canvasflow-update-quiet";
+
+function updateRemindersMuted() {
+  return localStorage.getItem(UPDATE_QUIET_KEY) === "1";
+}
+
+function setUpdateRemindersMuted(muted) {
+  localStorage.setItem(UPDATE_QUIET_KEY, muted ? "1" : "0");
+  $("updateQuietToggle").checked = muted;
+}
+
+function showStartupUpdatePrompt(message, canHotUpdate) {
+  const dialog = $("updatePromptDialog");
+  $("updatePromptMessage").textContent = message;
+  $("updatePromptConfirm").textContent = canHotUpdate
+    ? updateText("立即更新", "Update now") : updateText("打开下载页", "Open download page");
+  dialog.returnValue = "";
+  return new Promise(resolve => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+    dialog.showModal();
+  });
+}
+
 function renderCheckedUpdateStatus(data = lastUpdateCheckResult) {
   if (!data || !els.updateStatus) return;
   els.updateStatus.textContent = data.hasUpdate
@@ -11935,7 +12247,7 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
     els.releasePageLink.href = data.pageUrl || "https://github.com/wuxinliuyun-art/canvasflow/releases";
     renderCheckedUpdateStatus(data);
     console.info("[自动更新] 检查完成", { current: data.currentVersion, latest: data.latestVersion, hasUpdate: data.hasUpdate, asset: data.asset && data.asset.name });
-    if (data.hasUpdate && (!silent || prompt)) {
+    if (data.hasUpdate && (!silent || (prompt && !updateRemindersMuted()))) {
       const canHotUpdate = data.canHotUpdate && Boolean(desktop?.applyWebUpdate);
       const message = canHotUpdate
         ? updateText(
@@ -11946,7 +12258,10 @@ async function checkForUpdates({ silent = false, prompt = false } = {}) {
           `发现新版本 ${data.latestVersion}（当前 ${data.currentVersion}），需要下载完整安装包。现在打开下载页面吗？`,
           `Version ${data.latestVersion} is available (current: ${data.currentVersion}) and requires the full installer. Open the download page now?`
         );
-      if (window.confirm(message)) {
+      const action = silent ? await showStartupUpdatePrompt(message, canHotUpdate)
+        : window.confirm(message) ? "update" : "later";
+      if (action === "quiet") setUpdateRemindersMuted(true);
+      if (action === "update") {
         if (canHotUpdate) await applyWebUpdate({ confirmed: true });
         else els.releasePageLink.click();
       }
@@ -12756,7 +13071,7 @@ async function migrateNodeAssets(nodes) {
         failures.push({ nodeId: node.id || "unknown", field: "groupImage", message: error.message || String(error) });
       }
     }
-    for (const attachment of node.chatAttachments || []) {
+    for (const attachment of allChatAttachments(node)) {
       try {
         if (await externalizeImageField(attachment, "image", "assetId", attachment.fileName || "chat-attachment.png")) changed = true;
       } catch (error) {
@@ -13076,6 +13391,8 @@ document.querySelectorAll("[data-ui-language]").forEach(button => {
 
 if (els.checkUpdateBtn) els.checkUpdateBtn.onclick = () => checkForUpdates({ silent: false, prompt: false });
 if (els.installWebUpdateBtn) els.installWebUpdateBtn.onclick = applyWebUpdate;
+$("updateQuietToggle").checked = updateRemindersMuted();
+$("updateQuietToggle").onchange = event => setUpdateRemindersMuted(event.target.checked);
 
 function populateDefaultModelOptions() {
   if (!els.defaultImageModelSelect) return;
@@ -14173,7 +14490,7 @@ async function materializeNodeAssetsForPortableSave(nodes, readImage = materiali
         delete image.assetId;
       }
     }
-    for (const attachment of node.chatAttachments || []) {
+    for (const attachment of allChatAttachments(node)) {
       if (attachment.assetId) {
         attachment.image = await readImage(attachment);
         delete attachment.assetId;
@@ -14605,8 +14922,8 @@ async function resolveImageRefs(nodes) {
         }
       }
     }
-    if (Array.isArray(node.chatAttachments)) {
-      for (const attachment of node.chatAttachments) {
+    if (allChatAttachments(node).length) {
+      for (const attachment of allChatAttachments(node)) {
         if (!attachment.image || attachment.image.startsWith("data:") || attachment.image.startsWith("http")) continue;
         if (attachment.image.includes("://")) continue;
         try {

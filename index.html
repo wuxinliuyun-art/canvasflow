@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261105-chatui1">
+  <link rel="stylesheet" href="styles.css?v=20261105-chat-sessions-packaging1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -152,6 +152,7 @@
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
+          <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <details class="update-notes">
             <summary class="update-notes-title">v2.7.3 更新说明</summary>
             <ul>
@@ -594,12 +595,23 @@
     </div>
   </div>
 
+  <dialog id="updatePromptDialog" class="update-prompt-dialog" aria-labelledby="updatePromptTitle">
+    <form method="dialog">
+      <h2 id="updatePromptTitle">发现新版本</h2>
+      <p id="updatePromptMessage"></p>
+      <div class="update-prompt-actions">
+        <button id="updatePromptQuiet" value="quiet">免打扰</button>
+        <button value="later" autofocus>稍后</button>
+        <button id="updatePromptConfirm" class="primary" value="update">立即更新</button>
+      </div>
+    </form>
+  </dialog>
   <script src="model-catalog.js?v=20261105-agtdefault1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
-  <script src="app.js?v=20261105-chatui1"></script>
-  <script src="modules/manual-matting.js?v=20261018-matting-flare1"></script>
+  <script src="app.js?v=20261105-chat-sessions-packaging1"></script>
+  <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>

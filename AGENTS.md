@@ -301,3 +301,11 @@
 - 主程序打包继续按资源白名单收集，不得把整个 `extensions-presets` 或 `dist` 目录递归打入；自动抠图包仅在用户单独要求时制作或分发。
 - 分区抠图选择「本地 BiRefNet」时直接复用 `auto-matting-general` 拓展执行接口，由 CanvasFlow 自动启动拓展 Python；不得恢复要求用户预先运行 `127.0.0.1:8790` 服务或启动脚本的流程。多个选区任务必须串行调用该拓展，避免并发清理同一 `input/`、`output/` 目录。
 - 拓展的 `python-path.txt` 只作为 Python 3.11–3.13 的引导解释器，实际依赖安装在拓展自己的 `.venv`；路径失效时回退系统 Python，清华镜像缺包时回退官方 PyPI。
+
+### 合入旧线 v2.7.8 与免打扰/附件修复（2026-11-05）
+
+- 发布线分裂收场：旧线（基线 10bf1bb + f083df7 自由画笔 + c01d200 打包 U2Net + 4d8d3b1 拓展发现修复）已整体合入 master（merge 7a2a1d1），package.json=2.8.0 仅本地、未推送未打包；v2.7.6 tag 已按 11-04 决策删除（本地+远端）。DesktopApi 构造注入两侧共存：focusCanvas（master）+ registerGeneratedExport（旧线，MainWindow.RegisterGeneratedExport 894 行），改任一侧签名必须同步 MainWindow 调用点。
+- 更新提醒免打扰（**自 2.7.8 界面包手工移植，git 里无此提交**——包 ?v=20261105-update-quiet 晚于 tag）：`UPDATE_QUIET_KEY="canvasflow-update-quiet"`（localStorage 全局开关，非按版本）；启动自动弹窗走原生 `<dialog id="updatePromptDialog">`（免打扰/稍后/立即更新三按钮，form method=dialog returnValue 分发）；`checkForUpdates` 弹窗条件 `(!silent || (prompt && !updateRemindersMuted()))`——免打扰只静音启动弹窗，手动「检查更新」照常 confirm；设置→软件更新卡有 `updateQuietToggle` 常驻开关。避免：`setUpdateRemindersMuted` 会顺手同步设置开关勾选态；`showStartupUpdatePrompt` 依赖 index.html 的 dialog DOM，删 DOM 会让启动弹窗静默失效。
+- 对话工作区控件直接分发（修复「附件无法点击」）：工作区 click/change 中继原把 data-role 转发给画布紧凑节点的同名控件，但 chat-compact-card 重构后节点里只有 chat-expand，附件/发送/消息操作/模型下拉全部转发落空。现 chat-* 角色经 `handleChatNodeAction(node, actionRole, action)`（app.js 独立函数）直接分发，画布 els.nodes 监听器同函数复用（chat 分支从监听器整体抽出，行为不变）；change 监听器在紧凑控件缺失时直接写回 `_chatModel`/`_chatEnumerated`（语义与画布 change 委托一致）。避免：工作区新增控件时必须在 handleChatNodeAction 或直接分支里接住，别指望中继转发。
+- `stripCopiedImage` 已被旧线统一进 `cloneNodeForClipboard`（合并冲突按"master 完整重置语义 + 旧线 walkNodes 层级"组合——编组内嵌套 AI 节点复制时同样清 generatedImage/taskId/generating）；tests/canvas-group-collision.test.cjs 切片标记随之改为 async function copySelection( / function cloneNodeForClipboard(，并桩 navigator.clipboard/ClipboardItem/Blob/structuredClone/encodeCanvasflowNodesHtml/walkNodes/desktop=null（copySelection 变 async 原生剪贴板写入后 vm 需要这套面）。
+- 打包清单清理：mindmap-module.js 随思维导图移除删除，但 CanvasFlow.Desktop.csproj Content 与 build-mac.ps1 appFiles 白名单里的条目漏删，导致 publish MSB3030（Debug build 不触发、只有打包炸）——两处已清；fill-selection.js（旧线新模块，填色配套）条目由合并自动带入。**教训：删模块文件必须同步查 csproj Content 与 build-mac.ps1 白名单。**?v= 现 app/styles/manual-matting=20261105-merge2802、fill-selection=20261105-merge2801，chat-thread-ui 基线已同步。

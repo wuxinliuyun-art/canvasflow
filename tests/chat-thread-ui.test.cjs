@@ -29,8 +29,8 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(styles, /\.chat-messages\s*\{/);
   assert.match(styles, /\.chat-message\.is-user/);
   assert.match(styles, /\.chat-message-actions/);
-  assert.match(index, /styles\.css\?v=20261105-chatui1/);
-  assert.match(index, /app\.js\?v=20261105-chatui1/);
+  assert.match(index, /styles\.css\?v=20261105-chat-sessions-packaging1/);
+  assert.match(index, /app\.js\?v=20261105-chat-sessions-packaging1/);
   assert.match(styles, /\.chat-compact-card\s*\{/);
   assert.match(styles, /\.chat-compact-summary\s*\{/);
   assert.doesNotMatch(styles, /chat-compact-card-stats/);
@@ -40,6 +40,20 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(app, /CHAT_NODE_HEIGHT = 220/);
 });
 
+test("chat sessions provide tabs, history, migration, and lifecycle actions", () => {
+  assert.match(app, /function ensureChatSessions\(node\)/);
+  assert.match(app, /function saveActiveChatSession\(node, touch = false\)/);
+  assert.match(app, /data-role="chat-session-history"/);
+  assert.match(app, /data-role="chat-session-add"/);
+  assert.match(app, /data-role="chat-session-close"/);
+  assert.match(app, /actionRole === "chat-session-delete"/);
+  assert.match(app, /actionRole === "chat-session-rename"/);
+  assert.match(app, /text\/x-canvasflow-chat-session/);
+  assert.match(app, /继续当前对话会把已有聊天历史发送给新站点/);
+  assert.match(styles, /\.chat-session-strip\s*\{/);
+  assert.match(styles, /\.chat-history-panel\s*\{/);
+});
+
 test("complete HTML replies get sandboxed previews", () => {
   assert.match(app, /function extractHtmlDocument\(text\)/);
   assert.match(app, /sandbox="allow-scripts"/);
@@ -47,6 +61,9 @@ test("complete HTML replies get sandboxed previews", () => {
   assert.match(app, /data-role="chat-html-open"/);
   assert.match(app, /data-role="chat-html-code"/);
   assert.match(app, /data-html-copy-code/);
+  assert.match(app, /data-html-save/);
+  assert.match(app, /data-role="chat-html-save"/);
+  assert.match(app, /function saveChatHtmlFile\(html\)/);
   assert.match(app, /class="chat-html-code"/);
   assert.match(app, /完整文档已生成/);
   assert.doesNotMatch(app, /data-chat-html-preview=/);
@@ -83,6 +100,8 @@ test("chat can expand into a dedicated workspace", () => {
   assert.match(styles, /border-left: 1px solid var\(--panel-2\); border-radius: 0; background: var\(--panel-solid\)/);
   assert.match(app, /chatNodeBody\(node, true\)/);
   assert.match(app, /composer\.insertBefore\(controls, send\)/);
+  assert.match(app, /function handleChatNodeAction\(node, actionRole, action\)/);
+  assert.match(app, /actionRole === "chat-send"[\s\S]*sendChatNodeMessage\(node\.id\)/);
 });
 
 test("complete HTML replies can be edited without creating a chat branch", () => {

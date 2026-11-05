@@ -19,8 +19,9 @@ const MOUSEDOWN_CODE = slice('els.viewport.addEventListener("mousedown"', 'windo
 const MOUSEMOVE_CODE = slice('window.addEventListener("mousemove"', 'window.addEventListener("mouseup"');
 const MOUSEUP_CODE = slice('window.addEventListener("mouseup"', 'function findNearbyInputNode(');
 const DELETE_CODE = slice('function deleteNodes(', 'function toggleDisabled(');
-const COPY_CODE = slice('function copySelection(', 'function stripCopiedImage(');
-const STRIP_CODE = slice('function stripCopiedImage(', 'function rekeyContainedGraph(');
+const COPY_CODE = slice('async function copySelection(', 'function cloneNodeForClipboard(');
+// 旧线 v2.7.8 合并后 stripCopiedImage 已统一进 cloneNodeForClipboard（重置语义经 walkNodes 覆盖编组内嵌套节点）
+const STRIP_CODE = slice('function cloneNodeForClipboard(', 'function rekeyContainedGraph(');
 const REKEY_CODE = slice('function rekeyContainedGraph(', 'function pasteNodes(');
 const PASTE_CODE = slice('function pasteNodes(', 'function addEdge(');
 const CLONE_CODE = slice('function cloneData(', 'function currentPage(');
@@ -490,6 +491,21 @@ test('未编组节点之间没有碰撞约束，可直接重叠', () => {
 
 function loadClipboardLogic(context) {
   loadGroupLogic(context);
+  // 合并后 copySelection 走 async 原生剪贴板写入:桩掉浏览器剪贴板面,只验证 state.clipboard 载荷
+  context.navigator = { clipboard: { write: async () => {} } };
+  context.ClipboardItem = class {};
+  context.Blob = class {};
+  context.structuredClone = value => JSON.parse(JSON.stringify(value));
+  context.encodeCanvasflowNodesHtml = () => 'data:text/html';
+  context.materializeNodeAssetsForPortableSave = async () => {};
+  context.desktop = null; // 走浏览器分支,跳过桌面素材物化
+  context.walkNodes = (nodes, fn) => {
+    for (const node of nodes || []) {
+      fn(node);
+      if (Array.isArray(node.items)) context.walkNodes(node.items, fn);
+      if (Array.isArray(node.subgraph?.nodes)) context.walkNodes(node.subgraph.nodes, fn);
+    }
+  };
   vm.runInNewContext(STRIP_CODE, context);
   vm.runInNewContext(COPY_CODE, context);
   vm.runInNewContext(REKEY_CODE, context);
@@ -497,17 +513,17 @@ function loadClipboardLogic(context) {
   return context;
 }
 
-test('复制单个成员不会带走整组外框', () => {
+test('复制单个成员不会带走整组外框', async () => {
   const state = baseState();
   const context = loadClipboardLogic(makeContext(state));
   context.canvasGroupBounds(state.nodes.slice(0, 2));
   state.selected = new Set(['a']);
-  context.copySelection(false);
+  await context.copySelection(false);
   assert.deepEqual(state.clipboard.nodes.map(node => node.id), ['a']);
   assert.deepEqual(plain(state.clipboard.canvasGroupFrames), {});
 });
 
-test('粘贴整组会换新组 ID，外框随位移偏移且不影响原组', () => {
+test('粘贴整组会换新组 ID，外框随位移偏移且不影响原组', async () => {
   const state = baseState();
   const context = loadClipboardLogic(makeContext(state, {
     findFreeNodePosition: (x, y) => ({ x, y }),
@@ -518,7 +534,7 @@ test('粘贴整组会换新组 ID，外框随位移偏移且不影响原组', ()
   }));
   context.canvasGroupBounds(state.nodes.slice(0, 2));
   state.selected = new Set(['a', 'b']);
-  context.copySelection(false);
+  await context.copySelection(false);
   const bounds = frameOf(state);
   context.pasteNodes(state.clipboard, { x: 700, y: 800 });
   const pasted = state.nodes.slice(3);
