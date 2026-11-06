@@ -2933,6 +2933,12 @@ function pasteNodes(data, anchor = null) {
     if (Array.isArray(nn.items)) rekeyContainedGraph(nn.items, nn.internalEdges || []);
     if (Array.isArray(nn.subgraph?.nodes)) rekeyContainedGraph(nn.subgraph.nodes, nn.subgraph.edges || []);
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
+    // PR-5 图片批注：粘贴副本重新生成批注 ID（坐标深拷贝、顺序保留、imageId 指向新节点），旧 comments 一并规范化为 imageAnnotations
+    if (Array.isArray(nn.imageAnnotations) || Array.isArray(nn.comments)) {
+      const pasteAnnotationModule = window.CanvasFlowImageAnnotations;
+      if (pasteAnnotationModule) pasteAnnotationModule.writeNodeAnnotations(nn, pasteAnnotationModule.remapAnnotationIds(pasteAnnotationModule.readNodeAnnotations(nn)));
+      else console.warn("[图片批注] 模块未加载，粘贴副本保留原批注 ID");
+    }
     map.set(n.id, nn.id);
     pasted.push(nn);
   });
@@ -3062,6 +3068,13 @@ function activeCatalog(apiType = activeApiType()) {
 
 function modelCatalogEntry(model, apiType = activeApiType()) {
   return activeCatalog(apiType).models.find(item => item.id === model) || null;
+}
+
+// PR-5 图片批注：模型参考图上限只采信目录里来源明确的 maxImages 声明（如 APIMart 文档 image_urls ≤16、Nano Banana Pro ≤14）。
+// 未声明的模型视为上限未知 → 返回 0，发送准备将保守跳过定位图（仅坐标说明提交），不把任何历史数值当作通用模型能力。
+function annotationModelImageLimit(settings) {
+  const entry = modelCatalogEntry(settings?._model, settings?._apiType || activeApiType());
+  return Number.isFinite(entry?.maxImages) && entry.maxImages > 0 ? entry.maxImages : 0;
 }
 
 function catalogModels() {
@@ -4233,7 +4246,10 @@ function collectUpstreamForAI(nodeId, incoming) {
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
-    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _y: n.y, _nodeId: n.id, hasColorArrowNotes: !!n.hasColorArrowNotes };
+    // PR-5 图片批注：仅当节点带批注字段时附加规范化 annotations（发送准备阶段只读；无批注节点结构不变）
+    const annotationModule = window.CanvasFlowImageAnnotations;
+    const annotations = annotationModule && (Array.isArray(n.imageAnnotations) || Array.isArray(n.comments)) ? annotationModule.readNodeAnnotations(n) : null;
+    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _y: n.y, _nodeId: n.id, hasColorArrowNotes: !!n.hasColorArrowNotes, ...(annotations ? { annotations } : {}) };
   }
 
   // 深度优先展开上游,返回该子图的分支列表;每个分支是 { texts, images }。
@@ -5813,15 +5829,59 @@ async function runQueuedAiTask(task) {
   if (task.localMatting) {
     imageUrls = await runLocalRegionMatting(task);
   } else {
-  // 带配色标注箭头的参考图:按本次实际发送的图片顺序内置颜色修改提示词;只计算一次,重试不重复追加
+  // PR-5 图片批注：发送前合成定位图与提示词。原图序号不变、定位图统一追加到尾部；
+  // taskImages（任务原始参考图）永不改动，每次尝试都从它重新推导，定位图天然不会重复插入；
+  // 提示词每次尝试都从固定来源 _annotationPromptSource（首次捕获的原始 prompt）重算，
+  // 与当轮实际发送数组严格一致（定位图成败、超限、未知上限等降级都会如实反映到编号说明中）。
+  let sendImages = taskImages;
+  let sendPrompt = task.prompt;
+  let annotationApplied = false;
+  const annotationModule = window.CanvasFlowImageAnnotations;
+  if (annotationModule?.hasAnnotatedReference(taskImages)) {
+    if (task._annotationPromptSource === undefined) task._annotationPromptSource = task.prompt ?? ""; // 原始 prompt 来源，只捕获一次
+    const locatorLimit = annotationModelImageLimit(task.generationSettings);
+    const prepared = await annotationModule.prepareSubmission(task._annotationPromptSource, taskImages, async (reference, refs) => {
+      try {
+        const original = await materializeReferenceImage(reference);
+        const locator = await annotationModule.createLocatorImage(original, refs);
+        return { image: locator, assetId: "", fileName: `${reference.fileName || "image"}-批注定位图.png`, mime: "image/png", _annotationLocator: true };
+      } catch (error) {
+        console.warn("[图片批注] 定位图创建失败，该图仅按坐标说明提交", error);
+        return null;
+      }
+    }, locatorLimit);
+    sendImages = prepared.references;
+    sendPrompt = prepared.prompt;
+    annotationApplied = true;
+    if (prepared.annotatedCount && !prepared.locatorAllowed) {
+      console.warn(locatorLimit
+        ? `[图片批注] 参考图 ${taskImages.length} 张 + 定位图 ${prepared.annotatedCount} 张超出模型上限 ${locatorLimit}，本次仅按坐标说明提交（不删原图）`
+        : `[图片批注] 模型 ${task.generationSettings?._model || "?"} 未声明参考图上限，保守跳过定位图，仅按坐标说明提交（不删原图）`);
+    }
+    if (sendImages !== taskImages) {
+      console.debug("[图片批注] 最终发送数组", { taskId: task.id, images: sendImages.map(image => image?.fileName || "未命名图片") });
+    }
+  }
+  // 带配色标注箭头的参考图:按本次实际发送的图片顺序内置颜色修改提示词;子句文本只计算一次
+  // （序号基于最终数组 sendImages 计算；尾部追加规则下原图序号跨尝试稳定，重试复用同一子句文本是安全的）
   if (task._arrowNoteClause === undefined) {
-    const colorArrowIndexes = taskImages.map((image, index) => image?.hasColorArrowNotes ? index + 1 : 0).filter(Boolean);
+    const colorArrowIndexes = sendImages.map((image, index) => image?.hasColorArrowNotes ? index + 1 : 0).filter(Boolean);
     task._arrowNoteClause = colorArrowIndexes.length ? `根据第${colorArrowIndexes.join("、")}张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注` : "";
-    if (task._arrowNoteClause) task.prompt = task.prompt ? `${task.prompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+  }
+  if (task._arrowNoteClause) {
+    if (annotationApplied) {
+      // 批注任务：sendPrompt 每轮从固定来源整体重算，此处拼接不会跨轮累积
+      sendPrompt = sendPrompt ? `${sendPrompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+    } else if (task._arrowNoteAppended !== true) {
+      // 非批注任务：保持上游"子句只拼接一次"语义
+      sendPrompt = sendPrompt ? `${sendPrompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+      task._arrowNoteAppended = true;
+    }
   }
   // Persist the same fallback text sent to the API, including image-only requests.
-  if (!task.prompt && taskImages.length) task.prompt = "generate an image";
-  task.taskId = await submitGeneration(task.prompt, taskImages, task.generationSettings);
+  if (!sendPrompt && taskImages.length) sendPrompt = "generate an image";
+  task.prompt = sendPrompt; // 与本次实际发送一致（导出 PNG 的 generationPrompt 取此值）
+  task.taskId = await submitGeneration(task.prompt, sendImages, task.generationSettings);
   task.status = "generating";
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();

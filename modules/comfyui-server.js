@@ -9,6 +9,10 @@ const tasks = new Map();
 function json(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json;charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
+  // 返回 true 供 handle 的 `return json(...)` 分支表达"已处理"：此前无返回值导致 handle 对
+  // /api/comfyui/config 等分支写完响应后仍返回 undefined，requestHandler 继续落入静态回退分支
+  // 二次 writeHead → ERR_HTTP_HEADERS_SENT 未捕获 → 整个服务进程崩溃（页面加载即触发）。
+  return true;
 }
 
 async function readJson(req, limit = 180 * 1024 * 1024) {
