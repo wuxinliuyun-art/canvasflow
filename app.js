@@ -3974,8 +3974,14 @@ function imageAnnotationEditorMarkup(node) {
   }).join("");
   return `<div class="image-annotation-editor" data-role="annotation-editor">
     <div class="image-annotation-surface" data-role="annotation-surface">${pins}</div>
-    <div class="image-annotation-toolbar"><span class="annotation-hint">点击添加点位，拖拽框选区域，点击标记可编辑</span><button type="button" data-role="annotation-done">完成</button></div>
   </div>`;
+}
+
+// 批注工具条独立于图片预览之外（图片下方）：编辑层此前把工具条作为流内子项排在
+// 图片顶部并盖住上部批注点（PR5 验收发现的提示层遮挡）。移出后工具条不再遮挡
+// 任何图钉/编号/文字，节点高度随编辑态自动撑高、退出即恢复。
+function imageAnnotationToolbarMarkup() {
+  return `<div class="image-annotation-toolbar"><span class="annotation-hint">点击添加点位，拖拽框选区域，点击标记可编辑</span><button type="button" data-role="annotation-done">完成</button></div>`;
 }
 
 // 操作面对齐图片实际显示区域：object-fit: contain 的留白不计入坐标（缩放/平移下按百分比自适应）
@@ -8135,13 +8141,15 @@ function nodeTemplate(node) {
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
     const annotating = state.annotationEditorNodeId === node.id;
+    // 编辑态隐藏上传/清除：编辑中替换图片会使批注的归一化坐标系失效；退出编辑即恢复
     body = `<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
-      <div class="node-hover-controls">
+      ${annotating ? imageAnnotationToolbarMarkup() : ""}
+      ${annotating ? "" : `<div class="node-hover-controls">
         <div class="image-actions">
           <button data-role="upload">上传</button>
           <button data-role="clear-image">清除</button>
         </div>
-      </div>`;
+      </div>`}`;
   } else if (node.type === "ai-image") {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "ai-video") {

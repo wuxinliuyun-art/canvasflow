@@ -45,9 +45,26 @@ test('编辑层标记：点位/矩形图钉按归一化百分比定位并带 ①
   assert.ok(markup.includes('left:10%;top:20%;')); // 矩形位置（无需 clamp）
   assert.ok(markup.includes('①') && markup.includes('②')); // 编号按数组顺序
   assert.match(markup, /data-role="annotation-delete"[^>]*aria-label="删除批注1"/);
-  assert.ok(markup.includes('data-role="annotation-done"')); // 完成
-  assert.ok(markup.includes('点击添加点位，拖拽框选区域'));
+  // 工具条已移出图片预览（独立渲染），编辑层内不得再出现提示条
+  assert.ok(!markup.includes('data-role="annotation-done"'));
+  assert.ok(!markup.includes('点击添加点位，拖拽框选区域'));
   assert.ok(!markup.includes('textarea')); // 未进入单条编辑态时无输入框
+});
+
+test('PR5 提示层避让：工具条独立渲染于图片预览之外，不再遮挡图钉与编号', () => {
+  const ctx = runSlice('function imageAnnotationEditorMarkup(', 'function positionAnnotationSurface(', {
+    escapeHtml: String,
+    window: { CanvasFlowImageAnnotations: annotations },
+    annotationModule: () => annotations,
+  });
+  const toolbar = ctx.imageAnnotationToolbarMarkup();
+  assert.ok(toolbar.includes('data-role="annotation-done"'), '完成按钮在工具条');
+  assert.ok(toolbar.includes('点击添加点位，拖拽框选区域'), '提示文字在工具条');
+  // 工具条不得包含编辑层/操作面容器（结构上与图片预览内编辑层分离）
+  assert.ok(!toolbar.includes('annotation-editor') && !toolbar.includes('annotation-surface'));
+  // nodeTemplate 拼接：工具条位于 image-preview 之后，编辑态隐藏上传/清除
+  assert.ok(source.includes('${annotating ? imageAnnotationToolbarMarkup() : ""}'), '工具条独立拼接');
+  assert.ok(source.includes('annotating ? "" : `<div class="node-hover-controls">'), '编辑态隐藏上传/清除');
 });
 
 test('PR5-UI-09C 四角边界：左上/右上/左下/右下的点位 clamp 均保留原始坐标且不出操作面', () => {

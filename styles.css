@@ -4279,16 +4279,18 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   font-size: 12px;
   cursor: pointer;
 }
+/* 批注工具条位于图片预览下方（图片区域外）：编辑层此前把工具条排在图片顶部并盖住
+   上部批注点，移出后结构性避开所有图钉/编号/文字，不再依赖层级或条件位移。 */
 .image-annotation-toolbar {
-  position: relative;
-  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: 6px;
   padding: 4px 8px;
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
   background: var(--panel);
-  border-top: 1px solid var(--panel-2);
 }
 .annotation-hint { color: var(--muted); font-size: 12px; }
 .image-annotation-toolbar button {
