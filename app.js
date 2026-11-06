@@ -6966,7 +6966,7 @@ function scheduleInteractiveRender(flags = {}) {
     const pending = { ...interactiveRenderFlags };
     for (const key of Object.keys(interactiveRenderFlags)) interactiveRenderFlags[key] = false;
     if (pending.view) applyView();
-    if (pending.nodes) syncNodeGeometry();
+    if (pending.nodes) { syncNodeGeometry(); syncTextNodeScrollEdges(); }
     if (pending.selection) syncSelectedNodeClasses();
     if (pending.edges) renderEdges();
     if (pending.minimap) renderMinimap();
@@ -7533,6 +7533,7 @@ function renderNodes(options = {}) {
     els.nodes.appendChild(div);
   }
   syncContentDrivenNodeHeights();
+  syncTextNodeScrollEdges();
   els.nodes.querySelectorAll(".node.chat .chat-messages").forEach(list => { list.scrollTop = list.scrollHeight; });
   if (expandedChatNodeId) renderChatWorkspace();
 }
@@ -8983,6 +8984,28 @@ function syncTextNodeVariableStrip(node) {
     if (preview) { const wrap = document.createElement("div"); wrap.innerHTML = html; preview.replaceWith(wrap.firstElementChild); }
     else textarea.insertAdjacentHTML("beforebegin", html);
   } else preview?.remove();
+  syncTextNodeScrollEdges(node.id);
+}
+
+// 文字节点滚动边缘渐隐:预览区或编辑区还有未显示的内容时,在节点内容区上/下缘显示渐隐层,
+// 提示存在被裁剪的文字。纯视觉层:渐隐层 pointer-events:none,不拦截滚动/输入/选择;
+// 测量目标 = 当前可见的滚动元素(编辑态 textarea,预览态 .text-inline-preview),两者均为原生滚动容器。
+// 浏览器本身按帧合并 scroll 事件,这里不再包 rAF(后台标签 rAF 会被节流,直接同步更稳)。
+function syncTextNodeScrollEdges(nodeId) {
+  const nodes = nodeId ? [findNode(nodeId)] : state.nodes;
+  for (const node of nodes) {
+    if (!node || node.type !== "text") continue;
+    const nodeEl = els.nodes.querySelector(`.node[data-id="${node.id}"]`);
+    if (!nodeEl) continue;
+    const preview = nodeEl.querySelector(".text-inline-preview");
+    const editing = nodeEl.classList.contains("is-text-editing");
+    const scroller = editing || !preview ? nodeEl.querySelector('textarea[data-role="text"]') : preview;
+    if (!scroller) continue;
+    const before = scroller.scrollTop > 1;
+    const after = scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1;
+    nodeEl.classList.toggle("has-scroll-before", before);
+    nodeEl.classList.toggle("has-scroll-after", after);
+  }
 }
 
 els.nodes.addEventListener("input", ev => {
@@ -8993,6 +9016,7 @@ els.nodes.addEventListener("input", ev => {
     node.text = ev.target.value;
     markDirty();
     publishScreenshotNodeCatalog();
+    syncTextNodeScrollEdges(node.id);
     if (!ev.isComposing) {
       window.clearTimeout(textVariableStripSyncTimer);
       textVariableStripSyncTimer = window.setTimeout(() => syncTextNodeVariableStrip(node), 250);
@@ -9015,6 +9039,11 @@ els.nodes.addEventListener("input", ev => {
   }
   window.LocalSD?.handleInput(node, ev.target.dataset.role, ev.target);
 });
+
+// 预览区/编辑区滚动不冒泡,用捕获阶段统一接住(scroll 事件由浏览器按帧合并,直接同步即可)
+els.nodes.addEventListener("scroll", ev => {
+  if (ev.target instanceof Element && ev.target.matches('textarea[data-role="text"], .text-inline-preview')) syncTextNodeScrollEdges();
+}, { capture: true, passive: true });
 
 // 对话正文回车即发送(Shift+Enter 换行);IME 组合中的回车是选字确认,不发送
 els.nodes.addEventListener("keydown", ev => {
@@ -9040,6 +9069,7 @@ els.nodes.addEventListener("pointerdown", ev => {
 els.nodes.addEventListener("focusin", ev => {
   if (ev.target.dataset.role !== "text") return;
   ev.target.closest(".node")?.classList.add("is-text-editing");
+  syncTextNodeScrollEdges(ev.target.closest(".node")?.dataset.id);
   const value = ev.target.value.trim();
   if (value !== "请输入文字内容" && value !== "Enter text") return;
   const nodeEl = ev.target.closest(".node");
