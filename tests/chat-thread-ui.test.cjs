@@ -29,8 +29,8 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(styles, /\.chat-messages\s*\{/);
   assert.match(styles, /\.chat-message\.is-user/);
   assert.match(styles, /\.chat-message-actions/);
-  assert.match(index, /styles\.css\?v=20261105-chat-sessions-packaging1/);
-  assert.match(index, /app\.js\?v=20261105-chat-sessions-packaging1/);
+  assert.match(index, /styles\.css\?v=20261107-minimap-kbd1/);
+  assert.match(index, /app\.js\?v=20261107-minimap-kbd1/);
   assert.match(styles, /\.chat-compact-card\s*\{/);
   assert.match(styles, /\.chat-compact-summary\s*\{/);
   assert.doesNotMatch(styles, /chat-compact-card-stats/);

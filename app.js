@@ -8093,6 +8093,74 @@ function finishMinimapNavigation(event) {
 els.minimap.addEventListener("pointerup", finishMinimapNavigation);
 els.minimap.addEventListener("pointercancel", finishMinimapNavigation);
 
+// ===== 小地图增强：点击选中命中节点 + Enter/Space 键盘导航 =====
+// 增量叠加，不改动上方上游导航实现：按下即导航的手感保持不变；
+// 阈值只用于“松开时是否选中”，不影响导航时机。组节点与普通节点同样可命中。
+function minimapProjection(bounds, width, height) {
+  const scale = Math.min((width - 10) / bounds.w, (height - 10) / bounds.h);
+  return { scale, ox: 5 - bounds.x * scale, oy: 5 - bounds.y * scale };
+}
+
+// 小地图画布坐标命中检测：逆序取最上层节点，含 4px 容差
+function minimapNodeAtPoint(nodes, point, projection) {
+  const { scale, ox, oy } = projection;
+  return [...nodes].reverse().find(node => {
+    const x = node.x * scale + ox, y = node.y * scale + oy;
+    const w = Math.max(3, node.w * scale), h = Math.max(3, node.h * scale);
+    return point.x >= x - 4 && point.x <= x + w + 4 && point.y >= y - 4 && point.y <= y + h + 4;
+  }) || null;
+}
+
+// 事件坐标 → 小地图画布坐标（画布属性尺寸 150×96 与 CSS 显示尺寸解耦）
+function minimapEventPoint(clientX, clientY) {
+  const rect = els.minimap.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  return {
+    point: { x: (clientX - rect.left) * els.minimap.width / rect.width, y: (clientY - rect.top) * els.minimap.height / rect.height },
+    projection: minimapProjection(contentBounds(), els.minimap.width, els.minimap.height),
+  };
+}
+
+// 指针按下时记录命中候选；位移 ≥4px（CSS 像素）视为拖拽，松开不再选中
+let minimapSelectCandidate = null;
+els.minimap.addEventListener("pointerdown", event => {
+  if (event.button !== 0) return;
+  // 上游 pointerdown 的 preventDefault 会取消“点击聚焦”这一浏览器默认动作，
+  // 导致键盘导航永远拿不到焦点；这里补一次编程式聚焦（不影响上游手感，
+  // 鼠标路径不触发 :focus-visible 焦点环，Tab 键盘聚焦仍显示焦点环）。
+  els.minimap.focus({ preventScroll: true });
+  const eventPoint = minimapEventPoint(event.clientX, event.clientY);
+  minimapSelectCandidate = eventPoint ? { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, point: eventPoint.point, projection: eventPoint.projection, moved: false } : null;
+});
+els.minimap.addEventListener("pointermove", event => {
+  if (!minimapSelectCandidate || minimapSelectCandidate.pointerId !== event.pointerId) return;
+  if (Math.hypot(event.clientX - minimapSelectCandidate.clientX, event.clientY - minimapSelectCandidate.clientY) >= 4) minimapSelectCandidate.moved = true;
+});
+els.minimap.addEventListener("pointerup", event => {
+  const candidate = minimapSelectCandidate;
+  minimapSelectCandidate = null;
+  if (!candidate || candidate.pointerId !== event.pointerId || candidate.moved) return;
+  const hit = minimapNodeAtPoint(state.nodes, candidate.point, candidate.projection);
+  if (!hit) return; // 空白点击：保持上游“仅导航”语义，不动选区
+  state.selected = new Set([hit.id]);
+  syncSelectedNodeClasses();
+});
+els.minimap.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  const selected = state.nodes.find(node => state.selected.has(node.id));
+  const bounds = contentBounds();
+  const target = selected
+    ? { x: selected.x + selected.w / 2, y: selected.y + selected.h / 2 }
+    : { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
+  const viewRect = els.viewport.getBoundingClientRect();
+  state.view.x = viewRect.width / 2 - target.x * state.view.scale;
+  state.view.y = viewRect.height / 2 - target.y * state.view.scale;
+  applyView();
+  renderMinimap();
+  scheduleViewPersistence();
+});
+
 function contentBounds() {
   if (!state.nodes.length) return { x: 0, y: 0, w: 1000, h: 700 };
   const xs = state.nodes.map(n => n.x);
