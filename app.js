@@ -6766,7 +6766,9 @@ async function generateBatchFromGroup(node, upstream) {
 }
 
 function addAiImageNode(x, y, sourceIds) {
-  const node = addNode("ai-image", x, y, false, { reveal: true });
+  // reveal 延迟到 refreshAiPrompt 的 render() 让 syncContentDrivenNodeHeights 定型节点高度之后：
+  // addNode 时节点还是初始高度，渲染后内容自适应会撑高（如 300→433），提前 reveal 会按旧几何平移。
+  const node = addNode("ai-image", x, y, false);
   normalizeAiNodeSettings(node);
   if (sourceIds && sourceIds.length) {
     sourceIds.forEach(sourceId => {
@@ -6778,6 +6780,7 @@ function addAiImageNode(x, y, sourceIds) {
   }
   state.selected = new Set([node.id]);
   refreshAiPrompt(node.id);
+  revealCreatedNode(node);
   pushHistory();
   render();
   toast("已创建 AI 绘图节点");
@@ -6803,14 +6806,15 @@ function addAiVideoNode(x, y, sourceIds) {
 }
 
 function addAngleImageNode(x, y, sourceIds = []) {
-  const node = addNode("angle-image", x, y, false, { reveal: true });
+  // 与 addAiImageNode 相同：先渲染定型高度，再按最终几何 reveal。
+  const node = addNode("angle-image", x, y, false);
   normalizeAngleNodeSettings(node);
   sourceIds.slice(0, 1).forEach(sourceId => {
     const source = findNode(sourceId);
     if (source && source.type !== "output") state.edges.push({ id: uid("e"), from: { node: sourceId, port: "out" }, to: { node: node.id, port: "in" } });
   });
   node.prompt = anglePrompt(node);
-  pushHistory(); render(); toast("已创建角度变化节点（测试功能）");
+  pushHistory(); render(); revealCreatedNode(node); render(); toast("已创建角度变化节点（测试功能）");
   return node;
 }
 
