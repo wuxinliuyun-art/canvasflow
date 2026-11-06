@@ -162,6 +162,31 @@ test('computeLocatorGeometry stays finite on degenerate 1x1 canvas', () => {
   }
 });
 
+test('PR5-UI-09C 四角边界：定位图圆点标记在左上/右上/左下/右下均内收到画布内，锚点不回写', () => {
+  const size = 800;
+  const radius = Math.max(3, Math.round(size / 350)) * 2.5; // line*2.5，与实现一致
+  const corners = [
+    ['左上', 0, 0], ['右上', 1, 0], ['左下', 0, 1], ['右下', 1, 1],
+    ['近贴边', 0.005, 0.995],
+  ];
+  for (const [name, x, y] of corners) {
+    const input = [{ type: 'point', coordinates: { x, y }, content: name }];
+    const g = annotations.computeLocatorGeometry(size, size, input);
+    const m = g.markers[0];
+    assert.ok(m.x >= radius && m.x <= size - radius, `${name} 圆点 x 内收: ${m.x}`);
+    assert.ok(m.y >= radius && m.y <= size - radius, `${name} 圆点 y 内收: ${m.y}`);
+    assert.ok(m.labelX >= g.font && m.labelX <= size - g.font, `${name} 编号 x 在画布内`);
+    assert.ok(m.labelY >= g.font && m.labelY <= size - g.font, `${name} 编号 y 在画布内`);
+    // 锚点数据不被几何计算改写
+    assert.equal(input[0].coordinates.x, x);
+    assert.equal(input[0].coordinates.y, y);
+  }
+  // 界内锚点不动（只有贴边才内收）
+  const g = annotations.computeLocatorGeometry(size, size, [{ type: 'point', coordinates: { x: .5, y: .5 }, content: '中' }]);
+  assert.equal(g.markers[0].x, size * .5);
+  assert.equal(g.markers[0].y, size * .5);
+});
+
 // ===== 发送规划（纯函数） =====
 
 test('planning without annotations produces no slots and leaves the array unchanged', () => {

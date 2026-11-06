@@ -421,3 +421,99 @@ test('样例留存：3 原图 2 批注的最终发送数组与合成 prompt', as
   ].join('\n') + '，根据第3张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注';
   assert.equal(sample.prompt, expected);
 });
+
+// ===== 10B 回归：扇入四支线（3 图 1 文字，图一/图三带批注）拆任务不丢 =====
+// 场景对齐《CanvasFlow-PR5-模拟发送验收.cflow》B 项目：图一(点批注)、图二(无)、图三(矩形批注)、
+// 文字支线全部汇入同一 AI 节点。锁死三个事实：① branches 恰为 4 条且批注归属正确；
+// ② 图一批注文字逐字进入其支线任务的合成 prompt 与发送数组（定位图尾部）；
+// ③ 未批注图二原样透传、无定位图。
+
+test('10B 扇入四支线：3 图 1 文字拆 4 任务，图一/图三批注各自完整不丢', async () => {
+  const collectStart = source.indexOf('function collectUpstreamForAI');
+  const collectEnd = source.indexOf('\nfunction ', collectStart + 10);
+  const slice = source.slice(collectStart, collectEnd);
+
+  const annShape = (x, y, content, extra = {}) => ({ annotationId: 'a-' + content, type: 'point', coordinates: { x, y }, content, index: 1, ...extra });
+  const nodes = {
+    n1: { id: 'n1', type: 'image', x: 0, y: 0, image: 'ref1-data', fileName: 'mock-b-ref1.png', mime: 'image/png',
+      imageAnnotations: [annShape(.25, .3, '主图人物发型改为短发', { annotationId: 'ann-b-1' })] },
+    n2: { id: 'n2', type: 'image', x: 0, y: 0, image: 'ref2-data', fileName: 'mock-b-ref2.png', mime: 'image/png' },
+    n3: { id: 'n3', type: 'image', x: 0, y: 0, image: 'ref3-data', fileName: 'mock-b-ref3.png', mime: 'image/png',
+      imageAnnotations: [{ ...annShape(.2, .55, '参考此配色方案', { annotationId: 'ann-b-2' }), type: 'rectangle', coordinates: { x: .2, y: .55, width: .4, height: .3 } }] },
+    n4: { id: 'n4', type: 'text', x: 0, y: 0, text: '三图融合：人物以图1为准，风格取图3' },
+    n5: { id: 'n5', type: 'ai-image', x: 0, y: 0 },
+  };
+  const edges = [
+    { id: 'e1', from: { node: 'n1', port: 'out' }, to: { node: 'n5', port: 'in' } },
+    { id: 'e2', from: { node: 'n2', port: 'out' }, to: { node: 'n5', port: 'in' } },
+    { id: 'e3', from: { node: 'n3', port: 'out' }, to: { node: 'n5', port: 'in' } },
+    { id: 'e4', from: { node: 'n4', port: 'out' }, to: { node: 'n5', port: 'in' } },
+  ];
+  const context = {
+    findNode: id => nodes[id] || null,
+    buildIncomingIndex: () => {
+      const map = new Map();
+      for (const e of edges) { (map.get(e.to.node) || map.set(e.to.node, []).get(e.to.node)).push(e); }
+      return map;
+    },
+    expandTextNodeVariables: n => String(n.text || ''),
+    variableNodeOutput: () => '',
+    isLinkedUpscaleNode: () => false,
+    linkedUpscaleOutputs: () => [],
+    window: { CanvasFlowImageAnnotations: annotations },
+  };
+  const collect = vm.runInNewContext(`(${slice})`, context);
+  const result = collect('n5');
+  // vm 跨 realm 数组先展开到宿主 realm 再断言（deepStrictEqual 对跨 realm 对象会误报）
+  const branches = JSON.parse(JSON.stringify(result.branches));
+
+  // ① 四条支线任务全部创建：3 图片线 + 1 文字线
+  assert.equal(branches.length, 4, `branches 应为 4 条，实际 ${branches.length}`);
+  const byImage = branches.filter(b => b.images.length);
+  const textBranches = branches.filter(b => !b.images.length && b.texts.length);
+  assert.equal(byImage.length, 3, '图片支线应为 3 条');
+  assert.equal(textBranches.length, 1, '文字支线应为 1 条');
+
+  // ② 各图片支线的原图与批注归属：图一/图三批注逐字保留，图二无批注
+  const branchByFile = {};
+  for (const b of byImage) branchByFile[b.images[0].fileName] = b;
+  const b1 = branchByFile['mock-b-ref1.png'];
+  const b2 = branchByFile['mock-b-ref2.png'];
+  const b3 = branchByFile['mock-b-ref3.png'];
+  assert.ok(b1 && b2 && b3, '三条图片支线各自存在');
+  assert.equal(b1.images.length, 1);
+  assert.deepEqual(b1.images[0].annotations.map(a => a.content), ['主图人物发型改为短发'], '图一批注必须完整随支线');
+  assert.equal(b1.images[0].annotations[0].coordinates.x, 0.25);
+  assert.equal(b1.images[0].annotations[0].coordinates.y, 0.3);
+  assert.equal(b2.images[0].annotations, undefined, '图二不得被误加批注');
+  assert.deepEqual(b3.images[0].annotations.map(a => a.content), ['参考此配色方案'], '图三批注必须完整随支线');
+  assert.deepEqual(textBranches[0].texts, ['三图融合：人物以图1为准，风格取图3']);
+
+  // ③ 分支任务逐一过真实发送块：图一/图三定位图尾部、图二原样、批注文本进入各自 prompt
+  const runs = [];
+  for (const branch of branches) {
+    const images = branch.images || [];
+    const prompt = branch.texts.join('，');
+    const task = makeTask({ orderedImages: images, prompt });
+    const { submitted } = await run(task);
+    runs.push(...JSON.parse(JSON.stringify(submitted)));
+  }
+  assert.equal(runs.length, 4, '4 个支线任务各提交一次');
+  const runByFirstImage = {};
+  for (const r of runs) runByFirstImage[r.images[0]?.fileName || '(text)'] = r;
+  const r1 = runByFirstImage['mock-b-ref1.png'];
+  const r2 = runByFirstImage['mock-b-ref2.png'];
+  const r3 = runByFirstImage['mock-b-ref3.png'];
+  const rText = runByFirstImage['(text)'];
+  assert.ok(r1 && r2 && r3 && rText, '四条任务全部到达 submitGeneration');
+  assert.deepEqual(r1.images.map(i => i.fileName), ['mock-b-ref1.png', 'mock-b-ref1.png-批注定位图.png'], '图一定位图追加尾部');
+  assert.ok(r1.prompt.includes('主图人物发型改为短发'), '图一批注文字进入 prompt');
+  assert.ok(!r1.prompt.includes('参考此配色方案'), '图一支线不得串入图三批注');
+  assert.equal(r2.images.length, 1, '图二无定位图');
+  assert.ok(!r2.prompt.includes('局部修改'), '图二任务 prompt 无批注段');
+  assert.deepEqual(r3.images.map(i => i.fileName), ['mock-b-ref3.png', 'mock-b-ref3.png-批注定位图.png'], '图三定位图追加尾部');
+  assert.ok(r3.prompt.includes('参考此配色方案'), '图三批注文字进入 prompt');
+  assert.ok(!r3.prompt.includes('主图人物发型改为短发'), '图三支线不得串入图一批注');
+  assert.equal(rText.images.length, 0, '文字支线无图');
+  assert.ok(rText.prompt.includes('三图融合'), '文字支线 prompt 保留原文');
+});

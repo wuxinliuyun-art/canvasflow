@@ -106,9 +106,16 @@
       const shape = item.type === "rectangle"
         ? { kind: "rectangle", x, y, width: clamp01(c.width) * safeWidth, height: clamp01(c.height) * safeHeight }
         : { kind: "point", x, y, radius: line * 2.5 };
+      // 圆点标记做边界内偏移（锚点数据不变，仅绘制位置内收）：与编辑层图钉的 clamp 规则一致，
+      // 贴边批注的圆点/编号不会被画布边缘裁掉一半。画布小于 2×半径的退化场景保持原坐标。
+      const radius = shape.radius || 0;
+      if (shape.kind === "point" && safeWidth >= radius * 2 && safeHeight >= radius * 2) {
+        shape.x = Math.min(Math.max(shape.x, radius), safeWidth - radius);
+        shape.y = Math.min(Math.max(shape.y, radius), safeHeight - radius);
+      }
       const label = number(index + 1);
-      const labelX = Math.max(font, Math.min(safeWidth - font, x + font * .5));
-      const labelY = Math.max(font, Math.min(safeHeight - font, y - font * .5));
+      const labelX = Math.max(font, Math.min(safeWidth - font, shape.x + font * .5));
+      const labelY = Math.max(font, Math.min(safeHeight - font, shape.y - font * .5));
       return { ...shape, label, labelX, labelY, labelRadius: font * .7 };
     });
     return { width: safeWidth, height: safeHeight, line, font, marker, text, markers };
