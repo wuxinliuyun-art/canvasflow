@@ -12788,6 +12788,7 @@ function setSettingsSidebarOpen(open) {
   if (open && window.innerWidth < SIDEBAR_PAIR_MIN_WIDTH && !els.taskQueuePanel.classList.contains("hidden")) {
     setTaskQueueOpen(false);
   }
+  if (!open) flushApiKeyInputSaves(); // 关闭设置面板时冲刷未决的 key 防抖保存
   els.settings.classList.toggle("hidden", !open);
   if (open) { syncSettingsPanel(); fetchBalance(); }
   syncSidebarLayoutClasses();
@@ -14449,10 +14450,58 @@ if (!desktop) {
   }, 4000);
 }
 
+// ===== API Key 输入防抖安全保存（移植自个人 v2.7.8 快照） =====
+// 现状缺陷：key 只在 change（失焦）时保存——输入过程中应用退出/崩溃会丢 key；
+// change 与保存按钮可能并发调用桌面 saveApiKey（读全部槽再写回），交叉执行会覆盖中间态。
+// 这里补三层：input 防抖保存、串行保存队列（同一时刻只有一次 secrets 读改写）、
+// 失焦/页面隐藏时冲刷待保存内容。加密失败不降级、不重试覆盖密文——桌面端模型不动。
+let apiKeySaveQueue = Promise.resolve();
+let apiKeyInputSaveTimer = null;
+
+function saveApiKeyValue(value, apiType = activeApiType()) {
+  const trimmed = String(value ?? "").trim();
+  setActiveApiKey(trimmed);
+  if (!desktop) return Promise.resolve();
+  // 串行队列：同一时刻只有一次 secrets 读改写；提交时捕获值——连续提交不同值时按序落盘，
+  // 不读队列执行时刻的内存值（否则中间值会被跳过）；失败不静默重试（避免用旧值覆盖有效密文）
+  const task = apiKeySaveQueue.catch(() => {}).then(async () => {
+    const result = await desktop.saveApiKey(trimmed, apiType);
+    if (result && result.warning) toast(result.warning);
+    return result;
+  });
+  apiKeySaveQueue = task;
+  return task;
+}
+
+function scheduleApiKeyInputSave() {
+  if (!desktop) return; // 浏览器模式 key 不落盘（persistPages 剥离），内存值已由 input 事件实时写入
+  window.clearTimeout(apiKeyInputSaveTimer);
+  apiKeyInputSaveTimer = window.setTimeout(() => {
+    apiKeyInputSaveTimer = null;
+    saveApiKeyValue(els.apiKeyInput.value, activeApiType());
+  }, 800);
+}
+
+// 失焦/关闭设置/页面隐藏时冲刷：未决的防抖保存立即执行，之后不留待保存状态
+function flushApiKeyInputSaves() {
+  if (!apiKeyInputSaveTimer) return;
+  window.clearTimeout(apiKeyInputSaveTimer);
+  apiKeyInputSaveTimer = null;
+  saveApiKeyValue(els.apiKeyInput.value, activeApiType());
+}
+
+els.apiKeyInput.addEventListener("input", () => {
+  setActiveApiKey(els.apiKeyInput.value.trim()); // 内存实时写入，请求侧立即可用
+  scheduleApiKeyInputSave();
+});
+els.apiKeyInput.addEventListener("blur", flushApiKeyInputSaves);
+window.addEventListener("pagehide", () => { if (desktop && els.apiKeyInput.value) flushApiKeyInputSaves(); });
+
 els.apiKeyInput.onchange = () => {
+  flushApiKeyInputSaves();
   setActiveApiKey(els.apiKeyInput.value.trim());
   renderNodes();
-  if (desktop) desktop.saveApiKey(activeApiKey(), activeApiType()).then(result => { if (result.warning) toast(result.warning); });
+  if (desktop) saveApiKeyValue(activeApiKey(), activeApiType());
   pushHistory();
 };
 
@@ -14569,12 +14618,9 @@ async function applyWebUpdate({ confirmed = false } = {}) {
 els.balanceRefreshBtn.onclick = fetchBalance;
 
 els.saveKeyBtn.onclick = async () => {
-  setActiveApiKey(els.apiKeyInput.value.trim());
+  flushApiKeyInputSaves();
   renderNodes();
-  if (desktop) {
-    const result = await desktop.saveApiKey(activeApiKey(), activeApiType());
-    if (result.warning) toast(result.warning);
-  }
+  if (desktop) await saveApiKeyValue(activeApiKey(), activeApiType());
   saveCurrentPage();
   persistPages();
   pushHistory();
