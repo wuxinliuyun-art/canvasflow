@@ -115,8 +115,9 @@ test("fade layers never intercept pointer input and ship both themes", () => {
   assert.match(css, /has-scroll-before \.node-body::before/);
   assert.match(css, /has-scroll-after \.node-body::after/);
   assert.match(css, /pointer-events: none/);
-  assert.match(css, /\.theme-dark \.node\.text\.has-scroll-before/);
-  assert.match(css, /\.theme-dark \.node\.text\.has-scroll-after/);
+  // 渐隐层只用 --panel-solid 语义变量（主题感知，明暗自动适配；UI-SPEC 禁裸色值）
+  assert.match(css, /has-scroll-before[\s\S]*var\(--panel-solid\)/);
+  assert.doesNotMatch(css, /rgba\(255, 255, 255/);
 });
 
 test("scroll events sync only the scrolled node, not the whole canvas", () => {
