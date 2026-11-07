@@ -5512,6 +5512,12 @@ async function generateBrowserImage(nodeId) {
   const requestId = `breq-${++chatRequestSeq}`;
   node._browserRequestId = requestId;
   render();
+  // 落位与轮询必须按 id 重新解析节点（同 runQueuedAiTask）：任务运行期间用户可能切换项目、
+  // 撤销重做或删除节点，saveCurrentPage/restoreData 的深克隆会替换全部节点对象，启动时捕获的
+  // node 引用会失联——结果写进孤儿对象（画布无图、任务显示完成），多图还会把结果图片节点
+  // 插进用户当前所在的其他项目。先取当前画布活节点，不在当前画布时退回任务所属项目的 page.data。
+  const resolveTaskNode = () => findNode(nodeId) || nodeFromPageData(taskTargetPage(queueTask), nodeId);
+  const nodeIsOnCanvas = () => !!findNode(nodeId);
   try {
     const resp = await apiFetch("/api/browser-task", {
       method: "POST",
@@ -5528,7 +5534,6 @@ async function generateBrowserImage(nodeId) {
     const startedAt = Date.now();
     for (;;) {
       await new Promise(resolve => setTimeout(resolve, BROWSER_TASK_POLL_MS));
-      if (node._browserRequestId !== requestId || node._browserTaskId !== taskId) { queueTask.status = "cancelled"; renderTaskQueue(); return; } // 已取消/节点已删除
       let status;
       try {
         const statusResp = await apiFetch(`/api/browser-task/status/${encodeURIComponent(taskId)}`);
@@ -5537,6 +5542,10 @@ async function generateBrowserImage(nodeId) {
         if (Date.now() - startedAt > BROWSER_TASK_TIMEOUT_MS) throw new Error("查询任务状态失败");
         continue;
       }
+      // 解析时机在状态请求返回之后：状态请求 await 期间用户同样可能切换项目/撤销/删除，
+      // 此处解析出的引用直接用于本轮守卫与落位，中间不再有 await，不会再次失联
+      const taskNode = resolveTaskNode();
+      if (!taskNode || taskNode._browserRequestId !== requestId || taskNode._browserTaskId !== taskId) { queueTask.status = "cancelled"; renderTaskQueue(); return; } // 已取消/节点已删除
       queueTask.status = status.status === "running" ? "generating" : "waiting";
       queueTask.progress = status.status === "running" ? 30 : 0;
       if (status.status === "running" && !queueTask.startedAt) queueTask.startedAt = Date.now();
@@ -5545,35 +5554,51 @@ async function generateBrowserImage(nodeId) {
         const urls = Array.isArray(status.images) ? status.images.filter(url => typeof url === "string") : [];
         if (!urls.length) throw new Error(status.text ? "站点只返回了文字，没有生成图片" : "站点未返回图片");
         queueTask.status = "done"; queueTask.progress = 100; queueTask.thumbnail = urls[0]; renderTaskQueue();
-        node.generatedImage = urls[0];
+        const landedPage = taskTargetPage(queueTask);
+        const offPage = landedPage && landedPage.id !== state.activePageId ? landedPage : null;
+        taskNode.generatedImage = urls[0];
         urls.slice(1).forEach((url, index) => {
-          const imageNode = addNode("image", node.x + node.w + 40, node.y + index * IMAGE_NODE_VERTICAL_STEP, false);
+          const imageNode = offPage
+            ? addNodeToPageData(offPage, "image", taskNode.x + taskNode.w + 40, taskNode.y + index * IMAGE_NODE_VERTICAL_STEP)
+            : addNode("image", taskNode.x + taskNode.w + 40, taskNode.y + index * IMAGE_NODE_VERTICAL_STEP, false);
           imageNode.image = url;
           imageNode.fileName = `browser-result-${index + 2}.png`;
           imageNode.mime = "image/png";
         });
-        node.generating = false;
-        node._browserStatus = "";
-        node._browserError = "";
-        pushHistory();
-        render();
-        toast(urls.length > 1 ? `浏览器生成完成，共 ${urls.length} 张` : "浏览器生成完成");
+        taskNode.generating = false;
+        taskNode._browserStatus = "";
+        taskNode._browserError = "";
+        if (offPage) {
+          // 离页变更直接写回任务所属项目的 page.data（markDirty 持久化），不进当前页撤销历史（同 applyQueuedResult）
+          markDirty();
+          toast(urls.length > 1 ? `浏览器生成完成，共 ${urls.length} 张，已落回项目「${landedPage.name || "未命名"}」` : `浏览器生成完成，已落回项目「${landedPage.name || "未命名"}」`);
+        } else {
+          pushHistory();
+          render();
+          toast(urls.length > 1 ? `浏览器生成完成，共 ${urls.length} 张` : "浏览器生成完成");
+        }
         return;
       }
       if (status.status === "failed") throw new Error(status.error || "浏览器生成失败");
       if (status.status === "expired") throw new Error("浏览器任务已过期或服务已重启，请重新生成");
       if (queueTask.startedAt && Date.now() - queueTask.startedAt > BROWSER_TASK_TIMEOUT_MS) throw new Error("浏览器插件超时未响应（确认已在目标站点页面安装并启用 CanvasFlow 插件）");
-      node._browserStatus = status.status === "running" ? "浏览器页面执行中…" : "等待浏览器插件领取";
-      renderNodes();
+      taskNode._browserStatus = status.status === "running" ? "浏览器页面执行中…" : "等待浏览器插件领取";
+      if (nodeIsOnCanvas()) renderNodes();
     }
   } catch (error) {
-    if (node._browserRequestId !== requestId) return;
-    node.generating = false;
+    const taskNode = resolveTaskNode();
+    if (!taskNode || taskNode._browserRequestId !== requestId) {
+      // 节点已删除且无法在任务所属项目中定位：丢弃迟到结果，仅保留任务面板失败记录
+      queueTask.status = "failed"; queueTask.error = error.message || "浏览器生成失败"; renderTaskQueue();
+      return;
+    }
+    taskNode.generating = false;
     queueTask.status = "failed"; queueTask.error = error.message || "浏览器生成失败"; renderTaskQueue();
-    node._browserError = error.message || "浏览器生成失败";
-    render();
+    taskNode._browserError = error.message || "浏览器生成失败";
+    if (nodeIsOnCanvas()) render();
   } finally {
-    if (node._browserRequestId === requestId) delete node._browserRequestId;
+    const taskNode = resolveTaskNode();
+    if (taskNode && taskNode._browserRequestId === requestId) delete taskNode._browserRequestId;
   }
 }
 
