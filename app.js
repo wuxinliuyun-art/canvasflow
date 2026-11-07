@@ -2258,6 +2258,38 @@ function buildNodeObject(type, position, width, height) {
   };
 }
 
+// Reveal only explicitly created nodes; generated results retain their existing placement/view.
+function nodeViewportRevealOffset(node, view, rect, padding = 24) {
+  function axis(start, size, available) {
+    const end = start + size;
+    if (size > available - padding * 2) return padding - start;
+    if (start < padding) return padding - start;
+    if (end > available - padding) return available - padding - end;
+    return 0;
+  }
+  return {
+    x: axis(view.x + node.x * view.scale, node.w * view.scale, rect.width),
+    y: axis(view.y + node.y * view.scale, node.h * view.scale, rect.height),
+  };
+}
+
+function revealCreatedNode(node) {
+  const rect = els.viewport.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  // Keep the newly revealed node clear of floating tools and the minimap.
+  const header = document.querySelector(".topbar")?.getBoundingClientRect();
+  const bottomRects = [...document.querySelectorAll(".composer-dock, .minimap-panel")]
+    .map(el => el.getBoundingClientRect()).filter(r => r.width && r.height);
+  const top = Math.max(0, (header?.bottom || rect.top) - rect.top);
+  const bottom = Math.min(rect.height, ...bottomRects.map(r => r.top - rect.top));
+  const safeRect = { width: rect.width, height: Math.max(1, bottom - top) };
+  const offset = nodeViewportRevealOffset(node, { ...state.view, y: state.view.y - top }, safeRect);
+  if (!offset.x && !offset.y) return;
+  state.view.x += offset.x;
+  state.view.y += offset.y;
+  scheduleViewPersistence();
+}
+
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : type === "palette" ? 300 : NODE_WIDTH);
   const height = placementOptions.height || nodeHeightForType(type);
@@ -2270,6 +2302,7 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const node = buildNodeObject(type, position, width, height);
   state.nodes.push(node);
   state.selected = new Set([node.id]);
+  if (commit || placementOptions.reveal === true) revealCreatedNode(node);
   if (commit) {
     pushHistory();
     render();
@@ -6735,6 +6768,8 @@ async function generateBatchFromGroup(node, upstream) {
 }
 
 function addAiImageNode(x, y, sourceIds) {
+  // reveal 延迟到 refreshAiPrompt 的 render() 让 syncContentDrivenNodeHeights 定型节点高度之后：
+  // addNode 时节点还是初始高度，渲染后内容自适应会撑高（如 300→433），提前 reveal 会按旧几何平移。
   const node = addNode("ai-image", x, y, false);
   normalizeAiNodeSettings(node);
   if (sourceIds && sourceIds.length) {
@@ -6747,6 +6782,7 @@ function addAiImageNode(x, y, sourceIds) {
   }
   state.selected = new Set([node.id]);
   refreshAiPrompt(node.id);
+  revealCreatedNode(node);
   pushHistory();
   render();
   toast("已创建 AI 绘图节点");
@@ -6772,6 +6808,7 @@ function addAiVideoNode(x, y, sourceIds) {
 }
 
 function addAngleImageNode(x, y, sourceIds = []) {
+  // 与 addAiImageNode 相同：先渲染定型高度，再按最终几何 reveal。
   const node = addNode("angle-image", x, y, false);
   normalizeAngleNodeSettings(node);
   sourceIds.slice(0, 1).forEach(sourceId => {
@@ -6779,7 +6816,7 @@ function addAngleImageNode(x, y, sourceIds = []) {
     if (source && source.type !== "output") state.edges.push({ id: uid("e"), from: { node: sourceId, port: "out" }, to: { node: node.id, port: "in" } });
   });
   node.prompt = anglePrompt(node);
-  pushHistory(); render(); toast("已创建角度变化节点（测试功能）");
+  pushHistory(); render(); revealCreatedNode(node); render(); toast("已创建角度变化节点（测试功能）");
   return node;
 }
 
@@ -14148,7 +14185,12 @@ if (!desktop) {
       const data = await resp.json();
       for (const item of (data.data || [])) {
         if (item?.data && String(item.data).startsWith("data:image/")) {
-          await addImageNodeFromDataUrl(item.data, item.name || "", "image/png", "已从 Photoshop 回传创建图片节点");
+          const node = await addImageNodeFromDataUrl(item.data, item.name || "", "image/png", "已从 Photoshop 回传创建图片节点");
+          if (node) {
+            state.selected = new Set([node.id]);
+            revealCreatedNode(node);
+            scheduleInteractiveRender({ view: true, minimap: true, selection: true });
+          }
         }
       }
     } catch (error) { /* 画布服务未启动等情况静默跳过 */ }
