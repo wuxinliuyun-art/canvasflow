@@ -118,3 +118,9 @@ test("fade layers never intercept pointer input and ship both themes", () => {
   assert.match(css, /\.theme-dark \.node\.text\.has-scroll-before/);
   assert.match(css, /\.theme-dark \.node\.text\.has-scroll-after/);
 });
+
+test("scroll events sync only the scrolled node, not the whole canvas", () => {
+  // 性能契约：滚动监听按节点过滤（大画布上每个滚动事件不做全量扫描）
+  assert.match(source, /els\.nodes\.addEventListener\("scroll"[\s\S]*?syncTextNodeScrollEdges\(nodeEl\.dataset\.id\)/);
+  assert.doesNotMatch(source, /addEventListener\("scroll"[\s\S]*?syncTextNodeScrollEdges\(\);/);
+});

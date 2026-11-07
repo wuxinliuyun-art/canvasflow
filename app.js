@@ -9040,9 +9040,12 @@ els.nodes.addEventListener("input", ev => {
   window.LocalSD?.handleInput(node, ev.target.dataset.role, ev.target);
 });
 
-// 预览区/编辑区滚动不冒泡,用捕获阶段统一接住(scroll 事件由浏览器按帧合并,直接同步即可)
+// 预览区/编辑区滚动不冒泡,用捕获阶段统一接住(scroll 事件由浏览器按帧合并,直接同步即可);
+// 单次滚动只改变一个节点的滚动状态,按节点过滤同步,避免大画布上每个滚动事件全量扫描
 els.nodes.addEventListener("scroll", ev => {
-  if (ev.target instanceof Element && ev.target.matches('textarea[data-role="text"], .text-inline-preview')) syncTextNodeScrollEdges();
+  if (!(ev.target instanceof Element) || !ev.target.matches('textarea[data-role="text"], .text-inline-preview')) return;
+  const nodeEl = ev.target.closest(".node");
+  if (nodeEl) syncTextNodeScrollEdges(nodeEl.dataset.id);
 }, { capture: true, passive: true });
 
 // 对话正文回车即发送(Shift+Enter 换行);IME 组合中的回车是选字确认,不发送
