@@ -4170,6 +4170,15 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 /* ---------- 提示词优化（文字节点入口 + 确认对话框） ---------- */
 .text-prompt-actions { display: flex; justify-content: flex-end; flex: 0 0 auto; margin-top: 8px; }
+.prompt-model-wrap { position: relative; display: inline-flex; flex: 0 1 auto; min-width: 0; margin-right: 6px; }
+.prompt-model-select { max-width: 100%; border: 1px solid var(--panel-2); border-radius: 8px; padding: 4px 20px 4px 8px; color: var(--muted); background: var(--node-control); font-size: 12px; cursor: pointer; }
+.prompt-model-select:hover, .prompt-model-select:focus-visible { color: var(--text); border-color: var(--selected); }
+.prompt-model-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.prompt-model-select.is-empty { opacity: .55; cursor: default; }
+.prompt-model-select.is-compact { inline-size: 40px; padding: 4px; color: transparent; }
+.prompt-model-wrap.is-compact .prompt-model-select:hover { color: transparent; }
+.prompt-model-icon { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; pointer-events: none; color: var(--muted); }
+.prompt-model-wrap.is-compact .prompt-model-icon { display: block; }
 .prompt-optimize-btn { padding: 4px 12px; border: 1px solid var(--panel-2); border-radius: 8px; color: var(--muted); background: var(--node-control); font-size: 12px; cursor: pointer; }
 .prompt-optimize-btn:hover { color: var(--text); border-color: var(--selected); }
 .prompt-optimize-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }

@@ -3878,12 +3878,13 @@ function openPromptOptimizer(nodeId) {
   const apply = overlay.querySelector('[data-action="apply"]');
   originalField.value = originalText;
   modelField.value = selectedPromptOptimizeModel(node, models)?.id || models[0].id;
-  const close = () => overlay.remove();
+  const close = () => { overlay.remove(); render(); }; // 关闭时重渲染，节点内模型选择器与弹窗内改选保持一致
   overlay.addEventListener("click", event => {
     if (event.target === overlay || event.target.closest('[data-action="close"]')) close();
   });
   overlay.addEventListener("keydown", event => { if (event.key === "Escape") close(); });
   for (const selector of [modeField, modelField]) selector.addEventListener("change", () => {
+    if (selector === modelField) { node._promptOptimizeModel = modelField.value; markDirty(); } // 弹窗内改选同步回节点并持久化，下次打开仍生效
     resultField.value = "";
     apply.disabled = true;
     status.textContent = "优化方向或模型已改变，请重新生成结果。";
@@ -8257,11 +8258,41 @@ function browserNodeBody(node) {
 }
 
 // 文字节点正文底部的提示词操作行：未优化过 → 打开优化对话框；已应用过优化 → 一键还原原文。
+// 行内同时提供优化模型选择器（写入 node._promptOptimizeModel，只持久化不发请求）；
+// 节点宽度不足时选择器折叠成图标（title 保留完整模型名），重新变宽即恢复完整名称。
 function textPromptActionsHtml(node) {
   const restoring = typeof node._promptOriginalText === "string";
   const busy = promptOptimizationPending.has(node.id);
   const label = restoring ? "还原优化前的提示词" : "优化提示词";
-  return `<div class="text-prompt-actions"><button type="button" class="prompt-optimize-btn${restoring ? " is-restore" : ""}${busy ? " is-busy" : ""}" data-role="prompt-optimize" title="${label}" aria-label="${label}" ${busy ? "disabled" : ""}>${restoring ? "还原" : "优化"}</button></div>`;
+  return `<div class="text-prompt-actions">${promptModelSelectHtml(node, restoring)}<button type="button" class="prompt-optimize-btn${restoring ? " is-restore" : ""}${busy ? " is-busy" : ""}" data-role="prompt-optimize" title="${label}" aria-label="${label}" ${busy ? "disabled" : ""}>${restoring ? "还原" : "优化"}</button></div>`;
+}
+
+// 优化模型选择器宽度预估：与 variableChoiceSelectWidth 同款字体栈的 canvas measureText，
+// 按渲染时已知的 node.w 静态计算，不用 ResizeObserver/持续重测量；节点缩放触发重渲染时自然复算。
+const promptModelMeasureCtxHolder = { ctx: null };
+function promptModelTextWidth(text) {
+  if (!promptModelMeasureCtxHolder.ctx) promptModelMeasureCtxHolder.ctx = document.createElement("canvas").getContext("2d");
+  promptModelMeasureCtxHolder.ctx.font = `12px "HarmonyOS Sans SC", "HarmonyOS Sans", "鸿蒙黑体", "PingFang SC", "Microsoft YaHei", sans-serif`;
+  return promptModelMeasureCtxHolder.ctx.measureText(String(text || "")).width;
+}
+
+function promptModelSelectHtml(node, restoring) {
+  const models = chatCatalogModels();
+  const selected = selectedPromptOptimizeModel(node, models);
+  if (!selected) {
+    return `<select class="prompt-model-select is-empty" data-role="prompt-model" title="请先在设置 → API 中填写对应站点的 API Key" aria-label="优化模型" disabled><option>选模型</option></select>`;
+  }
+  const options = models.map(item => `<option value="${escapeHtml(item.id)}"${item.id === selected.id ? " selected" : ""}>${escapeHtml(item.label)}</option>`).join("");
+  // 操作行可用宽度 = 节点宽 - .node-body 左右内边距(11×2)；选择器 + 间距(6) + 优化按钮 之和放不下即折叠
+  const available = (Number(node?.w) || 240) - 22;
+  const selectWidth = Math.ceil((promptModelTextWidth(selected.label) + 34) / 4) * 4;
+  const buttonWidth = Math.ceil((promptModelTextWidth(restoring ? "还原" : "优化") + 26) / 4) * 4;
+  const compact = selectWidth + 6 + buttonWidth > available;
+  const ariaName = `优化模型：${selected.label}`;
+  if (compact) {
+    return `<span class="prompt-model-wrap is-compact" title="${ariaName}"><select class="prompt-model-select is-compact" data-role="prompt-model" title="${ariaName}" aria-label="${ariaName}">${options}</select><svg class="prompt-model-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm8.6 3.5c0 .5-.05 1-.14 1.46l2.06 1.6-2 3.47-2.43-.98c-.74.6-1.6 1.08-2.53 1.4L15.2 21.5h-4l-.36-2.55a7.8 7.8 0 0 1-2.53-1.4l-2.43.98-2-3.47 2.06-1.6a8.3 8.3 0 0 1 0-2.92L3.88 8.94l2-3.47 2.43.98a7.8 7.8 0 0 1 2.53-1.4L11.2 2.5h4l.36 2.55c.93.32 1.79.8 2.53 1.4l2.43-.98 2 3.47-2.06 1.6c.09.47.14.96.14 1.46Z"/></svg></span>`;
+  }
+  return `<select class="prompt-model-select" data-role="prompt-model" title="${ariaName}" aria-label="${ariaName}" style="inline-size:${selectWidth}px">${options}</select>`;
 }
 
 function nodeTemplate(node) {
@@ -9682,6 +9713,12 @@ els.nodes.addEventListener("change", async ev => {
   if (!node) return;
   // 本地 SD 节点的功能/工作流/Seed/降噪下拉(否则修改不会写回节点，见 local-sd.js handleChange)
   if (window.LocalSD?.handleChange(node, role, ev.target)) return;
+  // 文字节点内嵌优化模型选择器：只持久化选择，不发送任何请求（与 ai-model 下拉同为 pushHistory 语义）
+  if (role === "prompt-model") {
+    node._promptOptimizeModel = ev.target.value;
+    pushHistory(); render();
+    return;
+  }
   if (node.type === "variable") {
     const rowElement = ev.target.closest(".variable-node-row");
     const row = node.variableRows?.find(item => item.id === rowElement?.dataset.rowId);

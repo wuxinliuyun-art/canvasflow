@@ -18,6 +18,8 @@ function setup(options = {}) {
   const pushed = [];
   const context = {
     desktop: options.desktop ?? false,
+    escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])),
+    document: { createElement: () => ({ getContext: () => ({ font: "", measureText: t => ({ width: String(t).split("").reduce((w, ch) => w + (ch.charCodeAt(0) > 0xff ? 12 : 7), 0) }) }) }) },
     state: { settings: { apiKey: "key-apimart", agtokenApiKey: "key-agtoken", chatCustomKeys: { s1: "key-custom" } } },
     chatCatalogModels: () => options.models ?? [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol", apiType: "apimart", multimodal: false }],
     chatModelEntry: modelId => (options.chatModelEntry ?? ((id) => (context.chatCatalogModels().find(item => item.id === id) || null)))(modelId),
