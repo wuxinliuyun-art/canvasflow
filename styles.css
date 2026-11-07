@@ -4170,3 +4170,20 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .update-prompt-dialog h2 { margin: 0 0 8px; font-size: 16px; }
 .update-prompt-dialog p { margin: 0 0 16px; font-size: 14px; }
 .update-prompt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* ---------- 文字节点滚动边缘渐隐（内容被裁剪时的视觉提示，纯展示层） ---------- */
+.node.text .node-body { position: relative; }
+.node.text.has-scroll-before .node-body::before,
+.node.text.has-scroll-after .node-body::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 2;
+}
+.node.text.has-scroll-before .node-body::before { top: 0; background: linear-gradient(rgba(255, 255, 255, .95), rgba(255, 255, 255, 0)); }
+.node.text.has-scroll-after .node-body::after { bottom: 0; background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, .95)); }
+.theme-dark .node.text.has-scroll-before .node-body::before { background: linear-gradient(var(--panel-solid), rgba(0, 0, 0, 0)); }
+.theme-dark .node.text.has-scroll-after .node-body::after { background: linear-gradient(rgba(0, 0, 0, 0), var(--panel-solid)); }
