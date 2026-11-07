@@ -4538,7 +4538,9 @@ async function sendChatNodeMessage(nodeId, options = {}) {
   const payload = { apiType: entry.apiType, model: entry.apiType === "custom" ? entry.model : node._chatModel, stream: false, messages: [...history, { role: "user", content: userContent }] };
   // 自定义 OpenAI 兼容站点：Base URL/站点号随请求体携带（服务端转发前移除），上游 model 用真实模型名
   if (entry.apiType === "custom") {
-    payload.__chatCustom = { baseUrl: String(entry.site?.baseUrl || "").trim(), siteId: entry.siteId };
+    // chatModelEntry 的 custom 条目只有 siteId（无 site 属性），Base URL 须经站点表解析
+    const customSite = chatCustomSiteById(entry.siteId);
+    payload.__chatCustom = { baseUrl: String(customSite?.baseUrl || "").trim(), siteId: entry.siteId };
     // 自定义站点无既有桌面槽语义，两种模式都随请求体带 key（桌面值来自 secrets 回填）
     payload._apiKey = chatCustomSiteKey(entry.siteId);
   } else if (!desktop) {
