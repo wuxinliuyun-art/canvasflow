@@ -390,8 +390,10 @@ test('22 批注逻辑不触碰任务拆分与分支语义', () => {
   const runStart = source.indexOf('async function runQueuedAiTask');
   const runBlock = source.slice(runStart, source.indexOf('\nasync function ', runStart + 10));
   assert.equal((runBlock.match(/prepareSubmission/g) || []).length, 1);
-  // ARROW_NOTE_ENABLED 保持隐藏
-  assert.match(source, /const ARROW_NOTE_ENABLED = false;/);
+  // 灯箱箭头标注已整体删除（2026-11-07）：源码不得再有总闸门与渲染调用；hasColorArrowNotes 数据消费保留
+  assert.doesNotMatch(source, /ARROW_NOTE_ENABLED/);
+  assert.doesNotMatch(source, /drawArrowAnnotation/);
+  assert.match(source, /hasColorArrowNotes \? index \+ 1 : 0/);
 });
 
 // ===== 最终发送数组与 prompt 样例留存（供报告引用） =====

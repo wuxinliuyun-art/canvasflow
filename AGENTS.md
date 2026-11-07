@@ -216,7 +216,7 @@
 
 ### 带配色标注箭头的参考图自动内置颜色修改提示词（2026-10）
 
-- **功能已隐藏（2026-10 用户明确要求）**：箭头末端标注功能（悬浮编辑器 + 画布标注渲染）自 2.7.4 起整体隐藏，**后续打包版本均不得包含此功能**。实现为 app.js 箭头标注区顶部的总闸门 `ARROW_NOTE_ENABLED = false`，共闸三处：`showArrowNote` 入口（画完箭头自动弹出 + 悬浮弹出都走这里）、灯箱 pointermove 的箭头尾点命中检测、`drawArrowAnnotation` 渲染调用。index.html 的 DOM 与事件绑定保留（顶层绑定删掉会因元素缺失抛错），置回 `true` 可整体恢复。
+- **功能已整体删除（2026-11-07 用户拍板，由 PR #10 图片批注系统取代）**：灯箱箭头末端标注的悬浮编辑器、画布标注渲染、命中检测、index.html 的 lightboxArrow* DOM、.lightbox-arrow-* 样式与 tests/arrow-annotation.test.cjs 已全部移除，不存在恢复开关。**下游兼容保留（勿删）**：`hasColorArrowNotes` 数据传播（imageRef/imageEntries/重编辑继承）与 `_arrowNoteClause` 颜色修改提示词追加按节点数据驱动保留——已烘焙标注的旧图行为不变；新画笔不会再产生标记。
 - 下游逻辑保留不删：`hasColorArrowNotes` 继承（重编辑已烘焙标注的旧图仍继承标记）与颜色修改提示词追加（4707-4711）按节点数据驱动，隐藏后不会再产生新标记，但旧图行为不变；改动此功能时不要顺手删这两处。
 - 规则：灯箱画笔里画的箭头带“配色标注”（`action.noteColor` 非空）并确认生成节点时，产物图片节点打 `node.hasColorArrowNotes`（来源图本身带标记则继承；普通箭头/画笔/裁剪不标记）。标记经 `collectUpstreamForAI.imageRef` 与 `directScreenshotNodeInputs` 随参考图对象传播；`runQueuedAiTask` 在 submitGeneration 前（`task.localMatting` 分支之外）按**本次实际发送数组**（AI 任务=orderedImages 画布 x 排序；截图任务=[截图, ...参考图]）计算标注图序号，把「根据第x张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注」追加到 `task.prompt`（多张用「、」，如“第2、3张”；无上游文字时该句即 prompt）。因发送时才追加，任务队列在启动前面板显示的是用户原文；导出 PNG 的 generationPrompt 取自发送后的 task.prompt，与实际请求一致。
 - 避免：追加必须只做一次（`task._arrowNoteClause === undefined` 守卫，重试不重复拼接）；序号必须按发送数组下标+1，不能按节点创建顺序；浏览器生图节点（/api/browser-task）不走此逻辑，勿在别处重复拼接；自动化测试中灯箱箭头拖拽对 `setPointerCapture` 有依赖，合成 PointerEvent 需临时屏蔽该方法，且 `startLightboxPaint` 要求 lightboxImg 加载完成（naturalWidth>0），过早点击会静默返回。

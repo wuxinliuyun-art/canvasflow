@@ -3892,25 +3892,6 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .settings-language-switch button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 @media (max-width: 600px) { .settings > .panel-head { flex-wrap: wrap; gap: 16px; } }
 
-/* Arrow annotation controls reuse the editor's buttons and semantic theme tokens. */
-.lightbox-arrow-note { position: fixed; z-index: 4; display: flex; flex-wrap: wrap; gap: 8px; width: 280px; max-width: calc(100vw - 16px); max-height: calc(100vh - 96px); overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); box-shadow: var(--soft-shadow); }
-.lightbox-arrow-note textarea { flex: 1 1 100%; width: 100%; min-width: 0; min-height: 56px; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--node-control); color: var(--text); font: inherit; font-size: 14px; }
-.lightbox-arrow-note .btn { min-height: 32px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
-.lightbox-arrow-note :is(button, textarea, input):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.lightbox-arrow-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; min-width: 0; }
-.lightbox-arrow-palette label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.lightbox-arrow-palette input[type="color"] { width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); background: var(--node-control); cursor: pointer; }
-.lightbox-arrow-palette > span { font-size: 12px; }
-.lightbox-arrow-color-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 40px)); justify-content: space-between; align-content: start; gap: 8px; width: 100%; max-height: 232px; overflow-y: auto; overscroll-behavior: contain; padding: 4px; }
-.lightbox-arrow-color-slot { position: relative; min-width: 0; aspect-ratio: 1; }
-.lightbox-arrow-color-slot > button:first-child { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--inverse-text); color: var(--muted); font-size: 20px; line-height: 1; }
-.lightbox-arrow-color-slot > .lightbox-arrow-color-remove { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 20px; height: 20px; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--panel-solid); color: var(--text); font-size: 16px; line-height: 1; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out; }
-.lightbox-arrow-color-slot:is(:hover, :focus-within) > .lightbox-arrow-color-remove { opacity: 1; pointer-events: auto; }
-@media (hover: none) { .lightbox-arrow-color-slot > .lightbox-arrow-color-remove { opacity: 1; pointer-events: auto; } }
-
-.lightbox-arrow-swatch { display: inline-block; flex: 0 0 12px; width: 12px; height: 12px; border: 1px solid var(--line); }
-
-.lightbox-arrow-color-preview { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--text); background: var(--panel-solid); font-size: 12px; }
 
 /* ===== 画布文字标注（双击空白创建；屏幕像素渲染，缩放不改变字号） ===== */
 .canvas-annotations {

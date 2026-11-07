@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261107-ann-ui3">
+  <link rel="stylesheet" href="styles.css?v=20261107-arrow-note-off1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -526,17 +526,6 @@
       </div>
     </div>
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
-    <div id="lightboxArrowNote" class="lightbox-arrow-note hidden" role="group" aria-label="箭头说明">
-      <textarea id="lightboxArrowText" rows="2" maxlength="500" placeholder="输入箭头说明" aria-label="箭头说明文字"></textarea>
-      <button id="lightboxArrowColorPreview" type="button" class="btn lightbox-arrow-color-preview hidden" title="点击修改标注颜色" aria-label="修改当前配色标注颜色"><span id="lightboxArrowPreviewSwatch" class="lightbox-arrow-swatch" aria-hidden="true"></span><span id="lightboxArrowPreviewHex"></span></button>
-      <button id="lightboxArrowPaletteBtn" class="btn" type="button" aria-expanded="false" aria-controls="lightboxArrowPalette">配色标注</button>
-      <div id="lightboxArrowPalette" class="lightbox-arrow-palette hidden">
-        <label>标注颜色 <input id="lightboxArrowColor" type="color" aria-label="配色标注颜色"></label>
-        <span id="lightboxArrowHex"></span>
-        <button id="lightboxArrowColorClear" class="btn" type="button">移除色块</button>
-        <div id="lightboxArrowColorSlots" class="lightbox-arrow-color-slots" role="group" aria-label="10 个配色槽位，每行 5 个"></div>
-      </div>
-    </div>
     <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="图片右侧工具">
       <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
@@ -612,7 +601,7 @@
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
-  <script src="app.js?v=20261107-ann-ui3"></script>
+  <script src="app.js?v=20261107-arrow-note-off1"></script>
   <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>

@@ -10306,274 +10306,6 @@ let lightboxCropDrag = null;
 const lightboxCropBtn = $("lightboxCropBtn");
 const lightboxCropApply = $("lightboxCropApply");
 
-// Arrow annotations are part of the paint overlay; the floating editor is never exported.
-// 箭头末端标注（文字+配色）2026-10 起按用户要求整体隐藏，后续打包版本均不含此功能；置回 true 可整体恢复。
-// 下游 hasColorArrowNotes 继承与颜色修改提示词逻辑保留，兼容已烘焙标注的旧图。
-const ARROW_NOTE_ENABLED = false;
-const arrowNote = $("lightboxArrowNote");
-const arrowNoteText = $("lightboxArrowText");
-const arrowNoteColor = $("lightboxArrowColor");
-const arrowPalette = $("lightboxArrowPalette");
-let arrowNoteAction = null;
-let arrowNoteHideTimer = null;
-let arrowNoteTextBefore = "";
-let arrowColorPicking = false;
-let arrowColorBefore = null;
-const ARROW_COLOR_STORAGE_KEY = "canvasflow-arrow-annotation-colors";
-function normalizeArrowColors(value) {
-  const colors = Array.isArray(value) ? value : [];
-  return Array.from({ length: 10 }, (_, i) => /^#[0-9a-f]{6}$/i.test(colors[i] || "") ? colors[i].toUpperCase() : null);
-}
-let arrowSavedColors = normalizeArrowColors([]);
-try { arrowSavedColors = normalizeArrowColors(JSON.parse(localStorage.getItem(ARROW_COLOR_STORAGE_KEY))); } catch {}
-function renderArrowColorSlots() {
-  const slots = $("lightboxArrowColorSlots");
-  slots.replaceChildren();
-  arrowSavedColors.forEach((color, index) => {
-    const slot = document.createElement("div");
-    slot.className = "lightbox-arrow-color-slot";
-    const use = document.createElement("button");
-    use.type = "button"; use.className = "btn";
-    use.textContent = color ? "" : "+";
-    use.setAttribute("aria-label", color ? `使用配色 ${color}` : `保存当前颜色到槽位 ${index + 1}`);
-    use.title = color ? `使用 ${color}` : "保存当前颜色";
-    if (color) {
-      use.style.backgroundColor = color;
-      use.onclick = () => { arrowNoteColor.value = color; setArrowNoteColor(color); };
-    } else {
-      use.onclick = () => {
-        arrowSavedColors[index] = arrowNoteColor.value.toUpperCase();
-        saveArrowColors();
-        positionArrowNote();
-      };
-    }
-    slot.append(use);
-    if (color) {
-      const remove = document.createElement("button");
-      remove.type = "button"; remove.className = "btn lightbox-arrow-color-remove"; remove.textContent = "×";
-      remove.setAttribute("aria-label", `删除配色 ${color}`);
-      remove.onclick = () => { arrowSavedColors[index] = null; saveArrowColors(); };
-      slot.append(remove);
-    }
-    slots.append(slot);
-  });
-}
-function saveArrowColors() {
-  try { localStorage.setItem(ARROW_COLOR_STORAGE_KEY, JSON.stringify(arrowSavedColors)); }
-  catch { toast("配色保存失败，请检查本地存储空间"); }
-  renderArrowColorSlots();
-}
-function cancelArrowNoteHide() {
-  clearTimeout(arrowNoteHideTimer);
-  arrowNoteHideTimer = null;
-}
-function scheduleArrowNoteHide() {
-  if (arrowNoteHideTimer !== null) return;
-  arrowNoteHideTimer = setTimeout(() => {
-    arrowNoteHideTimer = null;
-    hideArrowNote();
-  }, 800);
-}
-function hideArrowNote(force = false) {
-  cancelArrowNoteHide();
-  if (!force && (document.activeElement === arrowNoteText || arrowColorPicking || arrowNote.matches(":hover"))) return;
-  arrowNote.classList.add("hidden");
-  arrowPalette.classList.add("hidden");
-  $("lightboxArrowPaletteBtn").setAttribute("aria-expanded", "false");
-  if (force) {
-    arrowColorPicking = false;
-    arrowNoteAction = null;
-  }
-}
-function positionArrowNote() {
-  if (!arrowNoteAction || arrowNote.classList.contains("hidden")) return;
-  if (!lightboxPainting || !lightboxPaintActions.includes(arrowNoteAction)) return hideArrowNote(true);
-  const canvas = els.lightboxPaintCanvas;
-  const rect = canvas.getBoundingClientRect();
-  const end = arrowNoteAction.points[0];
-  const x = rect.left + end.x * rect.width / canvas.width;
-  const y = rect.top + end.y * rect.height / canvas.height;
-  const toolbarTop = els.lightboxPaintToolbar.getBoundingClientRect().top;
-  const bottom = toolbarTop > 0 ? Math.min(window.innerHeight - 8, toolbarTop - 8) : window.innerHeight - 8;
-  arrowNote.style.left = `${Math.max(8, Math.min(x + 12, window.innerWidth - arrowNote.offsetWidth - 8))}px`;
-  const panelY = y - arrowNote.offsetHeight - 12;
-  arrowNote.style.top = `${Math.max(8, Math.min(panelY >= 8 ? panelY : y + 64, bottom - arrowNote.offsetHeight))}px`;
-}
-function showArrowNote(action) {
-  if (!ARROW_NOTE_ENABLED || !action || !lightboxPaintActions.includes(action)) return;
-  if (arrowNoteAction !== action) {
-    if (document.activeElement === arrowNoteText || arrowColorPicking) return;
-    arrowNoteAction = action;
-    arrowNoteText.value = action.noteText || "";
-    arrowNoteColor.value = action.noteColor || action.color;
-    $("lightboxArrowHex").textContent = (action.noteColor || action.color).toUpperCase();
-  }
-  syncArrowColorPreview();
-  arrowNote.classList.remove("hidden");
-  positionArrowNote();
-  syncArrowNoteHandles();
-  scheduleArrowNoteHide();
-}
-function syncArrowColorPreview() {
-  const color = arrowNoteAction?.noteColor;
-  if (arrowNoteAction) {
-    arrowNoteColor.value = color || arrowNoteAction.color;
-    $("lightboxArrowHex").textContent = color ? color.toUpperCase() : "未添加色块";
-  }
-  const preview = $("lightboxArrowColorPreview");
-  preview.classList.toggle("hidden", !color);
-  $("lightboxArrowPreviewSwatch").style.backgroundColor = color || "";
-  $("lightboxArrowPreviewHex").textContent = color ? color.toUpperCase() : "";
-}
-function setArrowNoteColor(color, recordUndo = true) {
-  if (!arrowNoteAction || !lightboxPaintActions.includes(arrowNoteAction)) return;
-  const action = arrowNoteAction, previous = action.noteColor || null;
-  const next = color ? color.toUpperCase() : null;
-  if (previous === next) return;
-  action.noteColor = next;
-  if (recordUndo) pushLightboxEditUndo(() => { action.noteColor = previous; });
-  $("lightboxArrowHex").textContent = next || "未添加色块";
-  syncArrowColorPreview();
-  positionArrowNote();
-  rebuildLightboxPaintOverlay();
-}
-arrowNoteText.addEventListener("focus", () => { arrowNoteTextBefore = arrowNoteAction?.noteText || ""; });
-arrowNoteText.addEventListener("input", () => {
-  if (!arrowNoteAction) return;
-  arrowNoteAction.noteText = arrowNoteText.value;
-  rebuildLightboxPaintOverlay();
-});
-arrowNoteText.addEventListener("blur", () => {
-  const action = arrowNoteAction, previous = arrowNoteTextBefore;
-  if (action && (action.noteText || "") !== previous) pushLightboxEditUndo(() => { action.noteText = previous; });
-});
-arrowNote.addEventListener("pointerenter", cancelArrowNoteHide);
-arrowNote.addEventListener("pointerleave", scheduleArrowNoteHide);
-arrowNote.addEventListener("focusout", scheduleArrowNoteHide);
-arrowNote.addEventListener("keydown", ev => {
-  ev.stopPropagation();
-  if (ev.key === "Escape") {
-    ev.preventDefault();
-    document.activeElement?.blur();
-    hideArrowNote(true);
-    syncArrowNoteHandles();
-  }
-});
-$("lightboxArrowPaletteBtn").onclick = () => {
-  const open = arrowPalette.classList.contains("hidden");
-  arrowPalette.classList.toggle("hidden", !open);
-  $("lightboxArrowPaletteBtn").setAttribute("aria-expanded", String(open));
-  if (open) renderArrowColorSlots();
-  positionArrowNote();
-};
-function beginArrowColorPick() {
-  arrowColorPicking = true;
-  arrowColorBefore = arrowNoteAction?.noteColor || null;
-  cancelArrowNoteHide();
-}
-function openArrowColorPicker() {
-  if (!arrowNoteAction) return;
-  arrowPalette.classList.remove("hidden");
-  $("lightboxArrowPaletteBtn").setAttribute("aria-expanded", "true");
-  syncArrowColorPreview(); renderArrowColorSlots(); positionArrowNote();
-  if (typeof arrowNoteColor.showPicker === "function") {
-    beginArrowColorPick();
-    try { arrowNoteColor.showPicker(); } catch { arrowNoteColor.click(); }
-  } else arrowNoteColor.click();
-}
-$("lightboxArrowColorPreview").onclick = openArrowColorPicker;
-arrowNoteColor.addEventListener("click", beginArrowColorPick);
-arrowNoteColor.addEventListener("input", () => setArrowNoteColor(arrowNoteColor.value, false));
-function finishArrowColorPick() {
-  if (!arrowColorPicking) return;
-  const action = arrowNoteAction, previous = arrowColorBefore;
-  arrowColorPicking = false;
-  if (action && (action.noteColor || null) !== previous) pushLightboxEditUndo(() => { action.noteColor = previous; });
-  scheduleArrowNoteHide();
-}
-arrowNoteColor.addEventListener("change", () => {
-  // Some native color pickers report the final value only through change.
-  setArrowNoteColor(arrowNoteColor.value, !arrowColorPicking);
-  finishArrowColorPick();
-});
-arrowNoteColor.addEventListener("blur", finishArrowColorPick);
-window.addEventListener("focus", () => { if (arrowColorPicking) finishArrowColorPick(); });
-$("lightboxArrowColorClear").onclick = () => setArrowNoteColor(null);
-function arrowAnnotationLayout(context, action) {
-  if (!action.noteText?.trim() && !action.noteColor) return null;
-  const canvas = els.lightboxPaintCanvas;
-  const scale = Math.min(action.points[0].scale || 1, canvas.width / 96, canvas.height / 64);
-  const font = `${16 * scale}px ${getComputedStyle(canvas).fontFamily}`;
-  context.font = font;
-  const padding = 8 * scale, lineHeight = 24 * scale;
-  const maxWidth = Math.min(280 * scale, canvas.width - 2 * padding);
-  const textWidth = maxWidth - 2 * padding;
-  const lines = [];
-  for (const paragraph of String(action.noteText || "").split("\n")) {
-    let line = "";
-    for (const char of paragraph) {
-      if (line && context.measureText(line + char).width > textWidth) { lines.push(line); line = ""; }
-      line += char;
-    }
-    if (line || paragraph) lines.push(line);
-  }
-  const maxLines = Math.max(1, Math.floor((canvas.height - 4 * padding) / lineHeight) - (action.noteColor ? 1 : 0));
-  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + "…"; }
-  const swatchWidth = action.noteColor ? 24 * scale + context.measureText(action.noteColor).width : 0;
-  const width = Math.min(maxWidth, Math.max(swatchWidth, ...lines.map(line => context.measureText(line).width), 0) + 2 * padding);
-  const height = (lines.length + (action.noteColor ? 1 : 0)) * lineHeight + 2 * padding;
-  const end = action.points[0];
-  return { x: Math.max(0, Math.min(end.x + 12 * scale, canvas.width - width)), y: Math.max(0, Math.min(end.y + 12 * scale, canvas.height - height)), width, height, padding, lineHeight, scale, font, lines };
-}
-function drawArrowAnnotation(context, action) {
-  context.save();
-  const box = arrowAnnotationLayout(context, action);
-  if (!box) { context.restore(); return; }
-  const tokens = getComputedStyle(els.lightboxPaintCanvas);
-  context.font = box.font; context.textBaseline = "top";
-  context.fillStyle = tokens.getPropertyValue("--text").trim();
-  let y = box.y + box.padding;
-  for (const line of box.lines) { context.fillText(line, box.x + box.padding, y, box.width - 2 * box.padding); y += box.lineHeight; }
-  if (action.noteColor) {
-    context.fillStyle = action.noteColor;
-    context.fillRect(box.x + box.padding, y, 16 * box.scale, 16 * box.scale);
-    context.strokeStyle = tokens.getPropertyValue("--line").trim(); context.lineWidth = box.scale;
-    context.strokeRect(box.x + box.padding, y, 16 * box.scale, 16 * box.scale);
-    context.fillStyle = tokens.getPropertyValue("--text").trim();
-    context.fillText(action.noteColor.toUpperCase(), box.x + box.padding + 24 * box.scale, y);
-  }
-  context.restore();
-}
-// Keep rendered annotations visible; reveal only the editor near the arrow tail.
-function syncArrowNoteHandles() {
-  if (arrowNoteAction && (!lightboxPainting || !lightboxPaintActions.includes(arrowNoteAction))) hideArrowNote(true);
-  if (arrowNoteAction) syncArrowColorPreview();
-}
-function arrowNoteAtClientPoint(clientX, clientY) {
-  const canvas = els.lightboxPaintCanvas, rect = canvas.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
-  const x = (clientX - rect.left) * canvas.width / rect.width;
-  const y = (clientY - rect.top) * canvas.height / rect.height;
-  const radius = 48 * canvas.width / rect.width;
-  const context = lightboxPaintOverlay.getContext("2d");
-  return [...lightboxPaintActions].reverse().find(action => {
-    if (action.kind !== "arrow" || action === lightboxPaintCurrentAction) return false;
-    const tail = action.points[0];
-    if (Math.hypot(x - tail.x, y - tail.y) <= radius) return true;
-    context.save(); const box = arrowAnnotationLayout(context, action); context.restore();
-    const margin = 8 * canvas.width / rect.width;
-    return box && x >= box.x - margin && x <= box.x + box.width + margin && y >= box.y - margin && y <= box.y + box.height + margin;
-  }) || null;
-}
-els.lightbox.addEventListener("pointermove", ev => {
-  if (!lightboxPainting || lightboxDrawing || lightboxViewDrag || lightboxTransformDrag || lightboxCropDrag) return;
-  if (!ARROW_NOTE_ENABLED) return; // 标注功能隐藏时跳过箭头尾点命中检测
-  if (arrowNote.contains(ev.target)) { cancelArrowNoteHide(); return; }
-  const action = arrowNoteAtClientPoint(ev.clientX, ev.clientY);
-  if (action) { showArrowNote(action); cancelArrowNoteHide(); }
-  else scheduleArrowNoteHide();
-});
-els.lightbox.addEventListener("pointerleave", scheduleArrowNoteHide);
 
 function clearLightboxCrop() {
   lightboxCropRect = null;
@@ -10757,8 +10489,6 @@ async function startLightboxPaint() {
 }
 
 function cancelLightboxPaint() {
-  hideArrowNote(true);
-  lightboxViewDrag = null;
   els.lightboxPaintCanvas.style.transform = "";
   els.lightboxPaintCanvas.style.left = "";
   els.lightboxPaintCanvas.style.maxWidth = "";
@@ -10824,9 +10554,6 @@ function updateLightboxPaintDisplaySize() {
   canvas.style.transform = hasViewTransform
     ? `translate(${Math.round(lightboxViewOffset.x)}px, ${Math.round(lightboxViewOffset.y)}px) scale(${lightboxViewZoom})`
     : "";
-  positionLightboxMirrorTools();
-  positionArrowNote();
-  syncArrowNoteHandles();
 }
 
 // 左侧工具面板垂直定位：仅在打开/窗口变化/折叠调色盘时按当前内容高度“大概居中”定一次 top；
@@ -10961,7 +10688,6 @@ function drawLightboxShape(context, action) {
     context.fill();
   }
   context.restore();
-  if (action.kind === "arrow" && ARROW_NOTE_ENABLED) drawArrowAnnotation(context, action);
 }
 
 function isLightboxShapeAction(action) {
@@ -11041,8 +10767,6 @@ function renderLightboxPaintComposite() {
   }
   context.drawImage(lightboxPaintOverlay, 0, 0);
   if (lightboxPaintMode === "transform" && lightboxPlacedSelected && lightboxPlacedImage) drawLightboxPlacedSelection(context);
-  drawLightboxCropSelection(context);
-  syncArrowNoteHandles();
 }
 
 function drawLightboxPlacedSelection(context) {
@@ -11103,8 +10827,6 @@ function updateLightboxPaintUndo() {
 
 function undoLightboxPaint() {
   if (!lightboxPainting || !lightboxEditUndoStack.length) return;
-  arrowNoteText.blur();
-  hideArrowNote(true);
   clearLightboxCrop();
   lightboxDrawing = false;
   lightboxPaintCurrentAction = null;
@@ -11211,7 +10933,6 @@ function updateLightboxPlacedTransform(point) {
 
 els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   if (!lightboxPainting) return;
-  arrowNoteText.blur();
   if (ev.button === 1) {
     ev.preventDefault();
     lightboxViewDrag = { ...lightboxViewOffset, startX: ev.clientX, startY: ev.clientY };
@@ -11348,14 +11069,8 @@ function finishLightboxPointerAction(ev) {
       if (index >= 0) actions.splice(index, 1);
       if (actions === lightboxFillActions) markLightboxFillLayerDirty();
     });
-    if (action.kind === "arrow" && ev.type === "pointerup") {
-      lightboxPaintCurrentAction = null;
-      showArrowNote(action);
-    }
   }
   lightboxDrawing = false;
-  lightboxPaintCurrentAction = null;
-  syncArrowNoteHandles();
 }
 els.lightboxPaintCanvas.addEventListener("pointerup", finishLightboxPointerAction);
 els.lightboxPaintCanvas.addEventListener("pointercancel", finishLightboxPointerAction);
@@ -11815,8 +11530,9 @@ els.lightboxPaintConfirm.onclick = async () => {
   node.image = image;
   node.fileName = `局部修改_${Date.now()}.png`;
   node.mime = "image/png";
-  // 本轮画了带配色标注的箭头,或来源图本身带标注(重编辑时旧标注已烘焙进底图):产物继承标记,任务发送时据此内置颜色修改提示词
-  if (lightboxPaintActions.some(action => action.kind === "arrow" && action.noteColor) || source?.hasColorArrowNotes) node.hasColorArrowNotes = true;
+  // 来源图本身带配色标注(重编辑时旧标注已烘焙进底图):产物继承标记,任务发送时据此内置颜色修改提示词
+  // 灯箱箭头标注已下线,画笔不会再产生新标注;此继承只服务存量旧图
+  if (source?.hasColorArrowNotes) node.hasColorArrowNotes = true;
   await externalizeImageField(node, "image", "imageAssetId", node.fileName);
   pushHistory();
   render();
@@ -11830,7 +11546,6 @@ els.lightboxNext.onclick = lightboxNext;
 els.lightbox.querySelector(".lightbox-bg").onclick = () => { if (!lightboxPainting) hideLightbox(); };
 els.lightbox.addEventListener("wheel", ev => {
   if (ev.target.closest(".editor-quick-palette")) return;
-  if (ev.target.closest("#lightboxArrowNote")) { ev.stopPropagation(); return; }
   if (lightboxPainting) {
     ev.preventDefault();
     ev.stopImmediatePropagation();
