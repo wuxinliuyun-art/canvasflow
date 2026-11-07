@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261107-scroll-fade1">
+  <link rel="stylesheet" href="styles.css?v=20261107-minimap-kbd1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -64,7 +64,7 @@
       </div>
       <div id="annotations" class="canvas-annotations" aria-label="画布文字标注"></div>
       <div class="minimap-panel">
-        <canvas id="minimap" class="minimap" width="150" height="96" aria-label="画布缩略图，点击或拖动可移动当前视图"></canvas>
+        <canvas id="minimap" class="minimap" width="150" height="96" role="button" tabindex="0" aria-label="导航图：点击或拖动移动视图，点击节点选中该节点，按 Enter 或空格居中选中节点"></canvas>
       </div>
     </main>
 
@@ -611,7 +611,7 @@
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
-  <script src="app.js?v=20261107-viewport-reveal2"></script>
+  <script src="app.js?v=20261107-minimap-kbd1"></script>
   <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>

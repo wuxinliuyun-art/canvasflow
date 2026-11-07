@@ -3189,6 +3189,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 }
 .minimap { width: 150px; height: 96px; display: block; border: 1px solid var(--panel-2); border-radius: 11px; background: var(--minimap-bg); box-shadow: none; backdrop-filter: none; cursor: crosshair; touch-action: none; }
 .minimap.is-navigating { cursor: grabbing; }
+.minimap:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .canvas-utility-rail {
   position: fixed;
   z-index: 35;
