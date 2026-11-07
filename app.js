@@ -3754,6 +3754,157 @@ function chatContentToText(content) {
   return "";
 }
 
+// ---------- 提示词优化（文字节点 → 对话接口） ----------
+// 优化规则与消息构造独立成纯函数，便于在不依赖 DOM 的测试中验证。
+
+const PROMPT_OPTIMIZATION_INSTRUCTIONS = {
+  image: "你是图像生成提示词编辑。请保留用户原意、专有名词、数量、变量占位符和明确限制；使主体、场景、构图、光线、色彩、风格更清晰。不要凭空加入品牌、人物身份或用户没有要求的细节。只输出可直接用于图像生成的优化后提示词，不要解释。",
+  chat: "你是 AI 对话提示词编辑。请保留用户原意、专有名词、数量、变量占位符和明确限制；使任务目标、必要上下文、约束条件和期望输出更清晰。不要编造事实或改变任务。只输出可直接发送的优化后提示词，不要解释。",
+};
+
+function buildPromptOptimizationMessages(source, mode) {
+  const instruction = PROMPT_OPTIMIZATION_INSTRUCTIONS[mode];
+  if (!instruction) throw new Error("未知的优化方向");
+  return [
+    { role: "system", content: instruction },
+    { role: "user", content: String(source || "") },
+  ];
+}
+
+function selectedPromptOptimizeModel(node, models = chatCatalogModels()) {
+  return models.find(item => item.id === node?._promptOptimizeModel) || models[0] || null;
+}
+
+async function requestPromptOptimization(source, mode, modelId) {
+  const entry = chatModelEntry(modelId);
+  if (!entry) throw new Error("所选优化模型不可用，请先在设置 → API 中填写对应站点的 API Key");
+  const payload = {
+    apiType: entry.apiType,
+    model: entry.apiType === "custom" ? entry.model : entry.id,
+    stream: false,
+    messages: buildPromptOptimizationMessages(source, mode),
+  };
+  if (entry.apiType === "custom") {
+    const site = chatCustomSiteById(entry.siteId);
+    payload.__chatCustom = { baseUrl: String(site?.baseUrl || "").trim(), siteId: entry.siteId };
+    payload._apiKey = chatCustomSiteKey(entry.siteId);
+  } else if (!desktop) {
+    payload._apiKey = entry.apiType === "agtoken" ? (state.settings.agtokenApiKey || "") : (state.settings.apiKey || "");
+  }
+  const resp = await apiFetch("/api/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json().catch(() => ({}));
+  const apiError = typeof data.error === "string" ? data.error : data.error?.message;
+  if (resp.status === 404) {
+    throw new Error(desktop
+      ? "当前桌面程序没有对话接口：请保存画布并关闭窗口，再重新构建启动桌面版"
+      : "本机服务没有对话接口：请重启「启动CanvasFlow服务.bat」后再试");
+  }
+  if (!resp.ok || data.error) throw new Error(apiError || `优化请求失败（HTTP ${resp.status}）`);
+  // apimart 响应为 {code,data} 包装(data 内为标准 OpenAI 结构),其余为标准结构;按 choices 形状自适应解包
+  const inner = data && typeof data === "object" && data.data && Array.isArray(data.data.choices) ? data.data : data;
+  const optimized = chatContentToText(inner?.choices?.[0]?.message?.content);
+  if (!optimized) throw new Error("模型没有返回优化后的提示词");
+  return optimized;
+}
+
+// 同一节点同时只允许一个优化请求；对话框与节点按钮共同依据该集合禁用入口。
+const promptOptimizationPending = new Set();
+
+// 只有显式确认才替换节点文字；结果为空或节点内容已被编辑时一律保留现状。
+function applyPromptOptimization(nodeId, optimizedText, originalText) {
+  const node = findNode(nodeId);
+  if (!node) return { ok: false, message: "节点不存在，已保留原文" };
+  const value = String(optimizedText || "").trim();
+  if (!value) return { ok: false, message: "优化结果为空，已保留原文" };
+  if (String(node.text || "") !== String(originalText || "")) return { ok: false, message: "节点内容已被编辑，已保留最新内容" };
+  if (typeof node._promptOriginalText !== "string") node._promptOriginalText = String(originalText || "");
+  node.text = value;
+  publishScreenshotNodeCatalog();
+  pushHistory();
+  return { ok: true, message: "优化后的提示词已应用，可点击「还原」恢复原文" };
+}
+
+function restorePromptOptimizedText(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || typeof node._promptOriginalText !== "string") return { ok: false, message: "" };
+  node.text = node._promptOriginalText;
+  delete node._promptOriginalText;
+  publishScreenshotNodeCatalog();
+  pushHistory();
+  return { ok: true, message: "已还原优化前的提示词" };
+}
+
+function openPromptOptimizer(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "text") return;
+  const originalText = String(node.text || "");
+  if (!originalText.trim()) return toast("请先输入需要优化的提示词");
+  const models = chatCatalogModels();
+  if (!models.length) return toast("请先在设置 → API 中填写对应站点的 API Key");
+  document.querySelector(".prompt-optimizer-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "prompt-optimizer-overlay";
+  overlay.innerHTML = `<div class="prompt-optimizer-dialog" role="dialog" aria-modal="true" aria-label="优化提示词">
+    <div class="prompt-optimizer-head"><strong>优化提示词</strong><button type="button" data-action="close" aria-label="关闭">×</button></div>
+    <div class="prompt-optimizer-controls"><label>优化方向<select data-field="mode"><option value="image">图像生成</option><option value="chat">AI 对话</option></select></label><label>优化模型<select data-field="model">${models.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")}</select></label></div>
+    <div class="prompt-optimizer-comparison"><label>原文<textarea data-field="original" readonly></textarea></label><label>优化结果<textarea data-field="result" placeholder="点击「开始优化」生成结果；也可以在这里修改后再应用"></textarea></label></div>
+    <p class="prompt-optimizer-status" role="status">优化会把原文发送给所选模型；确认结果后再应用到节点。</p>
+    <div class="prompt-optimizer-actions"><button type="button" data-action="close">取消</button><button type="button" data-action="optimize">开始优化</button><button type="button" data-action="apply" disabled>应用到节点</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const originalField = overlay.querySelector('[data-field="original"]');
+  const resultField = overlay.querySelector('[data-field="result"]');
+  const modeField = overlay.querySelector('[data-field="mode"]');
+  const modelField = overlay.querySelector('[data-field="model"]');
+  const status = overlay.querySelector(".prompt-optimizer-status");
+  const optimize = overlay.querySelector('[data-action="optimize"]');
+  const apply = overlay.querySelector('[data-action="apply"]');
+  originalField.value = originalText;
+  modelField.value = selectedPromptOptimizeModel(node, models)?.id || models[0].id;
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay || event.target.closest('[data-action="close"]')) close();
+  });
+  overlay.addEventListener("keydown", event => { if (event.key === "Escape") close(); });
+  for (const selector of [modeField, modelField]) selector.addEventListener("change", () => {
+    resultField.value = "";
+    apply.disabled = true;
+    status.textContent = "优化方向或模型已改变，请重新生成结果。";
+  });
+  resultField.addEventListener("input", () => { apply.disabled = !resultField.value.trim(); });
+  optimize.addEventListener("click", async () => {
+    optimize.disabled = true;
+    apply.disabled = true;
+    promptOptimizationPending.add(nodeId);
+    status.textContent = "正在优化…";
+    try {
+      resultField.value = await requestPromptOptimization(originalText, modeField.value, modelField.value);
+      apply.disabled = !resultField.value.trim();
+      status.textContent = "请检查结果；只有点击「应用到节点」才会替换原文。";
+    } catch (error) {
+      status.textContent = `优化失败：${error.message || error}`;
+    } finally {
+      promptOptimizationPending.delete(nodeId);
+      optimize.disabled = false;
+    }
+  });
+  apply.addEventListener("click", () => {
+    const result = applyPromptOptimization(nodeId, resultField.value, originalText);
+    if (!result.ok) {
+      status.textContent = result.message;
+      return;
+    }
+    render();
+    close();
+    toast(result.message);
+  });
+  optimize.focus();
+}
+
 // 浏览器生图节点:把提示词/参考图交给浏览器扩展,在 Gemini/ChatGPT 等站点页面模拟人工操作并回收结果
 function normalizeBrowserNode(node) {
   if (!BROWSER_SITES.some(site => site.id === node._browserSite) && node._browserSite !== "custom") node._browserSite = BROWSER_SITES[0].id;
@@ -7817,6 +7968,14 @@ function browserNodeBody(node) {
     + preview;
 }
 
+// 文字节点正文底部的提示词操作行：未优化过 → 打开优化对话框；已应用过优化 → 一键还原原文。
+function textPromptActionsHtml(node) {
+  const restoring = typeof node._promptOriginalText === "string";
+  const busy = promptOptimizationPending.has(node.id);
+  const label = restoring ? "还原优化前的提示词" : "优化提示词";
+  return `<div class="text-prompt-actions"><button type="button" class="prompt-optimize-btn${restoring ? " is-restore" : ""}${busy ? " is-busy" : ""}" data-role="prompt-optimize" title="${label}" aria-label="${label}" ${busy ? "disabled" : ""}>${restoring ? "还原" : "优化"}</button></div>`;
+}
+
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
   const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
@@ -7824,7 +7983,7 @@ function nodeTemplate(node) {
   const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
   if (node.type === "text") {
-    body = `${textVariableStripHtml(node)}<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea><span class="resize-handle" title="拖拽缩放"></span>`;
+    body = `${textVariableStripHtml(node)}<textarea data-role="text" placeholder="请输入文字内容">${escapeHtml(node.text || "")}</textarea>${textPromptActionsHtml(node)}<span class="resize-handle" title="拖拽缩放"></span>`;
   } else if (node.type === "variable") {
     normalizeVariableNode(node);
     if (!globalLibrary.variableDefinitions.length && !node.variableRows.some(row => row.variableNameSnapshot)) {
@@ -9573,6 +9732,15 @@ els.nodes.addEventListener("click", async ev => {
     node.variableRows = node.variableRows.filter(row => row.id !== rowId);
     if (!node.variableRows.length) node.variableRows.push({ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" });
     pushHistory(); render();
+  }
+  if (actionRole === "prompt-optimize" && node.type === "text") {
+    if (typeof node._promptOriginalText === "string") {
+      const restored = restorePromptOptimizedText(node.id);
+      if (restored.ok) { render(); toast(restored.message); }
+      return;
+    }
+    openPromptOptimizer(node.id);
+    return;
   }
   if (actionRole === "text-inline-edit" && node.type === "text") {
     nodeEl.classList.add("is-text-editing");

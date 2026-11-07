@@ -4186,3 +4186,27 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 }
 .node.text.has-scroll-before .node-body::before { top: 0; background: linear-gradient(var(--panel-solid), transparent); }
 .node.text.has-scroll-after .node-body::after { bottom: 0; background: linear-gradient(transparent, var(--panel-solid)); }
+
+/* ---------- 提示词优化（文字节点入口 + 确认对话框） ---------- */
+.text-prompt-actions { display: flex; justify-content: flex-end; flex: 0 0 auto; margin-top: 8px; }
+.prompt-optimize-btn { padding: 4px 12px; border: 1px solid var(--panel-2); border-radius: 8px; color: var(--muted); background: var(--node-control); font-size: 12px; cursor: pointer; }
+.prompt-optimize-btn:hover { color: var(--text); border-color: var(--selected); }
+.prompt-optimize-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.prompt-optimize-btn.is-busy { opacity: .45; cursor: default; }
+.prompt-optimizer-overlay { position: fixed; inset: 0; z-index: 299; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(5px); }
+.prompt-optimizer-dialog { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; padding: 20px; border: 1px solid var(--panel-2); border-radius: 16px; color: var(--text); background: var(--panel-solid); box-shadow: var(--shadow); }
+.prompt-optimizer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 18px; }
+.prompt-optimizer-head button { border: 0; color: var(--text); background: transparent; font-size: 24px; cursor: pointer; }
+.prompt-optimizer-controls, .prompt-optimizer-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.prompt-optimizer-dialog label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.prompt-optimizer-dialog select, .prompt-optimizer-dialog textarea { width: 100%; border: 1px solid var(--panel-2); border-radius: 8px; padding: 10px; color: var(--text); background: var(--panel); font: inherit; }
+.prompt-optimizer-comparison { margin-top: 16px; }
+.prompt-optimizer-comparison textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+.prompt-optimizer-dialog textarea[readonly] { opacity: .78; }
+.prompt-optimizer-status { min-height: 20px; margin: 12px 0; color: var(--muted); font-size: 12px; }
+.prompt-optimizer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.prompt-optimizer-actions button { padding: 8px 12px; border: 1px solid var(--panel-2); border-radius: 8px; color: var(--text); background: var(--node-control); font-size: 13px; cursor: pointer; }
+.prompt-optimizer-actions button[data-action="apply"] { border-color: var(--primary); color: var(--inverse-text); background: var(--primary); }
+.prompt-optimizer-actions button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.prompt-optimizer-actions button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 680px) { .prompt-optimizer-controls, .prompt-optimizer-comparison { grid-template-columns: 1fr; } .prompt-optimizer-comparison textarea { min-height: 130px; } }
