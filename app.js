@@ -8256,6 +8256,72 @@ function browserNodeBody(node) {
     + preview;
 }
 
+// 浏览器生图结果的右键交互（移植自个人 v2.7.8 快照）：结果图作为只读图片视图暴露，
+// 供右键菜单按图片语义操作；节点本身仍是浏览器任务及其设置。
+function browserResultImageNode(node) {
+  if (node?.type !== "browser-image" || !(node.generatedImage || node.generatedAssetId)) return null;
+  return {
+    id: node.id, type: "image", x: node.x, y: node.y, w: node.w, h: node.h,
+    image: node.generatedImage || "", imageAssetId: node.generatedAssetId || "",
+    fileName: node.fileName || "browser-result.png", mime: node.mime || "image/png",
+    generationPrompt: node.generationPrompt || "",
+  };
+}
+
+// 清除结果只移除节点上的结果字段，不触碰任何已落盘文件（文件归导出文件夹管理）
+function clearBrowserImageResult(node) {
+  node.generatedImage = null;
+  delete node.generatedAssetId;
+  delete node.generationPrompt;
+  pushHistory();
+  render();
+}
+
+// 结果落盘：结果仅以 dataURL/URL 存于节点，右键“保存到导出文件夹”是唯一的落盘入口；
+// 服务端返回的 outputPath 是唯一可信路径来源，后续打开/复制路径都只使用它。
+async function saveBrowserResultToExport(node, openAfterSave = false) {
+  const result = browserResultImageNode(node);
+  const raw = node.generatedImage;
+  if (!result || !raw) return;
+  try {
+    const dataUrl = await fetchImageAsBase64(raw);
+    if (!String(dataUrl).startsWith("data:image/")) throw new Error("结果图片不可读取");
+    const stamp = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    const fileName = `browser-result-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.png`;
+    const response = await apiFetch("/api/save-export-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderName: "browser_generated", baseFolder: state.settings.exportFolderLabel || "export", files: [{ name: projectExportFileName(fileName, currentPage()?.name || ""), data: dataUrl }] }),
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok || saved.error) throw new Error(saved.error || `HTTP ${response.status}`);
+    node.outputPath = saved.files?.[0] || "";
+    if (!node.outputPath) throw new Error("服务端未返回保存路径");
+    pushHistory();
+    render();
+    toast("生成结果已保存到导出文件夹");
+    if (openAfterSave) await openGeneratedFileLocation(node);
+  } catch (error) {
+    console.error("[浏览器生图] 结果保存失败", { nodeId: node.id, message: error.message });
+    toast("保存生成结果失败：" + (error.message || "未知错误"));
+  }
+}
+
+// 右键菜单追加项（保留通用菜单：复制图片/AI绘图/删除节点等对 browser-image 原本可用；
+// 通用菜单已有 outputPath 条件的「打开生成图片所在文件夹」，这里不重复提供）。
+// outputPath 只接受 save-export-files 的返回值，不存在时提供保存入口而不是打开动作，
+// 避免把任意字符串交给 openFileLocation。
+function browserResultContextMenuItems(node) {
+  if (node?.type !== "browser-image" || !(node.generatedImage || node.generatedAssetId)) return [];
+  return [
+    ...(node.outputPath
+      ? [["复制生成结果文件路径", () => copyTextValue(node.outputPath)]]
+      : [["保存生成结果到导出文件夹", () => saveBrowserResultToExport(node, true)]]),
+    ["清除生成结果", () => clearBrowserImageResult(node)],
+  ];
+}
+
 // 文字节点正文底部的提示词操作行：未优化过 → 打开优化对话框；已应用过优化 → 一键还原原文。
 function textPromptActionsHtml(node) {
   const restoring = typeof node._promptOriginalText === "string";
@@ -10016,9 +10082,7 @@ els.nodes.addEventListener("click", async ev => {
     render();
   }
   if (actionRole === "browser-clear" && node.type === "browser-image") {
-    node.generatedImage = null;
-    delete node.generatedAssetId;
-    pushHistory(); render();
+    clearBrowserImageResult(node);
   }
   if (node && node.type === "chat") await handleChatNodeAction(node, actionRole, action);
   if (actionRole === "variable-add-row") {
@@ -11915,6 +11979,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(state.selected.size === 1 && selectedNode?.type === "text" && String(selectedNode.text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).length > 1 ? [["按换行拆分为文字节点", () => splitTextNodeByLines(selectedNode)]] : []),
       ...(state.selected.size === 1 && selectedNode?.type === "image" && (selectedNode?.image || selectedNode?.imageAssetId) ? [["编辑图片批注", () => startImageAnnotationEditor(selectedNode)]] : []),
       ...generationKeywordMenuItems(selectedNode),
+      ...(state.selected.size === 1 ? browserResultContextMenuItems(selectedNode) : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
