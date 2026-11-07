@@ -22,12 +22,14 @@
         { id: "gpt-image-2-official", label: "GPT Image 2（官方）", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
         { id: "midjourney", label: "Midjourney", quality: false, qualities: [], resolutions: ["auto"], sizes: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"], versions: ["8.2", "8.1", "7", "6.1", "5.2", "5.1"], speeds: ["relax", "fast", "turbo"], pricingUrl: "https://apib.ai/zh/model/midjourney" },
         { id: "gpt-image-2", label: "GPT Image 2（ext · 便宜）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
-        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
-        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
-        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
+        // maxImages = 已验证的参考图上限（仅采信来源明确的数值；未声明的模型视为未知，功能侧保守降级）
+        // gpt-image-2.5-ext / gpt-image-2.5：APIMart 官方文档 image_urls 最多 16 张（2026-11-07 核实）
+        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
+        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
+        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k"], sizes: RATIOS_FULL, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
         { id: "gemini-3.1-flash-image-preview", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/nano-banana-3-api" },
         // Nano Banana Pro（Gemini 3 Pro Image）：比例仅接受 RATIOS_EXT 档，分辨率 1K/2K/4K，n 仅支持 1，不支持 quality；参考图最多 14 张
-        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
+        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 14, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
       ],
     },
     agtoken: {

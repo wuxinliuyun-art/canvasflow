@@ -4210,3 +4210,141 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .prompt-optimizer-actions button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .prompt-optimizer-actions button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 680px) { .prompt-optimizer-controls, .prompt-optimizer-comparison { grid-template-columns: 1fr; } .prompt-optimizer-comparison textarea { min-height: 130px; } }
+
+/* ===== PR-5 图片批注编辑层（节点内部元素，z-index 取第 1 档 1–9） ===== */
+.image-annotation-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.image-annotation-surface {
+  position: absolute;
+  cursor: crosshair;
+  touch-action: none;
+}
+.image-annotation-surface .annotation-rect-draft {
+  position: absolute;
+  border: 2px dashed var(--primary);
+  background: var(--primary) 14%;
+  background-color: color-mix(in srgb, var(--primary) 14%, transparent);
+  pointer-events: none;
+}
+.image-annotation-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 20px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-annotation-pin.rectangle {
+  transform: none;
+  border: 2px solid var(--primary);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+.annotation-pin-number {
+  display: block;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--inverse-text);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  pointer-events: none;
+}
+.annotation-pin-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--danger);
+  color: var(--inverse-text);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+.annotation-pin-editor {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 4;
+  width: 180px;
+  padding: 8px;
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.image-annotation-pin.rectangle .annotation-pin-editor { top: 8px; left: 8px; }
+/* 弹层自适应翻转（PR5-UI-09C）：贴边批注的输入弹层改向左/上展开，整体留在操作面内 */
+.annotation-pin-editor.flip-left { left: auto; right: 0; }
+.annotation-pin-editor.flip-up { top: auto; bottom: calc(100% + 8px); }
+.image-annotation-pin.rectangle .annotation-pin-editor.flip-left { left: auto; right: 8px; }
+.image-annotation-pin.rectangle .annotation-pin-editor.flip-up { top: auto; bottom: 8px; }
+.annotation-pin-editor textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 1px solid var(--panel-2);
+  border-radius: 4px;
+  background: var(--panel-solid);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.annotation-pin-editor-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+.annotation-pin-editor-actions button {
+  min-height: 24px;
+  padding: 2px 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--inverse-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+/* 批注工具条位于图片预览下方（图片区域外）：编辑层此前把工具条排在图片顶部并盖住
+   上部批注点，移出后结构性避开所有图钉/编号/文字，不再依赖层级或条件位移。 */
+.image-annotation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.annotation-hint { color: var(--muted); font-size: 12px; }
+.image-annotation-toolbar button {
+  min-height: 24px;
+  padding: 2px 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--inverse-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+/* 编辑态的定位基准（PR5-UI-09C 根因修复）：.image-preview 此前无 position，编辑层的
+   absolute 定位（editor inset:0、surface/pin 的百分比）会错挂到最近的定位祖先 .node 上，
+   导致贴边批注的视觉元素按错误基准落到照片区域外。仅编辑态建立基准，不影响常规布局。 */
+.image-preview[data-annotating="1"] { position: relative; border-style: solid; }
+>>>>>>> pr-10

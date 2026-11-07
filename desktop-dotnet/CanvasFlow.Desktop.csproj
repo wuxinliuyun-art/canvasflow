@@ -31,6 +31,7 @@
     <Content Include="..\modules\local-sd.js" Link="modules\local-sd.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\fill-selection.js" Link="modules\fill-selection.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\manual-matting.js" Link="modules\manual-matting.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\image-annotations.js" Link="modules\image-annotations.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\styles.css" Link="styles.css" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />

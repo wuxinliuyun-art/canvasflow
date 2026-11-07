@@ -2966,6 +2966,12 @@ function pasteNodes(data, anchor = null) {
     if (Array.isArray(nn.items)) rekeyContainedGraph(nn.items, nn.internalEdges || []);
     if (Array.isArray(nn.subgraph?.nodes)) rekeyContainedGraph(nn.subgraph.nodes, nn.subgraph.edges || []);
     walkNodes([nn], pastedNode => { if (pastedNode.customRef) delete pastedNode.customRef; });
+    // PR-5 图片批注：粘贴副本重新生成批注 ID（坐标深拷贝、顺序保留、imageId 指向新节点），旧 comments 一并规范化为 imageAnnotations
+    if (Array.isArray(nn.imageAnnotations) || Array.isArray(nn.comments)) {
+      const pasteAnnotationModule = window.CanvasFlowImageAnnotations;
+      if (pasteAnnotationModule) pasteAnnotationModule.writeNodeAnnotations(nn, pasteAnnotationModule.remapAnnotationIds(pasteAnnotationModule.readNodeAnnotations(nn)));
+      else console.warn("[图片批注] 模块未加载，粘贴副本保留原批注 ID");
+    }
     map.set(n.id, nn.id);
     pasted.push(nn);
   });
@@ -3095,6 +3101,13 @@ function activeCatalog(apiType = activeApiType()) {
 
 function modelCatalogEntry(model, apiType = activeApiType()) {
   return activeCatalog(apiType).models.find(item => item.id === model) || null;
+}
+
+// PR-5 图片批注：模型参考图上限只采信目录里来源明确的 maxImages 声明（如 APIMart 文档 image_urls ≤16、Nano Banana Pro ≤14）。
+// 未声明的模型视为上限未知 → 返回 0，发送准备将保守跳过定位图（仅坐标说明提交），不把任何历史数值当作通用模型能力。
+function annotationModelImageLimit(settings) {
+  const entry = modelCatalogEntry(settings?._model, settings?._apiType || activeApiType());
+  return Number.isFinite(entry?.maxImages) && entry.maxImages > 0 ? entry.maxImages : 0;
 }
 
 function catalogModels() {
@@ -4102,6 +4115,230 @@ function imageAspectStyle(node) {
   return Number.isFinite(ratio) && ratio > 0 ? ` style="aspect-ratio:${ratio}"` : "";
 }
 
+// ===== PR-5 图片批注编辑层：图片节点内编辑点位/矩形批注 =====
+// 图钉与定位图共用同一套归一化坐标（0–1，相对图片显示区域）与 ① 序号（CanvasFlowImageAnnotations.number），
+// 保证画布标记位置与最终定位图标记一致。编辑态是视图状态（不进撤销栈），数据增删改才 pushHistory。
+
+function annotationModule() {
+  return window.CanvasFlowImageAnnotations || null;
+}
+
+function startImageAnnotationEditor(node) {
+  if (!node || node.type !== "image" || (!node.image && !node.imageAssetId)) return;
+  if (!annotationModule()) { toast("批注模块尚未加载，请刷新页面后重试"); return; }
+  delete node._annotationEditingId;
+  state.annotationEditorNodeId = node.id;
+  render();
+}
+
+function exitImageAnnotationEditor() {
+  if (!state.annotationEditorNodeId) return;
+  state.annotationEditorNodeId = "";
+  render();
+}
+
+// 编辑层标记：仅编辑态的图片节点渲染；图钉按归一化坐标百分比定位（相对批注操作面=图片实际显示区域）。
+// 点位图钉的 left/top 用 clamp 做边界内偏移（PR5-UI-09C）：贴边锚点的徽章视觉上整体留在操作面内，
+// 锚点数据（归一化坐标）不改动；矩形批注坐标已钳制在 0–1 且 border-box，天然不出界。
+function imageAnnotationEditorMarkup(node) {
+  const mod = annotationModule();
+  if (!mod) return "";
+  const PIN_HALF_PX = 11; // 徽章视觉半径：20px 徽章 + 1px 余量
+  const pins = mod.readNodeAnnotations(node).map(item => {
+    const pct = v => Math.round(v * 1000) / 10;
+    const rect = item.type === "rectangle" ? `width:${pct(item.coordinates.width)}%;height:${pct(item.coordinates.height)}%;` : "";
+    const editing = node._annotationEditingId === item.annotationId;
+    const left = item.type === "rectangle" ? `${pct(item.coordinates.x)}%` : `clamp(${PIN_HALF_PX}px, ${pct(item.coordinates.x)}%, calc(100% - ${PIN_HALF_PX}px))`;
+    const top = item.type === "rectangle" ? `${pct(item.coordinates.y)}%` : `clamp(${PIN_HALF_PX}px, ${pct(item.coordinates.y)}%, calc(100% - ${PIN_HALF_PX}px))`;
+    return `<div class="image-annotation-pin ${item.type}${editing ? " is-editing" : ""}" data-role="annotation-pin" data-annotation-id="${escapeHtml(item.annotationId)}" style="left:${left};top:${top};${rect}">
+      <span class="annotation-pin-number" aria-hidden="true">${mod.number(item.index)}</span>
+      <button type="button" class="annotation-pin-delete" data-role="annotation-delete" data-annotation-id="${escapeHtml(item.annotationId)}" aria-label="删除批注${item.index}">×</button>
+      ${editing ? `<div class="annotation-pin-editor"><textarea data-role="annotation-content" rows="2" placeholder="批注内容（可留空）">${escapeHtml(item.content)}</textarea><div class="annotation-pin-editor-actions"><button type="button" data-role="annotation-save" data-annotation-id="${escapeHtml(item.annotationId)}">确定</button></div></div>` : ""}
+    </div>`;
+  }).join("");
+  return `<div class="image-annotation-editor" data-role="annotation-editor">
+    <div class="image-annotation-surface" data-role="annotation-surface">${pins}</div>
+  </div>`;
+}
+
+// 批注工具条独立于图片预览之外（图片下方）：编辑层此前把工具条作为流内子项排在
+// 图片顶部并盖住上部批注点（PR5 验收发现的提示层遮挡）。移出后工具条不再遮挡
+// 任何图钉/编号/文字，节点高度随编辑态自动撑高、退出即恢复。
+function imageAnnotationToolbarMarkup() {
+  return `<div class="image-annotation-toolbar"><span class="annotation-hint">点击添加点位，拖拽框选区域，点击标记可编辑</span><button type="button" data-role="annotation-done">完成</button></div>`;
+}
+
+// 操作面对齐图片实际显示区域：object-fit: contain 的留白不计入坐标（缩放/平移下按百分比自适应）
+function positionAnnotationSurface() {
+  const editor = els.nodes.querySelector('[data-role="annotation-editor"]');
+  const surface = editor?.querySelector('[data-role="annotation-surface"]');
+  if (!editor || !surface) return;
+  const img = editor.closest(".image-preview")?.querySelector("img");
+  let left = 0, top = 0, width = 100, height = 100;
+  if (img && img.naturalWidth > 0 && img.clientWidth > 0 && img.clientHeight > 0) {
+    const scale = Math.min(img.clientWidth / img.naturalWidth, img.clientHeight / img.naturalHeight);
+    const dispW = img.naturalWidth * scale, dispH = img.naturalHeight * scale;
+    left = (img.clientWidth - dispW) / 2 / img.clientWidth * 100;
+    top = (img.clientHeight - dispH) / 2 / img.clientHeight * 100;
+    width = dispW / img.clientWidth * 100;
+    height = dispH / img.clientHeight * 100;
+  }
+  const pct = v => `${Math.round(v * 1000) / 1000}%`;
+  surface.style.left = pct(left);
+  surface.style.top = pct(top);
+  surface.style.width = pct(width);
+  surface.style.height = pct(height);
+  clampAnnotationPinEditor(surface);
+}
+
+// 编辑中弹层自适应翻转（PR5-UI-09C）：贴右/下边缘的批注，180px 输入弹层按默认方向展开会越出
+// 操作面被节点裁剪；按实测边界改向左/向上展开。仅调整视觉方向，不触碰批注数据。
+function clampAnnotationPinEditor(surface) {
+  const pin = surface.querySelector(".image-annotation-pin.is-editing");
+  const popup = pin?.querySelector(".annotation-pin-editor");
+  if (!pin || !popup) return;
+  const surfaceRect = surface.getBoundingClientRect();
+  const pinRect = pin.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  if (!surfaceRect.width || !surfaceRect.height) return;
+  popup.classList.toggle("flip-left", popupRect.right > surfaceRect.right + 1);
+  popup.classList.toggle("flip-up", popupRect.bottom > surfaceRect.bottom + 1 || pinRect.bottom > surfaceRect.bottom - 4);
+}
+
+function annotationSurfacePoint(surface, clientX, clientY) {
+  const rect = surface.getBoundingClientRect();
+  if (!rect.width || !rect.height) return { x: 0, y: 0 };
+  return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+}
+
+function addNodeAnnotation(node, partial) {
+  const mod = annotationModule();
+  if (!mod || !node) return null;
+  const list = mod.readNodeAnnotations(node);
+  // 新增批注一律分配全新 ID：normalize 的 legacy 回退 ID 按下标生成，删除重排后可能与既有 ID 撞车
+  list.push({ annotationId: mod.makeAnnotationId(), ...partial });
+  const written = mod.writeNodeAnnotations(node, list);
+  return written.at(-1) || null;
+}
+
+function saveAnnotationContent(node, annotationId, content) {
+  const mod = annotationModule();
+  if (!mod || !node || !annotationId) return;
+  const list = mod.readNodeAnnotations(node);
+  const item = list.find(i => i.annotationId === annotationId);
+  if (!item) return;
+  const next = String(content ?? "");
+  if (item.content === next) {
+    delete node._annotationEditingId;
+    render();
+    return; // 内容无变化不进撤销栈
+  }
+  item.content = next;
+  mod.writeNodeAnnotations(node, list);
+  delete node._annotationEditingId;
+  pushHistory();
+  render();
+}
+
+function deleteNodeAnnotation(node, annotationId) {
+  const mod = annotationModule();
+  if (!mod || !node || !annotationId) return;
+  mod.writeNodeAnnotations(node, mod.readNodeAnnotations(node).filter(i => i.annotationId !== annotationId));
+  delete node._annotationEditingId;
+  pushHistory();
+  render();
+}
+
+// —— 编辑层事件（委托到 els.nodes；操作面上的按下不冒泡为画布/节点拖动） ——
+let annotationDraft = null;
+
+function annotationDraftRectEl(surface) {
+  let el = surface.querySelector(".annotation-rect-draft");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "annotation-rect-draft";
+    surface.appendChild(el);
+  }
+  return el;
+}
+
+function updateAnnotationDraftRect(surface, start, end) {
+  const el = annotationDraftRectEl(surface);
+  el.style.left = `${Math.min(start.x, end.x) * 100}%`;
+  el.style.top = `${Math.min(start.y, end.y) * 100}%`;
+  el.style.width = `${Math.abs(end.x - start.x) * 100}%`;
+  el.style.height = `${Math.abs(end.y - start.y) * 100}%`;
+}
+
+function clearAnnotationDraftRect(surface) {
+  surface.querySelector(".annotation-rect-draft")?.remove();
+}
+
+els.nodes.addEventListener("pointerdown", ev => {
+  const surface = ev.target.closest?.('[data-role="annotation-surface"]');
+  if (!surface || ev.target.closest("[data-role='annotation-pin']")) return;
+  const nodeEl = surface.closest(".node");
+  const node = findNode(nodeEl?.dataset.id);
+  if (!node || state.annotationEditorNodeId !== node.id) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  surface.setPointerCapture?.(ev.pointerId);
+  annotationDraft = { node, surface, startX: ev.clientX, startY: ev.clientY, startPoint: annotationSurfacePoint(surface, ev.clientX, ev.clientY), moved: false };
+});
+
+els.nodes.addEventListener("pointermove", ev => {
+  if (!annotationDraft || ev.target.closest?.('[data-role="annotation-surface"]') !== annotationDraft.surface) return;
+  if (!annotationDraft.moved && Math.hypot(ev.clientX - annotationDraft.startX, ev.clientY - annotationDraft.startY) >= 6) annotationDraft.moved = true;
+  if (annotationDraft.moved) {
+    updateAnnotationDraftRect(annotationDraft.surface, annotationDraft.startPoint, annotationSurfacePoint(annotationDraft.surface, ev.clientX, ev.clientY));
+  }
+});
+
+els.nodes.addEventListener("pointerup", ev => {
+  const draft = annotationDraft;
+  annotationDraft = null;
+  if (!draft) return;
+  clearAnnotationDraftRect(draft.surface);
+  const end = annotationSurfacePoint(draft.surface, ev.clientX, ev.clientY);
+  const created = draft.moved
+    ? addNodeAnnotation(draft.node, { type: "rectangle", coordinates: annotationModule().rectangleFromPoints(draft.startPoint, end), content: "" })
+    : addNodeAnnotation(draft.node, { type: "point", coordinates: draft.startPoint, content: "" });
+  if (created) {
+    draft.node._annotationEditingId = created.annotationId; // 新增后立即进入内容编辑
+    pushHistory();
+    render();
+    window.queueMicrotask(() => els.nodes.querySelector('[data-role="annotation-content"]')?.focus());
+  }
+});
+
+els.nodes.addEventListener("keydown", ev => {
+  if (ev.target.dataset?.role !== "annotation-content") return;
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) {
+    ev.preventDefault();
+    const node = findNode(ev.target.closest(".node")?.dataset.id);
+    saveAnnotationContent(node, ev.target.closest("[data-role='annotation-pin']")?.dataset.annotationId, ev.target.value);
+  }
+  if (ev.key === "Escape" && !ev.isComposing) {
+    const node = findNode(ev.target.closest(".node")?.dataset.id);
+    saveAnnotationContent(node, ev.target.closest("[data-role='annotation-pin']")?.dataset.annotationId, ev.target.value);
+  }
+});
+
+// 批注内容输入期间推迟全量渲染（与其他节点文本编辑器同一保护），失焦时静默提交数据
+els.nodes.addEventListener("focusout", ev => {
+  if (ev.target.dataset?.role !== "annotation-content") return;
+  const node = findNode(ev.target.closest(".node")?.dataset.id);
+  const annotationId = ev.target.closest("[data-role='annotation-pin']")?.dataset.annotationId;
+  const mod = annotationModule();
+  if (!node || !annotationId || !mod) return;
+  const list = mod.readNodeAnnotations(node);
+  const item = list.find(i => i.annotationId === annotationId);
+  if (!item || item.content === ev.target.value) return;
+  item.content = ev.target.value;
+  mod.writeNodeAnnotations(node, list);
+  pushHistory();
+});
+
 function aiPendingDownloadButton(node) {
   const count = node._pendingResults?.items?.length || 0;
   if (!count || node.generating || node._redownloadBusy) return "";
@@ -4417,7 +4654,10 @@ function collectUpstreamForAI(nodeId, incoming) {
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
-    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _y: n.y, _nodeId: n.id, hasColorArrowNotes: !!n.hasColorArrowNotes };
+    // PR-5 图片批注：仅当节点带批注字段时附加规范化 annotations（发送准备阶段只读；无批注节点结构不变）
+    const annotationModule = window.CanvasFlowImageAnnotations;
+    const annotations = annotationModule && (Array.isArray(n.imageAnnotations) || Array.isArray(n.comments)) ? annotationModule.readNodeAnnotations(n) : null;
+    return { image, assetId: assetId || "", fileName: n.fileName, mime: n.mime, _x: n.x, _y: n.y, _nodeId: n.id, hasColorArrowNotes: !!n.hasColorArrowNotes, ...(annotations ? { annotations } : {}) };
   }
 
   // 深度优先展开上游,返回该子图的分支列表;每个分支是 { texts, images }。
@@ -5999,15 +6239,59 @@ async function runQueuedAiTask(task) {
   if (task.localMatting) {
     imageUrls = await runLocalRegionMatting(task);
   } else {
-  // 带配色标注箭头的参考图:按本次实际发送的图片顺序内置颜色修改提示词;只计算一次,重试不重复追加
+  // PR-5 图片批注：发送前合成定位图与提示词。原图序号不变、定位图统一追加到尾部；
+  // taskImages（任务原始参考图）永不改动，每次尝试都从它重新推导，定位图天然不会重复插入；
+  // 提示词每次尝试都从固定来源 _annotationPromptSource（首次捕获的原始 prompt）重算，
+  // 与当轮实际发送数组严格一致（定位图成败、超限、未知上限等降级都会如实反映到编号说明中）。
+  let sendImages = taskImages;
+  let sendPrompt = task.prompt;
+  let annotationApplied = false;
+  const annotationModule = window.CanvasFlowImageAnnotations;
+  if (annotationModule?.hasAnnotatedReference(taskImages)) {
+    if (task._annotationPromptSource === undefined) task._annotationPromptSource = task.prompt ?? ""; // 原始 prompt 来源，只捕获一次
+    const locatorLimit = annotationModelImageLimit(task.generationSettings);
+    const prepared = await annotationModule.prepareSubmission(task._annotationPromptSource, taskImages, async (reference, refs) => {
+      try {
+        const original = await materializeReferenceImage(reference);
+        const locator = await annotationModule.createLocatorImage(original, refs);
+        return { image: locator, assetId: "", fileName: `${reference.fileName || "image"}-批注定位图.png`, mime: "image/png", _annotationLocator: true };
+      } catch (error) {
+        console.warn("[图片批注] 定位图创建失败，该图仅按坐标说明提交", error);
+        return null;
+      }
+    }, locatorLimit);
+    sendImages = prepared.references;
+    sendPrompt = prepared.prompt;
+    annotationApplied = true;
+    if (prepared.annotatedCount && !prepared.locatorAllowed) {
+      console.warn(locatorLimit
+        ? `[图片批注] 参考图 ${taskImages.length} 张 + 定位图 ${prepared.annotatedCount} 张超出模型上限 ${locatorLimit}，本次仅按坐标说明提交（不删原图）`
+        : `[图片批注] 模型 ${task.generationSettings?._model || "?"} 未声明参考图上限，保守跳过定位图，仅按坐标说明提交（不删原图）`);
+    }
+    if (sendImages !== taskImages) {
+      console.debug("[图片批注] 最终发送数组", { taskId: task.id, images: sendImages.map(image => image?.fileName || "未命名图片") });
+    }
+  }
+  // 带配色标注箭头的参考图:按本次实际发送的图片顺序内置颜色修改提示词;子句文本只计算一次
+  // （序号基于最终数组 sendImages 计算；尾部追加规则下原图序号跨尝试稳定，重试复用同一子句文本是安全的）
   if (task._arrowNoteClause === undefined) {
-    const colorArrowIndexes = taskImages.map((image, index) => image?.hasColorArrowNotes ? index + 1 : 0).filter(Boolean);
+    const colorArrowIndexes = sendImages.map((image, index) => image?.hasColorArrowNotes ? index + 1 : 0).filter(Boolean);
     task._arrowNoteClause = colorArrowIndexes.length ? `根据第${colorArrowIndexes.join("、")}张图标注要求进行颜色修改，未标注部分不要改动，生成结果中不要带选框、箭头、标注` : "";
-    if (task._arrowNoteClause) task.prompt = task.prompt ? `${task.prompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+  }
+  if (task._arrowNoteClause) {
+    if (annotationApplied) {
+      // 批注任务：sendPrompt 每轮从固定来源整体重算，此处拼接不会跨轮累积
+      sendPrompt = sendPrompt ? `${sendPrompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+    } else if (task._arrowNoteAppended !== true) {
+      // 非批注任务：保持上游"子句只拼接一次"语义
+      sendPrompt = sendPrompt ? `${sendPrompt}，${task._arrowNoteClause}` : task._arrowNoteClause;
+      task._arrowNoteAppended = true;
+    }
   }
   // Persist the same fallback text sent to the API, including image-only requests.
-  if (!task.prompt && taskImages.length) task.prompt = "generate an image";
-  task.taskId = await submitGeneration(task.prompt, taskImages, task.generationSettings);
+  if (!sendPrompt && taskImages.length) sendPrompt = "generate an image";
+  task.prompt = sendPrompt; // 与本次实际发送一致（导出 PNG 的 generationPrompt 取此值）
+  task.taskId = await submitGeneration(task.prompt, sendImages, task.generationSettings);
   task.status = "generating";
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
@@ -7649,7 +7933,7 @@ let pendingNodeRenderAfterSelect = false;
 function activeNodeTextEditor() {
   const active = document.activeElement;
   // 文字节点与对话节点正文都是常驻 textarea:输入期间推迟全量渲染,避免重建打断输入/IME
-  return active?.matches?.('.node textarea[data-role="text"], .node textarea[data-role="chat-text"], .node textarea[data-role="sd-prompt"], .node textarea[data-role="sd-negative"]') && els.nodes.contains(active) ? active : null;
+  return active?.matches?.('.node textarea[data-role="text"], .node textarea[data-role="chat-text"], .node textarea[data-role="sd-prompt"], .node textarea[data-role="sd-negative"], .node textarea[data-role="annotation-content"]') && els.nodes.contains(active) ? active : null;
 }
 
 function activeNodeSelect() {
@@ -7726,6 +8010,10 @@ function renderNodes(options = {}) {
   syncTextNodeScrollEdges();
   els.nodes.querySelectorAll(".node.chat .chat-messages").forEach(list => { list.scrollTop = list.scrollHeight; });
   if (expandedChatNodeId) renderChatWorkspace();
+  if (state.annotationEditorNodeId) {
+    if (!findNode(state.annotationEditorNodeId)) state.annotationEditorNodeId = ""; // 编辑对象已删除则自动退出
+    else positionAnnotationSurface();
+  }
 }
 
 let autoSizePersistTimer = 0;
@@ -8051,13 +8339,16 @@ function nodeTemplate(node) {
     body = window.LocalSD?.nodeBody(node) || `<div class="local-sd-empty">本地 SD 模块正在载入…</div>`;
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
-    body = `<div class="image-preview" title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}</div>
-      <div class="node-hover-controls">
+    const annotating = state.annotationEditorNodeId === node.id;
+    // 编辑态隐藏上传/清除：编辑中替换图片会使批注的归一化坐标系失效；退出编辑即恢复
+    body = `<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
+      ${annotating ? imageAnnotationToolbarMarkup() : ""}
+      ${annotating ? "" : `<div class="node-hover-controls">
         <div class="image-actions">
           <button data-role="upload">上传</button>
           <button data-role="clear-image">清除</button>
         </div>
-      </div>`;
+      </div>`}`;
   } else if (node.type === "ai-image") {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "ai-video") {
@@ -8964,6 +9255,7 @@ els.viewport.addEventListener("mousedown", ev => {
   hideMenu();
   els.projectMenu.classList.add("hidden");
   if (ev.target.closest(".minimap-panel")) return;
+  if (ev.target.closest("[data-role='annotation-editor']")) return; // 批注编辑层上的按下交给批注绘制，不触发画布空白选框/节点拖动
   lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
   if (state.selectedAnnotationId) {
     state.selectedAnnotationId = "";
@@ -9704,6 +9996,14 @@ els.nodes.addEventListener("click", async ev => {
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
   if (actionRole === "tool-run") runToolNode(node.id);
+  // PR-5 图片批注编辑层
+  if (actionRole === "annotation-done") exitImageAnnotationEditor();
+  if (actionRole === "annotation-delete") deleteNodeAnnotation(node, action.dataset.annotationId);
+  if (actionRole === "annotation-save") saveAnnotationContent(node, action.dataset.annotationId, nodeEl.querySelector('[data-role="annotation-content"]')?.value);
+  if (actionRole === "annotation-pin" && node && state.annotationEditorNodeId === node.id && !ev.target.closest("[data-role='annotation-delete'],[data-role='annotation-content'],[data-role='annotation-save']")) {
+    node._annotationEditingId = action.dataset.annotationId;
+    render();
+  }
   if (actionRole === "browser-generate" && node.type === "browser-image") generateBrowserImage(node.id);
   if (actionRole === "browser-cancel" && node.type === "browser-image" && node.generating) {
     if (node._browserTaskId) apiFetch("/api/browser-task/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId: node._browserTaskId }) }).catch(() => {});
@@ -11898,6 +12198,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(window.canvasflowDesktop?.launchInPs && (selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") && (selectedNode?.generatedAssetId || selectedNode?.outputPath) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
       ...(state.selected.size === 1 && selectedNode?.type === "text" && String(selectedNode.text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).length > 1 ? [["按换行拆分为文字节点", () => splitTextNodeByLines(selectedNode)]] : []),
+      ...(state.selected.size === 1 && selectedNode?.type === "image" && (selectedNode?.image || selectedNode?.imageAssetId) ? [["编辑图片批注", () => startImageAnnotationEditor(selectedNode)]] : []),
       ...generationKeywordMenuItems(selectedNode),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),

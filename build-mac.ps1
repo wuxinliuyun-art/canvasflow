@@ -57,6 +57,7 @@ $appFiles = @(
     @{ src = Join-Path $projectRoot "modules\fill-selection.js"; entry = "app/modules/fill-selection.js" },
     @{ src = Join-Path $projectRoot "modules\sd-workflow-templates.js"; entry = "app/modules/sd-workflow-templates.js" },
     @{ src = Join-Path $projectRoot "modules\local-sd.js"; entry = "app/modules/local-sd.js" },
+    @{ src = Join-Path $projectRoot "modules\image-annotations.js"; entry = "app/modules/image-annotations.js" },
     # server.js require() 依赖，缺失时 mac 端 server 启动即 MODULE_NOT_FOUND
     @{ src = Join-Path $projectRoot "modules\browser-transfer-server.js"; entry = "app/modules/browser-transfer-server.js" },
     @{ src = Join-Path $projectRoot "modules\comfyui-server.js"; entry = "app/modules/comfyui-server.js" },
