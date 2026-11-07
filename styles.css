@@ -4183,7 +4183,5 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   pointer-events: none;
   z-index: 2;
 }
-.node.text.has-scroll-before .node-body::before { top: 0; background: linear-gradient(rgba(255, 255, 255, .95), rgba(255, 255, 255, 0)); }
-.node.text.has-scroll-after .node-body::after { bottom: 0; background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, .95)); }
-.theme-dark .node.text.has-scroll-before .node-body::before { background: linear-gradient(var(--panel-solid), rgba(0, 0, 0, 0)); }
-.theme-dark .node.text.has-scroll-after .node-body::after { background: linear-gradient(rgba(0, 0, 0, 0), var(--panel-solid)); }
+.node.text.has-scroll-before .node-body::before { top: 0; background: linear-gradient(var(--panel-solid), transparent); }
+.node.text.has-scroll-after .node-body::after { bottom: 0; background: linear-gradient(transparent, var(--panel-solid)); }
