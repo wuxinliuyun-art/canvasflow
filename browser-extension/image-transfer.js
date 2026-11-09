@@ -29,6 +29,9 @@ if (!window.__canvasflowImageTransfer) {
     if (timeout) noticeTimer = setTimeout(() => { notice.hidden = true; }, timeout);
   }
   function reset() { drag = null; if (!busy) notice.hidden = true; }
+  chrome.runtime.onMessage.addListener(message => {
+    if (message?.type === "canvasflowTransferNotice") show(message.text || (message.error ? "传送失败" : "已送达画布"), message.error ? 6000 : 4000);
+  });
   function armed(event) {
     return drag && event.clientX - drag.x >= 80 && event.clientX - drag.x > Math.abs(event.clientY - drag.y);
   }

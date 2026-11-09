@@ -2,17 +2,18 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>CanvasFlow 浏览器生图</title>
+  <title>CanvasFlow 浏览器桥</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>CanvasFlow 浏览器生图</h1>
-  <p class="hint">网页图片向右拖动至少 80 像素后松手，即可传到最近使用的画布。按 Esc 取消；更新扩展后请刷新网页。</p>
+  <h1>CanvasFlow 浏览器桥</h1>
+  <p class="hint">选中文字后右键发送；网页图片向右拖动至少 80 像素后松手发送。文字和图片节点都可返回原网页。更新扩展后请刷新网页。</p>
 
   <section>
     <div id="status" class="status">正在查找本机 CanvasFlow 服务…</div>
     <button id="resumeBrowserQueue" type="button" class="ghost">继续浏览器队列</button>
     <button id="ping" type="button" class="ghost">重新连接</button>
+    <label class="toggle-row"><input id="autoFocusAfterTransfer" type="checkbox"><span>文字或图片发送成功后自动跳转到 CanvasFlow</span></label>
     <label class="row">
       <span>手动指定端口</span>
       <input id="port" type="text" inputmode="numeric" placeholder="自动发现">

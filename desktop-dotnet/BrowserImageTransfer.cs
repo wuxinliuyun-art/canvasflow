@@ -34,13 +34,21 @@ internal static class BrowserImageTransfer
                     return new { ok = true };
                 case "send":
                     if (!ready) throw new InvalidDataException("请先打开 CanvasFlow 画布");
-                    var image = Text("image");
-                    if (image.Length > 14000000 || !Regex.IsMatch(image, @"^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$")) throw new InvalidDataException("图片格式不支持或超过 10MB");
-                    if (Items.Count >= 8) throw new InvalidDataException("待接收图片过多，请回画布后重试");
+                    var kind = Text("kind") == "text" ? "text" : "image";
+                    var value = kind == "text" ? Text("text") : Text("image");
+                    if (kind == "text")
+                    {
+                        if (string.IsNullOrWhiteSpace(value) || value.Length > 200000) throw new InvalidDataException("文字为空或超过 20 万字");
+                    }
+                    else if (value.Length > 14000000 || !Regex.IsMatch(value, @"^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$")) throw new InvalidDataException("图片格式不支持或超过 10MB");
+                    if (Items.Count >= 8) throw new InvalidDataException("待接收内容过多，请回画布后重试");
+                    var sourceUrl = Text("sourceUrl");
+                    if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var parsedSource) || parsedSource.Scheme is not ("http" or "https")) sourceUrl = "";
+                    if (sourceUrl.Length > 4096) sourceUrl = sourceUrl[..4096];
                     var id = Guid.NewGuid().ToString();
-                    Items[id] = new JsonObject { ["id"] = id, ["image"] = image, ["receiver"] = receiver, ["createdAt"] = now };
+                    Items[id] = new JsonObject { ["id"] = id, ["kind"] = kind, [kind == "text" ? "text" : "image"] = value, ["sourceUrl"] = sourceUrl, ["receiver"] = receiver, ["createdAt"] = now };
                     return new { ok = true, id };
-                default: throw new InvalidDataException("未知图片传送操作");
+                default: throw new InvalidDataException("未知网页传送操作");
             }
         }
     }

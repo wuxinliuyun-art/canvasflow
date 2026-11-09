@@ -5,15 +5,17 @@
     "/api/save-json", "/api/save-project", "/api/save-images", "/api/custom-material", "/api/save-export-files",
     "/api/generate", "/api/midjourney/generate", "/api/models", "/api/balance", "/api/download-image", "/api/update/check",
     "/api/agtoken/generate", "/api/agtoken/edits", "/api/agtoken/models",
-    "/api/browser-transfer", "/api/chat/completions", "/api/browser-task/cancel", "/api/browser-task", "/api/browser-task/next", "/api/browser-task/result",
+    "/api/agtoken/video-generate", "/api/download-video",
+    "/api/browser-transfer", "/api/chat/completions", "/api/chat-custom/models", "/api/browser-task/cancel", "/api/browser-task", "/api/browser-task/next", "/api/browser-task/result",
     "/api/extensions", "/api/extensions/refresh",
+    "/api/comfyui/config", "/api/comfyui/test", "/api/comfyui/workflows/import", "/api/comfyui/workflows/update", "/api/comfyui/workflows/delete", "/api/comfyui/workflows/reorder", "/api/comfyui/run", "/api/comfyui/cancel",
     "/api/cep/status", "/api/cep/install", "/api/cep/uninstall",
   ]);
 
   async function apiFetch(input, options = {}) {
     const rawUrl = typeof input === "string" ? input : input?.url || String(input || "");
     const url = new URL(rawUrl, location.href);
-    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/") || url.pathname.startsWith("/api/extensions/") || url.pathname.startsWith("/api/browser-task/status/"))) {
+    if (desktop?.apiRequest && (desktopApiPaths.has(url.pathname) || url.pathname.startsWith("/api/task/") || url.pathname.startsWith("/api/extensions/") || url.pathname.startsWith("/api/browser-task/status/") || url.pathname.startsWith("/api/agtoken/video-task/") || url.pathname.startsWith("/api/comfyui/status/"))) {
       const headers = new Headers(options.headers || {});
       const result = await desktop.apiRequest(url.pathname + url.search, {
         method: options.method || "GET",

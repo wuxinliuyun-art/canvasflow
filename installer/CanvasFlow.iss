@@ -32,6 +32,9 @@ UninstallDisplayIcon={app}\app\CanvasFlow.exe
 WizardStyle=modern
 SetupIconFile=..\assets\canvasflow.ico
 
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
+
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "extensions-presets\*,export\*,data\*,download\*,projects\*,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。
@@ -70,6 +73,8 @@ Name: "{app}\app\export"; Permissions: users-modify; Flags: uninsneveruninstall
 [Icons]
 Name: "{autodesktop}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
 Name: "{group}\CanvasFlow"; Filename: "{app}\app\CanvasFlow.exe"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"
+Name: "{group}\安装 Codex MCP"; Filename: "{app}\app\mcp\install-mcp.cmd"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}\app\mcp"
+Name: "{group}\卸载 Codex MCP"; Filename: "{app}\app\mcp\uninstall-mcp.cmd"; IconFilename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}\app\mcp"
 
 [Run]
 Filename: "{app}\app\CanvasFlow.exe"; WorkingDir: "{app}"; Description: "启动 CanvasFlow"; Flags: nowait postinstall skipifsilent

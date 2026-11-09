@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CanvasFlow.Mcp</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\desktop-dotnet\DesktopApi.cs" Link="CanvasFlow\DesktopApi.cs" />
+    <Compile Include="..\..\desktop-dotnet\WebUpdateManager.cs" Link="CanvasFlow\WebUpdateManager.cs" />
+    <Compile Include="..\..\desktop-dotnet\ComfyUiApi.cs" Link="CanvasFlow\ComfyUiApi.cs" />
+    <Compile Include="..\..\desktop-dotnet\ExportFileStore.cs" Link="CanvasFlow\ExportFileStore.cs" />
+    <Compile Include="..\..\desktop-dotnet\BrowserImageTransfer.cs" Link="CanvasFlow\BrowserImageTransfer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="install-mcp.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="uninstall-mcp.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

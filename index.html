@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261105-update-quiet">
+  <link rel="stylesheet" href="styles.css?v=20261107-arrow-note-off1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -28,11 +28,6 @@
         </button>
       </div>
     </header>
-
-    <div id="mindmapBreadcrumb" class="mindmap-breadcrumb hidden" aria-label="编组导航">
-      <button id="mindmapBackBtn" type="button" title="返回上一级">←</button>
-      <span id="mindmapBreadcrumbText">编组</span>
-    </div>
 
     <div id="progressPanel" class="progress-panel hidden">
       <div class="progress-row">
@@ -69,7 +64,7 @@
       </div>
       <div id="annotations" class="canvas-annotations" aria-label="画布文字标注"></div>
       <div class="minimap-panel">
-        <canvas id="minimap" class="minimap" width="150" height="96" aria-label="画布缩略图"></canvas>
+        <canvas id="minimap" class="minimap" width="150" height="96" role="button" tabindex="0" aria-label="导航图：点击或拖动移动视图，点击节点选中该节点，按 Enter 或空格居中选中节点"></canvas>
       </div>
     </main>
 
@@ -125,6 +120,7 @@
           <button class="settings-tab-btn active" data-tab="general"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h4M12 17h8M8 14v6M4 12h2M10 12h10M6 9v6"/></svg></span><span>常规</span></button>
           <button class="settings-tab-btn" data-tab="appearance"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6.5A2.5 2.5 0 0 0 21 9.5 9 9 0 0 0 12 3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg></span><span>外观</span></button>
           <button class="settings-tab-btn" data-tab="ai"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.1 3.1L16 7.2l-2.9 1.1L12 11.5l-1.1-3.2L8 7.2l2.9-1.1L12 3zM18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13zM6 12l.7 1.8 1.8.7-1.8.7L6 17l-.7-1.8-1.8-.7 1.8-.7L6 12z"/></svg></span><span>AI绘图</span></button>
+          <button class="settings-tab-btn" data-tab="aichat"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H10l-5 4v-4H4zM8 9h8M8 12h5"/></svg></span><span>AI对话</span></button>
           <button class="settings-tab-btn" data-tab="screenshot"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M7 3H3v4M17 3h4v4"/></svg></span><span>截图工具</span></button>
           <button class="settings-tab-btn" data-tab="assets"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M10 5v14M15 4l4 16"/></svg></span><span>素材库</span></button>
           <button class="settings-tab-btn" data-tab="variables"><span class="settings-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h4M5 12h4M5 18h4M12 6h7M12 12h7M12 18h7"/></svg></span><span>变量库</span></button>
@@ -136,15 +132,17 @@
         <div class="settings-page-head"><h2>常规</h2><p>调整画布操作习惯。</p></div>
         <section class="settings-card">
           <h3>界面与画布</h3>
-          <div class="settings-field-grid">
-            <label>网格对齐距离<input id="gridSizeInput" type="number" min="10" max="200" value="40"></label>
-          </div>
-          <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
-          <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
           <label class="check-row"><input id="autoAlignToggle" type="checkbox" checked><span>创建节点或连线时自动对齐</span></label>
-          <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
           <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
           <label class="check-row"><input id="textMergeOnOverlapToggle" type="checkbox" checked><span>文字节点重叠时合并文案</span></label>
+        </section>
+        <section class="settings-card">
+          <h3>右键菜单节点</h3>
+          <p class="setting-desc">关闭后只隐藏画布右键菜单中的新建入口，已有节点不受影响。</p>
+          <label class="check-row"><input id="showBrowserNodeMenuToggle" type="checkbox" checked><span>显示浏览器生图节点</span></label>
+          <label class="check-row"><input id="showVideoNodeMenuToggle" type="checkbox" checked><span>显示 AI 视频节点</span></label>
+          <label class="check-row"><input id="showLocalSdNodeMenuToggle" type="checkbox" checked><span>显示本地 SD 节点</span></label>
+          <label class="check-row"><input id="showScreenshotNodeMenuToggle" type="checkbox" checked><span>显示截图功能节点</span></label>
         </section>
 
         <section class="settings-card onboarding-settings-card">
@@ -155,6 +153,7 @@
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
           <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
+          <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <details class="update-notes">
             <summary class="update-notes-title">v2.7.3 更新说明</summary>
             <ul>
@@ -207,20 +206,18 @@
       </div>
 
       <div class="tab-page hidden" data-tab="extensions">
-        <div class="settings-page-head settings-page-head-row"><div><h2>拓展 <span id="extensionServiceStatus" class="extension-service-dot" title="检测中…"></span></h2><p>拓展文件夹里的工具会自动接入画布，作为拓展节点使用。</p></div><div class="extension-head-actions">
-          <button id="extensionOpenFolderBtn" type="button" class="icon-btn extension-icon-btn" title="打开拓展文件夹" aria-label="打开拓展文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4.2l2 2.5H19a1.5 1.5 0 0 1 1.5 1.6l-.7 8.4A1.5 1.5 0 0 1 18.3 19H5.7a1.5 1.5 0 0 1-1.5-1.4l-.7-11Z"/></svg></button>
-          <button id="extensionRefreshBtn" type="button" class="icon-btn extension-icon-btn" title="刷新拓展（重新检索拓展文件夹）" aria-label="刷新拓展"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg></button>
-        </div></div>
-        <section class="settings-card">
-          <label>服务地址<input id="extensionServiceUrl" type="text" placeholder="http://127.0.0.1:8788"></label>
-          <p class="setting-desc">桌面版已内置拓展服务，刷新按钮会重新检索拓展文件夹；仅服务器运行模式需要手动双击拓展文件夹里的 扩展服务.bat。</p>
-        </section>
-        <section class="settings-card">
-          <p class="setting-desc">拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。</p>
-          <div id="extensionList" class="extension-list"></div>
-        </section>
-        <section class="settings-card" id="cepPanelCard">
-          <h3>Photoshop 互传</h3>
+        <div class="settings-page-head"><h2>拓展</h2><p>统一管理外部工具与连接；逐项展开后再配置。</p></div>
+        <div class="extension-accordion">
+        <details class="settings-card extension-section">
+          <summary><span><strong>浏览器插件</strong><small>把浏览器中的图片与生成任务接入画布</small></span><span id="browserExtensionStatus" class="extension-status-badge" data-state="checking">检查中</span></summary>
+          <div class="extension-section-body">
+            <p class="setting-desc">安装、更新或移除均在浏览器的扩展管理页完成；CanvasFlow 只提供插件文件。</p>
+            <button id="browserExtensionOpenFolderBtn" type="button">打开插件所在位置</button>
+          </div>
+        </details>
+        <details class="settings-card extension-section" id="cepPanelCard">
+          <summary><span><strong>Photoshop 插件</strong><small>在 CanvasFlow 与 Photoshop 间互传图片</small></span><span id="photoshopExtensionStatus" class="extension-status-badge" data-state="checking">检查中</span></summary>
+          <div class="extension-section-body">
           <p class="setting-desc">安装面板后，可在 CanvasFlow 与 Photoshop 间互传图片。</p>
           <label>Photoshop 路径<input id="psPathInput" type="text" placeholder="例如 C:\Program Files\Adobe\Adobe Photoshop 2024\photoshop.exe"></label>
           <div class="cep-panel-actions">
@@ -229,7 +226,55 @@
             <button id="cepUninstallBtn" type="button">移除面板</button>
           </div>
           <p id="cepStatusLine" class="setting-desc" hidden></p>
-        </section>
+          </div>
+        </details>
+        <details class="settings-card extension-section" open>
+          <summary><span><strong>Python 脚本</strong><small>自动发现拓展文件夹中的工具，并作为拓展节点使用</small></span><span id="extensionServiceStatus" class="extension-status-badge" data-state="checking" title="检测中…">检查中</span></summary>
+          <div class="extension-section-body">
+            <div class="extension-head-actions">
+              <button id="extensionOpenFolderBtn" type="button" class="icon-btn extension-icon-btn" title="打开拓展文件夹" aria-label="打开拓展文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4.2l2 2.5H19a1.5 1.5 0 0 1 1.5 1.6l-.7 8.4A1.5 1.5 0 0 1 18.3 19H5.7a1.5 1.5 0 0 1-1.5-1.4l-.7-11Z"/></svg></button>
+              <button id="extensionRefreshBtn" type="button" class="icon-btn extension-icon-btn" title="刷新拓展（重新检索拓展文件夹）" aria-label="刷新拓展"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg></button>
+            </div>
+            <label>服务地址<input id="extensionServiceUrl" type="text" placeholder="http://127.0.0.1:8788"></label>
+            <p class="setting-desc">桌面版已内置拓展服务；仅服务器运行模式需要手动启动扩展服务。</p>
+            <p class="setting-desc">拖动可排序；关闭开关的脚本不会出现在画布右键菜单。</p>
+            <div id="extensionList" class="extension-list"></div>
+          </div>
+        </details>
+        <details class="settings-card extension-section">
+          <summary><span><strong>本地 SD</strong><small>连接本机或局域网 ComfyUI，并管理工作流</small></span><span id="localSdExtensionStatus" class="extension-status-badge" data-state="idle">未连接</span></summary>
+          <div class="extension-section-body comfy-settings-card">
+            <p class="setting-desc">启动只会在你点击按钮后执行。</p>
+            <label>服务地址<input id="comfyServerUrl" type="url" value="http://127.0.0.1:8188" placeholder="http://127.0.0.1:8188"></label>
+            <div id="comfyDesktopFields">
+              <label>安装目录<div class="comfy-path-row"><input id="comfyInstallPath" type="text" readonly placeholder="选择 ComfyUI 安装目录"><button id="comfyChooseFolder" type="button">选择</button></div></label>
+              <label>启动入口<select id="comfyLaunchPath"><option value="">请先选择安装目录</option></select></label>
+            </div>
+            <div class="comfy-actions"><button id="comfyLaunchBtn" type="button">启动 ComfyUI</button><button id="comfyTestBtn" class="primary" type="button">测试连接</button></div>
+            <div id="comfyStatus" class="comfy-status" role="status">尚未测试</div>
+            <div class="comfy-workflow-head"><div><strong>工作流库</strong><p class="setting-desc">内置模板一键添加，也可导入 ComfyUI API 格式 JSON，类型自动识别。</p></div><div class="comfy-import-actions"><select id="comfyAddWorkflow" aria-label="添加工作流"><option value="">添加工作流…</option></select><button id="comfyAddBtn" type="button">添加</button></div></div>
+            <div id="comfyWorkflowList" class="comfy-workflow-list"></div>
+            <input id="comfyWorkflowFile" type="file" accept=".json,application/json" hidden>
+          </div>
+        </details>
+        <details class="settings-card extension-section" id="mcpExtensionSection">
+          <summary><span><strong>MCP</strong><small>连接任何支持 stdio MCP 的 Agent 工具</small></span><span id="mcpStatusBadge" class="extension-status-badge" data-state="checking">检查中</span></summary>
+          <div class="extension-section-body">
+            <p class="setting-desc">CanvasFlow 提供通用 stdio MCP 服务，不绑定特定客户端；会自动复用本页“本地 SD”中保存的 ComfyUI 地址与工作流。</p>
+            <div id="mcpStatusText" class="mcp-status-text" role="status" aria-live="polite">展开后检查 MCP 服务文件…</div>
+            <div id="mcpLocation" class="mcp-location" hidden></div>
+            <label>MCP 绘图默认 API 站点<select id="mcpApiSiteSelect"><option value="apimart">APIMart</option><option value="agtoken">AGToken</option></select></label>
+            <p class="setting-desc">Agent 未显式指定站点时使用此选项；密钥仍在“AI 绘图”中分别保存。</p>
+            <label>stdio 启动命令<textarea id="mcpLaunchCommand" rows="3" readonly aria-label="CanvasFlow MCP stdio 启动命令"></textarea></label>
+            <div class="mcp-actions">
+              <button id="mcpCopyLaunchCommandBtn" class="primary" type="button">复制启动命令</button>
+              <button id="mcpOpenFolderBtn" type="button">打开所在文件夹</button>
+              <button id="mcpRefreshBtn" type="button">刷新状态</button>
+            </div>
+            <details class="mcp-client-shortcut"><summary>可选：Codex 快捷连接</summary><div class="mcp-actions"><button id="mcpInstallBtn" type="button">连接到 Codex</button><button id="mcpUninstallBtn" type="button">从 Codex 移除</button></div></details>
+          </div>
+        </details>
+        </div>
       </div>
 
       <div class="tab-page hidden" data-tab="appearance">
@@ -237,6 +282,15 @@
         <section class="settings-card">
           <h3>主题</h3>
           <label class="check-row"><input id="darkThemeToggle" type="checkbox"><span>深色主题</span></label>
+        </section>
+        <section class="settings-card">
+          <h3>画布</h3>
+          <div class="settings-field-grid">
+            <label>网格对齐距离<input id="gridSizeInput" type="number" min="10" max="200" value="40"></label>
+          </div>
+          <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
+          <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
+          <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
         </section>
         <section class="settings-card ui-colors-card">
           <h3>界面颜色</h3>
@@ -320,6 +374,40 @@
         </section>
       </div>
 
+      <div class="tab-page hidden" data-tab="aichat">
+        <div class="settings-page-head"><h2>AI 对话</h2><p>管理对话节点的站点、密钥与可用模型；支持接入多个自定义 OpenAI 兼容接口（本地 Ollama、中转站等）。</p></div>
+
+        <section class="settings-card">
+          <div class="ai-section-head">站点与密钥</div>
+          <label for="chatSiteSelect">站点
+            <select id="chatSiteSelect"></select>
+          </label>
+          <div id="chatSiteKeyArea">
+            <label>API Key
+              <div class="apikey-row">
+                <input id="chatSiteKeyInput" type="password" placeholder="输入 API Key">
+                <div class="apikey-actions">
+                  <button id="chatSiteKeySaveBtn" class="apikey-btn" title="保存 API Key">保存</button>
+                  <button id="chatSiteKeyClearBtn" class="apikey-btn danger" title="清除该站点的 API Key">清除</button>
+                </div>
+              </div>
+            </label>
+            <span id="chatSiteKeyHint" class="api-url-hint"></span>
+          </div>
+          <div id="chatCustomSiteArea" class="hidden">
+            <p class="setting-desc">接入任意 OpenAI 兼容服务。接口地址需填到 /v1 一级，例如 http://127.0.0.1:11434/v1；密钥可选（本地服务通常无需填写）。</p>
+            <div id="chatCustomSiteList"></div>
+            <button id="chatAddCustomSiteBtn" class="apikey-btn" type="button">+ 添加自定义站点</button>
+          </div>
+        </section>
+
+        <section class="settings-card">
+          <h3>可用模型</h3>
+          <p class="setting-desc">勾选后才会出现在对话节点的模型下拉中；未填写 Key 的站点暂时不可用。</p>
+          <div id="chatModelToggleList"></div>
+        </section>
+      </div>
+
       <div class="tab-page hidden" data-tab="screenshot">
         <div class="settings-page-head"><h2>截图工具</h2><p>截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。</p></div>
         <section class="settings-card">
@@ -377,20 +465,6 @@
           <button id="folderImportCancelBtn" type="button">取消</button>
           <button id="folderImportConfirmBtn" type="button" class="primary">确认上传</button>
         </div>
-      </div>
-    </div>
-    <div id="projectModeDialog" class="project-mode-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="projectModeTitle">
-      <div class="project-mode-panel">
-        <div class="project-mode-head">
-          <div><span>新建项目</span><strong id="projectModeTitle">选择项目模式</strong></div>
-          <button id="projectModeCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <p>项目创建后将固定使用所选模式，避免 AI 工作流和关系图数据混在一起。</p>
-        <div class="project-mode-options">
-          <button type="button" data-project-mode="ai"><strong>AI 绘图画板</strong><span>组合文字、参考图和 AI 绘图节点</span></button>
-          <button type="button" data-project-mode="mindmap"><strong>思维导图 / 关系图</strong><span>整理文字、图片、文件夹和编组关系</span></button>
-        </div>
-        <div class="project-mode-actions"><button id="projectModeCancelBtn" type="button">取消</button></div>
       </div>
     </div>
   </div>
@@ -453,17 +527,6 @@
       </div>
     </div>
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
-    <div id="lightboxArrowNote" class="lightbox-arrow-note hidden" role="group" aria-label="箭头说明">
-      <textarea id="lightboxArrowText" rows="2" maxlength="500" placeholder="输入箭头说明" aria-label="箭头说明文字"></textarea>
-      <button id="lightboxArrowColorPreview" type="button" class="btn lightbox-arrow-color-preview hidden" title="点击修改标注颜色" aria-label="修改当前配色标注颜色"><span id="lightboxArrowPreviewSwatch" class="lightbox-arrow-swatch" aria-hidden="true"></span><span id="lightboxArrowPreviewHex"></span></button>
-      <button id="lightboxArrowPaletteBtn" class="btn" type="button" aria-expanded="false" aria-controls="lightboxArrowPalette">配色标注</button>
-      <div id="lightboxArrowPalette" class="lightbox-arrow-palette hidden">
-        <label>标注颜色 <input id="lightboxArrowColor" type="color" aria-label="配色标注颜色"></label>
-        <span id="lightboxArrowHex"></span>
-        <button id="lightboxArrowColorClear" class="btn" type="button">移除色块</button>
-        <div id="lightboxArrowColorSlots" class="lightbox-arrow-color-slots" role="group" aria-label="10 个配色槽位，每行 5 个"></div>
-      </div>
-    </div>
     <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="图片右侧工具">
       <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
@@ -522,10 +585,6 @@
     </div>
   </div>
 
-  <script src="model-catalog.js?v=20261018-chat-opus2"></script>
-  <script src="canvas-runtime.js?v=20261017-modelsync1"></script>
-  <script src="modules/mindmap-module.js?v=20260811-disabled"></script>
-  <script src="modules/fill-selection.js?v=20261104-material-experimental-canvas"></script>
   <dialog id="updatePromptDialog" class="update-prompt-dialog" aria-labelledby="updatePromptTitle">
     <form method="dialog">
       <h2 id="updatePromptTitle">发现新版本</h2>
@@ -537,7 +596,13 @@
       </div>
     </form>
   </dialog>
-  <script src="app.js?v=20261105-update-quiet"></script>
-  <script src="modules/manual-matting.js?v=20261104-u2net-engine"></script>
+  <script src="model-catalog.js?v=20261105-agtdefault1"></script>
+  <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
+  <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
+  <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
+  <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
+  <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
+  <script src="app.js?v=20261107-arrow-note-off1"></script>
+  <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>

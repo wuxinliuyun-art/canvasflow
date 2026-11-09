@@ -32,6 +32,22 @@ test("rejects URLs, unsupported formats and oversized images", () => {
   }
 });
 
+test("accepts selected text and preserves a safe source URL", () => {
+  transfer({ action: "poll", receiver: "canvas-a", focused: true });
+  transfer({ action: "send", kind: "text", text: "网页选中文字", sourceUrl: "https://example.com/article" });
+  const [item] = transfer({ action: "poll", receiver: "canvas-a" }).items;
+  assert.equal(item.kind, "text");
+  assert.equal(item.text, "网页选中文字");
+  assert.equal(item.sourceUrl, "https://example.com/article");
+  assert.equal(item.image, undefined);
+});
+
+test("drops unsafe source URLs", () => {
+  transfer({ action: "poll", receiver: "canvas-a", focused: true });
+  transfer({ action: "send", image, sourceUrl: "javascript:alert(1)" });
+  assert.equal(transfer({ action: "poll", receiver: "canvas-a" }).items[0].sourceUrl, "");
+});
+
 test("bounds the queue and expires unattended deliveries", () => {
   const originalNow = Date.now;
   let now = originalNow();

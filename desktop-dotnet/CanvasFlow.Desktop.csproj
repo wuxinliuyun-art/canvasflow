@@ -24,11 +24,14 @@
   <ItemGroup>
     <Content Include="..\index.html" Link="index.html" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\model-catalog.js" Link="model-catalog.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\assets\vendor\three\*.js" LinkBase="assets\vendor\three\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\app.js" Link="app.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\canvas-runtime.js" Link="canvas-runtime.js" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\modules\mindmap-module.js" Link="modules\mindmap-module.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\sd-workflow-templates.js" Link="modules\sd-workflow-templates.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\local-sd.js" Link="modules\local-sd.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\fill-selection.js" Link="modules\fill-selection.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\manual-matting.js" Link="modules\manual-matting.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\image-annotations.js" Link="modules\image-annotations.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\styles.css" Link="styles.css" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />

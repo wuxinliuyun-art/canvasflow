@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         public long Size { get; set; }
     }
 
+    private sealed record CommandResult(int ExitCode, string Output);
+
     private const string DesktopBridgeScript = """
       (() => {
         if (window.canvasflowDesktop || !window.chrome?.webview) return;
@@ -108,6 +110,12 @@ public partial class MainWindow : Window
           savePsPath: path => invoke("desktop:save-ps-path", { path: String(path || "") }),
           choosePsExe: () => invoke("desktop:choose-ps-exe", {}, 60000),
           launchInPs: (filePath, fileName, assetId) => invoke("desktop:open-in-ps", { filePath: String(filePath || ""), fileName: String(fileName || ""), assetId: String(assetId || "") }, 60000),
+          chooseComfyFolder: currentPath => invoke("desktop:choose-comfy-folder", { currentPath: String(currentPath || "") }, 60000),
+          launchComfy: launchPath => invoke("desktop:launch-comfy", { launchPath: String(launchPath || "") }, 60000),
+          getMcpStatus: () => invoke("desktop:mcp-status", {}, 30000),
+          saveMcpSettings: apiSite => invoke("desktop:mcp-settings-save", { apiSite: String(apiSite || "apimart") }),
+          installMcp: () => invoke("desktop:mcp-install", {}, 120000),
+          uninstallMcp: () => invoke("desktop:mcp-uninstall", {}, 60000),
         };
       })();
       """;
@@ -220,7 +228,12 @@ public partial class MainWindow : Window
             var hostVersion = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             _webUpdateManager = new WebUpdateManager(_root, paths.ContentRoot, hostVersion, Log);
             _contentRoot = _webUpdateManager.ResolveContentRoot();
-            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager, () => ReadApiKey("agtoken"), () => _contentRoot ?? "", RegisterGeneratedExport);
+            _desktopApi = new DesktopApi(_root, Log, () => ReadApiKey("apimart"), _webUpdateManager, () => ReadApiKey("agtoken"), () => _contentRoot ?? "", () => Dispatcher.BeginInvoke(() =>
+            {
+                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                Show();
+                Activate();
+            }), slot => ReadApiKey(slot), RegisterGeneratedExport);
             // CEP 面板桥：画布开着时，Photoshop 面板经 localhost 桥复用画布的 API 与已保存的 key
             _desktopBridge = new DesktopBridge(_desktopApi, Log, (name, dataUrl) => PostPsReturnImage(name, dataUrl));
             try { _desktopBridge.Start(); }
@@ -283,7 +296,10 @@ public partial class MainWindow : Window
                 var stream = File.Open(indexPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 args.Response = _webViewEnvironment?.CreateWebResourceResponse(stream, 200, "OK", "Content-Type: text/html; charset=utf-8\nCache-Control: no-cache");
             };
+            // canvasflow-videos.local 提供 AI 视频成片（download\videos）；映射目标必须先建目录，否则启动抛 0x80070003
+            Directory.CreateDirectory(Path.Combine(_root!, "download", "videos"));
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-data.local", Path.Combine(_root!, "download", "images"), CoreWebView2HostResourceAccessKind.Allow);
+            CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-videos.local", Path.Combine(_root!, "download", "videos"), CoreWebView2HostResourceAccessKind.Allow);
             CanvasView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
             CanvasView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
             CanvasView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -366,6 +382,26 @@ public partial class MainWindow : Window
                         try { PostRpcResult(root, OpenOutputFolder(root)); }
                         catch (Exception openError) { PostRpcResult(root, error: openError.Message); }
                     }
+                    else if (type.GetString() == "desktop:mcp-status")
+                    {
+                        try { PostRpcResult(root, await GetMcpStatusAsync()); }
+                        catch (Exception statusError) { PostRpcResult(root, error: statusError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-settings-save")
+                    {
+                        try { PostRpcResult(root, SaveMcpSettings(root)); }
+                        catch (Exception settingsError) { PostRpcResult(root, error: settingsError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-install")
+                    {
+                        try { PostRpcResult(root, await InstallMcpAsync()); }
+                        catch (Exception installError) { PostRpcResult(root, error: installError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:mcp-uninstall")
+                    {
+                        try { PostRpcResult(root, await UninstallMcpAsync()); }
+                        catch (Exception uninstallError) { PostRpcResult(root, error: uninstallError.Message); }
+                    }
                     else if (type.GetString() == "desktop:copy-image")
                     {
                         try { PostRpcResult(root, CopyImageToClipboard(root)); }
@@ -396,6 +432,16 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, OpenInPhotoshop(root)); }
                         catch (Exception psOpenError) { PostRpcResult(root, error: psOpenError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:choose-comfy-folder")
+                    {
+                        try { PostRpcResult(root, ChooseComfyFolder(root)); }
+                        catch (Exception comfyChooseError) { PostRpcResult(root, error: comfyChooseError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:launch-comfy")
+                    {
+                        try { PostRpcResult(root, LaunchComfy(root)); }
+                        catch (Exception comfyLaunchError) { PostRpcResult(root, error: comfyLaunchError.Message); }
                     }
                     else if (type.GetString() == "desktop:open-screenshot-window")
                     {
@@ -480,7 +526,7 @@ public partial class MainWindow : Window
                     }
                     else if (type.GetString() == "desktop:get-api-key")
                     {
-                        PostRpcResult(root, new { apiKey = ReadApiKey("apimart"), agtokenApiKey = ReadApiKey("agtoken") });
+                        PostRpcResult(root, new { apiKey = ReadApiKey("apimart"), agtokenApiKey = ReadApiKey("agtoken"), chatCustomKeys = ReadChatCustomKeys() });
                     }
                     else if (type.GetString() == "desktop:save-api-key")
                     {
@@ -652,7 +698,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string ApiKeySlot(string apiType) => string.Equals(apiType, "agtoken", StringComparison.OrdinalIgnoreCase) ? "agtoken" : "apimart";
+    // 内置网关保持两槽；自定义对话站点槽名（"chatcustom:<siteId>"）直接透传，与 server.js secretProvider 槽名一致
+    private static string ApiKeySlot(string apiType)
+    {
+        if (!string.IsNullOrEmpty(apiType) && apiType.StartsWith("chatcustom:", StringComparison.OrdinalIgnoreCase)) return apiType;
+        return string.Equals(apiType, "agtoken", StringComparison.OrdinalIgnoreCase) ? "agtoken" : "apimart";
+    }
 
     private string ReadApiKey(string apiType)
     {
@@ -683,27 +734,74 @@ public partial class MainWindow : Window
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SecretsPath)!);
         var slot = ApiKeySlot(apiType);
-        var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        keys["apimart"] = ReadApiKey("apimart");
-        keys["agtoken"] = ReadApiKey("agtoken");
-        keys[slot] = (value ?? "").Trim();
-        if (keys["apimart"].Length == 0 && keys["agtoken"].Length == 0)
+        var newValue = (value ?? "").Trim();
+        // 读现有全部槽（含自定义对话站点的 chatcustom:* 槽），保存一把 key 时不得抹掉其他槽；
+        // 读到的是密文，原样保留，仅本次写入的槽重新加密
+        var encryptedKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(SecretsPath))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
+                if (document.RootElement.TryGetProperty("keys", out var existing))
+                {
+                    foreach (var entry in existing.EnumerateObject())
+                        encryptedKeys[entry.Name] = entry.Value.GetString() ?? "";
+                }
+                // v1 兼容：旧文件根级 apiKey 属于 apimart，归一进 keys 后随写盘固化
+                if (!encryptedKeys.ContainsKey("apimart") && document.RootElement.TryGetProperty("apiKey", out var legacyKey))
+                    encryptedKeys["apimart"] = legacyKey.GetString() ?? "";
+            }
+            catch (Exception readError)
+            {
+                Log($"[安全存储] 旧密钥文件读取失败，将按空密钥重建。详细信息：{readError.Message}", true);
+            }
+        }
+        if (newValue.Length == 0) encryptedKeys.Remove(slot);
+        // 全空（所有槽均无密文且本次写入也为空）时删除文件
+        var hasAnyKey = newValue.Length > 0 || encryptedKeys.Values.Any(v => v.Length > 0);
+        if (!hasAnyKey)
         {
             if (File.Exists(SecretsPath)) File.Delete(SecretsPath);
             return;
         }
         var keyObject = new Dictionary<string, string>();
-        foreach (var pair in keys)
+        foreach (var pair in encryptedKeys)
         {
-            if (pair.Value.Length == 0) continue;
-            var bytes = Encoding.UTF8.GetBytes(pair.Value);
+            if (pair.Value.Length == 0 || string.Equals(pair.Key, slot, StringComparison.OrdinalIgnoreCase)) continue;
+            keyObject[pair.Key] = pair.Value;
+        }
+        if (newValue.Length > 0)
+        {
+            var bytes = Encoding.UTF8.GetBytes(newValue);
             var protectedBytes = ProtectedData.Protect(bytes, Encoding.UTF8.GetBytes("CanvasFlow.ApiKey.v1"), DataProtectionScope.CurrentUser);
-            keyObject[pair.Key] = Convert.ToBase64String(protectedBytes);
+            keyObject[slot] = Convert.ToBase64String(protectedBytes);
         }
         var content = JsonSerializer.Serialize(new { version = 2, keys = keyObject }, new JsonSerializerOptions { WriteIndented = true });
         var temporary = SecretsPath + $".{Environment.ProcessId}.{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.tmp";
         File.WriteAllText(temporary, content, Encoding.UTF8);
         File.Move(temporary, SecretsPath, true);
+    }
+
+    // 枚举 secrets 里全部自定义对话站点槽并解密，随 desktop:get-api-key 返回（键为去前缀后的 siteId），
+    // 前端回填 state.settings.chatCustomKeys
+    private Dictionary<string, string> ReadChatCustomKeys()
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            if (!File.Exists(SecretsPath)) return result;
+            using var document = JsonDocument.Parse(File.ReadAllText(SecretsPath, Encoding.UTF8));
+            if (!document.RootElement.TryGetProperty("keys", out var keys)) return result;
+            foreach (var entry in keys.EnumerateObject())
+            {
+                if (!entry.Name.StartsWith("chatcustom:", StringComparison.OrdinalIgnoreCase)) continue;
+                var slotValue = ReadApiKey(entry.Name);
+                if (slotValue.Length > 0) result[entry.Name.Substring("chatcustom:".Length)] = slotValue;
+            }
+        }
+        catch { }
+        return result;
     }
 
     private static string MimeFromExtension(string extension) => extension.ToLowerInvariant() switch
@@ -954,6 +1052,188 @@ public partial class MainWindow : Window
         return new { opened = true, path = fullPath };
     }
 
+    private string ResolveMcpDirectory()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(_contentRoot ?? "", "mcp"),
+            Path.Combine(_root ?? "", "app", "mcp"),
+            Path.Combine(_root ?? "", "integrations", "canvasflow-mcp"),
+            Path.Combine(_contentRoot ?? "", "integrations", "canvasflow-mcp"),
+        };
+        foreach (var candidate in candidates.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (File.Exists(Path.Combine(candidate, "CanvasFlow.Mcp.exe")) ||
+                File.Exists(Path.Combine(candidate, "CanvasFlow.Mcp.csproj")) ||
+                File.Exists(Path.Combine(candidate, "install-mcp.cmd"))) return Path.GetFullPath(candidate);
+        }
+        return Path.GetFullPath(candidates[0]);
+    }
+
+    private string ResolveBrowserExtensionDirectory()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(_contentRoot ?? "", "browser-extension"),
+            Path.Combine(_root ?? "", "app", "browser-extension"),
+            Path.Combine(_root ?? "", "browser-extension"),
+        };
+        return Path.GetFullPath(candidates.FirstOrDefault(Directory.Exists) ?? candidates[0]);
+    }
+
+    private string McpSettingsPath => Path.Combine(_root!, "data", "mcp-settings.json");
+
+    private string ReadMcpApiSite()
+    {
+        try
+        {
+            if (!File.Exists(McpSettingsPath)) return "apimart";
+            using var document = JsonDocument.Parse(File.ReadAllText(McpSettingsPath, Encoding.UTF8));
+            var value = document.RootElement.TryGetProperty("apiSite", out var site) ? site.GetString() : null;
+            return value is "agtoken" ? "agtoken" : "apimart";
+        }
+        catch { return "apimart"; }
+    }
+
+    private object SaveMcpSettings(JsonElement request)
+    {
+        var apiSite = request.TryGetProperty("apiSite", out var value) ? value.GetString() : "apimart";
+        if (apiSite is not ("apimart" or "agtoken")) throw new ArgumentException("MCP 绘图站点只支持 apimart 或 agtoken");
+        Directory.CreateDirectory(Path.GetDirectoryName(McpSettingsPath)!);
+        File.WriteAllText(McpSettingsPath, JsonSerializer.Serialize(new { apiSite }), new UTF8Encoding(false));
+        return new { apiSite };
+    }
+
+    private static string? FindCommandOnPath(string command)
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var extensions = new[] { ".exe", ".cmd", ".bat", "" };
+        foreach (var rawDirectory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var directory = rawDirectory.Trim().Trim('"');
+            if (directory.Length == 0) continue;
+            foreach (var extension in extensions)
+            {
+                try
+                {
+                    var candidate = Path.Combine(directory, command + extension);
+                    if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+                }
+                catch { }
+            }
+        }
+        return null;
+    }
+
+    private static string QuoteForCmd(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    private async Task<CommandResult> RunCommandAsync(string executable, params string[] arguments)
+    {
+        var info = new ProcessStartInfo
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        var extension = Path.GetExtension(executable).ToLowerInvariant();
+        if (extension is ".cmd" or ".bat")
+        {
+            info.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+            info.ArgumentList.Add("/d");
+            info.ArgumentList.Add("/s");
+            info.ArgumentList.Add("/c");
+            info.ArgumentList.Add(QuoteForCmd(executable) + " " + string.Join(" ", arguments.Select(QuoteForCmd)));
+        }
+        else
+        {
+            info.FileName = executable;
+            foreach (var argument in arguments) info.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(info) ?? throw new InvalidOperationException($"无法启动命令：{Path.GetFileName(executable)}");
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(_shutdown.Token);
+        var output = string.Join(Environment.NewLine, new[] { await standardOutput, await standardError }.Where(value => !string.IsNullOrWhiteSpace(value))).Trim();
+        return new CommandResult(process.ExitCode, output);
+    }
+
+    private async Task<object> GetMcpStatusAsync()
+    {
+        var directory = ResolveMcpDirectory();
+        var executable = Path.Combine(directory, "CanvasFlow.Mcp.exe");
+        var project = Path.Combine(directory, "CanvasFlow.Mcp.csproj");
+        var installScript = Path.Combine(directory, "install-mcp.cmd");
+        var codex = FindCommandOnPath("codex");
+        var filesAvailable = File.Exists(executable) || File.Exists(project);
+        var registered = false;
+        var detail = "";
+        if (codex is not null)
+        {
+            var result = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+            registered = result.ExitCode == 0;
+            detail = result.Output;
+        }
+        return new
+        {
+            desktopSupported = true,
+            codexAvailable = codex is not null,
+            filesAvailable,
+            registered,
+            directory,
+            browserExtensionDirectory = ResolveBrowserExtensionDirectory(),
+            apiSite = ReadMcpApiSite(),
+            installScript,
+            mode = File.Exists(executable) ? "exe" : File.Exists(project) ? "source" : "missing",
+            detail,
+        };
+    }
+
+    private async Task<object> InstallMcpAsync()
+    {
+        var codex = FindCommandOnPath("codex") ?? throw new FileNotFoundException("没有在 PATH 中找到 Codex CLI。请先安装或更新 Codex，再重试。");
+        var directory = ResolveMcpDirectory();
+        var executable = Path.Combine(directory, "CanvasFlow.Mcp.exe");
+        var project = Path.Combine(directory, "CanvasFlow.Mcp.csproj");
+        var existing = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+        if (existing.ExitCode == 0)
+        {
+            var remove = await RunCommandAsync(codex, "mcp", "remove", "canvasflow");
+            if (remove.ExitCode != 0) throw new InvalidOperationException("无法替换现有 CanvasFlow MCP：" + remove.Output);
+        }
+
+        CommandResult add;
+        if (File.Exists(executable))
+        {
+            add = await RunCommandAsync(codex, "mcp", "add", "canvasflow", "--", executable);
+        }
+        else if (File.Exists(project))
+        {
+            var dotnet = FindCommandOnPath("dotnet") ?? throw new FileNotFoundException("源码模式需要 .NET SDK，但没有在 PATH 中找到 dotnet。");
+            add = await RunCommandAsync(codex, "mcp", "add", "canvasflow", "--", dotnet, "run", "--project", project);
+        }
+        else
+        {
+            throw new FileNotFoundException("安装包中没有找到 CanvasFlow MCP 文件，请安装最新完整版本。", directory);
+        }
+        if (add.ExitCode != 0) throw new InvalidOperationException("CanvasFlow MCP 安装失败：" + add.Output);
+        Log($"[CanvasFlow MCP] 已由用户在设置中安装：{directory}", false);
+        return await GetMcpStatusAsync();
+    }
+
+    private async Task<object> UninstallMcpAsync()
+    {
+        var codex = FindCommandOnPath("codex") ?? throw new FileNotFoundException("没有在 PATH 中找到 Codex CLI。");
+        var current = await RunCommandAsync(codex, "mcp", "get", "canvasflow");
+        if (current.ExitCode == 0)
+        {
+            var remove = await RunCommandAsync(codex, "mcp", "remove", "canvasflow");
+            if (remove.ExitCode != 0) throw new InvalidOperationException("CanvasFlow MCP 卸载失败：" + remove.Output);
+            Log("[CanvasFlow MCP] 已由用户在设置中卸载。", false);
+        }
+        return await GetMcpStatusAsync();
+    }
+
     // ---- Photoshop 互传：图片节点右键“在 PS 中编辑” + PS 面板回传注入画布 ----
     // PS 路径只存本机数据目录（data\ps-path.txt），不自动探测注册表；
     // 启动 PS 是用户点击右键菜单触发的 UseShellExecute 直启，与“打开所在文件夹”同级。
@@ -979,6 +1259,46 @@ public partial class MainWindow : Window
         File.WriteAllText(PsPathFilePath, picker.FileName, Encoding.UTF8);
         Log($"[PS互传] 已选择 Photoshop 路径：{picker.FileName}", false);
         return new { path = picker.FileName };
+    }
+
+    private object ChooseComfyFolder(JsonElement request)
+    {
+        var currentPath = request.TryGetProperty("currentPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        var picker = new Microsoft.Win32.OpenFolderDialog { Title = "选择 ComfyUI 安装目录", Multiselect = false };
+        if (Directory.Exists(currentPath)) picker.InitialDirectory = Path.GetFullPath(currentPath);
+        if (picker.ShowDialog(this) != true) return new { cancelled = true, path = currentPath, candidates = Array.Empty<string>() };
+        var selected = Path.GetFullPath(picker.FolderName);
+        var candidates = ScanComfyLaunchers(selected).ToArray();
+        return new { cancelled = false, path = selected, candidates, launchPath = candidates.FirstOrDefault() ?? "" };
+    }
+
+    private static IEnumerable<string> ScanComfyLaunchers(string root)
+    {
+        var preferred = new[] { "绘世启动器.exe", "ComfyUI.exe", "run_nvidia_gpu.bat", "run_cpu.bat", "run.bat" };
+        var found = new List<string>();
+        var queue = new Queue<(string Path, int Depth)>(); queue.Enqueue((root, 0));
+        while (queue.Count > 0 && found.Count < 80)
+        {
+            var current = queue.Dequeue();
+            try
+            {
+                found.AddRange(Directory.EnumerateFiles(current.Path).Where(file => new[] { ".exe", ".bat", ".cmd" }.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase)));
+                if (current.Depth < 3) foreach (var directory in Directory.EnumerateDirectories(current.Path).Take(80)) queue.Enqueue((directory, current.Depth + 1));
+            }
+            catch { }
+        }
+        return found.OrderBy(file => { var index = Array.FindIndex(preferred, name => name.Equals(Path.GetFileName(file), StringComparison.OrdinalIgnoreCase)); return index < 0 ? preferred.Length : index; }).ThenBy(file => file.Length).ThenBy(file => file, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private object LaunchComfy(JsonElement request)
+    {
+        var launchPath = request.TryGetProperty("launchPath", out var pathElement) ? pathElement.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(launchPath) || !File.Exists(launchPath)) throw new FileNotFoundException("ComfyUI 启动文件不存在，请重新选择安装目录");
+        var extension = Path.GetExtension(launchPath).ToLowerInvariant();
+        if (extension is not ".exe" and not ".bat" and not ".cmd") throw new InvalidDataException("只允许启动 .exe、.bat 或 .cmd 文件");
+        Process.Start(new ProcessStartInfo { FileName = Path.GetFullPath(launchPath), WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(launchPath))!, UseShellExecute = true });
+        Log($"[ComfyUI] 用户已请求启动：{launchPath}", false);
+        return new { started = true, launchPath = Path.GetFullPath(launchPath) };
     }
 
     private object OpenInPhotoshop(JsonElement request)

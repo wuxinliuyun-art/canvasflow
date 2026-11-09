@@ -1,6 +1,8 @@
 using System.Threading;
 using System.Windows;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CanvasFlow.Desktop;
 

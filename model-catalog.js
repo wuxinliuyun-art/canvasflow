@@ -19,22 +19,24 @@
       label: "APIMart",
       defaultModel: "gpt-image-2.5-flare",
       models: [
-        { id: "gpt-image-2-official", label: "GPT Image 2（官方）", quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
+        { id: "gpt-image-2-official", label: "GPT Image 2（官方）", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
         { id: "midjourney", label: "Midjourney", quality: false, qualities: [], resolutions: ["auto"], sizes: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"], versions: ["8.2", "8.1", "7", "6.1", "5.2", "5.1"], speeds: ["relax", "fast", "turbo"], pricingUrl: "https://apib.ai/zh/model/midjourney" },
         { id: "gpt-image-2", label: "GPT Image 2（ext · 便宜）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
-        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
-        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
-        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
+        // maxImages = 已验证的参考图上限（仅采信来源明确的数值；未声明的模型视为未知，功能侧保守降级）
+        // gpt-image-2.5-ext / gpt-image-2.5：APIMart 官方文档 image_urls 最多 16 张（2026-11-07 核实）
+        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
+        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
+        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k"], sizes: RATIOS_FULL, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
         { id: "gemini-3.1-flash-image-preview", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/nano-banana-3-api" },
         // Nano Banana Pro（Gemini 3 Pro Image）：比例仅接受 RATIOS_EXT 档，分辨率 1K/2K/4K，n 仅支持 1，不支持 quality；参考图最多 14 张
-        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
+        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 14, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
       ],
     },
     agtoken: {
       label: "AGToken",
       defaultModel: "gpt-image-2.5-flare",
       models: [
-        { id: "gpt-image-2.5", label: "GPT Image 2.5", quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
+        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
         { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT },
         { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT },
         { id: "gpt-image-2", label: "GPT Image 2", quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
@@ -45,25 +47,51 @@
     },
   };
 
+  // AI 视频（ai-video）模型目录：与绘图/对话目录相互独立。
+  //   id          模型 ID（提交给上游统一视频接口 /v1/video/generations 的 model 值）
+  //   apiType     网关归属（key 分槽），当前仅 agtoken（settings.agtokenApiKey 槽）
+  //   resolutions 可选分辨率档（seedance 2.0 国内：480p/720p/1080p/4k）
+  //   ratios      可选画面比例（adaptive = 跟随参考图）
+  //   durations   可选时长（秒；-1 = 由模型决定智能时长）
+  //   audio       是否支持有声视频（generate_audio 开关）
+  //   maxImages   参考图上限（seedance 2.0 国内 ≤9 张）
+  //   pricingUrl  网关价格页
+  window.CANVASFLOW_VIDEO_CATALOG = {
+    defaultModel: "doubao-seedance-2-0-260128（国内）",
+    models: [
+      {
+        id: "doubao-seedance-2-0-260128（国内）",
+        label: "豆包 Seedance 2.0（国内）",
+        apiType: "agtoken",
+        resolutions: ["480p", "720p", "1080p", "4k"],
+        ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+        durations: [-1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        audio: true,
+        maxImages: 9,
+        pricingUrl: "https://agtoken.vip/pricing",
+      },
+    ],
+  };
+
   // AI 对话（chat）模型目录：与绘图目录相互独立。
   //   id         模型 ID（提交给上游 chat/completions 的 model 值）
   //   apiType    网关归属：apimart（settings.apiKey 槽）/ agtoken（settings.agtokenApiKey 槽），
   //              两家走各自的 OpenAI 兼容 chat/completions，请求格式互不转换
   //   multimodal true 时把上游参考图以 image_url 内容部分随消息发送；false 时忽略上游图片
   window.CANVASFLOW_CHAT_CATALOG = {
-    defaultModel: "gpt-5.2-chat-latest",
+    defaultModel: "gpt-6-astra",
     models: [
-      { id: "gpt-5.2-chat-latest", label: "GPT-5.2 Chat（多模态·APIMart）", apiType: "apimart", multimodal: true, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
+      { id: "gpt-5.2-chat-latest", label: "GPT-5.2 Chat（多模态·APIMart）", hidden: true, apiType: "apimart", multimodal: true, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
       // APIMart 官网公开价格，单位 Credits / 百万 Token；优惠可能随平台调整。
       // 暂按纯文本接入，未确认视觉能力前不发送参考图。
-      { id: "gemini-4-argon", label: "Gemini 4 Argon（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
-      { id: "claude-haiku-5-5", label: "Claude Haiku 5.5（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude" },
-      { id: "claude-opus-5-5", label: "Claude Opus 5.5（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude?id=claude-opus-5-5" },
+      { id: "gpt-6-luna", label: "GPT-6 Luna（APIMart）", note: "便宜", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
       { id: "gpt-6.1-sol", label: "GPT-6.1 Sol（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
+      { id: "gemini-4-argon", label: "Gemini 4 Argon（APIMart）", note: "文笔好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5（APIMart）", note: "美术及性能好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude?id=claude-opus-5-5" },
       { id: "deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/deepseek" },
-      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
+      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（APIMart）", hidden: true, apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
       { id: "gpt-6-sol", label: "GPT-6 Sol（AGToken）", apiType: "agtoken", multimodal: false },
-      { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", apiType: "agtoken", multimodal: false },
+      { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", note: "便宜", apiType: "agtoken", multimodal: false },
     ],
   };
 })();
