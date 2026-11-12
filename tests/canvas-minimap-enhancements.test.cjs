@@ -242,8 +242,8 @@ test('minimap canvas gains accessible semantics and asset versions are bumped', 
   assert.ok(canvas[0].includes('role="button"'), 'keyboard navigation needs role="button"');
   assert.ok(canvas[0].includes('tabindex="0"'), 'keyboard navigation needs tabindex');
   assert.ok(canvas[0].includes('aria-label='), 'canvas must keep an accessible label');
-  assert.ok(html.includes('app.js?v=20261107-arrow-note-off1'), 'app.js version must be bumped');
-  assert.ok(html.includes('styles.css?v=20261107-arrow-note-off1'), 'styles.css version must be bumped');
+  assert.ok(html.includes('app.js?v=20261112-menumgr1'), 'app.js version must be bumped');
+  assert.ok(html.includes('styles.css?v=20261112-menumgr1'), 'styles.css version must be bumped');
 });
 
 test('focus ring uses the primary token with no bare colors', () => {

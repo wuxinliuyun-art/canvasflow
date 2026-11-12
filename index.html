@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261107-arrow-note-off1">
+  <link rel="stylesheet" href="styles.css?v=20261112-chatskin1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -151,7 +151,6 @@
         <section class="settings-card update-settings-card">
           <div class="update-settings-head"><div><h3>软件更新</h3><p class="setting-desc">界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。</p></div><button id="checkUpdateBtn">检查更新</button></div>
           <div id="updateStatus" class="update-status">当前版本：正在读取…</div>
-          <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <details class="update-notes">
@@ -291,6 +290,12 @@
           <label class="check-row"><input id="snapToggle" type="checkbox" checked><span>开启网格吸附</span></label>
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
+        </section>
+        <section class="settings-card">
+          <h3>右键菜单管理</h3>
+          <p class="setting-desc">取消勾选可隐藏画布右键菜单中的对应选项；同名选项在不同位置一起隐藏，立即生效。</p>
+          <div id="menuManagerList" class="menu-manager-list"></div>
+          <div class="menu-manager-actions"><button id="menuManagerResetBtn" type="button">全部恢复显示</button></div>
         </section>
         <section class="settings-card ui-colors-card">
           <h3>界面颜色</h3>
@@ -505,13 +510,15 @@
         <div class="quick-palette-row">
           <button id="lightboxPaintFill" class="lightbox-icon-btn" type="button" title="上色" aria-label="上色" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 11-7-7-7 7a2 2 0 0 0 0 3l4 4a2 2 0 0 0 3 0l7-7ZM7 3l5 5M4 12h13M22 18a2 2 0 0 1-4 0c0-1 2-3 2-3s2 2 2 3Z"/></svg></button>
           <button id="lightboxColorBrush" class="lightbox-icon-btn" type="button" title="自由上色笔刷" aria-label="自由上色笔刷" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 14 8-10a2 2 0 0 1 3 3L11 17M10 14c-4-1-5 3-5 4s-1 2-2 2c5 1 8 0 8-3M14 7l3 3"/></svg></button>
+          <button id="lightboxColorPicker" class="lightbox-icon-btn" type="button" title="吸管取色" aria-label="吸管取色" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 7 4 4m-6-2 4 4m-3-3-7 7v2h2l7-7m1-5 3-3a2 2 0 0 1 3 3l-3 3"/></svg></button>
+          <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" aria-pressed="false" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         </div>
         <div id="lightboxToolColor" class="quick-palette-row hidden"></div>
         <div id="lightboxFillOptions" class="hidden">
           <label>上色模式
             <select id="lightboxFillMode">
               <option value="sketch">草图上色</option>
-              <option value="material">材质选取（实验）</option>
+              <option value="material">材质变色</option>
             </select>
           </label>
           <div id="lightboxFillAdjustment" class="lightbox-toolbar-section hidden" role="group" aria-label="微调当前选区">
@@ -527,7 +534,7 @@
       </div>
     </div>
     <canvas id="lightboxPaintCanvas" class="lightbox-paint-canvas hidden"></canvas>
-    <div id="lightboxEraserRing" class="lightbox-eraser-ring hidden" aria-hidden="true"></div>
+    <div id="lightboxBrushRing" class="lightbox-brush-ring hidden" aria-hidden="true"></div>
     <div id="lightboxMirrorTools" class="lightbox-mirror-tools hidden" role="group" aria-label="图片右侧工具">
       <button id="lightboxFlipHorizontal" type="button" title="左右镜像当前图片" aria-label="左右镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.4 7.8 10 12l-5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M19.6 7.8 14 12l5.6 4.2z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
       <button id="lightboxFlipVertical" type="button" title="上下镜像当前图片" aria-label="上下镜像当前图片"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.8 4.4 12 10l4.2-5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7.8 19.6 12 14l4.2 5.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>
@@ -543,12 +550,11 @@
       <div id="lightboxMainTools" class="lightbox-toolbar-section lightbox-main-tools" role="group" aria-label="图片编辑">
         <button id="lightboxPaintPointer" class="active lightbox-icon-btn" type="button" title="鼠标" aria-label="鼠标"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m5 3 14 10-7 1-3 7z"/></svg></button>
         <button id="lightboxPaintBrush" class="lightbox-icon-btn" type="button" title="画笔" aria-label="画笔"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.33" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.86) translate(-12 -12)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g></svg></button>
-        <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.22" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 12) scale(0.9) translate(-12 -12)"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></g></svg></button>
         <button id="lightboxPaintArrow" class="lightbox-icon-btn" type="button" title="箭头" aria-label="箭头"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4"/><path d="M9.5 4H20v10.5"/></svg></button>
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
-          <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+          <label id="lightboxPaintSizeField" title="【 / 】（[ / ]）缩小 / 放大笔刷">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
         </div>
       </div>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
@@ -596,13 +602,25 @@
       </div>
     </form>
   </dialog>
+  <dialog id="paletteHelpDialog" class="update-prompt-dialog palette-help-dialog" aria-labelledby="paletteHelpTitle">
+    <form method="dialog">
+      <h2 id="paletteHelpTitle">调色盘使用教程</h2>
+      <ol>
+        <li><strong>准备一套颜色</strong>。选色系、饱和度和明度，再点「按条件生成配色条」。也可以用「自定义」添加颜色，或在调色盘节点中从参考图「提取颜色」。</li>
+        <li><strong>选色或收藏</strong>。点击生成的色块即可选色，色号会显示在颜色详情里。已收藏的颜色可以通过调色盘名称切换和复用。</li>
+        <li><strong>给图片上色</strong>。双击图片打开编辑器，选好颜色后点目标区域，也可以直接把色块拖到区域上。黑白图默认用草图上色，彩色图默认用材质变色。</li>
+        <li><strong>用笔刷标色</strong>。点调色盘下方的自由上色笔刷即可涂画，用橡皮擦去颜色。完成后点「确认并生成节点」，可把配色稿接给 AI 绘图。</li>
+      </ol>
+      <div class="update-prompt-actions"><button type="submit" autofocus>知道了</button></div>
+    </form>
+  </dialog>
   <script src="model-catalog.js?v=20261105-agtdefault1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
-  <script src="app.js?v=20261107-arrow-note-off1"></script>
+  <script src="app.js?v=20261112-chatskin1"></script>
   <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>
