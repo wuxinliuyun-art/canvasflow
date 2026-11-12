@@ -293,6 +293,7 @@
       for (let attempt = 0; attempt < 720; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 2500));
         node = findNode(nodeId); if (!node || node._sdRequestSeq !== requestSeq) return;
+        if (window.CanvasFlowGroupNodeRunIsStopped?.(node)) { node.generating = false; node._sdTaskId = ""; node._sdStatus = ""; node._sdError = "编组运行已停止，结果已丢弃"; render(); return; }
         const result = await request(`/api/comfyui/status/${encodeURIComponent(submitted.taskId)}`);
         if (result.status === "running") continue;
         if (result.status === "cancelled") throw new Error("任务已取消");
@@ -341,7 +342,8 @@
     const source = await sourceFor(node); if (!source.imageData) return toast("请先连接一张上游图片");
     const image = new Image(); image.src = source.imageData; await image.decode();
     const overlay = document.createElement("div"); overlay.className = "manual-matting local-sd-mask-editor"; overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-label", "局部重绘蒙版编辑器");
-    overlay.innerHTML = `<div class="mm-shell"><header><strong>选择局部重绘区域</strong><span>白色区域会被重绘</span><button type="button" data-action="close" aria-label="关闭蒙版编辑器">关闭</button></header><div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="局部重绘选区和蒙版编辑区"></canvas></div></div><p class="mm-status" role="status">拖动绘制矩形，或使用画笔精修。</p></div><aside><strong>蒙版</strong><p>白色：重绘<br>黑色：保留</p></aside></div><footer><div class="mm-tools"><button type="button" data-mode="rect">矩形选区</button><button type="button" data-mode="restore">恢复画笔</button><button type="button" data-mode="erase">擦除画笔</button><label>笔刷 <input class="mm-size" type="range" min="4" max="120" value="32"></label><button type="button" data-action="undo">撤销</button><button type="button" data-action="clear">清空</button><label>缩放 <select class="mm-zoom"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="confirm">确认蒙版</button></div></footer></div>`;
+    overlay.tabIndex = -1;
+    overlay.innerHTML = `<div class="mm-shell"><header><strong>选择局部重绘区域</strong><span>白色区域会被重绘</span><button type="button" data-action="close" aria-label="关闭蒙版编辑器">关闭</button></header><div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="局部重绘选区和蒙版编辑区"></canvas></div></div><p class="mm-status" role="status">拖动绘制矩形，或使用画笔精修。</p></div><aside><strong>蒙版</strong><p>白色：重绘<br>黑色：保留</p></aside></div><footer><div class="mm-tools"><button type="button" data-mode="rect">矩形选区</button><button type="button" data-mode="restore">恢复画笔</button><button type="button" data-mode="erase">擦除画笔</button><label>笔刷 <input class="mm-size" type="range" min="4" max="120" value="32" title="快捷键：[ 缩小，] 放大" aria-label="笔刷大小；左方括号缩小，右方括号放大"></label><button type="button" data-action="undo">撤销</button><button type="button" data-action="clear">清空</button><label>缩放 <select class="mm-zoom"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="confirm">确认蒙版</button></div></footer></div>`;
     document.body.appendChild(overlay); const canvas = overlay.querySelector("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight; const ctx = canvas.getContext("2d");
     const base = document.createElement("canvas"); base.width = canvas.width; base.height = canvas.height; const bctx = base.getContext("2d"); bctx.fillStyle = "black"; bctx.fillRect(0, 0, base.width, base.height);
     if (node._sdMaskData) { const saved = new Image(); saved.src = node._sdMaskData; await saved.decode().catch(() => null); if (saved.naturalWidth === base.width && saved.naturalHeight === base.height) bctx.drawImage(saved, 0, 0); }
@@ -354,7 +356,17 @@
     canvas.addEventListener("pointerup", event => { if (!drawing) return; const p = point(event); drawing = false; if (mode === "rect") { bctx.fillStyle = "white"; bctx.fillRect(Math.min(start.x, p.x), Math.min(start.y, p.y), Math.abs(p.x - start.x), Math.abs(p.y - start.y)); } renderMask(); });
     overlay.addEventListener("click", event => { const selected = event.target.closest("[data-mode]")?.dataset.mode; if (selected) mode = selected; const action = event.target.closest("[data-action]")?.dataset.action; if (action === "close") overlay.remove(); if (action === "clear") { snapshot(); bctx.fillStyle = "black"; bctx.fillRect(0, 0, base.width, base.height); renderMask(); } if (action === "undo" && history.length) { bctx.putImageData(history.pop(), 0, 0); renderMask(); } if (action === "confirm") { node._sdMaskData = base.toDataURL("image/png"); node._sdMaskSource = source.imageData.slice(0, 128); pushHistory(); render(); overlay.remove(); } });
     overlay.querySelector(".mm-zoom").addEventListener("change", event => { canvas.style.width = event.target.value === "fit" ? "100%" : `${canvas.width * Number(event.target.value)}px`; });
+    overlay.addEventListener("keydown", event => {
+      const direction = event.code === "BracketLeft" || event.key === "[" ? -1
+        : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
+      if (!direction || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
+      const size = overlay.querySelector(".mm-size");
+      event.preventDefault();
+      size.value = String(Math.max(Number(size.min), Math.min(Number(size.max), Number(size.value) + direction * (Number(size.step) || 1))));
+      size.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     renderMask();
+    overlay.focus({ preventScroll: true });
   }
 
   function handleChange(node, role, target) {
@@ -401,6 +413,6 @@
     return true;
   }
 
-  window.LocalSD = { cache, load, nodeBody, normalizeNode, handleChange, handleInput, handleClick };
+  window.LocalSD = { cache, load, nodeBody, normalizeNode, handleChange, handleInput, handleClick, generate, cancel };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { wireSettings(); load(); }); else { wireSettings(); load(); }
 })();

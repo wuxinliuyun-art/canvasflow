@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261107-arrow-note-off1">
+  <link rel="stylesheet" href="styles.css?v=20261111-light-grid1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -295,8 +295,8 @@
           <h3>界面颜色</h3>
           <div class="ui-color-rows">
             <div class="ui-color-row ui-color-canvas-row"><span>画布背景样式</span><select id="canvasBgSelect"><option value="grid">网格线</option><option value="cross">网格 + 十字焦点</option><option value="dots">点状</option></select></div>
-            <label class="ui-color-row"><span>画布底色</span><input type="color" id="uiColorBg" value="#000000"><button type="button" class="ui-color-alt" data-ui-color-alt="bg" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="bg">默认</button></label>
-            <label class="ui-color-row"><span>网格线</span><input type="color" id="uiColorGrid" value="#ffffff"><button type="button" class="ui-color-alt" data-ui-color-alt="grid" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="grid">默认</button></label>
+            <label class="ui-color-row"><span>画布底色</span><input type="color" id="uiColorBg" value="#f5f5f5"><button type="button" class="ui-color-alt" data-ui-color-alt="bg" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="bg">默认</button></label>
+            <label class="ui-color-row"><span>网格线</span><input type="color" id="uiColorGrid" value="#e8e8e8"><button type="button" class="ui-color-alt" data-ui-color-alt="grid" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="grid">默认</button></label>
             <label class="ui-color-row"><span>面板底色</span><input type="color" id="uiColorPanel" value="#131316"><button type="button" class="ui-color-alt" data-ui-color-alt="panel" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="panel">默认</button></label>
             <label class="ui-color-row"><span>节点内控件</span><input type="color" id="uiColorNodeControl" value="#1c1c21"><button type="button" class="ui-color-alt" data-ui-color-alt="nodeControl" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="nodeControl">默认</button></label>
             <label class="ui-color-row"><span>主按钮</span><input type="color" id="uiColorAccent" value="#f4f4f5"><button type="button" class="ui-color-alt" data-ui-color-alt="accent" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="accent">默认</button></label>
@@ -547,7 +547,7 @@
         <button id="lightboxPaintRect" class="lightbox-icon-btn" type="button" title="方框" aria-label="方框"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="1.6"/></svg></button>
         <div id="lightboxPaintOptions" class="lightbox-toolbar-section lightbox-paint-options">
           <label id="lightboxPaintColorField">颜色 <input id="lightboxPaintColor" type="color" value="#ff3b30"></label>
-          <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36"></label>
+          <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36" title="快捷键：[ 缩小，] 放大" aria-label="画笔大小；左方括号缩小，右方括号放大"></label>
         </div>
       </div>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
@@ -595,13 +595,13 @@
       </div>
     </form>
   </dialog>
-  <script src="model-catalog.js?v=20261105-agtdefault1"></script>
+  <script src="model-catalog.js?v=20261107-agt-gpt2-resolution1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261102-extension-status1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
-  <script src="app.js?v=20261107-arrow-note-off1"></script>
+  <script src="app.js?v=20261111-light-grid1"></script>
   <script src="modules/manual-matting.js?v=20261105-merge2802"></script>
 </body>
 </html>

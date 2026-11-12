@@ -22,12 +22,12 @@
   --warning: #f59e0b;
   --inverse-text: #ffffff;
   --accent-ink: #ffffff;
-  --canvas-bg: #f4f5f6;
+  --canvas-bg: #f5f5f5;
   --chip-dark: #1d1e23;
   --node-control: #f2f2f5;
-  --canvas-grid: #3c4046;
-  --canvas-cross: #3c4046;
-  --canvas-dot: #3c4046;
+  --canvas-grid: #e8e8e8;
+  --canvas-cross: #e8e8e8;
+  --canvas-dot: #e8e8e8;
   --shadow: 0 22px 52px rgba(29, 34, 41, .13);
   --soft-shadow: 0 14px 28px rgba(29, 34, 41, .1);
   --radius: 8px;
@@ -2885,6 +2885,8 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   font-size: 12px;
   line-height: 1;
 }
+.node-group-run { position:absolute; top:4px; right:8px; min-height:20px; padding:0 8px; border:1px solid var(--border); border-radius:4px; background:var(--panel); color:var(--text); font-size:12px; cursor:pointer; pointer-events:auto; }
+.node-group-run:hover { background:var(--panel-2); }
 .node-group-frame.is-selected {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 7%, transparent);
@@ -3167,6 +3169,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .task-queue-prompt { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .task-queue-meta { color: var(--muted); font-size: 12px; }
 .task-queue-error { color: var(--danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
+.task-queue-error-link { display: block; width: fit-content; margin-top: 4px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .task-queue-mini-progress { height: 3px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
 .task-queue-mini-progress span { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .2s ease; }
 .task-queue-actions { display: flex; flex-direction: column; gap: 3px; }

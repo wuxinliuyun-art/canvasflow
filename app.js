@@ -282,7 +282,7 @@ const UI_EN = {
   "导入自定义图文": "Import Custom Text and Images", "来源项目": "Source project", "取消": "Cancel", "导入所选内容": "Import Selected",
   "当前项目": "Current project", "全局": "Global", "刷新当前项目": "Refresh Current Project",
   "保存为自定义文字": "Save as Custom Text", "保存为自定义图片": "Save as Custom Image", "保存为自定义组件": "Save as Custom Component",
-  "提取生成所用关键词": "Extract Generation Keywords",
+  "提取生成所用关键词": "Extract Generation Keywords", "关键词反推": "Reverse Prompt", "反推中…": "Analyzing…",
   "设置分类": "Settings categories", "常规": "General", "素材库": "Asset Library", "导出": "Export",
   "调整画布操作习惯。": "Adjust canvas behavior.", "界面与画布": "Interface & Canvas",
   "保存常用图文和节点组合，所有项目均可使用；创建出的节点是独立副本。": "Save reusable text, images, and node sets for every project; created nodes are independent copies.",
@@ -1365,8 +1365,8 @@ function updateUndoRedo() {
 
 // ===== UI 自定义颜色(暗色/浅色主题各自独立保存与应用) =====
 const UI_COLOR_FIELDS = [
-  { key: "bg",           label: "画布底色",   cssVar: "--canvas-bg",    darkDefault: "#000000", lightDefault: "#f4f5f6" },
-  { key: "grid",         label: "网格线",     cssVar: "--canvas-grid",  darkDefault: "#212121", lightDefault: "#3c4046" },
+  { key: "bg",           label: "画布底色",   cssVar: "--canvas-bg",    darkDefault: "#000000", lightDefault: "#f5f5f5" },
+  { key: "grid",         label: "网格线",     cssVar: "--canvas-grid",  darkDefault: "#212121", lightDefault: "#e8e8e8" },
   { key: "panel",        label: "面板底色",   cssVar: "--panel-solid",  darkDefault: "#131316", lightDefault: "#ffffff" },
   { key: "nodeControl",  label: "节点内控件", cssVar: "--node-control", darkDefault: "#1c1c21", lightDefault: "#f2f2f5" },
   { key: "accent",       label: "主按钮",     cssVar: "--accent",       darkDefault: "#f4f4f5", lightDefault: "#27292d" },
@@ -2531,6 +2531,10 @@ function groupSelection() {
 const CANVAS_GROUP_PAD_X = 16;
 const CANVAS_GROUP_PAD_TOP = 28; // 顶部留给"编组 · N 个节点"标签
 const CANVAS_GROUP_PAD_BOTTOM = 16;
+const canvasGroupRuns = new Map();
+const CANVAS_GROUP_RUNNABLE_TYPES = new Set(["ai-image", "ai-video", "angle-image", "browser-image", "chat", "local-sd", "tool-node"]);
+function canvasGroupNodeRunIsStopped(node) { return !!(node?.canvasGroupId && canvasGroupRuns.get(node.canvasGroupId)?.stopped); }
+window.CanvasFlowGroupNodeRunIsStopped = canvasGroupNodeRunIsStopped;
 
 function canvasGroupMembers(groupId) {
   return state.nodes.filter(node => node.canvasGroupId === groupId);
@@ -2552,6 +2556,7 @@ function groupCanvasSelection() {
   state.selected = ids;
   state.selectedCanvasGroupId = groupId;
   canvasGroupBounds(canvasGroupMembers(groupId));
+  if (typeof separateCanvasGroupFromOthers === "function") separateCanvasGroupFromOthers(groupId);
   pushHistory();
   render();
   toast(`已将 ${ids.size} 个节点编组`);
@@ -2641,6 +2646,13 @@ function constrainCanvasGroupDelta(nodes, axis, delta, movingIds, blockedGroups)
       } else if (delta < 0 && frame[axis] + frame[size] > box[axis] + box[size] && frame[axis] >= box[axis]) {
         allowed = Math.max(allowed, Math.min(0, box[axis] + box[size] - leading));
       }
+    }
+    const otherGroupIds = [...new Set(state.nodes.map(node => node.canvasGroupId).filter(id => id && id !== groupId))];
+    for (const otherGroupId of otherGroupIds) {
+      const box = canvasGroupBounds(canvasGroupMembers(otherGroupId));
+      if (frame[otherAxis] >= box[otherAxis] + box[otherSize] || frame[otherAxis] + frame[otherSize] <= box[otherAxis]) continue;
+      if (delta > 0 && frame[axis] < box[axis]) allowed = Math.min(allowed, Math.max(0, box[axis] - frame[axis] - frame[size]));
+      else if (delta < 0 && frame[axis] > box[axis]) allowed = Math.max(allowed, Math.min(0, box[axis] + box[size] - frame[axis]));
     }
     if (allowed !== beforeGroup) blockedGroups?.add(groupId);
   }
@@ -3296,6 +3308,7 @@ async function runToolNode(nodeId) {
     const resp = desktop?.apiRequest ? await apiFetch(runUrl, runInit) : await fetch(`${base}${runUrl}`, runInit);
     const data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
     if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
+    if (canvasGroupNodeRunIsStopped(node)) { node.toolStatus = { state: "cancelled", message: "编组运行已停止，结果已丢弃" }; return; }
 
     const outputNodeIds = [];
     let seq = 0;
@@ -3826,6 +3839,7 @@ async function requestPromptOptimization(source, mode, modelId) {
 
 // 同一节点同时只允许一个优化请求；对话框与节点按钮共同依据该集合禁用入口。
 const promptOptimizationPending = new Set();
+const imageKeywordReversePending = new Set();
 
 // 只有显式确认才替换节点文字；结果为空或节点内容已被编辑时一律保留现状。
 function applyPromptOptimization(nodeId, optimizedText, originalText) {
@@ -4519,6 +4533,7 @@ async function generateAngleImage(nodeId) {
       node._aiProgress = { status: "generating", label: "正在生成", percent: pct, error: "" };
       renderNodes();
     });
+    if (canvasGroupNodeRunIsStopped(node)) { node.generating = false; node._aiProgress = { status: "cancelled", label: "已停止", percent: null, error: "" }; render(); return; }
     } finally {
       releaseSlot();
     }
@@ -5626,6 +5641,28 @@ function markNodeAssetIssue(node, message) {
 const agtokenSyncResults = new Map();
 let agtokenSyncSeq = 0;
 
+async function parseAgtokenImageResponse(resp) {
+  const raw = await resp.text();
+  let data;
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    if (resp.status === 524 || /error\s*code\s*:\s*524/i.test(raw)) {
+      throw new Error("AGToken 生成超时（HTTP 524）：上游可能仍已生成，但画布未收到结果。请先到 AGToken 检查；若已生成，请下载图片后拖回画布，确认未生成再重试，避免重复扣费");
+    }
+    const detail = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+    throw new Error(`AGToken 返回了非 JSON 响应（HTTP ${resp.status || "未知"}）${detail ? `：${detail}` : ""}`);
+  }
+  const apiMessage = typeof data?.error === "string" ? data.error : data?.error?.message;
+  if (!resp.ok || data?.error) {
+    if (resp.status === 524) {
+      throw new Error("AGToken 生成超时（HTTP 524）：上游可能仍已生成，但画布未收到结果。请先到 AGToken 检查；若已生成，请下载图片后拖回画布，确认未生成再重试，避免重复扣费");
+    }
+    throw new Error(apiMessage || `AGToken 生成失败（HTTP ${resp.status || "未知"}）`);
+  }
+  return data;
+}
+
 async function submitAgtokenGeneration(prompt, imageUrls, node) {
   const apiType = node._apiType || activeApiType();
   const entry = modelCatalogEntry(node._model, apiType);
@@ -5646,8 +5683,7 @@ async function submitAgtokenGeneration(prompt, imageUrls, node) {
     headers: { "Content-Type": "application/json", "X-CanvasFlow-Api-Key": activeApiKey(apiType) || "" },
     body: JSON.stringify(desktop ? payload : { ...payload, _apiKey: activeApiKey(apiType) }),
   });
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error.message || "agtoken 生成失败");
+  const data = await parseAgtokenImageResponse(resp);
   const urls = (Array.isArray(data.data) ? data.data : [])
     .map(item => {
       if (item?.url) return item.url;
@@ -5870,12 +5906,20 @@ function renderTaskQueue() {
         <div class="task-queue-title"><span>${escapeHtml(task.label)}</span><span class="task-queue-status">${queueTaskStatusText(task)}</span></div>
         <div class="task-queue-prompt">${escapeHtml(task.prompt || translateUiString("(无文字输入)"))}</div>
         <div class="task-queue-meta">${escapeHtml(task.projectName ? `${task.projectName} · ` : "")}${escapeHtml(task.model)} · ${escapeHtml(task.resolution)} · ${escapeHtml(task.size)}</div>
-        ${task.error ? `<div class="task-queue-error" role="alert">${escapeHtml(task.error)}</div>` : ""}
+        ${task.error ? taskQueueErrorMarkup(task.error) : ""}
         <div class="task-queue-mini-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
       </div>
       <div class="task-queue-actions">${pauseButton}${orderButtons}</div>
     </div>`;
   }).join("") : `<div class="task-queue-empty">${translateUiString("还没有 AI 绘图任务")}</div>`;
+}
+
+function taskQueueErrorMarkup(error) {
+  const message = String(error || "");
+  const agtokenCheckLink = /AGToken.*(?:HTTP\s*524|任务结果未知)/i.test(message)
+    ? `<a class="task-queue-error-link" href="https://agtoken.vip/usage-logs/task" target="_blank" rel="noopener noreferrer">打开 AGToken 任务记录，检查是否已生成</a>`
+    : "";
+  return `<div class="task-queue-error" role="alert"><span>${escapeHtml(message)}</span>${agtokenCheckLink}</div>`;
 }
 
 function moveQueuedTask(taskId, direction) {
@@ -6318,6 +6362,11 @@ async function runQueuedAiTask(task) {
   // 否则 node-preview 结果写进失联对象,任务显示已完成而画布无图
   const liveNode = findNode(task.nodeId);
   node = liveNode || nodeFromPageData(taskTargetPage(task), task.nodeId) || node;
+  if (task.groupRunId && canvasGroupRuns.get(node?.canvasGroupId)?.id === task.groupRunId && canvasGroupRuns.get(node.canvasGroupId).stopped) {
+    task.status = "cancelled";
+    if (node) node.generating = false;
+    return;
+  }
   if (!liveNode && node) {
     // 离页节点没人清理进度状态,切回时会卡"生成中",这里直接清掉(同节点其余任务的进度回调会重建)
     node.generating = false;
@@ -7983,7 +8032,8 @@ function renderNodes(options = {}) {
     frame.style.top = `${bounds.y}px`;
     frame.style.width = `${bounds.w}px`;
     frame.style.height = `${bounds.h}px`;
-    frame.innerHTML = `<span>编组 · ${members.length} 个节点</span>`;
+    const groupRun = canvasGroupRuns.get(groupId);
+    frame.innerHTML = `<span>编组 · ${members.length} 个节点${groupRun ? " · 运行中" : ""}</span><button type="button" class="node-group-run" data-group-action="${groupRun ? "stop" : "run"}" aria-label="${groupRun ? "停止编组运行" : "运行整个编组"}">${groupRun ? "停止" : "运行"}</button>`;
     els.nodes.appendChild(frame);
   }
   for (const node of state.nodes) {
@@ -8346,6 +8396,7 @@ function nodeTemplate(node) {
       ${annotating ? "" : `<div class="node-hover-controls">
         <div class="image-actions">
           <button data-role="upload">上传</button>
+          ${(node.image || node.imageAssetId) ? `<button data-role="reverse-image-keywords" ${imageKeywordReversePending.has(node.id) ? "disabled" : ""}>${imageKeywordReversePending.has(node.id) ? "反推中…" : "关键词反推"}</button>` : ""}
           <button data-role="clear-image">清除</button>
         </div>
       </div>`}`;
@@ -9310,6 +9361,13 @@ els.viewport.addEventListener("mousedown", ev => {
   }
   const groupFrame = ev.target.closest(".node-group-frame");
   if (groupFrame && ev.button === 0) {
+    const groupAction = ev.target.closest("[data-group-action]");
+    if (groupAction) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (groupAction.dataset.groupAction === "stop") stopCanvasGroup(groupFrame.dataset.groupId);
+      else runCanvasGroup(groupFrame.dataset.groupId);
+      return;
+    }
     const nodes = canvasGroupMembers(groupFrame.dataset.groupId);
     if (nodes.length < 2) return;
     ev.preventDefault();
@@ -9982,6 +10040,7 @@ els.nodes.addEventListener("click", async ev => {
     return;
   }
   if (ev.target.dataset.role === "upload") { uploadImage(node); delete node._assetIssue; }
+  if (actionRole === "reverse-image-keywords" && node.type === "image") reverseImageKeywords(node);
   if (ev.target.dataset.role === "upload-group") uploadGroupImages(node);
   if (ev.target.dataset.role === "ai-generate") generateAiImage(node.id);
   if (ev.target.dataset.role === "ai-video-generate" && node.type === "ai-video") generateAiVideo(node.id);
@@ -10284,6 +10343,140 @@ const lightboxPaintSizeRanges = {
   brush: { min: 4, max: 120 }, eraser: { min: 4, max: 120 },
   arrow: { min: 1, max: 16 }, rect: { min: 1, max: 16 }
 };
+
+function adjustRangeByBracketKey(event, input) {
+  const direction = event.code === "BracketLeft" || event.key === "[" ? -1
+    : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
+  const target = event.target;
+  const isTextEditing = target && target !== input && (target.matches?.("textarea, input:not([type=range]):not([type=color])") || target.isContentEditable);
+  if (!direction || isTextEditing || event.ctrlKey || event.altKey || event.metaKey || event.isComposing || !input || input.disabled) return false;
+  const min = Number(input.min);
+  const max = Number(input.max);
+  const step = Number(input.step) || 1;
+  const next = Math.max(Number.isFinite(min) ? min : -Infinity, Math.min(Number.isFinite(max) ? max : Infinity, Number(input.value) + direction * step));
+  if (next !== Number(input.value)) {
+    input.value = String(next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  event.preventDefault();
+  return true;
+}
+
+function canvasGroupFramesOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function separateCanvasGroupFromOthers(groupId) {
+  const members = canvasGroupMembers(groupId);
+  if (members.length < 2) return;
+  let bounds = canvasGroupBounds(members);
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const otherIds = [...new Set(state.nodes.map(node => node.canvasGroupId).filter(id => id && id !== groupId))];
+    const hit = otherIds.map(id => canvasGroupBounds(canvasGroupMembers(id))).find(other => canvasGroupFramesOverlap(bounds, other));
+    if (!hit) return;
+    const dx = snap(hit.x + hit.w + CANVAS_GROUP_PAD_X - bounds.x);
+    for (const node of members) node.x += dx;
+    bounds = canvasGroupBounds(members);
+  }
+}
+
+function canvasGroupExecutionPlan(groupId) {
+  const members = canvasGroupMembers(groupId);
+  const ids = new Set(members.map(node => node.id));
+  const incoming = new Map(members.map(node => [node.id, 0]));
+  const outgoing = new Map(members.map(node => [node.id, []]));
+  for (const edge of state.edges) if (ids.has(edge.from.node) && ids.has(edge.to.node)) {
+    incoming.set(edge.to.node, incoming.get(edge.to.node) + 1);
+    outgoing.get(edge.from.node).push(edge.to.node);
+  }
+  const byPosition = (a, b) => a.x - b.x || a.y - b.y;
+  const ready = members.filter(node => incoming.get(node.id) === 0).sort(byPosition);
+  const ordered = [];
+  while (ready.length) {
+    const node = ready.shift(); ordered.push(node);
+    for (const id of outgoing.get(node.id)) {
+      incoming.set(id, incoming.get(id) - 1);
+      if (incoming.get(id) === 0) ready.push(findNode(id));
+    }
+    ready.sort(byPosition);
+  }
+  if (ordered.length !== members.length) throw new Error("编组内存在循环连线，请先断开循环后再运行");
+  return { ordered: ordered.filter(node => CANVAS_GROUP_RUNNABLE_TYPES.has(node.type) && !node.disabled), outgoing };
+}
+
+function waitForGroupQueueTasks(node, run, tasks) {
+  return new Promise(resolve => {
+    const timer = window.setInterval(() => {
+      if (run.stopped) for (const task of tasks) if (task.status === "waiting") task.status = "cancelled";
+      if (tasks.length && tasks.every(queueTaskIsSettled)) {
+        clearInterval(timer);
+        resolve(tasks.every(task => task.status === "done"));
+      }
+    }, 150);
+  });
+}
+
+async function runCanvasGroupNode(node, run) {
+  if (run.stopped) return false;
+  run.activeNodeId = node.id;
+  renderNodes();
+  if (node.type === "ai-image") {
+    node.generatedImage = null; delete node.generatedAssetId; node.outputPath = "";
+    const queueStart = aiTaskQueue.items.length;
+    if (!enqueueAiNode(node.id, "node-preview")) return false;
+    const tasks = aiTaskQueue.items.slice(queueStart);
+    tasks.forEach(task => task.groupRunId = run.id);
+    const completed = await waitForGroupQueueTasks(node, run, tasks);
+    const liveNodes = tasks.map(task => findNode(task.nodeId)).filter(Boolean);
+    return completed && liveNodes.every(item => item.generatedImage || state.nodes.some(result => result.type === "image" && result.aiSourceNodeId === item.id && tasks.some(task => task.nodeId === item.id && task.status === "done")));
+  }
+  if (node.type === "ai-video") {
+    const queueStart = aiTaskQueue.items.length;
+    if (!enqueueVideoNode(node.id)) return false;
+    const tasks = aiTaskQueue.items.slice(queueStart);
+    tasks.forEach(task => task.groupRunId = run.id);
+    return await waitForGroupQueueTasks(node, run, tasks);
+  }
+  if (node.type === "browser-image") { node.generatedImage = null; await generateBrowserImage(node.id); return !run.stopped && !!node.generatedImage; }
+  if (node.type === "chat") { await sendChatNodeMessage(node.id); return !run.stopped && !node._chatError; }
+  if (node.type === "angle-image") { node.generatedImage = null; await generateAngleImage(node.id); return !run.stopped && node._aiProgress?.status === "done"; }
+  if (node.type === "tool-node") { await runToolNode(node.id); return !run.stopped && node.toolStatus?.state === "done"; }
+  if (node.type === "local-sd") { await window.LocalSD?.generate?.(node.id); return !run.stopped && !node._sdError; }
+  return true;
+}
+
+async function runCanvasGroup(groupId) {
+  if (canvasGroupRuns.has(groupId)) return;
+  let plan;
+  try { plan = canvasGroupExecutionPlan(groupId); }
+  catch (error) { return toast(error.message); }
+  if (!plan.ordered.length) return toast("该编组没有可执行节点");
+  const run = { id: `group-run-${Date.now()}`, groupId, stopped: false, activeNodeId: "", failed: new Set() };
+  canvasGroupRuns.set(groupId, run); renderNodes();
+  try {
+    for (const node of plan.ordered) {
+      if (run.stopped) break;
+      const blocked = state.edges.some(edge => edge.to.node === node.id && run.failed.has(edge.from.node));
+      if (blocked) { run.failed.add(node.id); continue; }
+      if (!await runCanvasGroupNode(node, run)) run.failed.add(node.id);
+    }
+    toast(run.stopped ? "已停止编组运行，未发送任务已截断" : run.failed.size ? `编组运行完成，${run.failed.size} 个节点失败或被跳过` : "编组运行完成");
+  } finally {
+    canvasGroupRuns.delete(groupId); renderNodes();
+  }
+}
+
+function stopCanvasGroup(groupId) {
+  const run = canvasGroupRuns.get(groupId);
+  if (!run) return;
+  run.stopped = true;
+  const node = findNode(run.activeNodeId);
+  if (node?._chatBusy) { node._chatCancelled = true; node._chatAbort?.abort(); }
+  if (node?.type === "browser-image") { node._browserRequestId = `stopped-${Date.now()}`; node.generating = false; }
+  if (node?.type === "local-sd") window.LocalSD?.cancel?.(node);
+  for (const task of aiTaskQueue.items) if (task.groupRunId === run.id && task.status === "waiting") task.status = "cancelled";
+  renderTaskQueue(); renderNodes();
+}
 let lightboxEraserRingPoint = null;
 let lightboxPaintActions = [];
 let lightboxPaintCurrentAction = null;
@@ -10462,6 +10655,7 @@ async function startLightboxPaint() {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+  $("lightboxFillMode").value = detectLightboxDefaultFillModeFromImage(sourceImage);
   lightboxPaintOverlay.width = canvas.width;
   lightboxPaintOverlay.height = canvas.height;
   lightboxPaintActions = [];
@@ -10486,6 +10680,42 @@ async function startLightboxPaint() {
   els.lightboxMirrorTools.classList.remove("hidden");
   positionLightboxMirrorTools();
   els.lightboxPaintBtn.classList.add("hidden");
+}
+
+function detectLightboxDefaultFillMode(imageData) {
+  const data = imageData?.data || [];
+  const pixels = Math.floor(data.length / 4);
+  if (!pixels) return "sketch";
+  const stride = Math.max(1, Math.floor(pixels / 20000));
+  let sampled = 0, white = 0, chromatic = 0, neutral = 0;
+  for (let index = 0; index < pixels; index += stride) {
+    const offset = index * 4;
+    if (data[offset + 3] < 32) continue;
+    const r = data[offset], g = data[offset + 1], b = data[offset + 2];
+    const high = Math.max(r, g, b), low = Math.min(r, g, b);
+    const spread = high - low;
+    sampled++;
+    if (low >= 232) white++;
+    if (spread >= 28 && spread / Math.max(1, high) >= .14) chromatic++;
+    if (spread <= 18) neutral++;
+  }
+  if (!sampled) return "sketch";
+  const whiteRatio = white / sampled;
+  const chromaticRatio = chromatic / sampled;
+  const neutralRatio = neutral / sampled;
+  return (whiteRatio >= .55 && chromaticRatio <= .2) || (whiteRatio >= .35 && chromaticRatio <= .08 && neutralRatio >= .78)
+    ? "sketch" : "material";
+}
+
+function detectLightboxDefaultFillModeFromImage(image) {
+  const maxSide = 256;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || 1, image.naturalHeight || 1));
+  const sample = document.createElement("canvas");
+  sample.width = Math.max(1, Math.round((image.naturalWidth || 1) * scale));
+  sample.height = Math.max(1, Math.round((image.naturalHeight || 1) * scale));
+  const context = sample.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, 0, 0, sample.width, sample.height);
+  return detectLightboxDefaultFillMode(context.getImageData(0, 0, sample.width, sample.height));
 }
 
 function cancelLightboxPaint() {
@@ -11575,6 +11805,7 @@ els.lightboxDots.addEventListener("click", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
+  if (lightboxPainting && lightboxPaintSizeRanges[lightboxPaintMode] && adjustRangeByBracketKey(ev, els.lightboxPaintSize)) return;
   if (ev.key === "Escape") {
     ev.preventDefault();
     hideLightbox();
@@ -11875,6 +12106,55 @@ async function extractGenerationKeywords(node, detectedPrompt = "") {
   pushHistory();
   render();
   toast("已提取生成关键词并创建文字节点");
+}
+
+const IMAGE_KEYWORD_REVERSE_PROMPT = "分析这张图片并反推出适合再次生成相似图片的中文关键词。只输出最终关键词，不要解释、标题、Markdown 或序号。关键词应准确描述主体、数量、外观特征、动作、构图、镜头视角、画面风格、颜色、光影、材质、背景和画质；不要臆造图片中看不到的品牌、作者或作品名。";
+
+async function reverseImageKeywords(node) {
+  if (!node || node.type !== "image" || imageKeywordReversePending.has(node.id)) return;
+  const apiType = state.settings.apiType === "apimart" ? "apimart" : "agtoken";
+  const model = apiType === "apimart" ? "gpt-6-luna" : "gemini-3-flash";
+  const apiKey = apiType === "apimart" ? state.settings.apiKey : state.settings.agtokenApiKey;
+  if (!apiKey && !desktop) return toast(`请先在设置中填写并保存 ${apiType === "apimart" ? "APIMart" : "AGToken"} Key`);
+  imageKeywordReversePending.add(node.id);
+  render();
+  try {
+    const image = await materializeReferenceImage(nodeImageReference(node), { requireOriginal: true });
+    if (!String(image || "").startsWith("data:image/")) throw new Error("图片原文件无法读取，请重新上传后再试");
+    const payload = {
+      apiType,
+      model,
+      stream: false,
+      messages: [{ role: "user", content: [
+        { type: "text", text: IMAGE_KEYWORD_REVERSE_PROMPT },
+        { type: "image_url", image_url: { url: image } },
+      ] }],
+    };
+    if (!desktop) payload._apiKey = apiKey || "";
+    const response = await apiFetch("/api/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const data = await response.json().catch(() => ({}));
+    const apiError = typeof data.error === "string" ? data.error : data.error?.message;
+    if (response.status === 404 && (!data.error || apiError === "桌面接口不存在")) {
+      throw new Error(desktop ? "当前桌面程序没有反推接口，请重新运行「启动CanvasFlow-NET.bat」" : "本机服务没有反推接口，请重启 CanvasFlow 服务");
+    }
+    if (!response.ok || data.error) throw new Error(apiError || `${apiType === "apimart" ? "APIMart" : "AGToken"} 关键词反推失败（HTTP ${response.status}）`);
+    const inner = data?.data && Array.isArray(data.data.choices) ? data.data : data;
+    const keywords = chatContentToText(inner?.choices?.[0]?.message?.content).trim();
+    if (!keywords) throw new Error("模型没有返回关键词");
+    if (findNode(node.id) !== node) return;
+    const textNode = addNode("text", node.x + node.w + 40, node.y, false);
+    textNode.text = keywords;
+    state.edges.push({ id: uid("e"), from: { node: textNode.id, port: "out" }, to: { node: node.id, port: "in" } });
+    state.selected = new Set([textNode.id]);
+    pushHistory();
+    toast(`已用 ${apiType === "apimart" ? "GPT-6 Luna · APIMart" : "Gemini 3 Flash · AGToken"} 反推关键词`);
+  } catch (error) {
+    console.error("[关键词反推] 失败", { nodeId: node.id, apiType, model, message: error.message });
+    toast(`关键词反推失败：${error.message || "请稍后重试"}`);
+  } finally {
+    imageKeywordReversePending.delete(node.id);
+    render();
+  }
 }
 
 els.viewport.addEventListener("contextmenu", async ev => {
@@ -16065,7 +16345,7 @@ async function openPaletteExtraction(node, onPick) {
     ${mattingId ? '<div class="quick-palette-row"><label class="lightbox-check"><input type="checkbox" data-mask="matting" checked>自动抠图去背景</label><span class="palette-mask-matting-hint">只提取主体颜色，首次运行需加载模型</span></div>' : ""}
     <div class="quick-palette-row">
       <label>画笔 <select data-mask-tool aria-label="蒙版工具"><option value="exclude">排除背景</option><option value="restore">恢复取色</option></select></label>
-      <label>大小 <input data-mask-size type="range" min="8" max="96" value="32" aria-label="蒙版画笔大小"></label>
+      <label>大小 <input data-mask-size type="range" min="8" max="96" value="32" title="快捷键：[ 缩小，] 放大" aria-label="蒙版画笔大小；左方括号缩小，右方括号放大"></label>
       <button data-mask="clear">清空蒙版</button></div>
     <div class="palette-mask-surface"><canvas aria-label="参考图"></canvas><canvas aria-label="取色蒙版"></canvas></div>
     <p role="status">点击「提取颜色」取色，再点击色块划线排除不需要的颜色。</p><div class="palette-mask-result"></div>
@@ -16207,6 +16487,7 @@ async function openPaletteExtraction(node, onPick) {
   });
   mask.addEventListener("pointermove", event => { if (event.pointerId === pointer) paintMask(event); });
   mask.addEventListener("lostpointercapture", () => { pointer = previous = null; });
+  dialog.addEventListener("keydown", event => adjustRangeByBracketKey(event, dialog.querySelector("[data-mask-size]")));
   // 自动抠图：拓展可用时默认执行，把产品抠出来只提取主体颜色；不需要可取消勾选
   async function runMatting() {
     if (mattingStarted || !mattingId) return;

@@ -139,7 +139,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     <header><strong>手动分区抠图</strong><span>原图上拖动添加选框，选择选框后放大修整</span><button type="button" data-action="close" aria-label="关闭手动抠图">关闭</button></header>
     <div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="图片选框和蒙版编辑区"></canvas><div class="mm-boxes"></div></div></div><p class="mm-status" role="status"></p></div>
     <aside aria-label="选区列表"><strong>原图与选框</strong><div class="mm-list"></div></aside></div>
-    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option><option value="local-lite">本地 U²-Net 快速</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
+    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小；左方括号缩小，右方括号放大" title="快捷键：[ 缩小，] 放大" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option><option value="local-lite">本地 U²-Net 快速</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
   </div>`;
   // Inherit the app's theme and user-customized semantic color variables.
   els.app.append(dialog);
@@ -353,6 +353,15 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   function handleKey(event) {
     // Canvas shortcuts must remain blocked even when replacing a list row loses focus.
     event.stopImmediatePropagation();
+    const direction = event.code === "BracketLeft" || event.key === "[" ? -1
+      : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
+    const size = dialog.querySelector(".mm-size");
+    if (direction && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing && !size.disabled) {
+      event.preventDefault();
+      size.value = String(Math.max(Number(size.min), Math.min(Number(size.max), Number(size.value) + direction * (Number(size.step) || 1))));
+      size.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
     if (event.key === "Escape") { event.preventDefault(); close(); }
     if (event.key === "Tab") {
       const scope = confirmation?.element || dialog;
