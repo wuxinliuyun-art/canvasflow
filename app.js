@@ -245,7 +245,7 @@ const UI_EN = {
   "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
-  "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "解散编组": "Dissolve Group",
+  "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "取消编组": "Ungroup",
   "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组或多任务": "Create a group or multi-task from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
@@ -2242,7 +2242,7 @@ function buildNodeObject(type, position, width, height) {
     seq: 0,
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
-    _chatModel: type === "chat" ? (String(state.settings.chatDefaultModel || "") || window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
+    _chatModel: type === "chat" ? (String(state.settings.chatDefaultModel || "") || chatDefaultModelForSite() || window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
     _chatEnumerated: type === "chat" ? false : undefined,
     chatMessages: type === "chat" ? [] : undefined,
     chatText: type === "chat" ? "" : undefined,
@@ -2593,7 +2593,7 @@ function ungroupCanvasSelection() {
   state.selectedCanvasGroupId = "";
   pushHistory();
   render();
-  toast(`已解散编组，保留 ${count} 个节点`);
+  toast(`已取消编组，保留 ${count} 个节点`);
 }
 
 // 编组命名：名称存 state.canvasGroupNames[groupId]，显示在外框左上角，
@@ -3600,6 +3600,22 @@ function chatCustomSiteKey(siteId) {
 function chatModelEnabled(modelId) {
   const disabled = state?.settings?.chatDisabledModels;
   return !(Array.isArray(disabled) && disabled.includes(modelId));
+}
+
+// 分站点默认对话模型：只填一家的 key 时新建对话节点取该站默认（目录 siteDefaults）；
+// 两家都填或都没填返回空串（调用方落回目录全局 defaultModel）。
+// settings.chatDefaultModel（用户显式设置的默认模型）优先级更高，由调用方先行判断。
+// 站点物化列表里删掉了默认模型时同样返回空串，避免默认指向不可见模型。
+function chatDefaultModelForSite() {
+  const defaults = window.CANVASFLOW_CHAT_CATALOG?.siteDefaults || {};
+  const apimartReady = chatSiteKeyReady("apimart");
+  const agtokenReady = chatSiteKeyReady("agtoken");
+  if (apimartReady !== agtokenReady) {
+    const site = apimartReady ? "apimart" : "agtoken";
+    const fallback = String(defaults[site] || "").trim();
+    return fallback && chatBuiltinModelIds(site).includes(fallback) ? fallback : "";
+  }
+  return "";
 }
 
 // 内置站点的模型列表：settings.chatSiteModels[site] 有值（拉取/手动编辑过的）用之，
@@ -8677,17 +8693,13 @@ function nodeTemplate(node) {
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
     const annotating = state.annotationEditorNodeId === node.id;
-    // 关键词反推常驻按钮：锚定节点右上角（标题条区域）；批注编辑态不渲染，替换图片会使批注坐标系失效
-    const reversePending = imageKeywordReversePending.has(node.id);
-    const reverseChip = (!annotating && (node.image || node.imageAssetId))
-      ? `<button type="button" class="image-reverse-btn${node.seq ? " seq-shift" : ""}" data-role="reverse-image-keywords" title="关键词反推" aria-label="关键词反推" ${reversePending ? "disabled" : ""}>${reversePending ? "反推中…" : "关键词反推"}</button>`
-      : "";
     // 编辑态隐藏上传/清除：编辑中替换图片会使批注的归一化坐标系失效；退出编辑即恢复
-    body = `${reverseChip}<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
+    body = `<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
       ${annotating ? imageAnnotationToolbarMarkup() : ""}
       ${annotating ? "" : `<div class="node-hover-controls">
         <div class="image-actions">
           <button data-role="upload">上传</button>
+          ${(node.image || node.imageAssetId) ? `<button data-role="reverse-image-keywords" ${imageKeywordReversePending.has(node.id) ? "disabled" : ""}>${imageKeywordReversePending.has(node.id) ? "反推中…" : "关键词反推"}</button>` : ""}
           <button data-role="clear-image">清除</button>
         </div>
       </div>`}`;
@@ -12526,6 +12538,22 @@ async function reverseImageKeywords(node) {
 
 els.viewport.addEventListener("contextmenu", async ev => {
   ev.preventDefault();
+  // 编组外框右键专属菜单：选中整组并提供 重命名/取消 编组（外框不是 .node，不拦截会落到空白画布菜单）
+  const frameEl = ev.target.closest(".node-group-frame");
+  if (frameEl) {
+    const groupId = frameEl.dataset.groupId;
+    const members = canvasGroupMembers(groupId);
+    if (members.length >= 2) {
+      state.selected = new Set(members.map(node => node.id));
+      state.selectedCanvasGroupId = groupId;
+      showMenu(ev.clientX, ev.clientY, [
+        ["重命名编组", () => renameCanvasGroup(groupId)],
+        ["取消编组", () => ungroupCanvasSelection()],
+      ]);
+      renderNodes();
+    }
+    return;
+  }
   const nodeEl = ev.target.closest(".node");
   const p = screenToWorld(ev.clientX, ev.clientY);
   if (nodeEl) {
@@ -12551,7 +12579,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
       ...(state.selected.size > 1 ? [["创建编组", () => groupCanvasSelection()], ["多任务", () => groupSelection()]] : []),
       ...(selectedGroupIds.length === 1 ? [["重命名编组", () => renameCanvasGroup(selectedGroupIds[0])]] : []),
-      ...(state.nodes.some(node => state.selected.has(node.id) && node.canvasGroupId) ? [["解散编组", () => ungroupCanvasSelection()]] : []),
+      ...(state.nodes.some(node => state.selected.has(node.id) && node.canvasGroupId) ? [["取消编组", () => ungroupCanvasSelection()]] : []),
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(selectedNode?.videoFile && selectedNode?.outputPath ? [["打开视频所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
@@ -12580,7 +12608,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     const canvasMenuGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
-    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => renameCanvasGroup(canvasMenuGroupIds[0])]);
+    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => renameCanvasGroup(canvasMenuGroupIds[0])], ["取消编组", () => ungroupCanvasSelection()]);
     items.push(
       ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
       ["创建编组", () => groupCanvasSelection()],

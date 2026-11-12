@@ -235,7 +235,7 @@ test('单个节点不能编组，给出提示且不改数据', () => {
   assert.equal(context.history.length, 0);
 });
 
-test('解散编组会清掉组 ID 与外框，保留全部节点', () => {
+test('取消编组会清掉组 ID 与外框，保留全部节点', () => {
   const state = baseState();
   const context = loadGroupLogic(makeContext(state));
   context.canvasGroupBounds(state.nodes.slice(0, 2));

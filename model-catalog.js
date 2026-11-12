@@ -86,6 +86,10 @@
   //   multimodal true 时把上游参考图以 image_url 内容部分随消息发送；false 时忽略上游图片
   window.CANVASFLOW_CHAT_CATALOG = {
     defaultModel: "gpt-6-astra",
+    // 分站点默认对话模型：只填一家的 key 时新建对话节点取该站默认（chatDefaultModelForSite）；
+    // 两家都填或都没填、以及站点列表里没有该默认模型时，落回全局 defaultModel。
+    // settings.chatDefaultModel（用户显式设置）优先级最高。
+    siteDefaults: { apimart: "gpt-6-luna", agtoken: "gemini-3.8-flash" },
     models: [
       { id: "gpt-5.2-chat-latest", label: "GPT-5.2 Chat（多模态·APIMart）", hidden: true, apiType: "apimart", multimodal: true, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
       // APIMart 官网公开价格，单位 Credits / 百万 Token；优惠可能随平台调整。
@@ -95,9 +99,9 @@
       { id: "gemini-4-argon", label: "Gemini 4 Argon（APIMart）", note: "文笔好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
       { id: "claude-opus-5-5", label: "Claude Opus 5.5（APIMart）", note: "美术及性能好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude?id=claude-opus-5-5" },
       { id: "deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/deepseek" },
-      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（APIMart）", hidden: true, apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
       { id: "gpt-6-sol", label: "GPT-6 Sol（AGToken）", apiType: "agtoken", multimodal: false },
       { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", note: "便宜", apiType: "agtoken", multimodal: false },
+      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（AGToken）", apiType: "agtoken", multimodal: false },
     ],
   };
 })();

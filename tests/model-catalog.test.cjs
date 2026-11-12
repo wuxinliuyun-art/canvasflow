@@ -33,3 +33,24 @@ test("AGToken offers the official-channel GPT Image 2 fallback model", () => {
   assert.deepEqual(Array.from(model.resolutions), ["1k", "2k", "4k"]);
   assert.equal(model.quality, false, "官渠 pricing is flat per image; quality param stays off");
 });
+
+test("Chat catalog declares per-site default models", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "model-catalog.js"), "utf8");
+  const context = { window: {} };
+  vm.runInNewContext(source, context);
+  const chat = context.window.CANVASFLOW_CHAT_CATALOG;
+  assert.deepEqual({ ...chat.siteDefaults }, { apimart: "gpt-6-luna", agtoken: "gemini-3.8-flash" });
+});
+
+test("Gemini 3.8 Flash belongs to AGToken and is selectable", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "model-catalog.js"), "utf8");
+  const context = { window: {} };
+  vm.runInNewContext(source, context);
+  const chat = context.window.CANVASFLOW_CHAT_CATALOG;
+  const entries = chat.models.filter(entry => entry.id === "gemini-3.8-flash");
+  assert.equal(entries.length, 1, "single catalog entry keeps chatModelEntry resolution unambiguous");
+  assert.equal(entries[0].apiType, "agtoken");
+  assert.equal(entries[0].hidden, undefined, "site default must not be hidden");
+  assert.equal(chat.models.some(entry => entry.id === "gemini-3.8-flash" && entry.apiType === "apimart"), false,
+    "the old hidden APIMart entry is removed so id matching stays unique");
+});

@@ -788,26 +788,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
   margin-top: 8px;
 }
 
-/* 图片节点右上角的“关键词反推”常驻按钮：node-body 对 image 类型非 positioned，锚定到节点本体右上角（标题条区域） */
-.image-reverse-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
-  min-height: 24px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-}
-.image-reverse-btn:hover { background: var(--panel-2); }
-.image-reverse-btn:disabled { opacity: .6; cursor: default; }
-/* 隐藏标题模式没有标题条缓冲：带 #序号 角标时按钮左移避开 */
-.hide-node-titles .image-reverse-btn.seq-shift { right: 52px; }
-
 .image-actions button {
   flex: 1;
   min-height: 30px;
