@@ -10417,15 +10417,18 @@ const lightboxPaintSizeRanges = {
   arrow: { min: 1, max: 16 }, rect: { min: 1, max: 16 }
 };
 
-function adjustRangeByBracketKey(event, input) {
-  const direction = event.code === "BracketLeft" || event.key === "[" ? -1
-    : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
+// 画笔/笔刷大小滑块的 [ / ]（含全角【 】）快捷键唯一实现：所有画布编辑器（灯箱、取色蒙版、
+// 局部重绘蒙版）共用。stepOverride 用于灯箱画笔的 ±4 档；值变化经 input 事件广播，
+// 由各编辑器既有的 input 监听完成记忆与笔刷圆环/蒙版预览同步。
+function adjustRangeByBracketKey(event, input, stepOverride) {
+  const direction = event.code === "BracketLeft" || event.key === "[" || event.key === "【" ? -1
+    : event.code === "BracketRight" || event.key === "]" || event.key === "】" ? 1 : 0;
   const target = event.target;
-  const isTextEditing = target && target !== input && (target.matches?.("textarea, input:not([type=range]):not([type=color])") || target.isContentEditable);
+  const isTextEditing = target && target !== input && (target.matches?.("textarea, select, input:not([type=range]):not([type=color])") || target.isContentEditable);
   if (!direction || isTextEditing || event.ctrlKey || event.altKey || event.metaKey || event.isComposing || !input || input.disabled) return false;
   const min = Number(input.min);
   const max = Number(input.max);
-  const step = Number(input.step) || 1;
+  const step = Number(stepOverride) || Number(input.step) || 1;
   const next = Math.max(Number.isFinite(min) ? min : -Infinity, Math.min(Number.isFinite(max) ? max : Infinity, Number(input.value) + direction * step));
   if (next !== Number(input.value)) {
     input.value = String(next);
@@ -11939,8 +11942,6 @@ els.lightboxDots.addEventListener("click", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
-  // 灯箱画笔 []/【】 调节由 handleLightboxBrushSizeShortcut 统一处理（每模式记忆 + 笔刷圆环同步），
-  // 此处不再接入 adjustRangeByBracketKey，避免 document/window 两级监听双重调节。
   if (ev.key === "Escape") {
     ev.preventDefault();
     hideLightbox();
@@ -12531,26 +12532,10 @@ function hideMenu() {
   els.contextMenu.classList.add("hidden");
 }
 
-function handleLightboxBrushSizeShortcut(ev) {
-  if (!lightboxPainting || ev.isComposing || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
-  if (!isLightboxBrushTool(lightboxPaintMode)) return false;
-  if (ev.target.closest?.("textarea, select, [contenteditable]:not([contenteditable='false'])")) return false;
-  if (ev.target.matches?.("input:not([type='range']):not([type='button']):not([type='checkbox'])")) return false;
-  const smaller = ["[", "【"].includes(ev.key) || ev.code === "BracketLeft";
-  const larger = ["]", "】"].includes(ev.key) || ev.code === "BracketRight";
-  if (!smaller && !larger) return false;
-  const range = lightboxPaintSizeRanges[lightboxPaintMode];
-  const current = Number(els.lightboxPaintSize.value);
-  const size = Math.max(range.min, Math.min(range.max, current + (larger ? 4 : -4)));
-  lightboxPaintSizes[lightboxPaintMode] = size;
-  els.lightboxPaintSize.value = size;
-  syncLightboxBrushRing();
-  ev.preventDefault();
-  return true;
-}
-
 window.addEventListener("keydown", ev => {
-  if (handleLightboxBrushSizeShortcut(ev)) return;
+  // 灯箱画笔 []/【】 调节：与取色蒙版/局部重绘共用 adjustRangeByBracketKey；
+  // 值变化经 input 事件进入下方 lightboxPaintSize 监听（每模式记忆 + 笔刷圆环同步）。
+  if (lightboxPainting && isLightboxBrushTool(lightboxPaintMode) && adjustRangeByBracketKey(ev, els.lightboxPaintSize, 4)) return;
   if (ev.key === "Alt") {
     altDown = true;
     if (!ev.target.matches?.("textarea,input,select,[contenteditable='true']")) ev.preventDefault();

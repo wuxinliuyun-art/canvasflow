@@ -353,15 +353,8 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   function handleKey(event) {
     // Canvas shortcuts must remain blocked even when replacing a list row loses focus.
     event.stopImmediatePropagation();
-    const direction = event.code === "BracketLeft" || event.key === "[" ? -1
-      : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
-    const size = dialog.querySelector(".mm-size");
-    if (direction && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing && !size.disabled) {
-      event.preventDefault();
-      size.value = String(Math.max(Number(size.min), Math.min(Number(size.max), Number(size.value) + direction * (Number(size.step) || 1))));
-      size.dispatchEvent(new Event("input", { bubbles: true }));
-      return;
-    }
+    // []/【】 调笔刷：app.js 的 adjustRangeByBracketKey 是唯一实现；Escape/Tab 焦点循环仍是本编辑器私有逻辑
+    if (window.adjustRangeByBracketKey?.(event, dialog.querySelector(".mm-size"))) return;
     if (event.key === "Escape") { event.preventDefault(); close(); }
     if (event.key === "Tab") {
       const scope = confirmation?.element || dialog;

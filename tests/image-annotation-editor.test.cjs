@@ -243,7 +243,7 @@ test('接线：右键菜单/画布守卫/输入延迟保护/渲染钩子/模板�
 });
 
 test('界面资产：?v= 递增且新增 CSS 无裸色值、z-index 在节点内部档（1–9）', () => {
-  assert.ok(html.includes('app.js?v=20261112-merge-ext1') && html.includes('styles.css?v=20261112-merge-ext1'));
+  assert.ok(html.includes('app.js?v=20261112-brush-unify1') && html.includes('styles.css?v=20261112-brush-unify1'));
   const start = css.indexOf('/* ===== PR-5 图片批注编辑层');
   assert.ok(start > 0, '批注编辑层 CSS 必须存在');
   const block = css.slice(start);

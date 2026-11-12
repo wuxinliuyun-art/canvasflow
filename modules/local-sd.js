@@ -356,15 +356,8 @@
     canvas.addEventListener("pointerup", event => { if (!drawing) return; const p = point(event); drawing = false; if (mode === "rect") { bctx.fillStyle = "white"; bctx.fillRect(Math.min(start.x, p.x), Math.min(start.y, p.y), Math.abs(p.x - start.x), Math.abs(p.y - start.y)); } renderMask(); });
     overlay.addEventListener("click", event => { const selected = event.target.closest("[data-mode]")?.dataset.mode; if (selected) mode = selected; const action = event.target.closest("[data-action]")?.dataset.action; if (action === "close") overlay.remove(); if (action === "clear") { snapshot(); bctx.fillStyle = "black"; bctx.fillRect(0, 0, base.width, base.height); renderMask(); } if (action === "undo" && history.length) { bctx.putImageData(history.pop(), 0, 0); renderMask(); } if (action === "confirm") { node._sdMaskData = base.toDataURL("image/png"); node._sdMaskSource = source.imageData.slice(0, 128); pushHistory(); render(); overlay.remove(); } });
     overlay.querySelector(".mm-zoom").addEventListener("change", event => { canvas.style.width = event.target.value === "fit" ? "100%" : `${canvas.width * Number(event.target.value)}px`; });
-    overlay.addEventListener("keydown", event => {
-      const direction = event.code === "BracketLeft" || event.key === "[" ? -1
-        : event.code === "BracketRight" || event.key === "]" ? 1 : 0;
-      if (!direction || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
-      const size = overlay.querySelector(".mm-size");
-      event.preventDefault();
-      size.value = String(Math.max(Number(size.min), Math.min(Number(size.max), Number(size.value) + direction * (Number(size.step) || 1))));
-      size.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    // []/【】 调笔刷：app.js 的 adjustRangeByBracketKey 是唯一实现（运行时才触发，全局可用）
+    overlay.addEventListener("keydown", event => { window.adjustRangeByBracketKey?.(event, overlay.querySelector(".mm-size")); });
     renderMask();
     overlay.focus({ preventScroll: true });
   }
