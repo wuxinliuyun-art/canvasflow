@@ -10550,7 +10550,6 @@ function stopCanvasGroup(groupId) {
   for (const task of aiTaskQueue.items) if (task.groupRunId === run.id && task.status === "waiting") task.status = "cancelled";
   renderTaskQueue(); renderNodes();
 }
-let lightboxEraserRingPoint = null;
 // 笔刷类工具（画笔/上色笔刷/橡皮）共用虚线光标圈；滑块值即屏幕像素直径
 const isLightboxBrushTool = mode => ["brush", "color-brush", "eraser"].includes(mode);
 let lightboxBrushRingPoint = null;
