@@ -29,8 +29,8 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(styles, /\.chat-messages\s*\{/);
   assert.match(styles, /\.chat-message\.is-user/);
   assert.match(styles, /\.chat-message-actions/);
-  assert.match(index, /styles\.css\?v=20261107-agtoken-524-link2/);
-  assert.match(index, /app\.js\?v=20261107-agtoken-524-link2/);
+  assert.match(index, /styles\.css\?v=20261112-merge-ext1/);
+  assert.match(index, /app\.js\?v=20261112-merge-ext1/);
   assert.match(styles, /\.chat-compact-card\s*\{/);
   assert.match(styles, /\.chat-compact-summary\s*\{/);
   assert.doesNotMatch(styles, /chat-compact-card-stats/);
@@ -45,13 +45,15 @@ test("chat sessions provide tabs, history, migration, and lifecycle actions", ()
   assert.match(app, /function saveActiveChatSession\(node, touch = false\)/);
   assert.match(app, /data-role="chat-session-history"/);
   assert.match(app, /data-role="chat-session-add"/);
-  assert.match(app, /data-role="chat-session-close"/);
+  assert.match(app, /data-role="chat-session-open"/);
   assert.match(app, /actionRole === "chat-session-delete"/);
   assert.match(app, /actionRole === "chat-session-rename"/);
   assert.match(app, /text\/x-canvasflow-chat-session/);
   assert.match(app, /继续当前对话会把已有聊天历史发送给新站点/);
-  assert.match(styles, /\.chat-session-strip\s*\{/);
   assert.match(styles, /\.chat-history-panel\s*\{/);
+  assert.match(styles, /\.chat-history-panel-head\s*\{/);
+  assert.match(styles, /\.chat-history-panel\s*\{[^}]*position: absolute;/);
+  assert.doesNotMatch(styles, /chat-session-strip/);
 });
 
 test("complete HTML replies get sandboxed previews", () => {
@@ -97,7 +99,7 @@ test("chat can expand into a dedicated workspace", () => {
   assert.match(styles, /justify-content: flex-end; padding: 0; pointer-events: none/);
   assert.match(styles, /width: min\(720px, 100vw\)/);
   assert.match(styles, /\.chat-workspace \{[^}]*border-radius: 0;/);
-  assert.match(styles, /border-left: 1px solid var\(--panel-2\); border-radius: 0; background: var\(--panel-solid\)/);
+  assert.match(styles, /border-left: 1px solid var\(--panel-2\); border-radius: 0; background: var\(--node-control\)/);
   assert.match(app, /chatNodeBody\(node, true\)/);
   assert.match(app, /composer\.insertBefore\(controls, send\)/);
   assert.match(app, /function handleChatNodeAction\(node, actionRole, action\)/);

@@ -144,6 +144,8 @@ const UI_EN = {
   "桌面版已内置拓展服务，刷新按钮会重新检索拓展文件夹；仅服务器运行模式需要手动双击拓展文件夹里的 扩展服务.bat。": "The desktop app has a built-in extension service; Refresh rescans the extensions folder. Only server mode needs 扩展服务.bat started manually.",
   "拖动可排序，顺序即画布右键“拓展”菜单的顺序；关闭开关的拓展不会出现在右键菜单。": "Drag to reorder — the order applies to the canvas right-click Extensions menu; disabled extensions are hidden from the menu.",
   "软件更新": "Software Updates", "检查更新": "Check for Updates",
+  "启动更新提醒免打扰": "Mute startup update reminders", "发现新版本": "Update available",
+  "免打扰": "Mute reminders", "稍后": "Later", "立即更新": "Update now",
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
@@ -611,7 +613,7 @@ const state = {
   canvasGroupFrames: {},
   selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -939,7 +941,7 @@ const els = {
   lightboxPaintBtn: $("lightboxPaintBtn"),
   lightboxMattingBtn: $("lightboxMattingBtn"),
   lightboxPaintCanvas: $("lightboxPaintCanvas"),
-  lightboxEraserRing: $("lightboxEraserRing"),
+  lightboxBrushRing: $("lightboxBrushRing"),
   lightboxPaintToolbar: $("lightboxPaintToolbar"),
   lightboxMainTools: $("lightboxMainTools"),
   lightboxPaintBrush: $("lightboxPaintBrush"),
@@ -1208,7 +1210,7 @@ function restoreData(data) {
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
   state.selectedAnnotationId = "";
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
@@ -1464,6 +1466,7 @@ function syncSettingsPanel() {
   els.apiKeyInput.value = activeApiKey();
   els.defaultImageModelSelect.value = state.settings.defaultImageModel || "gpt-image-2.5-flare";
   applyApiTypeSettingsUi();
+  renderMenuManager();
   syncCustomMaterialsList();
   renderVariableDefinitions();
 }
@@ -2230,7 +2233,7 @@ function buildNodeObject(type, position, width, height) {
     seq: 0,
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
-    _chatModel: type === "chat" ? (window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
+    _chatModel: type === "chat" ? (String(state.settings.chatDefaultModel || "") || window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
     _chatEnumerated: type === "chat" ? false : undefined,
     chatMessages: type === "chat" ? [] : undefined,
     chatText: type === "chat" ? "" : undefined,
@@ -2302,6 +2305,8 @@ function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
   const node = buildNodeObject(type, position, width, height);
   state.nodes.push(node);
   state.selected = new Set([node.id]);
+  // 工作区开着时,新对话节点立即以标签形式出现在顶部标签条(右键菜单与工作区 + 都覆盖)
+  if (type === "chat" && expandedChatNodeId) renderChatWorkspace();
   if (commit || placementOptions.reveal === true) revealCreatedNode(node);
   if (commit) {
     pushHistory();
@@ -3739,8 +3744,13 @@ function normalizeChatNode(node) {
   node.chatMessages = messages
     .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
     .slice(-CHAT_HISTORY_LIMIT);
-  // 回退以"当前可见集合"为准：key 被清、模型被勾选关闭、自定义站点被删，节点都自动切到第一个可用模型
-  if (!chatCatalogModels().some(model => model.id === node._chatModel)) node._chatModel = chatCatalogModels()[0]?.id || "";
+  // 回退以"当前可见集合"为准：key 被清、模型被勾选关闭、自定义站点被删，节点都自动切回;
+  // 回退目标优先用设置里的「默认模型」,不可见才落到第一个可用模型
+  if (!chatCatalogModels().some(model => model.id === node._chatModel)) {
+    const preferred = String(state.settings.chatDefaultModel || "");
+    const visible = chatCatalogModels();
+    node._chatModel = (preferred && visible.some(model => model.id === preferred) ? preferred : visible[0]?.id) || "";
+  }
   node._chatEnumerated = node._chatEnumerated === true;
   node.chatAttachments = (Array.isArray(node.chatAttachments) ? node.chatAttachments : [])
     .filter(item => item && (typeof item.image === "string" || typeof item.assetId === "string"))
@@ -4939,11 +4949,6 @@ async function sendChatNodeMessage(nodeId, options = {}) {
     fileName: item.fileName,
     mime: item.mime,
   }));
-  if (attachedImages.length && !entry.multimodal) {
-    node._chatError = "当前模型不支持图片，请切换到多模态模型或移除附件";
-    syncChatNodeBody(node);
-    return;
-  }
   const imageRefs = (retryUser ? [] : [...attachedImages, ...collected.images])
     .filter((ref, index, refs) => refs.findIndex(other => (other.assetId || other.image) === (ref.assetId || ref.image)) === index)
     .slice(0, CHAT_MAX_REFERENCE_IMAGES);
@@ -4952,15 +4957,10 @@ async function sendChatNodeMessage(nodeId, options = {}) {
     syncChatNodeBody(node);
     return;
   }
-  if (!userText && imageRefs.length && !entry.multimodal) {
-    node._chatError = "当前模型不支持图片，请切换到多模态模型或输入文字";
-    syncChatNodeBody(node);
-    return;
-  }
   const baseRequestText = userText || translateUiString("请分析这些图片");
   const requestText = retryUser ? baseRequestText : (node._chatEnumerated === true ? `${baseRequestText}\n\n${CHAT_ENUMERATED_INSTRUCTION}` : baseRequestText);
   let imageDataUrls = [];
-  if (entry.multimodal && imageRefs.length) {
+  if (imageRefs.length) {
     try {
       imageDataUrls = (await Promise.all(imageRefs.map(ref => materializeReferenceImage(ref)))).filter(url => typeof url === "string" && url);
     } catch (error) {
@@ -4971,7 +4971,7 @@ async function sendChatNodeMessage(nodeId, options = {}) {
   }
   const historyMessages = retryUser ? node.chatMessages.slice(0, retryAssistantIndex - 1) : node.chatMessages;
   const history = historyMessages.map(message => ({ role: message.role, content: message.content }));
-  const userContent = entry.multimodal && imageDataUrls.length
+  const userContent = imageDataUrls.length
     ? [{ type: "text", text: requestText }, ...imageDataUrls.map(url => ({ type: "image_url", image_url: { url } }))]
     : requestText;
   const payload = { apiType: entry.apiType, model: entry.apiType === "custom" ? entry.model : node._chatModel, stream: false, messages: [...history, { role: "user", content: userContent }] };
@@ -5021,7 +5021,12 @@ async function sendChatNodeMessage(nodeId, options = {}) {
     if (retryUser) {
       node.chatMessages[retryAssistantIndex] = { role: "assistant", content: reply };
     } else {
-      node.chatMessages.push({ role: "user", content: requestText, imageCount: imageDataUrls.length });
+      // 消息历史存 420px WebP 缩略图供回看,原图只在本次请求里发送;单张缩略失败不阻塞落消息
+      const messageThumbs = [];
+      for (const url of imageDataUrls) {
+        try { messageThumbs.push(await dataUrlToThumbnailDataUrl(url)); } catch (error) { /* 忽略该张 */ }
+      }
+      node.chatMessages.push({ role: "user", content: requestText, imageCount: imageDataUrls.length, images: messageThumbs });
       node.chatMessages.push({ role: "assistant", content: reply });
       node.chatDraft = "";
       node.chatAttachments = [];
@@ -5066,10 +5071,34 @@ function syncChatNodeBody(node) {
   const body = nodeEl?.querySelector(".node-body");
   if (!nodeEl || !body) return;
   body.innerHTML = chatNodeBody(node);
+  const messages = nodeEl.querySelector(".chat-messages");
+  if (messages) messages.scrollTop = messages.scrollHeight;
   renderChatWorkspace();
 }
 
 let expandedChatNodeId = "";
+
+// 对话节点标签文案:优先用当前会话名,否则按项目内序号命名
+function chatNodeTabLabel(node) {
+  const session = (node.chatSessions || []).find(item => item.id === node.activeChatSessionId);
+  const index = state.nodes.filter(item => item.type === "chat").indexOf(node) + 1;
+  return String(session?.title || `AI 对话 ${index}`).trim() || "AI 对话";
+}
+
+// 工作区顶部浏览器式标签条:每标签 = 画布上一个对话节点;chatWorkspaceClosed 的节点不出现在条上(历史面板可重开)
+function chatWorkspaceNodeTabs(activeNodeId) {
+  return state.nodes
+    .filter(item => item.type === "chat" && item.chatWorkspaceClosed !== true)
+    .map(item => {
+      const active = item.id === activeNodeId;
+      const label = chatNodeTabLabel(item);
+      const busy = item._chatBusy === true;
+      return `<div class="chat-node-tab${active ? " is-active" : ""}${busy ? " is-busy" : ""}" role="tab" aria-selected="${active}">`
+        + `<button type="button" class="chat-node-tab-label" data-role="ws-tab" data-node-id="${escapeHtml(item.id)}" title="${escapeHtml(label)}"><span class="chat-node-tab-dot" aria-hidden="true"></span><span class="chat-node-tab-text">${escapeHtml(label)}</span></button>`
+        + `<button type="button" class="chat-node-tab-close" data-role="ws-tab-close" data-node-id="${escapeHtml(item.id)}" title="关闭标签（对话与画布节点保留，可从历史面板重新打开）" aria-label="关闭标签 ${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
+        + `</div>`;
+    }).join("");
+}
 
 function chatOverlayClass(baseClass) {
   return `${baseClass}${els.app.classList.contains("theme-dark") ? " theme-dark" : ""}`;
@@ -5089,8 +5118,16 @@ function renderChatWorkspace() {
   backdrop.className = chatOverlayClass("chat-workspace-backdrop");
   backdrop.dataset.nodeId = node.id;
   backdrop.innerHTML = `<section class="chat-workspace" role="dialog" aria-modal="true" aria-label="AI 对话工作区">`
-    + `<header class="chat-workspace-head"><div class="chat-workspace-title"><span class="chat-workspace-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/></svg></span><div><strong>AI 对话</strong><span>消息随当前画布保存</span></div></div><button type="button" data-chat-workspace-close aria-label="关闭对话工作区"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>`
+    + `<header class="chat-workspace-head">`
+    + `<div class="chat-workspace-tabs" role="tablist" aria-label="对话节点标签">${chatWorkspaceNodeTabs(node.id)}</div>`
+    + `<span class="chat-workspace-head-actions">`
+    + `<button class="chat-head-tool" type="button" data-role="chat-session-history" title="历史对话" aria-label="历史对话"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg></button>`
+    + `<button class="chat-head-tool chat-node-add" data-role="ws-node-add" type="button" title="新建对话节点" aria-label="新建对话节点"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`
+    + `<button type="button" data-chat-workspace-close aria-label="关闭对话工作区"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
+    + `</span>`
+    + `</header>`
     + `<div class="chat-workspace-body">${chatNodeBody(node, true)}</div>`
+    + chatSessionHistoryHtml(node)
     + `</section>`;
   if (!existing) document.body.appendChild(backdrop);
   const composer = backdrop.querySelector(".chat-composer");
@@ -5365,6 +5402,47 @@ document.addEventListener("click", async event => {
   if (!backdrop) return;
   if (event.target.closest("[data-chat-workspace-close]") || event.target === backdrop) {
     closeChatWorkspace();
+    return;
+  }
+  // 历史面板是悬浮下拉:点击面板与「历史」按钮之外的任意处自动收起
+  const historyOwner = findNode(backdrop.dataset.nodeId);
+  if (historyOwner?.type === "chat" && historyOwner._chatHistoryOpen && !event.target.closest(".chat-history-panel") && !event.target.closest("[data-role='chat-session-history']")) {
+    historyOwner._chatHistoryOpen = false;
+    syncChatNodeBody(historyOwner);
+  }
+  // 工作区顶部对话节点标签:切换 / 关闭(仅收起标签,节点与历史保留) / 新建节点
+  const wsAction = event.target.closest("[data-role='ws-tab-close'], [data-role='ws-tab'], [data-role='ws-node-add']");
+  if (wsAction?.dataset.role === "ws-tab-close") {
+    const tabNode = findNode(wsAction.dataset.nodeId);
+    if (tabNode?.type === "chat") {
+      tabNode.chatWorkspaceClosed = true;
+      pushHistory();
+      if (tabNode.id === backdrop.dataset.nodeId) {
+        const next = state.nodes.find(item => item.type === "chat" && item.chatWorkspaceClosed !== true);
+        if (!next) { closeChatWorkspace(); return; }
+        expandedChatNodeId = next.id;
+      }
+      renderChatWorkspace();
+    }
+    return;
+  }
+  if (wsAction?.dataset.role === "ws-tab") {
+    const tabNode = findNode(wsAction.dataset.nodeId);
+    if (tabNode?.type === "chat") {
+      tabNode.chatWorkspaceClosed = false;
+      expandedChatNodeId = tabNode.id;
+      renderChatWorkspace();
+      document.querySelector(`.chat-workspace-backdrop textarea[data-role="chat-text"]`)?.focus();
+    }
+    return;
+  }
+  if (wsAction?.dataset.role === "ws-node-add") {
+    const created = addNode("chat", 160, 120);
+    if (created) {
+      expandedChatNodeId = created.id;
+      renderChatWorkspace();
+      requestAnimationFrame(() => document.querySelector(`.chat-workspace-backdrop textarea[data-role="chat-text"]`)?.focus());
+    }
     return;
   }
   const action = event.target.closest("[data-role]");
@@ -8153,7 +8231,6 @@ function textVariableStripHtml(node) {
 function chatAttachmentBar(node, entry, busy) {
   const attachments = node.chatAttachments || [];
   const atLimit = attachments.length >= CHAT_MAX_REFERENCE_IMAGES;
-  const unsupported = attachments.length > 0 && entry && !entry.multimodal;
   const addTitle = atLimit ? `最多添加 ${CHAT_MAX_REFERENCE_IMAGES} 张图片` : "添加图片附件";
   const thumbnails = attachments.map(item => {
     const name = escapeHtml(item.fileName || "对话附件");
@@ -8162,12 +8239,10 @@ function chatAttachmentBar(node, entry, busy) {
       : `<span class="chat-attachment-placeholder" aria-hidden="true">图</span>`;
     return `<span class="chat-attachment-item" title="${name}">${preview}<button type="button" data-role="chat-attachment-remove" data-attachment-id="${escapeHtml(item.id)}" title="移除 ${name}" aria-label="移除附件 ${name}" ${busy ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span>`;
   }).join("");
-  const status = unsupported
-    ? `<span class="chat-attachment-status is-warning" title="当前模型不支持图片">不支持图片</span>`
-    : attachments.length
-      ? `<span class="chat-attachment-status">${attachments.length}/${CHAT_MAX_REFERENCE_IMAGES}</span>`
-      : `<span class="chat-attachment-status">发送后保留</span>`;
-  return `<div class="chat-attachment-bar ${unsupported ? "is-unsupported" : ""}">`
+  const status = attachments.length
+    ? `<span class="chat-attachment-status">${attachments.length}/${CHAT_MAX_REFERENCE_IMAGES}</span>`
+    : `<span class="chat-attachment-status">发送后保留</span>`;
+  return `<div class="chat-attachment-bar">`
     + `<button class="chat-attachment-add" data-role="chat-attachment-add" type="button" title="${addTitle}" aria-label="${addTitle}" ${(busy || atLimit) ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5 12 20a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.9-2.8l8.5-8.5"/></svg><span>附件</span></button>`
     + `<div class="chat-attachment-list" aria-label="已添加的图片附件">${thumbnails}</div>`
     + status
@@ -8218,27 +8293,32 @@ function chatMessageContentHtml(message) {
 
 function chatMessagesHtml(node, busy) {
   const messages = node.chatMessages || [];
-  if (!messages.length) return `<div class="chat-empty-state"><span class="chat-empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3ZM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span><strong>开始一段新对话</strong><span>输入消息与 AI 对话，历史随画布保存。</span></div>`;
+  const assistantAvatar = `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/></svg></span>`;
+  const userAvatar = `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></span>`;
+  // 生成中的占位消息:AI 侧文本框 + 旋转加载,回复到达/停止后随 busy 消失
+  const pending = busy
+    ? `<article class="chat-message is-assistant is-pending" aria-label="正在生成回复">`
+      + `<div class="chat-message-head">${assistantAvatar}<strong>AI</strong></div>`
+      + `<div class="chat-message-content"><span class="chat-pending-spinner" aria-hidden="true"></span><span>正在生成…</span></div>`
+      + `</article>`
+    : "";
+  if (!messages.length) return pending || `<div class="chat-empty-state"><span class="chat-empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3ZM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span><strong>开始一段新对话</strong><span>输入消息与 AI 对话，历史随画布保存。</span></div>`;
   const lastAssistantIndex = messages.findLastIndex(message => message.role === "assistant");
   return messages.map((message, index) => {
     const role = message.role === "assistant" ? "assistant" : "user";
     const label = role === "assistant" ? "AI" : "你";
-    const imageNote = role === "user" && Number(message.imageCount) > 0 ? `<span class="chat-message-images">${Number(message.imageCount)} 张图片</span>` : "";
-    const avatar = role === "assistant"
-      ? `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/></svg></span>`
-      : `<span class="chat-message-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></span>`;
+    const thumbs = role === "user" && Array.isArray(message.images) && message.images.length
+      ? `<div class="chat-message-thumbs">${message.images.map(src => `<img src="${escapeHtml(src)}" alt="" draggable="false">`).join("")}</div>`
+      : "";
+    const imageNote = role === "user" && Number(message.imageCount) > 0 && !thumbs ? `<span class="chat-message-images">${Number(message.imageCount)} 张图片</span>` : "";
+    const avatar = role === "assistant" ? assistantAvatar : userAvatar;
     return `<article class="chat-message is-${role}" data-message-index="${index}">`
       + `<div class="chat-message-head">${avatar}<strong>${label}</strong>${imageNote}<div class="chat-message-actions">${chatMessageActions(message, index, lastAssistantIndex, busy, Number(messages[index - 1]?.imageCount) > 0)}</div></div>`
+      + thumbs
       + chatMessageContentHtml(message)
       + chatHtmlPreviewCard(message, index)
       + `</article>`;
-  }).join("");
-}
-
-function chatSessionTabsHtml(node) {
-  const open = (node.chatSessions || []).filter(session => !session.closed);
-  const tabs = open.map(session => `<div class="chat-session-tab${session.id === node.activeChatSessionId ? " is-active" : ""}" draggable="true" data-chat-session-id="${escapeHtml(session.id)}"><button type="button" data-role="chat-session-open" data-session-id="${escapeHtml(session.id)}" title="${escapeHtml(session.title)}">${escapeHtml(session.title)}</button><button type="button" data-role="chat-session-close" data-session-id="${escapeHtml(session.id)}" aria-label="关闭对话 ${escapeHtml(session.title)}">×</button></div>`).join("");
-  return `<div class="chat-session-strip"><button class="chat-session-history-toggle" type="button" data-role="chat-session-history" aria-label="打开聊天历史" title="聊天历史">历史</button><div class="chat-session-tabs" role="tablist" aria-label="对话标签">${tabs}</div><button class="chat-session-add" type="button" data-role="chat-session-add" aria-label="新建对话" title="新建对话">+</button></div>`;
+  }).join("") + pending;
 }
 
 function chatSessionHistoryHtml(node) {
@@ -8250,7 +8330,13 @@ function chatSessionHistoryHtml(node) {
     const time = new Date(session.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
     return `<div class="chat-history-item${session.id === node.activeChatSessionId ? " is-active" : ""}" data-session-id="${escapeHtml(session.id)}"><button type="button" data-role="chat-session-open" data-session-id="${escapeHtml(session.id)}"><strong>${escapeHtml(session.title)}</strong><span>${escapeHtml(model)} · ${escapeHtml(time)}</span></button><div><button type="button" data-role="chat-session-rename" data-session-id="${escapeHtml(session.id)}">改名</button><button type="button" data-role="chat-session-delete" data-session-id="${escapeHtml(session.id)}">删除</button></div></div>`;
   }).join("") || `<div class="chat-history-empty">没有匹配的对话</div>`;
-  return `<aside class="chat-history-panel" aria-label="聊天历史"><label><span>搜索历史</span><input type="search" data-role="chat-history-search" value="${escapeHtml(node._chatHistoryQuery || "")}" placeholder="搜索对话名称"></label><div class="chat-history-list">${items}</div></aside>`;
+  // 顶部列出项目内全部对话节点:已关闭标签的节点在此重新打开,打开中的可直接切换
+  const nodeItems = state.nodes.filter(item => item.type === "chat").map(item => {
+    const closed = item.chatWorkspaceClosed === true;
+    const label = chatNodeTabLabel(item);
+    return `<div class="chat-history-node${item.id === node.id ? " is-active" : ""}${closed ? " is-closed" : ""}"><button type="button" data-role="ws-tab" data-node-id="${escapeHtml(item.id)}" title="${escapeHtml(label)}"><strong>${escapeHtml(label)}</strong><span>${item._chatBusy ? "生成中…" : closed ? "标签已关闭，点击重新打开" : `${(item.chatMessages || []).length} 条消息`}</span></button></div>`;
+  }).join("");
+  return `<aside class="chat-history-panel" aria-label="聊天历史"><div class="chat-history-panel-head"><strong>历史对话</strong><button type="button" class="chat-history-add" data-role="chat-session-add" title="在当前对话节点新建一个会话" aria-label="新建会话">＋ 新对话</button></div><label><span>搜索历史</span><input type="search" data-role="chat-history-search" value="${escapeHtml(node._chatHistoryQuery || "")}" placeholder="搜索对话名称"></label><div class="chat-history-nodes"><div class="chat-history-nodes-title">对话节点标签</div>${nodeItems}</div><div class="chat-history-list">${items}</div></aside>`;
 }
 
 function chatNodeBody(node, expanded = false) {
@@ -8273,14 +8359,12 @@ function chatNodeBody(node, expanded = false) {
     ? `<button class="chat-tool-btn is-busy" data-role="chat-stop" type="button" title="停止生成" aria-label="停止生成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>`
     : `<label class="chat-enumerate-toggle" title="批量提示词：要求 AI 按 a. b. 序号输出；收到回复后可手动拆成文字节点"><input type="checkbox" data-role="chat-enumerate-toggle" ${node._chatEnumerated ? "checked" : ""} ${busy ? "disabled" : ""}><span>批量</span></label>`
       + `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
-  return chatSessionTabsHtml(node)
-    + chatSessionHistoryHtml(node)
-    + `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
+  return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
     + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
     + `<div class="chat-messages" role="log" aria-label="对话记录">${chatMessagesHtml(node, busy)}</div>`
     + `<div class="chat-composer"><textarea data-role="chat-text" placeholder="输入新消息，Enter 发送；Shift+Enter 换行" ${busy ? "disabled" : ""}>${escapeHtml(node.chatDraft || "")}</textarea>`
     + chatAttachmentBar(node, entry, busy)
-    + `<button class="chat-composer-send" data-role="chat-send" type="button" title="发送" aria-label="发送消息" ${busy ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>`
+    + `<button class="chat-composer-send" data-role="chat-send" type="button" title="发送" aria-label="发送消息" ${busy ? "disabled" : ""}><span>发送</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>`
     + `<span class="resize-handle" title="拖拽缩放"></span>`;
 }
 
@@ -9914,18 +9998,7 @@ async function handleChatNodeAction(node, actionRole, action) {
     if (loadChatSession(node, action.dataset.sessionId)) { pushHistory(); syncChatNodeBody(node); }
     return;
   }
-  if (actionRole === "chat-session-close") {
-    if (node._chatBusy && action.dataset.sessionId === node.activeChatSessionId) return toast("请先停止或等待当前回复完成");
-    saveActiveChatSession(node, true);
-    const session = node.chatSessions.find(item => item.id === action.dataset.sessionId);
-    if (!session) return;
-    session.closed = true;
-    let next = node.chatSessions.find(item => !item.closed && item.id !== session.id);
-    if (!next) { next = createChatSession(node, { title: `对话 ${node.chatSessions.length + 1}` }); node.chatSessions.push(next); }
-    if (session.id === node.activeChatSessionId) loadChatSession(node, next.id);
-    pushHistory(); syncChatNodeBody(node);
-    return;
-  }
+  // 会话「关闭标签」入口已随工作区会话条移除(会话管理统一在历史面板,面板不再过滤 closed 标记)
   if (actionRole === "chat-session-rename") {
     const session = node.chatSessions.find(item => item.id === action.dataset.sessionId);
     const host = action.closest(".chat-history-item, .chat-session-tab");
@@ -10478,6 +10551,9 @@ function stopCanvasGroup(groupId) {
   renderTaskQueue(); renderNodes();
 }
 let lightboxEraserRingPoint = null;
+// 笔刷类工具（画笔/上色笔刷/橡皮）共用虚线光标圈；滑块值即屏幕像素直径
+const isLightboxBrushTool = mode => ["brush", "color-brush", "eraser"].includes(mode);
+let lightboxBrushRingPoint = null;
 let lightboxPaintActions = [];
 let lightboxPaintCurrentAction = null;
 const lightboxPaintOverlay = document.createElement("canvas");
@@ -10729,7 +10805,7 @@ function cancelLightboxPaint() {
   lightboxPainting = false;
   $("lightboxLeftTools").classList.add("hidden");
   lightboxDrawing = false;
-  hideLightboxEraserRing();
+  hideLightboxBrushRing();
   lightboxPaintActions = [];
   lightboxPaintCurrentAction = null;
   lightboxPlacedImage = null;
@@ -10784,14 +10860,18 @@ function updateLightboxPaintDisplaySize() {
   canvas.style.transform = hasViewTransform
     ? `translate(${Math.round(lightboxViewOffset.x)}px, ${Math.round(lightboxViewOffset.y)}px) scale(${lightboxViewZoom})`
     : "";
+  // 画布几何（窗口 resize、调色盘折叠、显示尺寸重算）变化后，镜像/置入工具组跟随画布右缘重新定位，
+  // 否则它停留在旧窗口尺寸下的 fixed 坐标上，最大化/还原后与画布错位
+  positionLightboxMirrorTools();
 }
 
-// 左侧工具面板垂直定位：仅在打开/窗口变化/折叠调色盘时按当前内容高度“大概居中”定一次 top；
-// 之后容差等调节行增减只让面板向下伸展，底部不够时收进 max-height 内部滚动，面板不再上下跳动
+// 左侧工具面板垂直定位：在打开/窗口变化/内容高度变化（调色盘重渲染、换色工具条显隐）时重新执行；
+// 高度放不下时先整体等比缩小调色盘（见 fitEditorPaletteScale），top 按缩小后的实际高度取中
 function syncLightboxPaletteTop() {
   const palette = $("lightboxLeftTools");
   if (!palette || palette.classList.contains("hidden") || !palette.offsetHeight) return;
   if (window.innerWidth < 768) { // 移动端断点交给 CSS 固定定位
+    fitEditorPaletteScale(); // 只负责清掉宽屏时残留的缩放
     palette.style.removeProperty("top");
     palette.style.removeProperty("max-height");
     return;
@@ -10799,16 +10879,46 @@ function syncLightboxPaletteTop() {
   // 先把高度上限收到“距屏幕上下各留出余量”，再测量、再居中：
   // 内容再高也只会收进上限内部滚动，top 计算永远不会顶到下限，任何窗口尺寸都能真正居中
   palette.style.maxHeight = `${Math.max(240, window.innerHeight - 96)}px`;
+  fitEditorPaletteScale();
   const top = Math.max(24, Math.round((window.innerHeight - palette.offsetHeight) / 2 - 24));
   palette.style.top = `${top}px`;
 }
 
+// 窗口高度不够时把调色盘（#editorPalette）整体等比缩小：transform scale 让视觉、布局盒与命中区域一起缩，
+// 优先不出现滚动条；缩到 0.5 仍放不下才回退为容器内部滚动。测量前先清掉旧缩放，
+// 清除、测量、回设在同一任务内同步完成，中间不会渲染，不会闪烁
+function fitEditorPaletteScale() {
+  const panel = $("editorPalette");
+  panel.style.transform = "";
+  panel.style.height = "";
+  panel.style.overflow = "";
+  panel.style.transformOrigin = "";
+  panel.style.flexShrink = "";
+  if (window.innerWidth < 768) return; // 移动端断点交给 CSS 固定定位
+  const container = $("lightboxLeftTools");
+  const gap = parseFloat(getComputedStyle(container).rowGap) || 0;
+  const tools = $("lightboxPaletteTools");
+  const toolsHeight = tools && !tools.classList.contains("hidden") && tools.offsetHeight ? tools.offsetHeight + gap : 0;
+  const natural = panel.scrollHeight;
+  const scale = (container.clientHeight - toolsHeight - 2) / natural; // 2px 余量抵消 scrollHeight 取整误差
+  if (scale >= 1) return;
+  const zoom = Math.max(0.5, scale);
+  // 布局盒同步缩到缩放后的高度，容器与换色工具条不再被撑出滚动；overflow 放开让缩放后的内容完整画出
+  panel.style.flexShrink = "0";
+  panel.style.height = `${Math.round(natural * zoom)}px`;
+  panel.style.overflow = "visible";
+  panel.style.transformOrigin = "top left";
+  panel.style.transform = `scale(${zoom.toFixed(4)})`;
+}
+
+let lightboxPickReturnMode = "fill";
+
 function setLightboxPaintMode(mode) {
   clearLightboxCrop();
-  lightboxPaintMode = ["brush", "color-brush", "eraser", "arrow", "rect", "fill", "transform", "crop"].includes(mode) ? mode : "idle";
+  lightboxPaintMode = ["brush", "color-brush", "eraser", "arrow", "rect", "fill", "pick-color", "transform", "crop"].includes(mode) ? mode : "idle";
   lightboxCropBtn.classList.toggle("active", lightboxPaintMode === "crop");
   lightboxCropApply.classList.toggle("hidden", lightboxPaintMode !== "crop");
-  els.lightboxPaintCanvas.style.cursor = ["crop", "fill"].includes(lightboxPaintMode) ? "crosshair" : "";
+  els.lightboxPaintCanvas.style.cursor = ["crop", "fill", "pick-color"].includes(lightboxPaintMode) ? "crosshair" : "";
   const sizeRange = lightboxPaintSizeRanges[lightboxPaintMode];
   if (sizeRange) {
     els.lightboxPaintSize.min = sizeRange.min;
@@ -10825,6 +10935,7 @@ function setLightboxPaintMode(mode) {
   if (colorField.parentElement !== colorParent) colorParent.prepend(colorField);
   els.lightboxPaintFill.setAttribute("aria-pressed", String(isFill));
   $("lightboxColorBrush").setAttribute("aria-pressed", String(isColorBrush));
+  $("lightboxColorPicker").setAttribute("aria-pressed", String(lightboxPaintMode === "pick-color"));
   const annotateColor = isColorBrush || lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
   els.lightboxPaintFill.classList.toggle("active", isFill);
   els.lightboxPaintSizeField.classList.toggle("hidden", isFill);
@@ -10834,9 +10945,10 @@ function setLightboxPaintMode(mode) {
   $("lightboxPaintPointer").classList.toggle("active", lightboxPaintMode === "idle" || lightboxPaintMode === "transform");
   els.lightboxPaintBrush.classList.toggle("active", lightboxPaintMode === "brush");
   els.lightboxPaintEraser.classList.toggle("active", lightboxPaintMode === "eraser");
+  els.lightboxPaintEraser.setAttribute("aria-pressed", String(lightboxPaintMode === "eraser"));
   els.lightboxPaintArrow.classList.toggle("active", lightboxPaintMode === "arrow");
   els.lightboxPaintRect.classList.toggle("active", lightboxPaintMode === "rect");
-  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop", "fill"].includes(lightboxPaintMode));
+  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop", "fill", "pick-color"].includes(lightboxPaintMode));
   els.lightboxPaintColorField.classList.toggle("hidden", !annotateColor);
   els.lightboxPaintColor.disabled = !annotateColor;
   els.lightboxPaintCanvas.classList.toggle("transform-mode", lightboxPaintMode === "transform");
@@ -10845,7 +10957,7 @@ function setLightboxPaintMode(mode) {
   els.lightboxPaintCanvas.classList.toggle("arrow-mode", lightboxPaintMode === "arrow");
   els.lightboxPaintCanvas.classList.toggle("rect-mode", lightboxPaintMode === "rect");
   if (lightboxPaintMode !== "transform") els.lightboxPaintCanvas.classList.remove("is-rotate-target");
-  if (lightboxPaintMode !== "eraser") hideLightboxEraserRing();
+  if (!isLightboxBrushTool(lightboxPaintMode)) hideLightboxBrushRing();
   if (lightboxPainting) renderLightboxPaintComposite();
 }
 
@@ -10860,19 +10972,19 @@ function positionLightboxMirrorTools() {
   });
 }
 
-function syncLightboxEraserRing(clientX, clientY) {
-  if (clientX != null) lightboxEraserRingPoint = { x: clientX, y: clientY };
-  if (!lightboxPainting || lightboxPaintMode !== "eraser" || !lightboxEraserRingPoint) return hideLightboxEraserRing();
+function syncLightboxBrushRing(clientX, clientY) {
+  if (clientX != null) lightboxBrushRingPoint = { x: clientX, y: clientY };
+  if (!lightboxPainting || !isLightboxBrushTool(lightboxPaintMode) || !lightboxBrushRingPoint) return hideLightboxBrushRing();
   const diameter = Math.max(2, Number(els.lightboxPaintSize.value));
-  els.lightboxEraserRing.style.width = `${diameter}px`;
-  els.lightboxEraserRing.style.height = `${diameter}px`;
-  els.lightboxEraserRing.style.transform = `translate(${lightboxEraserRingPoint.x}px, ${lightboxEraserRingPoint.y}px) translate(-50%, -50%)`;
-  els.lightboxEraserRing.classList.remove("hidden");
+  els.lightboxBrushRing.style.width = `${diameter}px`;
+  els.lightboxBrushRing.style.height = `${diameter}px`;
+  els.lightboxBrushRing.style.transform = `translate(${lightboxBrushRingPoint.x}px, ${lightboxBrushRingPoint.y}px) translate(-50%, -50%)`;
+  els.lightboxBrushRing.classList.remove("hidden");
 }
 
-function hideLightboxEraserRing() {
-  els.lightboxEraserRing.classList.add("hidden");
-  lightboxEraserRingPoint = null;
+function hideLightboxBrushRing() {
+  els.lightboxBrushRing.classList.add("hidden");
+  lightboxBrushRingPoint = null;
 }
 
 function drawLightboxPaintSegment(context, action, from, to) {
@@ -11174,6 +11286,21 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   ev.stopPropagation();
   if (lightboxPaintMode === "idle") return;
   const p = paintCanvasPoint(ev);
+  if (lightboxPaintMode === "pick-color") {
+    const canvas = els.lightboxPaintCanvas;
+    if (p.x < 0 || p.y < 0 || p.x >= canvas.width || p.y >= canvas.height) return;
+    try {
+      const [r, g, b, alpha] = canvas.getContext("2d").getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
+      if (!alpha) return;
+      const hex = "#" + [r, g, b].map(value => value.toString(16).padStart(2, "0")).join("");
+      els.lightboxPaintColor.value = hex;
+      setLightboxPaintMode(lightboxPickReturnMode);
+      toast(`已取色 ${hex.toUpperCase()}`);
+    } catch {
+      toast("无法读取当前位置的颜色");
+    }
+    return;
+  }
   if (lightboxPaintMode === "fill") {
     applyLightboxFillAt(p);
     return;
@@ -11265,10 +11392,10 @@ els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
   drawLightboxPaintSegment(layer.getContext("2d"), lightboxPaintCurrentAction, previous, p);
   renderLightboxPaintComposite();
 });
-els.lightboxPaintCanvas.addEventListener("pointermove", ev => syncLightboxEraserRing(ev.clientX, ev.clientY));
+els.lightboxPaintCanvas.addEventListener("pointermove", ev => syncLightboxBrushRing(ev.clientX, ev.clientY));
 els.lightboxPaintCanvas.addEventListener("pointerleave", () => {
   if (!lightboxTransformDrag) els.lightboxPaintCanvas.classList.remove("is-rotate-target");
-  hideLightboxEraserRing();
+  hideLightboxBrushRing();
 });
 
 function finishLightboxPointerAction(ev) {
@@ -11322,7 +11449,7 @@ els.lightboxPaintRect.onclick = () => setLightboxPaintMode("rect");
 els.lightboxPaintUndo.onclick = undoLightboxPaint;
 els.lightboxPaintSize.addEventListener("input", () => {
   if (lightboxPaintSizes[lightboxPaintMode] != null) lightboxPaintSizes[lightboxPaintMode] = Number(els.lightboxPaintSize.value);
-  syncLightboxEraserRing();
+  syncLightboxBrushRing();
 });
 // ===== 填色（魔棒式区域填充）=====
 // 流程：按容差二值化 → 按“忽略细线”半径膨胀可通行区（浅色细线被吸收，深色硬线保持阻挡）→ 扫描线连通填充 → 闭运算填满区域内细线 → 生成颜色层。
@@ -11613,6 +11740,14 @@ $("lightboxFillMode").onchange = () => {
 };
 els.lightboxPaintFill.onclick = () => setLightboxPaintMode("fill");
 $("lightboxColorBrush").onclick = () => setLightboxPaintMode("color-brush");
+$("lightboxColorPicker").onclick = () => {
+  if (lightboxPaintMode === "pick-color") {
+    setLightboxPaintMode(lightboxPickReturnMode);
+    return;
+  }
+  lightboxPickReturnMode = lightboxPaintMode === "color-brush" ? "color-brush" : "fill";
+  setLightboxPaintMode("pick-color");
+};
 els.lightboxPaintColor.addEventListener("input", scheduleLightboxFillReapply);
 els.lightboxFillTolerance.addEventListener("input", () => {
   els.lightboxFillToleranceValue.textContent = String(els.lightboxFillTolerance.value);
@@ -11787,7 +11922,7 @@ els.lightbox.addEventListener("wheel", ev => {
     lightboxViewOffset.y += (ev.clientY - (rect.top + rect.height / 2)) * (1 - ratio);
     lightboxViewZoom = nextZoom;
     updateLightboxPaintDisplaySize();
-    syncLightboxEraserRing(ev.clientX, ev.clientY);
+    syncLightboxBrushRing(ev.clientX, ev.clientY);
     return;
   }
   if (lightboxImages.length <= 1) return;
@@ -11805,7 +11940,8 @@ els.lightboxDots.addEventListener("click", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (els.lightbox.classList.contains("hidden")) return;
-  if (lightboxPainting && lightboxPaintSizeRanges[lightboxPaintMode] && adjustRangeByBracketKey(ev, els.lightboxPaintSize)) return;
+  // 灯箱画笔 []/【】 调节由 handleLightboxBrushSizeShortcut 统一处理（每模式记忆 + 笔刷圆环同步），
+  // 此处不再接入 adjustRangeByBracketKey，避免 document/window 两级监听双重调节。
   if (ev.key === "Escape") {
     ev.preventDefault();
     hideLightbox();
@@ -11815,6 +11951,8 @@ document.addEventListener("keydown", ev => {
 });
 window.addEventListener("resize", updateLightboxPaintDisplaySize);
 window.addEventListener("resize", syncLightboxPaletteTop);
+// 换色工具条高度变化（上色模式/容差等调节行显隐）会挤占调色盘可用高度，跟着重新等比适配
+new ResizeObserver(syncLightboxPaletteTop).observe(document.getElementById("lightboxPaletteTools"));
 
 async function setComposerImage(file) {
   if (!file) return;
@@ -12272,6 +12410,56 @@ function toolMenuItems(p) {
   return items;
 }
 
+// 右键菜单管理（设置 → 外观）：清单驱动画布右键菜单显隐，按标签匹配、同名选项在不同位置一起隐藏。
+// 其中四个「添加××节点」入口沿用常规页「右键菜单节点」卡的独立开关（CONTEXT_MENU_FLAG_ITEMS），其余存 settings.hiddenMenuItems。
+const CONTEXT_MENU_MANAGER_GROUPS = [
+  { title: "画布空白处", items: [
+    "粘贴节点", "添加文字节点", "添加调色盘", "添加图片节点", "添加AI绘图节点", "添加AI视频节点",
+    "添加对话节点", "添加浏览器生图节点", "添加本地 SD 节点", "添加截图功能节点", "自定义节点", "拓展", "角度变化", "节点对齐",
+  ] },
+  { title: "选中节点时", items: [
+    "AI绘图", "保存为自定义组件", "创建编组", "多任务", "解散编组", "切换启用/停用", "批量停用", "批量启用",
+    "复制图片", "打开生成图片所在文件夹", "打开视频所在文件夹", "打开文件所在文件夹", "打开所在文件夹", "在 PS 中编辑",
+    "保存为自定义文字/图片", "按换行拆分为文字节点", "编辑图片批注", "提取生成所用关键词", "依次连接", "对齐所选节点",
+    "取消多任务", "断开连接", "复制节点", "删除节点", "批量删除",
+  ] },
+];
+const CONTEXT_MENU_FLAG_ITEMS = {
+  "添加AI视频节点": "showVideoNodeMenu",
+  "添加浏览器生图节点": "showBrowserNodeMenu",
+  "添加本地 SD 节点": "showLocalSdNodeMenu",
+  "添加截图功能节点": "showScreenshotNodeMenu",
+};
+// 一个勾选项覆盖多个菜单标签（同一动作按节点类型以不同文案出现）
+const CONTEXT_MENU_ALIAS_ITEMS = { "保存为自定义文字/图片": ["保存为自定义文字", "保存为自定义图片"] };
+
+function isMenuItemHidden(label) {
+  const flag = CONTEXT_MENU_FLAG_ITEMS[label];
+  if (flag && state.settings[flag] === false) return true;
+  return (state.settings.hiddenMenuItems || []).includes(label);
+}
+
+// 递归过滤菜单项：子菜单全部隐藏时连同父项一起隐藏
+function filterContextMenuItems(menuItems) {
+  return menuItems
+    .filter(([label]) => !isMenuItemHidden(label))
+    .map(([label, action]) => Array.isArray(action) ? [label, filterContextMenuItems(action)] : [label, action])
+    .filter(([, action]) => !(Array.isArray(action) && action.length === 0));
+}
+
+function renderMenuManager() {
+  const list = $("menuManagerList");
+  if (!list) return;
+  list.innerHTML = CONTEXT_MENU_MANAGER_GROUPS.map(group => `
+    <div class="menu-manager-group">
+      <div class="menu-manager-group-title">${escapeHtml(group.title)}</div>
+      <div class="menu-manager-items">${group.items.map(display => {
+        const labels = CONTEXT_MENU_ALIAS_ITEMS[display] || [display];
+        return `<label class="check-row"><input type="checkbox" data-menu-manager-item="${escapeHtml(labels.join("|"))}"${labels.every(label => !isMenuItemHidden(label)) ? " checked" : ""}><span>${escapeHtml(display)}</span></label>`;
+      }).join("")}</div>
+    </div>`).join("");
+}
+
 function showMenu(x, y, items) {
   els.contextMenu.innerHTML = "";
   function positionSubmenu(item, submenu) {
@@ -12328,7 +12516,7 @@ function showMenu(x, y, items) {
       container.appendChild(item);
     });
   }
-  buildMenu(els.contextMenu, items);
+  buildMenu(els.contextMenu, filterContextMenuItems(items));
   els.contextMenu.style.left = `${x}px`;
   els.contextMenu.style.top = `${y}px`;
   els.contextMenu.style.bottom = "";
@@ -12344,7 +12532,26 @@ function hideMenu() {
   els.contextMenu.classList.add("hidden");
 }
 
+function handleLightboxBrushSizeShortcut(ev) {
+  if (!lightboxPainting || ev.isComposing || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+  if (!isLightboxBrushTool(lightboxPaintMode)) return false;
+  if (ev.target.closest?.("textarea, select, [contenteditable]:not([contenteditable='false'])")) return false;
+  if (ev.target.matches?.("input:not([type='range']):not([type='button']):not([type='checkbox'])")) return false;
+  const smaller = ["[", "【"].includes(ev.key) || ev.code === "BracketLeft";
+  const larger = ["]", "】"].includes(ev.key) || ev.code === "BracketRight";
+  if (!smaller && !larger) return false;
+  const range = lightboxPaintSizeRanges[lightboxPaintMode];
+  const current = Number(els.lightboxPaintSize.value);
+  const size = Math.max(range.min, Math.min(range.max, current + (larger ? 4 : -4)));
+  lightboxPaintSizes[lightboxPaintMode] = size;
+  els.lightboxPaintSize.value = size;
+  syncLightboxBrushRing();
+  ev.preventDefault();
+  return true;
+}
+
 window.addEventListener("keydown", ev => {
+  if (handleLightboxBrushSizeShortcut(ev)) return;
   if (ev.key === "Alt") {
     altDown = true;
     if (!ev.target.matches?.("textarea,input,select,[contenteditable='true']")) ev.preventDefault();
@@ -13932,22 +14139,57 @@ els.textMergeOnOverlap.onchange = () => {
 
 els.showBrowserNodeMenu.onchange = () => {
   state.settings.showBrowserNodeMenu = els.showBrowserNodeMenu.checked;
+  renderMenuManager();
   pushHistory();
 };
 
 els.showVideoNodeMenu.onchange = () => {
   state.settings.showVideoNodeMenu = els.showVideoNodeMenu.checked;
+  renderMenuManager();
   pushHistory();
 };
 
 if (els.showLocalSdNodeMenu) els.showLocalSdNodeMenu.onchange = () => {
   state.settings.showLocalSdNodeMenu = els.showLocalSdNodeMenu.checked;
+  renderMenuManager();
   pushHistory();
 };
 
 if (els.showScreenshotNodeMenu) els.showScreenshotNodeMenu.onchange = () => {
   state.settings.showScreenshotNodeMenu = els.showScreenshotNodeMenu.checked;
+  renderMenuManager();
   pushHistory();
+};
+
+// 外观页「右键菜单管理」：勾选即时写回设置；四个「添加××节点」入口与常规页开关双写保持一致
+$("menuManagerList").addEventListener("change", event => {
+  const input = event.target.closest("input[data-menu-manager-item]");
+  if (!input) return;
+  for (const label of input.dataset.menuManagerItem.split("|")) {
+    const flag = CONTEXT_MENU_FLAG_ITEMS[label];
+    if (flag) {
+      state.settings[flag] = input.checked;
+      if (els[flag]) els[flag].checked = input.checked;
+    } else {
+      const hidden = state.settings.hiddenMenuItems || (state.settings.hiddenMenuItems = []);
+      state.settings.hiddenMenuItems = input.checked
+        ? hidden.filter(name => name !== label)
+        : (hidden.includes(label) ? hidden : [...hidden, label]);
+    }
+  }
+  renderMenuManager();
+  pushHistory();
+});
+
+$("menuManagerResetBtn").onclick = () => {
+  state.settings.hiddenMenuItems = [];
+  for (const flag of Object.values(CONTEXT_MENU_FLAG_ITEMS)) {
+    state.settings[flag] = true;
+    if (els[flag]) els[flag].checked = true;
+  }
+  renderMenuManager();
+  pushHistory();
+  toast("右键菜单选项已全部恢复显示");
 };
 
 
@@ -14104,9 +14346,18 @@ function chatToggleGroupHtml(label, inner, keyReady) {
   return `<div class="chat-model-group"><div class="chat-model-group-head">${escapeHtml(label)}${keyReady ? "" : '<span class="chat-toggle-hint">未填写 Key，暂不可用</span>'}</div>${inner}</div>`;
 }
 
+// 每行「设为默认」:已设为默认的显示徽标;新建对话节点与失效回退都优先用该模型(settings.chatDefaultModel)
+function chatModelDefaultControlHtml(modelId, usable) {
+  if (state.settings.chatDefaultModel === modelId) return `<span class="chat-model-default-badge" title="新建对话节点默认使用此模型">默认</span>`;
+  return `<button type="button" class="chat-model-setdefault" data-chat-model-setdefault="${escapeHtml(modelId)}" ${usable ? "" : "disabled"} title="新建对话节点默认使用此模型">设为默认</button>`;
+}
+
 function chatToggleRowHtml(modelId, label, checked, enabled, note = "") {
   const noteHtml = note ? ` <span class="chat-model-note">${escapeHtml(note)}</span>` : "";
-  return `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(modelId)}" ${checked ? "checked" : ""} ${enabled ? "" : "disabled"}><span>${escapeHtml(label)}${noteHtml}</span></label>`;
+  return `<div class="chat-model-row">`
+    + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(modelId)}" ${checked ? "checked" : ""} ${enabled ? "" : "disabled"}><span>${escapeHtml(label)}${noteHtml}</span></label>`
+    + chatModelDefaultControlHtml(modelId, checked && enabled)
+    + `</div>`;
 }
 
 function renderChatSiteKeyArea() {
@@ -14155,6 +14406,7 @@ function renderChatModelToggleList() {
     const label = entry.label || id;
     return `<div class="chat-model-row">`
       + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(id)}" ${disabled.includes(id) ? "" : "checked"} ${ready ? "" : "disabled"}><span>${escapeHtml(label)}${entry.note ? ` <span class="chat-model-note">${escapeHtml(entry.note)}</span>` : ""}</span></label>`
+      + chatModelDefaultControlHtml(id, ready && !disabled.includes(id))
       + `<button type="button" class="chat-model-remove" data-chat-model-delete="${escapeHtml(id)}" title="从列表移除此模型" aria-label="移除模型 ${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
       + `</div>`;
   }).join("");
@@ -14380,6 +14632,16 @@ if (els.chatSiteSelect) {
     renderNodes();
   });
   els.chatModelToggleList.addEventListener("click", async event => {
+    // 设为默认:新建对话节点与模型失效回退都优先用此模型(settings.chatDefaultModel)
+    const setDefaultButton = event.target.closest("[data-chat-model-setdefault]");
+    if (setDefaultButton && !setDefaultButton.disabled) {
+      state.settings.chatDefaultModel = setDefaultButton.getAttribute("data-chat-model-setdefault") || "";
+      pushHistory();
+      renderChatModelToggleList();
+      renderNodes();
+      toast("已设为对话默认模型，新建对话节点将默认使用它");
+      return;
+    }
     // 内置站点行删除：从 chatSiteModels 列表移除（首次操作会把目录默认物化成显式列表）
     const deleteButton = event.target.closest("[data-chat-model-delete]");
     if (deleteButton && chatSettingsSite !== "custom") {
@@ -16176,6 +16438,7 @@ function updatePaletteWidget(root, widget) {
   for (const button of root.querySelectorAll('[data-palette-action="layout"]')) {
     button.setAttribute("aria-pressed", String(button.dataset.layout === widget.layout));
   }
+  if (root.dataset.paletteOwner === "editor") syncLightboxPaletteTop(); // 结果区布局切换会改变面板高度
 }
 
 function paletteMarkup(node) {
@@ -16184,7 +16447,7 @@ function paletteMarkup(node) {
   const widget = paletteWidget(owner);
   return `<div class="quick-palette palette-widget" data-palette-owner="${escapeHtml(owner)}" data-layout="${widget.layout}">
     <header class="palette-widget-header">
-      <div><strong>智能灵感调色盘</strong><small>按条件生成与收藏颜色</small></div>
+      <div><div class="palette-widget-title"><strong>智能灵感调色盘</strong><button type="button" class="palette-help-button" data-palette-action="help" title="调色盘使用教程" aria-label="调色盘使用教程" aria-haspopup="dialog" aria-controls="paletteHelpDialog">?</button></div><small>按条件生成与收藏颜色</small></div>
       <div class="palette-widget-layouts" role="group" aria-label="配色展示方式">${[
         ["stack", "纵条", "M3 3h10v4H3z M3 9h10v4H3z"],
         ["strip", "横条", "M3 3h4v10H3z M9 3h4v10H9z"],
@@ -16220,6 +16483,7 @@ function renderEditorPalette() {
     editorPaletteId = (withColors || globalLibrary.palettes[0]).id;
   }
   panel.querySelector(".quick-palette-body").innerHTML = paletteMarkup();
+  syncLightboxPaletteTop(); // 内容高度可能变化（收藏颜色行数、结果区布局），重新等比适配
 }
 
 function refreshPalettes() {
@@ -16648,6 +16912,11 @@ document.addEventListener("click", event => {
   const palette = paletteFor(node);
   const widget = paletteWidget(root.dataset.paletteOwner);
   switch (button.dataset.paletteAction) {
+    case "help": {
+      const dialog = $("paletteHelpDialog");
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
     case "generate":
       generateWidgetPalette(widget);
       updatePaletteWidget(root, widget);
@@ -16674,7 +16943,6 @@ document.addEventListener("click", event => {
         }
         if (!node && lightboxPainting) {
           els.lightboxPaintColor.value = hex;
-          if (lightboxPaintMode !== "color-brush") setLightboxPaintMode("fill");
           scheduleLightboxFillReapply();
         }
         toast(`已取色 ${hex}`);
@@ -16706,9 +16974,9 @@ document.addEventListener("click", event => {
     case "pick": {
       const hex = button.dataset.color;
       widget.selected = hex;
+      // 选色只更新当前工具的色值（画笔/上色共用），不强制切换工具（2026-11-12 用户要求）
       if (!node && lightboxPainting) {
         els.lightboxPaintColor.value = hex;
-        if (lightboxPaintMode !== "color-brush") setLightboxPaintMode("fill");
         scheduleLightboxFillReapply();
       }
       if (button.dataset.paletteAction !== "sample" || !saveWidgetColor(node, widget, hex)) {
