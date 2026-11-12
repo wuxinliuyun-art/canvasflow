@@ -1205,7 +1205,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .chat-workspace-head button:focus-visible, .chat-html-preview-dialog header button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .chat-workspace-head svg, .chat-html-preview-dialog header svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 /* 顶部对话节点标签条:浏览器式——标签贴着底边,激活标签以工作区底色衔接内容区,顶部 2px 主色 */
-.chat-workspace-head .chat-workspace-tabs { flex: 1 1 auto; min-width: 0; align-items: flex-end; gap: 3px; padding: 7px 6px 0; overflow-x: auto; scrollbar-width: thin; }
+.chat-workspace-head .chat-workspace-tabs { flex: 1 1 auto; min-width: 0; align-items: flex-end; gap: 3px; padding: 7px 6px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .chat-node-tab { position: relative; z-index: 0; display: flex; min-width: 120px; max-width: 200px; flex: 0 1 auto; height: 31px; align-items: center; gap: 2px; padding: 0 2px 0 10px; border: 1px solid color-mix(in srgb, var(--line) 55%, transparent); border-bottom: 0; border-radius: 6px 6px 0 0; background: color-mix(in srgb, var(--panel-2) 62%, transparent); color: var(--muted); }
 .chat-node-tab.is-active { z-index: 1; margin-bottom: -1px; border-color: var(--line); border-top: 2px solid var(--primary); background: var(--node-control); color: var(--text); }
 .chat-node-tab:not(.is-active):hover { background: var(--panel-2); color: var(--text); }
