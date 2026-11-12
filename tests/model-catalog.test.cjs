@@ -24,3 +24,12 @@ test("AGToken keeps 4K on image models with supported channels", () => {
     assert(model.resolutions.includes("4k"), `${id} should keep 4K`);
   }
 });
+
+test("AGToken offers the official-channel GPT Image 2 fallback model", () => {
+  const catalog = loadCatalog();
+  const model = catalog.agtoken.models.find(entry => entry.id === "gpt-image-2官渠");
+  assert(model, "gpt-image-2官渠 should exist in the agtoken catalog");
+  assert.equal(model.hidden, undefined, "官渠 model stays selectable in the dropdown");
+  assert.deepEqual(Array.from(model.resolutions), ["1k", "2k", "4k"]);
+  assert.equal(model.quality, false, "官渠 pricing is flat per image; quality param stays off");
+});

@@ -182,18 +182,18 @@ test("node entry button reflects undo state and disables itself while a request 
   const harness = setup();
   const button = node => {
     const html = harness.context.textPromptActionsHtml(node);
-    return { label: />(还原|优化)</.exec(html)?.[1], disabled: /disabled/.test(html) };
+    return { label: />(还原|AI优化)</.exec(html)?.[1], disabled: /disabled/.test(html) };
   };
-  assert.deepEqual(button(harness.node), { label: "优化", disabled: false });
+  assert.deepEqual(button(harness.node), { label: "AI优化", disabled: false });
 
   harness.context.pendingSet.add(harness.node.id);
-  assert.deepEqual(button(harness.node), { label: "优化", disabled: true });
+  assert.deepEqual(button(harness.node), { label: "AI优化", disabled: true });
   harness.context.pendingSet.delete(harness.node.id);
 
   harness.context.apply(harness.node.id, "更清晰的提示词", "画一只猫");
   assert.deepEqual(button(harness.node), { label: "还原", disabled: false });
   harness.context.restore(harness.node.id);
-  assert.deepEqual(button(harness.node), { label: "优化", disabled: false });
+  assert.deepEqual(button(harness.node), { label: "AI优化", disabled: false });
 });
 
 test("selected model prefers the per-node choice and falls back to the first available model", () => {

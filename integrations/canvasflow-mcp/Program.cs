@@ -74,6 +74,10 @@ internal static class Program
         {
             ["type"] = "object", ["properties"] = new JsonObject(), ["additionalProperties"] = false
         }, false),
+        Tool("canvasflow_list_canvas_groups", "列出 CanvasFlow 当前项目的画布编组：编组名称、成员节点（类型与文字/图片摘要）和位置。用于把用户提到的编组名对应到具体节点。只读，不会改动画布。", new JsonObject
+        {
+            ["type"] = "object", ["properties"] = new JsonObject(), ["additionalProperties"] = false
+        }, false),
         Tool("canvasflow_start_generation", "通过 CanvasFlow 已配置的绘图服务提交图片生成任务。该操作可能产生费用，必须显式确认。", new JsonObject
         {
             ["type"] = "object",
@@ -159,7 +163,7 @@ internal static class Program
         ["annotations"] = new JsonObject
         {
             ["title"] = name,
-            ["readOnlyHint"] = name is "canvasflow_status" or "canvasflow_list_outputs" or "canvasflow_sd_status" or "canvasflow_sd_list_workflows" or "canvasflow_sd_get",
+            ["readOnlyHint"] = name is "canvasflow_status" or "canvasflow_list_outputs" or "canvasflow_list_canvas_groups" or "canvasflow_sd_status" or "canvasflow_sd_list_workflows" or "canvasflow_sd_get",
             ["destructiveHint"] = name is "canvasflow_sd_cancel",
             ["idempotentHint"] = name is not ("canvasflow_start_generation" or "canvasflow_sd_start"),
             ["openWorldHint"] = openWorld
@@ -177,6 +181,7 @@ internal static class Program
             var payload = name switch
             {
                 "canvasflow_status" => Status(),
+                "canvasflow_list_canvas_groups" => await ListCanvasGroupsAsync(),
                 "canvasflow_start_generation" => await StartGenerationAsync(args),
                 "canvasflow_get_generation" => await GetGenerationAsync(args),
                 "canvasflow_list_outputs" => ListOutputs(args),
@@ -204,6 +209,16 @@ internal static class Program
         ["agtoken_configured"] = HasApiKey("agtoken"),
         ["output_directory"] = OutputDirectory()
     };
+
+    // 画布编组列表：走桌面端 GET /api/canvas-groups（读 app-state.json 当前页），
+    // 用户在画布上给编组起名后，AI 通过本工具即可知道“角色A”这类名字对应哪些节点
+    private static async Task<JsonObject> ListCanvasGroupsAsync()
+    {
+        var response = await ApiAsync("GET", "/api/canvas-groups", "", "");
+        var parsed = JsonNode.Parse(response.Body) as JsonObject ?? throw new InvalidDataException("CanvasFlow 编组响应无效");
+        if (response.Status is < 200 or >= 300) throw new InvalidOperationException(ErrorMessage(parsed, response.Status));
+        return parsed;
+    }
 
     private static async Task<JsonObject> SdStatusAsync()
     {

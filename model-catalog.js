@@ -42,6 +42,10 @@
         // AGToken currently has no distributor channel for the derived gpt-image-2-4k model.
         // Keep 4K available on models whose upstream channels support it instead of submitting a known-invalid combination.
         { id: "gpt-image-2", label: "GPT Image 2", quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k"], sizes: RATIOS_FULL },
+        // gpt-image-2官渠：官方直连满血版，原生 1K/2K/4K 各档同价（约 ¥0.15/张），支持 image-edits；
+        // 同时承担两件事（见 app.js）：gpt-image-2 的 2K 档固定路由到官渠提交（agtokenSubmitModelId），
+        // 以及 gpt-image-2 派生渠道不可用（No available channel）时的自动兜底（agtokenChannelFallbackModelId）
+        { id: "gpt-image-2官渠", label: "GPT Image 2 官渠（满血）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
         // nano-banana-2 / nano-banana-pro：size 传 1k/2k/4k 档，比例仅接受标准档（任意宽高比会被上游 400 拒绝）；不支持 quality
         { id: "nano-banana-2", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"] },
         { id: "nano-banana-pro", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"] },

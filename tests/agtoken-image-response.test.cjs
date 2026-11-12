@@ -43,3 +43,22 @@ test("only unknown-result AGToken timeouts show the account check link", () => {
   assert.match(timeoutMarkup, /检查是否已生成/);
   assert.doesNotMatch(context.taskQueueErrorMarkup("参数错误"), /agtoken\.vip/);
 });
+
+test("channel fallback triggers only for gpt-image-2 with No available channel errors", () => {
+  const channelError = "No available channel for model gpt-image-2-2k under group default (distributor) (request id: 202611121516005285669408268d9d67qrLFpd1)";
+  assert.equal(context.agtokenChannelFallbackModelId(channelError, "gpt-image-2"), "gpt-image-2官渠");
+  assert.equal(context.agtokenChannelFallbackModelId("no available channel for model gpt-image-2-1k", "gpt-image-2"), "gpt-image-2官渠");
+  assert.equal(context.agtokenChannelFallbackModelId(channelError, "gpt-image-2.5-flare"), "", "other models have no fallback target");
+  assert.equal(context.agtokenChannelFallbackModelId("agtoken 接口连接失败 ← The SSL connection could not be established", "gpt-image-2"), "", "network errors must not switch models");
+  assert.equal(context.agtokenChannelFallbackModelId("", "gpt-image-2"), "");
+  assert.equal(context.agtokenChannelFallbackModelId(undefined, "gpt-image-2"), "");
+});
+
+test("gpt-image-2 2K submissions take the official-channel route, other tiers stay put", () => {
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2", "2k"), "gpt-image-2官渠");
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2", "2K"), "gpt-image-2官渠");
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2", "1k"), "gpt-image-2", "普通档位仍用原模型");
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2", ""), "gpt-image-2");
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2.5-flare", "2k"), "gpt-image-2.5-flare");
+  assert.equal(context.agtokenSubmitModelId("gpt-image-2官渠", "2k"), "gpt-image-2官渠");
+});

@@ -697,6 +697,7 @@ internal sealed class DesktopApi
             if (method == "GET" && path == "/api/runtime-paths")
                 return Json(200, new { dataRoot = _root, exportFolder = Path.Combine(_root, "export"), projectsFolder = Path.Combine(_root, "projects") });
             if (path == "/api/app-state") return HandleAppState(method, body);
+            if (method == "GET" && path == "/api/canvas-groups") return ListCanvasGroups();
             if (path == "/api/custom-library") return HandleCustomLibrary(method, body);
             if (method == "POST" && path == "/api/auto-backup") return SaveAutoBackup(body);
             if (method == "POST" && path == "/api/save-json") return SaveJson(body);
@@ -741,6 +742,75 @@ internal sealed class DesktopApi
             }
         AtomicWrite(filePath, stateNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return Json(200, new { success = true });
+    }
+
+    // 画布编组列表（MCP 伴生服务用）：从 app-state.json 读当前页的编组分组、canvasGroupNames
+    // 名称与成员摘要，供 AI 把用户提到的编组名对应到具体节点；只读，不改动画布
+    private DesktopApiResponse ListCanvasGroups()
+    {
+        var filePath = Path.Combine(_root, "data", "app-state.json");
+        var state = File.Exists(filePath) ? JsonNode.Parse(File.ReadAllText(filePath, Encoding.UTF8)) as JsonObject : null;
+        var pages = state?["pages"] as JsonArray ?? [];
+        var activeId = JsonText(state?["activePageId"]);
+        JsonObject? page = null;
+        foreach (var item in pages.OfType<JsonObject>())
+        {
+            if (activeId.Length > 0 && JsonText(item["id"]) == activeId) { page = item; break; }
+            page ??= item;
+        }
+        var data = page?["data"] as JsonObject;
+        var nodes = data?["nodes"] as JsonArray ?? [];
+        var names = data?["canvasGroupNames"] as JsonObject;
+        var frames = data?["canvasGroupFrames"] as JsonObject;
+        var members = new Dictionary<string, JsonArray>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var item in nodes.OfType<JsonObject>())
+        {
+            var groupId = JsonText(item["canvasGroupId"]);
+            if (groupId.Length == 0) continue;
+            if (!members.TryGetValue(groupId, out var list)) { list = []; members[groupId] = list; order.Add(groupId); }
+            var image = JsonText(item["generatedImage"]);
+            list.Add(new JsonObject
+            {
+                ["id"] = JsonText(item["id"]),
+                ["type"] = JsonText(item["type"]),
+                ["text"] = JsonPreview(item, "text", "prompt"),
+                ["image"] = image.StartsWith("data:", StringComparison.Ordinal) ? "[内嵌图片]" : PreviewText(image, 120),
+            });
+        }
+        var groups = new JsonArray();
+        foreach (var groupId in order)
+        {
+            if (members[groupId].Count < 2) continue;
+            groups.Add(new JsonObject
+            {
+                ["id"] = groupId,
+                ["name"] = JsonText(names?[groupId]),
+                ["member_count"] = members[groupId].Count,
+                ["bounds"] = frames?[groupId]?.DeepClone() ?? new JsonObject(),
+                ["members"] = members[groupId].DeepClone(),
+            });
+        }
+        return Json(200, new { success = true, page_id = JsonText(page?["id"]), page_name = JsonText(page?["name"]), group_count = groups.Count, groups });
+    }
+
+    private static string JsonText(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : "";
+
+    private static string JsonPreview(JsonObject item, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var text = JsonText(item[key]);
+            if (text.Length > 0) return PreviewText(text, 80);
+        }
+        return "";
+    }
+
+    private static string PreviewText(string text, int max)
+    {
+        text = text.Trim();
+        return text.Length <= max ? text : text[..max] + "…";
     }
 
     private DesktopApiResponse HandleCustomLibrary(string method, string body)

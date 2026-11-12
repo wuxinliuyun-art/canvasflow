@@ -29,6 +29,7 @@ CanvasFlow 的本机 stdio MCP 伴侣。它让 Codex 在获得用户明确确认
 ## 工具与结果位置
 
 - `canvasflow_status`：检查版本、密钥槽和导出目录，不产生费用。
+- `canvasflow_list_canvas_groups`：列出当前项目的画布编组（名称、成员节点摘要与位置），用于把用户提到的编组名对应到具体节点。只读。
 - `canvasflow_start_generation`：提交真实图片生成，必须显式确认可能产生的费用。
 - `canvasflow_get_generation`：查询进度，完成后可保存结果。
 - `canvasflow_list_outputs`：列出近期生成结果。

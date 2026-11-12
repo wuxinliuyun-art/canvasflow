@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261112-chatws-ui1">
+  <link rel="stylesheet" href="styles.css?v=20261113-resultedge1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -81,7 +81,6 @@
       </section>
       <div class="utility-track bottom-utility-track" aria-label="工作流工具">
         <button id="autoOutputBtn" class="track-icon-btn" title="一键连接" aria-label="一键连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0"/></svg></button>
-        <button id="aiGenerateBtn" class="track-icon-btn" title="批量执行" aria-label="批量执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h9M5 10h6M5 15h5"/><path d="m14 12 6 4-6 4z"/></svg></button>
         <button id="taskQueueBtn" class="track-icon-btn task-queue-btn" type="button" title="任务队列" aria-label="任务队列">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11M7 12h11M7 17h11"/><circle cx="4" cy="7" r=".8"/><circle cx="4" cy="12" r=".8"/><circle cx="4" cy="17" r=".8"/></svg>
           <span id="taskQueueBadge" class="task-queue-badge hidden">0</span>
@@ -95,7 +94,8 @@
         <button id="taskQueueCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
       </div>
       <div class="task-queue-toolbar">
-        <span>最多同时处理 5 个任务</span>
+        <span>最多同时处理 5 个任务 · 多任务批量最多 2 个、组间隔 2 秒 · 点任务看发送详情</span>
+        <button id="taskQueuePauseBtn" type="button" title="暂停队列：拦截所有未发送任务" aria-label="暂停任务队列">暂停队列</button>
         <button id="taskQueueClearBtn" type="button">清除已完成</button>
       </div>
       <div id="taskQueueList" class="task-queue-list"><div class="task-queue-empty">还没有 AI 绘图任务</div></div>
@@ -291,12 +291,6 @@
           <label class="check-row"><input id="smoothEdgesToggle" type="checkbox" checked><span>平滑连线</span></label>
           <label class="check-row"><input id="hideNodeTitlesToggle" type="checkbox"><span>隐藏节点名称</span></label>
         </section>
-        <section class="settings-card">
-          <h3>右键菜单管理</h3>
-          <p class="setting-desc">取消勾选可隐藏画布右键菜单中的对应选项；同名选项在不同位置一起隐藏，立即生效。</p>
-          <div id="menuManagerList" class="menu-manager-list"></div>
-          <div class="menu-manager-actions"><button id="menuManagerResetBtn" type="button">全部恢复显示</button></div>
-        </section>
         <section class="settings-card ui-colors-card">
           <h3>界面颜色</h3>
           <div class="ui-color-rows">
@@ -308,6 +302,12 @@
             <label class="ui-color-row"><span>主按钮</span><input type="color" id="uiColorAccent" value="#f4f4f5"><button type="button" class="ui-color-alt" data-ui-color-alt="accent" title="快捷色板">&#9662;</button><button type="button" class="ui-color-reset" data-ui-color="accent">默认</button></label>
           </div>
           <div class="ui-color-actions"><button type="button" id="uiColorResetAll">全部恢复默认</button></div>
+        </section>
+        <section class="settings-card">
+          <h3>右键菜单管理</h3>
+          <p class="setting-desc">取消勾选可隐藏画布空白处右键菜单中的对应选项，立即生效。</p>
+          <div id="menuManagerList" class="menu-manager-list"></div>
+          <div class="menu-manager-actions"><button id="menuManagerResetBtn" type="button">全部恢复显示</button></div>
         </section>
       </div>
 
@@ -614,13 +614,13 @@
       <div class="update-prompt-actions"><button type="submit" autofocus>知道了</button></div>
     </form>
   </dialog>
-  <script src="model-catalog.js?v=20261107-agt-gpt2-resolution1"></script>
+  <script src="model-catalog.js?v=20261112-guanqu1"></script>
   <script src="canvas-runtime.js?v=20261101-sdvideo1"></script>
   <script src="modules/sd-workflow-templates.js?v=20261101-matting4"></script>
   <script src="modules/local-sd.js?v=20261112-brush-unify1"></script>
   <script src="modules/fill-selection.js?v=20261105-merge2801"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
-  <script src="app.js?v=20261112-chatws-ui1"></script>
+  <script src="app.js?v=20261113-resultedge1"></script>
   <script src="modules/manual-matting.js?v=20261112-brush-unify1"></script>
 </body>
 </html>

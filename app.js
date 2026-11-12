@@ -253,10 +253,10 @@ const UI_EN = {
   "取消连线": "Remove Connection", "已居中显示": "View centered", "已整理节点": "Nodes arranged", "没有需要添加的节点": "No nodes need to be added", "没有需要连接的节点": "No nodes need to be connected",
   "已生成局部修改图片节点": "Edited image node created", "请输入文字或选择图片": "Enter text or choose an image", "已创建节点": "Node created",
   "已从剪贴板创建图片节点": "Image node created from clipboard", "已从 Photoshop 回传创建图片节点": "Image node created from Photoshop return", "已从剪贴板创建文字节点": "Text node created from clipboard",
-  "切换启用/停用": "Toggle Enabled/Disabled", "多任务": "Multi-task", "依次连接": "Connect in Sequence", "取消多任务": "Dissolve Multi-task", "添加输出节点": "Add Output Node",
+  "多任务": "Multi-task", "依次连接": "Connect in Sequence", "取消多任务": "Dissolve Multi-task", "添加输出节点": "Add Output Node",
   "请至少选择 2 个文字、图片或 AI 绘图节点": "Select at least 2 text, image, or AI image nodes", "所选节点已经依次连接": "The selected nodes are already connected in sequence",
   "打开本地文件夹": "Open Local Folder", "断开连接": "Disconnect", "复制": "Copy", "复制节点": "Copy Nodes", "删除节点": "Delete Nodes", "粘贴节点": "Paste Nodes",
-  "批量停用": "Disable Selected", "批量启用": "Enable Selected", "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
+  "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
   "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加AI视频节点": "Add AI Video Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
   "已新建标签页": "New project created", "至少保留一个项目": "At least one project must remain", "已删除项目（Ctrl+Z 可撤回）": "Project deleted (Ctrl+Z to restore)",
   "上传图片文件": "Upload Image Files", "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
@@ -611,6 +611,8 @@ const state = {
   selected: new Set(),
   // 画布节点编组：成员节点带 canvasGroupId，外框按成员范围拟合后缓存在这里
   canvasGroupFrames: {},
+  // 编组名称（groupId → 名称）：显示在外框左上角，并经 /api/canvas-groups 暴露给 MCP
+  canvasGroupNames: {},
   selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
   settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
@@ -642,9 +644,12 @@ let desktopAssetMigrationTimer = null;
 let desktopAssetMigrationPromise = null;
 let desktopAssetMigrationQueued = false;
 const AI_QUEUE_MAX_CONCURRENT = 5;
+// 多任务批量(组图/批量参考图,task.groupImage 非空)单独限流:瞬时并发提交过多
+// 容易被同步接口拒绝,批量任务同时占满 5 个槽位也会拖慢单个任务的完成节奏
+const AI_GROUP_TASK_CONCURRENT = 2;
 // 远程 AI 与本地 BiRefNet 分开计数：本地任务不占用远程并发名额，
 // 但本地拓展仍固定串行，避免多个任务同时清理同一 input/output 目录。
-const aiTaskQueue = { items: [], running: 0, localRunning: 0, nextId: 1 };
+const aiTaskQueue = { items: [], running: 0, localRunning: 0, groupRunning: 0, nextId: 1 };
 const aiApiSlots = { active: 0, waiters: [] };
 
 function acquireAiApiSlot(label = "AI任务") {
@@ -909,7 +914,6 @@ const els = {
   defaultImageModelSelect: $("defaultImageModelSelect"),
   defaultResolutionSelect: $("defaultResolutionSelect"),
   defaultSizeSelect: $("defaultSizeSelect"),
-  aiGenerateBtn: $("aiGenerateBtn"),
   verifyKeyBtn: $("verifyKeyBtn"),
   saveKeyBtn: $("saveKeyBtn"),
   apiTypeSelect: $("apiTypeSelect"),
@@ -1038,6 +1042,7 @@ const els = {
   taskQueuePanel: $("taskQueuePanel"),
   taskQueueCloseBtn: $("taskQueueCloseBtn"),
   taskQueueSummary: $("taskQueueSummary"),
+  taskQueuePauseBtn: $("taskQueuePauseBtn"),
   taskQueueClearBtn: $("taskQueueClearBtn"),
   taskQueueList: $("taskQueueList"),
   replayOnboardingBtn: $("replayOnboardingBtn"),
@@ -1174,6 +1179,7 @@ function cloneData() {
     edges: state.edges,
     annotations: state.annotations,
     canvasGroupFrames: state.canvasGroupFrames,
+    canvasGroupNames: state.canvasGroupNames,
     settings,
     customLibrary: state.customLibrary,
     view: state.view,
@@ -1205,6 +1211,7 @@ function restoreData(data) {
   state.edges = data.edges || [];
   // 旧工程没有 canvasGroupFrames 字段：留空即可，外框会在渲染时按成员范围重新推导
   state.canvasGroupFrames = { ...(data.canvasGroupFrames || {}) };
+  state.canvasGroupNames = { ...(data.canvasGroupNames || {}) };
   state.selectedCanvasGroupId = "";
   state.annotations = Array.isArray(data.annotations)
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
@@ -1243,6 +1250,8 @@ function restoreData(data) {
     console.warn(`[旧编组] 思维导图编组功能已下线，已移除 ${legacyGroupIds.size} 个编组节点`);
   }
   walkNodes(state.nodes, node => { if (node.customRef) delete node.customRef; });
+  // 节点启用/停用功能已取消(2026-11-13):旧存档里停用的节点一律恢复可用,避免永远无法重新启用
+  walkNodes(state.nodes, node => { if (node.disabled) delete node.disabled; });
   walkNodes(state.nodes, node => normalizeAiNodeSettings(node, legacyAiSettings));
   walkNodes(state.nodes, node => { if (node.type === "variable") normalizeVariableNode(node); });
   // 已移除的包装盒节点迁移为普通图片节点，保留生成结果和原有连线。
@@ -2555,7 +2564,10 @@ function expandCanvasGroupIds(ids) {
 function groupCanvasSelection() {
   const ids = expandCanvasGroupIds(state.selected);
   if (ids.size < 2) return toast("至少选中 2 个节点才能创建编组");
-  for (const node of state.nodes) if (ids.has(node.id) && node.canvasGroupId) delete state.canvasGroupFrames[node.canvasGroupId];
+  for (const node of state.nodes) if (ids.has(node.id) && node.canvasGroupId) {
+    delete state.canvasGroupFrames[node.canvasGroupId];
+    delete state.canvasGroupNames[node.canvasGroupId];
+  }
   const groupId = uid("canvas-group");
   for (const node of state.nodes) if (ids.has(node.id)) node.canvasGroupId = groupId;
   state.selected = ids;
@@ -2572,6 +2584,7 @@ function ungroupCanvasSelection() {
   let count = 0;
   for (const node of state.nodes) if (ids.has(node.id) && node.canvasGroupId) {
     delete state.canvasGroupFrames[node.canvasGroupId];
+    delete state.canvasGroupNames[node.canvasGroupId];
     delete node.canvasGroupId;
     count++;
   }
@@ -2581,6 +2594,42 @@ function ungroupCanvasSelection() {
   pushHistory();
   render();
   toast(`已解散编组，保留 ${count} 个节点`);
+}
+
+// 编组命名：名称存 state.canvasGroupNames[groupId]，显示在外框左上角，
+// 并经 /api/canvas-groups（DesktopApi）暴露给 MCP 伴生服务
+async function renameCanvasGroup(groupId) {
+  const members = canvasGroupMembers(groupId);
+  if (!groupId || members.length < 2) return;
+  const current = String(state.canvasGroupNames?.[groupId] || "");
+  let value = current;
+  const onInput = event => { if (event.target?.matches?.(".group-rename-input")) value = event.target.value; };
+  const onKeyDown = event => {
+    if (!event.target?.matches?.(".group-rename-input")) return;
+    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    event.target.closest(".canvas-confirm-panel")?.querySelector("[data-dialog-confirm]")?.click();
+  };
+  document.addEventListener("input", onInput, true);
+  document.addEventListener("keydown", onKeyDown, true);
+  const dialogPromise = showCanvasDialog({
+    title: "重命名编组",
+    message: `该编组包含 ${members.length} 个节点。名称显示在外框左上角，并通过 MCP 编组列表提供给 AI。`,
+    content: `<input type="text" class="group-rename-input" maxlength="40" placeholder="编组名称（留空恢复默认显示）" aria-label="编组名称" value="${escapeHtml(current)}" />`,
+    confirmText: "保存",
+    cancelText: "取消",
+  });
+  setTimeout(() => document.querySelector(".group-rename-input")?.focus(), 0);
+  const confirmed = await dialogPromise;
+  document.removeEventListener("input", onInput, true);
+  document.removeEventListener("keydown", onKeyDown, true);
+  if (!confirmed) return;
+  const name = value.trim().slice(0, 40);
+  if (name) state.canvasGroupNames[groupId] = name;
+  else delete state.canvasGroupNames[groupId];
+  pushHistory();
+  render();
+  toast(name ? `编组已命名：${name}` : "已清除编组名称");
 }
 
 function canvasGroupNodeRect(node) {
@@ -2807,15 +2856,8 @@ function deleteNodes(ids) {
   const memberCounts = new Map();
   for (const node of state.nodes) if (node.canvasGroupId) memberCounts.set(node.canvasGroupId, (memberCounts.get(node.canvasGroupId) || 0) + 1);
   for (const groupId of Object.keys(state.canvasGroupFrames || {})) if ((memberCounts.get(groupId) || 0) < 2) delete state.canvasGroupFrames[groupId];
+  for (const groupId of Object.keys(state.canvasGroupNames || {})) if ((memberCounts.get(groupId) || 0) < 2) delete state.canvasGroupNames[groupId];
   for (const node of state.nodes) if (node.canvasGroupId && (memberCounts.get(node.canvasGroupId) || 0) < 2) delete node.canvasGroupId;
-  pushHistory();
-  render();
-}
-
-function toggleDisabled(ids, disabled = null) {
-  state.nodes.forEach(n => {
-    if (ids.has(n.id)) n.disabled = disabled === null ? !n.disabled : disabled;
-  });
   pushHistory();
   render();
 }
@@ -2855,8 +2897,9 @@ async function copySelection(event = null) {
     copyId: uid("copy"),
     nodes,
     edges: state.edges.filter(e => state.selected.has(e.from.node) && state.selected.has(e.to.node)),
-    // 整组被完整复制时带上外框，粘贴后保留被撑开的组内空间
+    // 整组被完整复制时带上外框与名称，粘贴后保留被撑开的组内空间和编组名
     canvasGroupFrames: Object.fromEntries(canvasDragGroupFrames(nodes).map(({ groupId, ...bounds }) => [groupId, bounds])),
+    canvasGroupNames: Object.fromEntries(canvasDragGroupFrames(nodes).map(({ groupId }) => [groupId, String(state.canvasGroupNames?.[groupId] || "")]).filter(([, name]) => name)),
   };
   if (!desktop && event?.clipboardData) {
     const html = encodeCanvasflowNodesHtml(payload);
@@ -2996,6 +3039,8 @@ function pasteNodes(data, anchor = null) {
   for (const [oldId, newId] of groupMap) {
     const bounds = data.canvasGroupFrames?.[oldId];
     if (bounds) state.canvasGroupFrames[newId] = { ...bounds, x: bounds.x + groupPosition.x - minX, y: bounds.y + groupPosition.y - minY };
+    const groupName = data.canvasGroupNames?.[oldId];
+    if (groupName) state.canvasGroupNames[newId] = String(groupName);
   }
   (data.edges || []).forEach(e => {
     if (map.has(e.from.node) && map.has(e.to.node)) {
@@ -4737,7 +4782,15 @@ function collectUpstreamForAI(nodeId, incoming) {
       if (n.images && n.images.length) {
         for (const gImg of n.images) result.groupImages.push(imageRef({ ...n, fileName: gImg.fileName, mime: gImg.mime }, gImg.image, gImg.assetId));
       }
-      return [];
+      // 组节点不是语义边界:沿入线继续向上游收集分支(汇聚节点语义)。
+      // 文字节点→图片节点→多任务节点→AI 时,文字与上游参考图(如样式图)随每条分支到达任务,
+      // 组图仍走 groupImages 与分支图片融合;组节点无入线时行为不变(返回空,任务只有组图)。
+      const edges = incoming.get(id) || [];
+      const upBranches = [];
+      for (const edge of edges) {
+        for (const branch of visit(edge.from.node, nextVisited)) upBranches.push(branch);
+      }
+      return upBranches.map(branch => ({ texts: branch.texts, images: branch.images }));
     }
     // 图片节点等:自身图片加入每条经过它的分支
     const own = n.type === "image" && n.image ? [imageRef(n, n.image, n.imageAssetId)] : [];
@@ -5741,27 +5794,81 @@ async function parseAgtokenImageResponse(resp) {
   return data;
 }
 
+// 官渠兜底（2026-11-12）：gpt-image-2 的派生渠道（如 gpt-image-2-2k）被网关下线/停用时，
+// 上游返回 "No available channel for model ... under group default (distributor)"。
+// 此时自动改用官方直连的 gpt-image-2官渠 重试一次，并把节点/任务参数切到官渠（首次弹窗，其后 toast）。
+// 另有固定路由（2026-11-13，agtokenSubmitModelId）：gpt-image-2 的 2K 档不再走派生渠道，直接按官渠提交，节点模型保持所选。
+const AGTOKEN_CHANNEL_FALLBACK_MODEL = "gpt-image-2官渠";
+const AGTOKEN_CHANNEL_ERROR_RE = /no available channel/i;
+let agtokenFallbackNoticeShown = false;
+
+function agtokenChannelFallbackModelId(errorMessage, modelId) {
+  return modelId === "gpt-image-2" && AGTOKEN_CHANNEL_ERROR_RE.test(String(errorMessage || ""))
+    ? AGTOKEN_CHANNEL_FALLBACK_MODEL
+    : "";
+}
+
+// 2K 固定路由（2026-11-13）：网关把 gpt-image-2+2K 映射到派生渠道 gpt-image-2-2k，该渠道长期无可用渠道，
+// 2K 请求直接改用官方直连的 gpt-image-2官渠 提交；1K 等其他档位与其他模型原样返回（渠道报错兜底仍由 fallback 负责）
+function agtokenSubmitModelId(modelId, resolution) {
+  return modelId === "gpt-image-2" && String(resolution || "").trim().toLowerCase() === "2k"
+    ? AGTOKEN_CHANNEL_FALLBACK_MODEL
+    : modelId;
+}
+
+function applyAgtokenChannelFallback(target, fromModel) {
+  target._agtokenFallbackFrom = fromModel;
+  target._model = AGTOKEN_CHANNEL_FALLBACK_MODEL;
+  if (target.id) renderNodes(); // 真实节点：模型下拉立即显示官渠（任务参数快照没有 id，由 runQueuedAiTask 镜像）
+}
+
+function notifyAgtokenChannelFallback(fromModel) {
+  const message = `${fromModel} 上游渠道暂时不可用（No available channel），已自动改用 ${AGTOKEN_CHANNEL_FALLBACK_MODEL}（官方直连满血版，约 ¥0.15/张，各分辨率同价）重试本次生成。如需换回，请在节点模型下拉重新选择 GPT Image 2。`;
+  if (agtokenFallbackNoticeShown) {
+    toast(message);
+    return;
+  }
+  agtokenFallbackNoticeShown = true;
+  void showCanvasDialog({ title: "已自动切换官渠模型", message, confirmText: "知道了" });
+}
+
 async function submitAgtokenGeneration(prompt, imageUrls, node) {
   const apiType = node._apiType || activeApiType();
-  const entry = modelCatalogEntry(node._model, apiType);
-  const payload = {
-    model: node._model,
-    prompt: prompt || "generate an image",
-    n: entry?.quality && isImage25ExtModel(node._model) ? Math.max(1, Math.min(4, Number(node._count) || 1)) : 1,
-    size: String(node._resolution || "1k").toLowerCase(),
-    response_format: "url",
-  };
-  if (node._size && node._size !== "auto") payload.aspect_ratio = node._size;
-  if (entry?.quality && node._quality) payload.quality = node._quality;
-  if (imageUrls.length) payload.images = await Promise.all(imageUrls.map(materializeReferenceImage));
-
   const endpoint = imageUrls.length ? "/api/agtoken/edits" : "/api/agtoken/generate";
-  const resp = await apiFetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-CanvasFlow-Api-Key": activeApiKey(apiType) || "" },
-    body: JSON.stringify(desktop ? payload : { ...payload, _apiKey: activeApiKey(apiType) }),
-  });
-  const data = await parseAgtokenImageResponse(resp);
+  const materializedImages = imageUrls.length ? await Promise.all(imageUrls.map(materializeReferenceImage)) : [];
+  const submitOnce = async modelId => {
+    const modelEntry = modelCatalogEntry(modelId, apiType);
+    const payload = {
+      model: modelId,
+      prompt: prompt || "generate an image",
+      n: modelEntry?.quality && isImage25ExtModel(modelId) ? Math.max(1, Math.min(4, Number(node._count) || 1)) : 1,
+      size: String(node._resolution || "1k").toLowerCase(),
+      response_format: "url",
+    };
+    if (node._size && node._size !== "auto") payload.aspect_ratio = node._size;
+    if (modelEntry?.quality && node._quality) payload.quality = node._quality;
+    if (materializedImages.length) payload.images = materializedImages;
+    const resp = await apiFetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CanvasFlow-Api-Key": activeApiKey(apiType) || "" },
+      body: JSON.stringify(desktop ? payload : { ...payload, _apiKey: activeApiKey(apiType) }),
+    });
+    return parseAgtokenImageResponse(resp);
+  };
+  const originalModel = node._model;
+  const routedModel = agtokenSubmitModelId(originalModel, node._resolution);
+  if (routedModel !== originalModel) node._agtokenRoutedModel = routedModel;
+  let data;
+  try {
+    data = await submitOnce(routedModel);
+  } catch (error) {
+    const fallbackModel = agtokenChannelFallbackModelId(error?.message, routedModel);
+    if (!fallbackModel) throw error;
+    applyAgtokenChannelFallback(node, originalModel);
+    notifyAgtokenChannelFallback(originalModel);
+    console.warn("[AGToken] 上游渠道不可用，自动切换官渠模型重试", { from: routedModel, to: fallbackModel, message: error?.message });
+    data = await submitOnce(fallbackModel);
+  }
   const urls = (Array.isArray(data.data) ? data.data : [])
     .map(item => {
       if (item?.url) return item.url;
@@ -5967,9 +6074,9 @@ function renderTaskQueue() {
   els.taskQueueBadge.textContent = String(activeCount);
   els.taskQueueBadge.classList.toggle("hidden", activeCount === 0);
   els.taskQueueBtn.classList.toggle("has-active", running > 0);
-  els.taskQueueSummary.textContent = aiTaskQueue.items.length
+  els.taskQueueSummary.textContent = (aiTaskQueue.items.length
     ? (uiLanguage === "en" ? `Running ${running} · Queued ${waiting} · Paused ${paused}` : `运行 ${running} · 等待 ${waiting} · 暂停 ${paused}`)
-    : translateUiString("暂无任务");
+    : translateUiString("暂无任务")) + (aiQueuePaused && aiTaskQueue.items.length ? (uiLanguage === "en" ? " · Queue paused" : " · 队列已暂停") : "");
   els.taskQueueList.innerHTML = aiTaskQueue.items.length ? aiTaskQueue.items.map((task, index) => {
     const thumbnail = task.thumbnail ? `<img src="${task.thumbnail}" alt="">` : translateUiString("无参考图");
     const canManage = task.kind !== "browser" && (task.status === "waiting" || task.status === "paused");
@@ -5998,6 +6105,68 @@ function taskQueueErrorMarkup(error) {
     ? `<a class="task-queue-error-link" href="https://agtoken.vip/usage-logs/task" target="_blank" rel="noopener noreferrer">打开 AGToken 任务记录，检查是否已生成</a>`
     : "";
   return `<div class="task-queue-error" role="alert"><span>${escapeHtml(message)}</span>${agtokenCheckLink}</div>`;
+}
+
+// 一键暂停按钮状态:按钮文字/提示随 aiQueuePaused 切换,状态类供样式高亮
+function updateTaskQueuePauseButton() {
+  if (!els.taskQueuePauseBtn) return;
+  els.taskQueuePauseBtn.textContent = aiQueuePaused ? "继续队列" : "暂停队列";
+  els.taskQueuePauseBtn.title = aiQueuePaused ? "继续队列：恢复发送队列中的任务" : "暂停队列：拦截所有未发送任务";
+  els.taskQueuePauseBtn.setAttribute("aria-label", aiQueuePaused ? "继续任务队列" : "暂停任务队列");
+  els.taskQueuePauseBtn.classList.toggle("is-paused", aiQueuePaused);
+}
+
+// 任务实际(或将要)发送的参考图数组:与发送层 taskImages 同源(orderedImages 优先)
+function queuedTaskSendImages(task) {
+  return task.orderedImages || (task.groupImage ? [...(task.regularImages || []), task.groupImage] : (task.regularImages || []));
+}
+
+// 点击任务行查看发送详情:完整文字(可复制)+ 参考图缩略图(按发送顺序,点开灯箱)。
+// 等待中任务显示"将发送内容",已提交任务 task.prompt 已被发送层覆写为实际发送的最终文字
+function showQueuedTaskDetail(taskId) {
+  const task = aiTaskQueue.items.find(item => item.id === taskId);
+  if (!task) return;
+  const images = queuedTaskSendImages(task);
+  const promptText = String(task.prompt || "");
+  const notSentYet = task.status === "waiting" || task.status === "paused";
+  const thumbs = images.map((ref, index) => {
+    const src = ref?.image || "";
+    const caption = `第${index + 1}张${ref?.fileName ? ` · ${ref.fileName}` : ""}${ref?.hasColorArrowNotes ? " · 带标注" : ""}`;
+    return `<figure${src ? ` data-detail-image="${index}"` : ""}><div class="task-detail-thumb-box">${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(ref?.fileName || "")}" loading="lazy" draggable="false">` : `<div class="task-detail-thumb-empty">素材待读取</div>`}</div><figcaption>${escapeHtml(caption)}</figcaption></figure>`;
+  }).join("");
+  const overlay = document.createElement("div");
+  overlay.className = "canvas-confirm-backdrop";
+  overlay.innerHTML = `<section class="canvas-confirm-panel task-detail-panel" role="dialog" aria-modal="true" aria-label="任务发送详情">
+    <h3>任务详情 · ${escapeHtml(task.label)}</h3>
+    <p>${escapeHtml(queueTaskStatusText(task))} · ${escapeHtml(task.model || "")} · ${escapeHtml(task.resolution || "")} · ${escapeHtml(task.size || "")} · ${notSentYet ? "以下为将发送内容" : "以下为实际发送内容"}</p>
+    <div class="task-detail-block">
+      <div class="task-detail-block-head"><span>发送文字</span><button type="button" data-detail-copy${promptText ? "" : " disabled"}>复制文字</button></div>
+      <div class="task-detail-prompt">${promptText ? escapeHtml(promptText) : ""}</div>
+    </div>
+    <div class="task-detail-block">
+      <div class="task-detail-block-head"><span>参考图 ${images.length} 张（按发送顺序）</span></div>
+      <div class="screenshot-batch-thumbs task-detail-thumbs">${thumbs || ""}</div>
+      ${images.length ? "" : `<div class="task-detail-empty">无参考图</div>`}
+    </div>
+    <div class="canvas-confirm-actions"><button type="button" data-detail-close>关闭</button></div>
+  </section>`;
+  const finish = () => { document.removeEventListener("keydown", onKey); overlay.remove(); };
+  const onKey = event => { if (event.key === "Escape") finish(); };
+  overlay.querySelector("[data-detail-copy]").onclick = async () => {
+    toast(await copyTextValue(promptText) ? "已复制发送文字" : "复制失败");
+  };
+  overlay.querySelector("[data-detail-close]").onclick = finish;
+  overlay.addEventListener("mousedown", event => { if (event.target === overlay) finish(); });
+  overlay.querySelectorAll("[data-detail-image]").forEach(figure => {
+    figure.addEventListener("click", () => {
+      const srcs = images.map(ref => ref?.image).filter(Boolean);
+      const clicked = images[Number(figure.dataset.detailImage)]?.image || "";
+      const at = Math.max(0, srcs.indexOf(clicked));
+      showLightbox([...srcs.slice(at), ...srcs.slice(0, at)]);
+    });
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
 }
 
 function moveQueuedTask(taskId, direction) {
@@ -6226,6 +6395,11 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     resultNode.aiBatchIndex = task.groupIndex >= 0 ? task.groupIndex : null;
     resultNode.outputPath = saved?.outputPath || "";
     task.resultNodeId = resultNode.id;
+    // 结果图片节点用连线挂回生成节点:整条链读作 上游→AI→结果(与角度变化结果同款),
+    // 多任务等批量结果不再是一盘散图;离页落位时连线写入目标项目的边表
+    const resultEdge = { id: uid("e"), from: { node: node.id, port: "out" }, to: { node: resultNode.id, port: "in" } };
+    if (offPage) (offPage.data.edges = offPage.data.edges || []).push(resultEdge);
+    else state.edges.push(resultEdge);
     if (!offPage) render();
     try {
       await externalizeImageField(resultNode, "image", "imageAssetId", fileName, saved?.assetId);
@@ -6414,6 +6588,20 @@ async function runQueuedAiTask(task) {
   if (!sendPrompt && taskImages.length) sendPrompt = "generate an image";
   task.prompt = sendPrompt; // 与本次实际发送一致（导出 PNG 的 generationPrompt 取此值）
   task.taskId = await submitGeneration(task.prompt, sendImages, task.generationSettings);
+  if (task.generationSettings?._agtokenRoutedModel) {
+    // 2K 固定走官渠是常态规则：任务面板如实显示实际提交的模型，节点模型保持用户所选不变
+    task.model = task.generationSettings._agtokenRoutedModel;
+  }
+  if (task.generationSettings?._agtokenFallbackFrom) {
+    // 官渠兜底已在提交层触发：任务面板改显官渠模型，并把仍是触发前模型的活节点一并切过去
+    // （活节点若已被用户中途手动换模型则不覆盖）
+    task.model = task.generationSettings._model;
+    const fallbackLiveNode = findNode(task.nodeId);
+    if (fallbackLiveNode && fallbackLiveNode._model === task.generationSettings._agtokenFallbackFrom) {
+      fallbackLiveNode._model = task.generationSettings._model;
+      renderNodes();
+    }
+  }
   task.status = "generating";
   refreshQueuedNodeProgress(task.nodeId);
   renderTaskQueue();
@@ -6511,12 +6699,19 @@ function runQueuedTask(task) {
 // 并发任务错峰提交：同步接口(如 agtoken)对同一密钥的瞬时并发提交可能被上游拒绝。
 // 以"最近一次提交时间"为基准保证任意两次任务启动至少间隔 AI_TASK_SUBMIT_STAGGER_MS，
 // 无论触发来源是入队、错峰定时器还是任务完成补位(补位不会被瞬时完成的任务绕过)。
+// 多任务批量任务(groupImage 非空)单独用更长的组间隔 AI_GROUP_TASK_STAGGER_MS：
+// 十几连发 500ms 一发太密，组与组之间留 2 秒缓冲，降低触发上游风控/限流的概率。
 const AI_TASK_SUBMIT_STAGGER_MS = 500;
+const AI_GROUP_TASK_STAGGER_MS = 2000;
 let aiQueueStaggerTimer = null;
 let aiQueueLastSubmitAt = 0;
+// 任务队列一键暂停:暂停后 pump 不再启动任何未发送任务(等待中/新入队都被拦截),
+// 已在生成中的任务无法中途撤回,继续跑完;状态仅存内存,刷新页面自动复位
+let aiQueuePaused = false;
 
 function pumpAiTaskQueue() {
   if (aiQueueStaggerTimer) { clearTimeout(aiQueueStaggerTimer); aiQueueStaggerTimer = null; }
+  if (aiQueuePaused) { renderTaskQueue(); return; }
 
   // 本地抠图拥有独立的单任务通道，不等待远程 AI 槽位，也不参与远程提交错峰。
   if (aiTaskQueue.localRunning < 1) {
@@ -6537,15 +6732,21 @@ function pumpAiTaskQueue() {
   }
 
   while (aiTaskQueue.running < AI_QUEUE_MAX_CONCURRENT) {
-    const task = aiTaskQueue.items.find(item => item.kind !== "browser" && !item.localMatting && item.status === "waiting");
+    // 批量任务(组图/批量参考图,groupImage 非空)单独限流:达到批量上限时跳过它
+    // 继续找普通任务,避免批量批次占满全部远程槽位;前方没有可启动任务时自然等补位
+    const task = aiTaskQueue.items.find(item => item.kind !== "browser" && !item.localMatting && item.status === "waiting"
+      && (!item.groupImage || aiTaskQueue.groupRunning < AI_GROUP_TASK_CONCURRENT));
     if (!task) break;
+    // 批量任务用更长的组间隔(2 秒),普通任务维持 500ms 错峰
+    const requiredGap = task.groupImage ? AI_GROUP_TASK_STAGGER_MS : AI_TASK_SUBMIT_STAGGER_MS;
     const sinceLastSubmit = Date.now() - aiQueueLastSubmitAt;
-    if (sinceLastSubmit < AI_TASK_SUBMIT_STAGGER_MS) {
-      aiQueueStaggerTimer = setTimeout(() => { aiQueueStaggerTimer = null; pumpAiTaskQueue(); }, AI_TASK_SUBMIT_STAGGER_MS - sinceLastSubmit);
+    if (sinceLastSubmit < requiredGap) {
+      aiQueueStaggerTimer = setTimeout(() => { aiQueueStaggerTimer = null; pumpAiTaskQueue(); }, requiredGap - sinceLastSubmit);
       break;
     }
     aiQueueLastSubmitAt = Date.now();
     aiTaskQueue.running++;
+    if (task.groupImage) aiTaskQueue.groupRunning++;
     runQueuedTask(task).catch(error => {
       task.status = "failed";
       task.error = error.message;
@@ -6553,6 +6754,7 @@ function pumpAiTaskQueue() {
       console.error("[任务队列] 任务执行失败", { taskId: task.id, nodeId: task.nodeId, message: error.message });
     }).finally(() => {
       aiTaskQueue.running--;
+      if (task.groupImage) aiTaskQueue.groupRunning--;
       refreshQueuedNodeProgress(task.nodeId);
       renderTaskQueue();
       pumpAiTaskQueue();
@@ -8111,14 +8313,15 @@ function renderNodes(options = {}) {
     frame.style.width = `${bounds.w}px`;
     frame.style.height = `${bounds.h}px`;
     const groupRun = canvasGroupRuns.get(groupId);
-    frame.innerHTML = `<span>编组 · ${members.length} 个节点${groupRun ? " · 运行中" : ""}</span><button type="button" class="node-group-run" data-group-action="${groupRun ? "stop" : "run"}" aria-label="${groupRun ? "停止编组运行" : "运行整个编组"}">${groupRun ? "停止" : "运行"}</button>`;
+    const groupName = String(state.canvasGroupNames?.[groupId] || "").trim();
+    frame.innerHTML = `<span>${escapeHtml(groupName || "编组")} · ${members.length} 个节点${groupRun ? " · 运行中" : ""}</span><button type="button" class="node-group-run" data-group-action="${groupRun ? "stop" : "run"}" aria-label="${groupRun ? "停止编组运行" : "运行整个编组"}">${groupRun ? "停止" : "运行"}</button>`;
     els.nodes.appendChild(frame);
   }
   for (const node of state.nodes) {
     const div = document.createElement("div");
     const progressClass = (node.type === "ai-image" || node.type === "angle-image") && node._aiProgress ? `ai-status-${node._aiProgress.status}` : "";
     const variableInvalid = node.type === "variable" && (normalizeVariableNode(node), node.variableRows.some(row => resolvedVariableRow(row).invalid));
-    div.className = `node ${node.type} ${progressClass} ${variableInvalid ? "variable-invalid" : ""} ${node.disabled ? "disabled" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""} ${nodeReleaseTargetId === node.id ? (nodeReleaseBridged ? "edge-release-armed edge-release-bridge" : "edge-release-armed") : ""}`;
+    div.className = `node ${node.type} ${progressClass} ${variableInvalid ? "variable-invalid" : ""} ${state.selected.has(node.id) ? "selected" : ""} ${compositeHoverReady && compositeHoverTargetId === node.id ? "composite-drop-ready" : ""} ${nodeReleaseTargetId === node.id ? (nodeReleaseBridged ? "edge-release-armed edge-release-bridge" : "edge-release-armed") : ""}`;
     div.dataset.id = node.id;
     div.draggable = false;
     div.style.left = `${node.x}px`;
@@ -8395,7 +8598,7 @@ function textPromptActionsHtml(node) {
   const restoring = typeof node._promptOriginalText === "string";
   const busy = promptOptimizationPending.has(node.id);
   const label = restoring ? "还原优化前的提示词" : "优化提示词";
-  return `<div class="text-prompt-actions"><button type="button" class="prompt-optimize-btn${restoring ? " is-restore" : ""}${busy ? " is-busy" : ""}" data-role="prompt-optimize" title="${label}" aria-label="${label}" ${busy ? "disabled" : ""}>${restoring ? "还原" : "优化"}</button></div>`;
+  return `<div class="text-prompt-actions"><button type="button" class="prompt-optimize-btn${restoring ? " is-restore" : ""}${busy ? " is-busy" : ""}" data-role="prompt-optimize" title="${label}" aria-label="${label}" ${busy ? "disabled" : ""}>${restoring ? "还原" : "AI优化"}</button></div>`;
 }
 
 function nodeTemplate(node) {
@@ -8474,13 +8677,17 @@ function nodeTemplate(node) {
   } else if (node.type === "image") {
     const seqTag = node.seq ? `<span class="image-seq">#${node.seq}</span>` : "";
     const annotating = state.annotationEditorNodeId === node.id;
+    // 关键词反推常驻按钮：锚定节点右上角（标题条区域）；批注编辑态不渲染，替换图片会使批注坐标系失效
+    const reversePending = imageKeywordReversePending.has(node.id);
+    const reverseChip = (!annotating && (node.image || node.imageAssetId))
+      ? `<button type="button" class="image-reverse-btn${node.seq ? " seq-shift" : ""}" data-role="reverse-image-keywords" title="关键词反推" aria-label="关键词反推" ${reversePending ? "disabled" : ""}>${reversePending ? "反推中…" : "关键词反推"}</button>`
+      : "";
     // 编辑态隐藏上传/清除：编辑中替换图片会使批注的归一化坐标系失效；退出编辑即恢复
-    body = `<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
+    body = `${reverseChip}<div class="image-preview"${annotating ? ' data-annotating="1"' : ""} title="双击放大预览"${imageAspectStyle(node)}>${node.image ? `<img src="${node.image}" alt="" draggable="false">` : "无图片"}${seqTag}${annotating ? imageAnnotationEditorMarkup(node) : ""}</div>
       ${annotating ? imageAnnotationToolbarMarkup() : ""}
       ${annotating ? "" : `<div class="node-hover-controls">
         <div class="image-actions">
           <button data-role="upload">上传</button>
-          ${(node.image || node.imageAssetId) ? `<button data-role="reverse-image-keywords" ${imageKeywordReversePending.has(node.id) ? "disabled" : ""}>${imageKeywordReversePending.has(node.id) ? "反推中…" : "关键词反推"}</button>` : ""}
           <button data-role="clear-image">清除</button>
         </div>
       </div>`}`;
@@ -8655,7 +8862,7 @@ function renderMinimap() {
     const y = n.y * scale + oy;
     const w = Math.max(3, n.w * scale);
     const h = Math.max(3, n.h * scale);
-    ctx.fillStyle = styles.getPropertyValue(n.disabled ? "--minimap-node-disabled" : "--minimap-node").trim();
+    ctx.fillStyle = styles.getPropertyValue("--minimap-node").trim();
     ctx.strokeStyle = styles.getPropertyValue("--minimap-node-outline").trim();
     ctx.fillRect(x, y, w, h);
     ctx.strokeRect(x + .5, y + .5, Math.max(1, w - 1), Math.max(1, h - 1));
@@ -12028,11 +12235,33 @@ async function addImageNodeFromDataUrl(dataUrl, fileName, mime, toastText = "已
 async function createNodeFromClipboard(ev) {
   const data = ev.clipboardData;
   if (!data) return false;
-  const items = Array.from(data.items || []);
-  const imageItem = items.find(item => item.kind === "file" && item.type.startsWith("image/"));
-  if (imageItem) {
-    const file = imageItem.getAsFile();
-    if (!file) return false;
+  // 文件夹里多选复制:Chromium 把资源管理器复制的文件整体暴露为 kind="file" 的剪贴板项,
+  // 常见图片类型是 image/*,部分文件(尤其靠扩展名识别的)type 为空串,所以统一过 isSupportedImageFile
+  // (mime 或扩展名任一命中)。旧实现 items.find 只取第一张,多选粘贴永远只落一张图。
+  const clipboardFiles = Array.from(data.items || [])
+    .filter(item => item.kind === "file")
+    .map(item => item.getAsFile())
+    .filter(isSupportedImageFile);
+  if (clipboardFiles.length > 1) {
+    const anchor = currentPasteAnchor();
+    const cols = Math.min(clipboardFiles.length, 4);
+    for (let i = 0; i < clipboardFiles.length; i++) {
+      const file = clipboardFiles[i];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const node = addNode("image", anchor.x + col * 280, anchor.y + row * IMAGE_NODE_VERTICAL_STEP, false);
+      node.image = await fileToDataUrl(file);
+      node.fileName = file.name || `clipboard_${timestamp()}.png`;
+      node.mime = file.type || "image/png";
+      await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+    }
+    pushHistory();
+    render();
+    toast(`已从剪贴板创建 ${clipboardFiles.length} 个图片节点`);
+    return true;
+  }
+  if (clipboardFiles.length === 1) {
+    const file = clipboardFiles[0];
     const anchor = currentPasteAnchor();
     const node = addNode("image", anchor.x, anchor.y, false);
     node.image = await fileToDataUrl(file);
@@ -12316,17 +12545,18 @@ els.viewport.addEventListener("contextmenu", async ev => {
         });
       }
     };
+    const selectedGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
     const items = [
       ...(state.selected.size > 1 ? [["AI绘图", aiDrawAction]] : []),
       ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
       ...(state.selected.size > 1 ? [["创建编组", () => groupCanvasSelection()], ["多任务", () => groupSelection()]] : []),
+      ...(selectedGroupIds.length === 1 ? [["重命名编组", () => renameCanvasGroup(selectedGroupIds[0])]] : []),
       ...(state.nodes.some(node => state.selected.has(node.id) && node.canvasGroupId) ? [["解散编组", () => ungroupCanvasSelection()]] : []),
-      ["切换启用/停用", () => toggleDisabled(state.selected)],
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(selectedNode?.videoFile && selectedNode?.outputPath ? [["打开视频所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(selectedNode?.type === "tool-node" && (selectedNode?.toolOutputFiles || []).length ? [["打开文件所在文件夹", () => openToolNodeFileLocation(selectedNode)]] : []),
-      ...(selectedNode?.type === "image" && selectedNode?.imageAssetId && window.canvasflowDesktop?.openAssetLocation ? [["打开所在文件夹", () => openImageNodeLocation(selectedNode)]] : []),
+      ...(state.selected.size === 1 && selectedNode?.type === "image" && selectedNode?.imageAssetId && window.canvasflowDesktop?.openAssetLocation ? [["打开所在文件夹", () => openImageNodeLocation(selectedNode)]] : []),
       ...(window.canvasflowDesktop?.launchInPs && selectedNode?.type === "image" && (selectedNode?.imageAssetId || selectedNode?.outputPath || selectedNode?.fileName) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(window.canvasflowDesktop?.launchInPs && (selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") && (selectedNode?.generatedAssetId || selectedNode?.outputPath) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
@@ -12337,7 +12567,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
       ...(isGroupWithItems ? [["取消多任务", () => ungroupNode(id)]] : []),
       ...(state.selected.size === 1 ? [["AI绘图", aiDrawAction]] : []),
-      ...(extensionSources.length ? [["角度变化", () => {
+      ...(state.selected.size === 1 && extensionSources.length ? [["角度变化", () => {
         extensionSources.forEach(source => addAngleImageNode(source.x + 290, source.y, [source.id]));
       }]] : []),
       ["断开连接", () => disconnectEdges(state.selected)],
@@ -12349,6 +12579,8 @@ els.viewport.addEventListener("contextmenu", async ev => {
   } else if (state.selected.size > 1) {
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
+    const canvasMenuGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
+    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => renameCanvasGroup(canvasMenuGroupIds[0])]);
     items.push(
       ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
       ["创建编组", () => groupCanvasSelection()],
@@ -12363,8 +12595,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
           });
         }
       }],
-      ["批量停用", () => toggleDisabled(state.selected, true)],
-      ["批量启用", () => toggleDisabled(state.selected, false)],
       ["断开连接", () => disconnectEdges(state.selected)],
       ["批量删除", () => deleteNodes(state.selected)],
     );
@@ -12410,18 +12640,12 @@ function toolMenuItems(p) {
   return items;
 }
 
-// 右键菜单管理（设置 → 外观）：清单驱动画布右键菜单显隐，按标签匹配、同名选项在不同位置一起隐藏。
+// 右键菜单管理（设置 → 外观）：只管理画布空白处右键的显隐清单；选中节点时的右键项不在设置中管理。
 // 其中四个「添加××节点」入口沿用常规页「右键菜单节点」卡的独立开关（CONTEXT_MENU_FLAG_ITEMS），其余存 settings.hiddenMenuItems。
 const CONTEXT_MENU_MANAGER_GROUPS = [
   { title: "画布空白处", items: [
     "粘贴节点", "添加文字节点", "添加调色盘", "添加图片节点", "添加AI绘图节点", "添加AI视频节点",
     "添加对话节点", "添加浏览器生图节点", "添加本地 SD 节点", "添加截图功能节点", "自定义节点", "拓展", "角度变化", "节点对齐",
-  ] },
-  { title: "选中节点时", items: [
-    "AI绘图", "保存为自定义组件", "创建编组", "多任务", "解散编组", "切换启用/停用", "批量停用", "批量启用",
-    "复制图片", "打开生成图片所在文件夹", "打开视频所在文件夹", "打开文件所在文件夹", "打开所在文件夹", "在 PS 中编辑",
-    "保存为自定义文字/图片", "按换行拆分为文字节点", "编辑图片批注", "提取生成所用关键词", "依次连接", "对齐所选节点",
-    "取消多任务", "断开连接", "复制节点", "删除节点", "批量删除",
   ] },
 ];
 const CONTEXT_MENU_FLAG_ITEMS = {
@@ -12430,9 +12654,6 @@ const CONTEXT_MENU_FLAG_ITEMS = {
   "添加本地 SD 节点": "showLocalSdNodeMenu",
   "添加截图功能节点": "showScreenshotNodeMenu",
 };
-// 一个勾选项覆盖多个菜单标签（同一动作按节点类型以不同文案出现）
-const CONTEXT_MENU_ALIAS_ITEMS = { "保存为自定义文字/图片": ["保存为自定义文字", "保存为自定义图片"] };
-
 function isMenuItemHidden(label) {
   const flag = CONTEXT_MENU_FLAG_ITEMS[label];
   if (flag && state.settings[flag] === false) return true;
@@ -12453,10 +12674,9 @@ function renderMenuManager() {
   list.innerHTML = CONTEXT_MENU_MANAGER_GROUPS.map(group => `
     <div class="menu-manager-group">
       <div class="menu-manager-group-title">${escapeHtml(group.title)}</div>
-      <div class="menu-manager-items">${group.items.map(display => {
-        const labels = CONTEXT_MENU_ALIAS_ITEMS[display] || [display];
-        return `<label class="check-row"><input type="checkbox" data-menu-manager-item="${escapeHtml(labels.join("|"))}"${labels.every(label => !isMenuItemHidden(label)) ? " checked" : ""}><span>${escapeHtml(display)}</span></label>`;
-      }).join("")}</div>
+      <div class="menu-manager-items">${group.items.map(display => (
+        `<label class="check-row"><input type="checkbox" data-menu-manager-item="${escapeHtml(display)}"${isMenuItemHidden(display) ? "" : " checked"}><span>${escapeHtml(display)}</span></label>`
+      )).join("")}</div>
     </div>`).join("");
 }
 
@@ -12597,7 +12817,7 @@ window.addEventListener("copy", ev => {
 window.addEventListener("paste", async ev => {
   const data = ev.clipboardData;
   const internalNodeCopy = !!data && Array.from(data.types || []).includes("application/x-canvasflow-nodes");
-  const hasExternalContent = !!data && (Array.from(data.items || []).some(item => item.kind === "file" && item.type.startsWith("image/")) || !!data.getData("text/plain").trim());
+  const hasExternalContent = !!data && (Array.from(data.items || []).some(item => item.kind === "file" && item.type.startsWith("image/")) || (data.files && data.files.length > 0) || !!data.getData("text/plain").trim());
   if (ev.target === els.composerText && data) {
     const imageItem = Array.from(data.items || []).find(item => item.kind === "file" && item.type.startsWith("image/"));
     if (imageItem) {
@@ -13424,7 +13644,6 @@ function onboardingSteps() {
         [`<span class="onboarding-text-icon">T</span>`, onboardingCopy("文字与图片", "Text & Images"), onboardingCopy("输入文字创建文字节点，或上传图片", "Enter text to create a text node, or upload images")],
         [onboardingIcon("#composerSubmitBtn", "+"), onboardingCopy("创建", "Create"), onboardingCopy("把当前输入添加到画布", "Add the current input to the canvas")],
         [onboardingIcon("#autoOutputBtn", "↗"), onboardingCopy("一键连接", "Connect in Sequence"), onboardingCopy("按顺序连接框选的节点", "Connect selected nodes in sequence")],
-        [onboardingIcon("#aiGenerateBtn", "▶"), onboardingCopy("批量执行", "Run Batch"), onboardingCopy("批量提交可执行的 AI 绘图节点", "Submit runnable AI image nodes in a batch")],
         [onboardingIcon("#taskQueueBtn", "≡"), onboardingCopy("任务队列", "Task Queue"), onboardingCopy("查看等待、运行和已完成的任务", "Review queued, running, and completed tasks")],
       ],
     },
@@ -13730,7 +13949,6 @@ els.viewport.addEventListener("dblclick", ev => {
   // 双击空白创建文字标注（原“居中显示”行为替换；居中仍保留给进入编组等场景）
   createAnnotationAt(screenToWorld(ev.clientX, ev.clientY));
 });
-els.aiGenerateBtn.onclick = openExecuteDialog;
 els.composerSubmitBtn.onclick = createNodesFromComposer;
 els.composerText.addEventListener("keydown", ev => {
   if (ev.isComposing || ev.keyCode === 229) return; // 输入法选字回车不创建节点
@@ -16142,6 +16360,14 @@ async function executeAllAiNodes() {
 if (els.taskQueueBtn) {
   els.taskQueueBtn.onclick = () => setTaskQueueOpen(els.taskQueuePanel.classList.contains("hidden"));
   els.taskQueueCloseBtn.onclick = () => setTaskQueueOpen(false);
+  els.taskQueuePauseBtn.onclick = () => {
+    aiQueuePaused = !aiQueuePaused;
+    updateTaskQueuePauseButton();
+    renderTaskQueue();
+    if (!aiQueuePaused) pumpAiTaskQueue();
+    toast(aiQueuePaused ? "任务队列已暂停：未发送任务已全部拦截" : "任务队列已继续发送");
+  };
+  updateTaskQueuePauseButton();
   els.taskQueueClearBtn.onclick = () => {
     const affectedNodeIds = new Set(aiTaskQueue.items.filter(queueTaskIsSettled).map(task => task.nodeId));
     aiTaskQueue.items = aiTaskQueue.items.filter(task => !queueTaskIsSettled(task));
@@ -16151,8 +16377,10 @@ if (els.taskQueueBtn) {
   els.taskQueueList.addEventListener("click", event => {
     const button = event.target.closest("[data-queue-action]");
     const row = event.target.closest("[data-task-id]");
-    if (!button || !row) return;
-    manageQueuedTask(row.dataset.taskId, button.dataset.queueAction);
+    if (!row) return;
+    // 点操作按钮只管操作;点行其余区域打开发送详情(文字+参考图)
+    if (button) return manageQueuedTask(row.dataset.taskId, button.dataset.queueAction);
+    showQueuedTaskDetail(row.dataset.taskId);
   });
   renderTaskQueue();
 }

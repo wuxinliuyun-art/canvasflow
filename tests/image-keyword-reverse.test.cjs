@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 test("keyword reverse uses the confirmed model for each built-in site", () => {
   assert.match(source, /apiType === "apimart" \? "gpt-6-luna" : "gemini-3-flash"/);
   assert.match(source, /data-role="reverse-image-keywords"/);
+  assert.match(source, /class="image-reverse-btn/);
   assert.match(source, /type: "image_url", image_url: \{ url: image \}/);
   assert.match(source, /from: \{ node: textNode\.id, port: "out" \}, to: \{ node: node\.id, port: "in" \}/);
 });

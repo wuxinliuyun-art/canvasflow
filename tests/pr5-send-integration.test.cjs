@@ -519,3 +519,97 @@ test('10B 扇入四支线：3 图 1 文字拆 4 任务，图一/图三批注各�
   assert.equal(rText.images.length, 0, '文字支线无图');
   assert.ok(rText.prompt.includes('三图融合'), '文字支线 prompt 保留原文');
 });
+
+// ===== 11. 组节点上游透传（2026-11-13 修复）：文字→图片→多任务→AI 不再丢文字与第一张参考图 =====
+// 症状回归：组节点曾是隐式截断点,入线上的文字/参考图全部丢弃,任务 prompt 落到
+// "generate an image" 兜底。锁死三个事实：① 组节点沿入线继续收集分支(汇聚节点语义);
+// ② 组图仍走 groupImages,每任务 = 分支图片 + 一张组图,按画布 x 排序后上游样式图排第一张;
+// ③ 组节点无入线时行为不变(branches 为空,任务只有组图)。
+
+test('11 组节点上游透传：文字与上游样式图随分支到达每个组图任务且样式图排第一张', async () => {
+  const collectStart = source.indexOf('function collectUpstreamForAI');
+  const collectEnd = source.indexOf('\nfunction ', collectStart + 10);
+  const collectSlice = source.slice(collectStart, collectEnd);
+  const buildStart = source.indexOf('function buildAiQueueTasks');
+  const buildSlice = source.slice(buildStart, source.indexOf('\nfunction ', buildStart + 10));
+
+  const nodes = {
+    t1: { id: 't1', type: 'text', x: 60, y: 40, text: '白底角色设定图，包含正面和背面视图，写实风格。第二张图为角色参考，第一张图为样式参考' },
+    img1: { id: 'img1', type: 'image', x: 280, y: 70, image: 'style-ref-data', fileName: 'style-ref.png', mime: 'image/png' },
+    grp: { id: 'grp', type: 'group', x: 545, y: 190, images: [
+      { image: 'char-a-data', fileName: 'char-a.png', mime: 'image/png' },
+      { image: 'char-b-data', fileName: 'char-b.png', mime: 'image/png' },
+    ] },
+    ai: { id: 'ai', type: 'ai-image', x: 820, y: 230 },
+  };
+  const edges = [
+    { id: 'e1', from: { node: 't1', port: 'out' }, to: { node: 'img1', port: 'in' } },
+    { id: 'e2', from: { node: 'img1', port: 'out' }, to: { node: 'grp', port: 'in' } },
+    { id: 'e3', from: { node: 'grp', port: 'out' }, to: { node: 'ai', port: 'in' } },
+  ];
+  const context = {
+    findNode: id => nodes[id] || null,
+    buildIncomingIndex: () => {
+      const map = new Map();
+      for (const e of edges) { (map.get(e.to.node) || map.set(e.to.node, []).get(e.to.node)).push(e); }
+      return map;
+    },
+    expandTextNodeVariables: n => String(n.text || ''),
+    variableNodeOutput: () => '',
+    isLinkedUpscaleNode: () => false,
+    linkedUpscaleOutputs: () => [],
+    window: { CanvasFlowImageAnnotations: annotations },
+  };
+  const collect = vm.runInNewContext(`(${collectSlice})`, context);
+  const upstream = collect('ai');
+  const branchData = JSON.parse(JSON.stringify(upstream.branches));
+
+  // ① 单条入线 → 单分支,文字与样式图都在分支上;组图仍归 groupImages
+  assert.equal(branchData.length, 1, `入线应拆出 1 条分支,实际 ${branchData.length}`);
+  assert.deepEqual(branchData[0].texts, ['白底角色设定图，包含正面和背面视图，写实风格。第二张图为角色参考，第一张图为样式参考'], '文字节点文案必须随分支到达');
+  assert.deepEqual(branchData[0].images.map(i => i.fileName), ['style-ref.png'], '图片节点自身图片随分支携带');
+  assert.deepEqual(JSON.parse(JSON.stringify(upstream.groupImages)).map(i => i.fileName), ['char-a.png', 'char-b.png'], '组图归 groupImages');
+  assert.deepEqual(JSON.parse(JSON.stringify(upstream.texts)), branchData[0].texts, '汇总文字含上游文字');
+
+  // ② 走真实 buildAiQueueTasks:每任务 prompt=上游文字,orderedImages=样式图+组图且样式图排第一张
+  const buildContext = {
+    queuedGenerationSettings: () => ({ _model: 'gpt-image-2', _count: 1, _resolution: '2k', _size: '16:9' }),
+    isImage25ExtModel: () => false,
+    currentPage: () => ({ name: '测试项目' }),
+    state: { activePageId: 'p1', nodes: [], settings: { exportFolderLabel: 'export' } },
+    aiTaskQueue: { nextId: 100 },
+    Math, Number, Date,
+  };
+  const build = vm.runInNewContext(`(${buildSlice})`, buildContext);
+  const branch = upstream.branches[0];
+  const merged = {
+    ...upstream,
+    texts: [...(branch.texts || []), ...upstream.groupTexts],
+    images: branch.images,
+    orderedRefs: branch.images,
+  };
+  const tasks = build(nodes.ai, merged, 'node-preview', 'run-1');
+  assert.equal(tasks.length, 2, '两张组图拆 2 个任务');
+  for (const task of tasks) {
+    assert.equal(task.prompt, nodes.t1.text, '任务 prompt 必须是上游文字(不得落到 generate an image 兜底)');
+    assert.equal(task.resultMode, 'image-node', '组图任务结果各自生成图片节点');
+  }
+  assert.deepEqual([...tasks[0].orderedImages].map(i => i.fileName), ['style-ref.png', 'char-a.png'], '第一张参考图=上游样式图,第二张=组图');
+  assert.deepEqual([...tasks[1].orderedImages].map(i => i.fileName), ['style-ref.png', 'char-b.png'], '每个任务都携带样式图');
+
+  // ③ 组节点无入线:行为不变(branches 空,任务只有组图、prompt 为空)
+  const edgesWithoutUpstream = [edges[2]];
+  const context2 = { ...context, buildIncomingIndex: () => {
+    const map = new Map();
+    for (const e of edgesWithoutUpstream) { (map.get(e.to.node) || map.set(e.to.node, []).get(e.to.node)).push(e); }
+    return map;
+  } };
+  const collect2 = vm.runInNewContext(`(${collectSlice})`, context2);
+  const upstream2 = collect2('ai');
+  assert.equal(upstream2.branches.length, 0, '无入线时 branches 为空');
+  assert.equal(upstream2.groupImages.length, 2, '组图收集不受影响');
+  const tasks2 = build(nodes.ai, { ...upstream2, texts: [...[], ...upstream2.groupTexts], images: [], orderedRefs: [] }, 'node-preview', 'run-2');
+  assert.equal(tasks2.length, 2);
+  assert.equal(tasks2[0].prompt, '', '无上游文字时 prompt 为空(由发送层兜底)');
+  assert.deepEqual([...tasks2[0].orderedImages].map(i => i.fileName), ['char-a.png'], 'orderedImages 只含组图');
+});
