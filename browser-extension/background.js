@@ -273,10 +273,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (data?.task) {
             await chrome.storage.local.set({ activeBrowserTask: { id: data.task.id, port, tabId: sender.tab?.id, at: Date.now() } });
             await rememberTaskPort(data.task.id, port);
-            if (sender.tab?.id != null) {
-              await chrome.tabs.update(sender.tab.id, { active: true });
-              await chrome.windows.update(sender.tab.windowId, { focused: true });
-            }
             sendResponse({ ok: true, task: data.task });
             return;
           }
@@ -375,13 +371,11 @@ async function ensureTaskPage(task) {
   });
   if (tab) {
     const navigate = task.newConversation === true || task.site !== "gemini" && task.site !== "chatgpt" && task.pageUrl && tab.url !== url;
-    await chrome.tabs.update(tab.id, { active: true, ...(navigate ? { url } : {}) });
-    await chrome.windows.update(tab.windowId, { focused: true });
+    await chrome.tabs.update(tab.id, navigate ? { url } : {});
     // Reloaded extensions do not automatically inject into existing tabs.
     if (!navigate) await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
   } else {
-    const openedTab = await chrome.tabs.create({ url, active: true });
-    if (openedTab?.windowId != null) await chrome.windows.update(openedTab.windowId, { focused: true });
+    await chrome.tabs.create({ url, active: false });
   }
 }
 

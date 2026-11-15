@@ -31,6 +31,15 @@ function init({ appRoot, isPackaged }) {
         "放入后重启 CanvasFlow，或在画布「拓展」页点击刷新。\n");
     } catch (_) { /* 只读等场景忽略 */ }
   }
+  // 拓展规范随包携带，复制到用户拓展文件夹方便作者对照（打包版在 app/ 下，源码运行在 extensions-presets/ 下）
+  try {
+    const specSource = [path.join(appRoot, "拓展脚本规范.md"), path.join(appRoot, "extensions-presets", "拓展脚本规范.md")]
+      .find(candidate => fs.existsSync(candidate));
+    const specTarget = path.join(extensionsFolder, "拓展脚本规范.md");
+    if (specSource && (!fs.existsSync(specTarget) || fs.readFileSync(specTarget, "utf8") !== fs.readFileSync(specSource, "utf8"))) {
+      fs.copyFileSync(specSource, specTarget);
+    }
+  } catch (_) { /* 只读等场景忽略 */ }
   return extensionsFolder;
 }
 

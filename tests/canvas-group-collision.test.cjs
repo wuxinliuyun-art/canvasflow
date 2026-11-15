@@ -50,6 +50,7 @@ function baseState({ scale = 1, snap = false, gridSize = 40 } = {}) {
     selectedCanvasGroupId: '',
     canvasGroupFrames: {},
     canvasGroupNames: {},
+    canvasGroupCollapsed: {},
     view: { x: 40, y: -20, scale },
     settings: { gridSize, snap },
     edges: [],
@@ -209,7 +210,7 @@ test('多选两个节点可编组，外框按成员范围拟合', () => {
   assert.equal(state.nodes[1].canvasGroupId, 'canvas-group-1');
   assert.equal(state.nodes[2].canvasGroupId, undefined);
   assert.deepEqual([...state.selected].sort(), ['a', 'b']);
-  assert.deepEqual(frameOf(state, 'canvas-group-1'), { x: -6, y: -8, w: 302, h: 234 });
+  assert.deepEqual(frameOf(state, 'canvas-group-1'), { x: -6, y: -28, w: 302, h: 254 });
   assert.equal(context.history.length, 1);
 });
 
@@ -222,7 +223,7 @@ test('对已编组成员再次编组时会带上同组其它成员', () => {
   assert.equal(state.nodes[0].canvasGroupId, 'canvas-group-1');
   assert.equal(state.nodes[1].canvasGroupId, 'canvas-group-1');
   assert.equal(state.nodes[2].canvasGroupId, undefined);
-  assert.deepEqual(frameOf(state, 'canvas-group-1'), { x: -6, y: -8, w: 302, h: 234 });
+  assert.deepEqual(frameOf(state, 'canvas-group-1'), { x: -6, y: -28, w: 302, h: 254 });
 });
 
 test('单个节点不能编组，给出提示且不改数据', () => {
@@ -299,7 +300,7 @@ for (const point of [{ x: -150, y: 50 }, { x: 400, y: 50 }, { x: 50, y: -150 }, 
     assert.deepEqual(h.state.nodes.slice(1), before.slice(1));
     assert.equal(node.canvasGroupId, 'g');
     assert.equal(frame.x, Math.min(other.x, node.x) - 16);
-    assert.equal(frame.y, Math.min(other.y, node.y) - 28);
+    assert.equal(frame.y, Math.min(other.y, node.y) - 48);
     assert.equal(frame.x + frame.w, Math.max(other.x + other.w, node.x + node.w) + 16);
     assert.equal(frame.y + frame.h, Math.max(other.y + other.h, node.y + node.h) + 16);
     h.emit('mousemove');
@@ -573,33 +574,68 @@ test('编组名称随复制粘贴换新组 ID 传递，原组名保留', async (
   assert.equal(state.canvasGroupNames.g, '角色A');
 });
 
-test('重命名编组：确认写入、留空清除、取消不动', async () => {
+test('编组收纳：切换写入/清除标记，选中整组并留历史', () => {
+  const state = baseState();
+  const separated = [];
+  const context = loadGroupLogic(makeContext(state, {
+    separateCanvasGroupFromOthers: groupId => separated.push(groupId),
+  }));
+  context.canvasGroupBounds(state.nodes.slice(0, 2));
+
+  // 收纳：写入标记、整组入选、记历史
+  context.toggleCanvasGroupCollapse('g', true);
+  assert.equal(state.canvasGroupCollapsed.g, true);
+  assert.deepEqual([...state.selected].sort(), ['a', 'b']);
+  assert.equal(state.selectedCanvasGroupId, 'g');
+  assert.equal(context.history.length, 1);
+  assert.ok(context.toggleCanvasGroupCollapse && context.canvasGroupIsCollapsed('g'), '辅助函数在编组切片内可用');
+
+  // 展开清除标记，并触发与其他组的分离检查
+  context.toggleCanvasGroupCollapse('g', false);
+  assert.equal(state.canvasGroupCollapsed.g, undefined);
+  assert.deepEqual(separated, ['g']);
+
+  // 单成员（<2）不响应收纳
+  state.nodes = [state.nodes[0]];
+  context.toggleCanvasGroupCollapse('g2', true);
+  assert.equal(state.canvasGroupCollapsed.g2, undefined);
+});
+
+test('编组收纳状态随复制粘贴换新组 ID 传递，原组保持收纳', async () => {
+  const state = baseState();
+  const context = loadClipboardLogic(makeContext(state, {
+    findFreeNodePosition: (x, y) => ({ x, y }),
+    walkNodes() {},
+    nodeHeightForType: () => 160,
+    nextScreenshotNodeSequence: () => 1,
+    CanvasFlowImageAnnotations: { read: () => [], write() {} },
+  }));
+  context.canvasGroupBounds(state.nodes.slice(0, 2));
+  state.canvasGroupCollapsed.g = true;
+  state.selected = new Set(['a', 'b']);
+  await context.copySelection(false);
+  assert.deepEqual(plain(state.clipboard.canvasGroupCollapsed), { g: true }, '收纳标记进剪贴板载荷');
+  context.pasteNodes(state.clipboard, { x: 700, y: 800 });
+  const pasted = state.nodes.slice(3);
+  const groupId = pasted[0].canvasGroupId;
+  assert.ok(groupId && groupId !== 'g');
+  assert.equal(state.canvasGroupCollapsed[groupId], true, '粘贴副本保持收纳');
+  assert.equal(state.canvasGroupCollapsed.g, true, '原组收纳状态不变');
+});
+
+test('重命名编组：就地确认写入、留空清除、未编辑时提交无副作用', () => {
   const state = baseState();
   state.canvasGroupNames.g = '旧名';
   const context = loadGroupLogic(makeContext(state));
-  const inputListeners = [];
-  context.document = {
-    addEventListener: (type, fn) => { if (type === 'input') inputListeners.push(fn); },
-    removeEventListener() {},
-    querySelector: () => null,
-  };
-  context.escapeHtml = value => String(value);
-  context.setTimeout = () => {};
-  context.showCanvasDialog = async () => {
-    inputListeners.forEach(fn => fn({ target: { matches: selector => selector === '.group-rename-input', value: '新名' } }));
-    return true;
-  };
-  await context.renameCanvasGroup('g');
+  // 未进入编辑态（groupInlineRenameId 为空）时 commit 是空操作——防 blur 重复提交
+  context.commitCanvasGroupRename('误写');
+  assert.equal(state.canvasGroupNames.g, '旧名');
+  context.beginCanvasGroupRename('g');
+  context.commitCanvasGroupRename('新名');
   assert.equal(state.canvasGroupNames.g, '新名');
-  context.showCanvasDialog = async () => {
-    inputListeners.forEach(fn => fn({ target: { matches: selector => selector === '.group-rename-input', value: '' } }));
-    return true;
-  };
-  await context.renameCanvasGroup('g');
-  assert.equal(state.canvasGroupNames.g, undefined);
-  context.showCanvasDialog = async () => false;
-  await context.renameCanvasGroup('g');
-  assert.equal(state.canvasGroupNames.g, undefined);
+  context.beginCanvasGroupRename('g');
+  context.commitCanvasGroupRename('');
+  assert.equal(state.canvasGroupNames.g, undefined, '留空清除名称');
 });
 
 test('删除单个成员后剩余节点自动退出编组，外框被清理', () => {
@@ -627,10 +663,12 @@ test('编组与外框可随工程存档往返，旧工程按成员范围推导�
   state.nodes[0].x = -150;
   state.nodes[0].y = -150;
   state.canvasGroupNames.g = '角色A';
+  state.canvasGroupCollapsed.g = true;
   context.canvasGroupBounds(state.nodes.slice(0, 2));
   const saved = context.cloneData();
   assert.deepEqual(plain(saved.canvasGroupFrames.g), frameOf(state));
   assert.equal(saved.canvasGroupNames.g, '角色A');
+  assert.equal(saved.canvasGroupCollapsed.g, true);
   assert.equal(saved.nodes.length, 3);
 
   const reload = baseState({});
@@ -641,6 +679,7 @@ test('编组与外框可随工程存档往返，旧工程按成员范围推导�
   vm.runInNewContext(RESTORE_CODE, reloadContext);
   assert.deepEqual(plain(reload.canvasGroupFrames), plain(saved.canvasGroupFrames));
   assert.equal(reload.canvasGroupNames.g, '角色A');
+  assert.equal(reload.canvasGroupCollapsed.g, true, '收纳状态随存档往返');
   assert.equal(reload.selectedCanvasGroupId, '');
 
   // 旧工程：完全没有 canvasGroupFrames 字段
@@ -648,6 +687,7 @@ test('编组与外框可随工程存档往返，旧工程按成员范围推导�
   vm.runInNewContext(RESTORE_CODE, reloadContext);
   assert.deepEqual(plain(reload.canvasGroupFrames), {});
   assert.deepEqual(plain(reload.canvasGroupNames), {});
+  assert.deepEqual(plain(reload.canvasGroupCollapsed), {});
   const derived = reloadContext.canvasGroupBounds(reload.nodes.slice(0, 2));
   assert.ok(derived.w > 0 && derived.h > 0);
   assert.deepEqual(plain(reload.canvasGroupFrames.g), plain(derived));

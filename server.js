@@ -46,6 +46,9 @@ const mime = {
   ".html": "text/html;charset=utf-8",
   ".css": "text/css;charset=utf-8",
   ".js": "text/javascript;charset=utf-8",
+  ".mjs": "text/javascript;charset=utf-8",
+  ".wasm": "application/wasm",
+  ".onnx": "application/octet-stream",
   ".json": "application/json;charset=utf-8",
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
 };
@@ -880,6 +883,53 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // apimart 统一视频接口透传（MiniMax H3/H3-Max/Hailuo-2.3 等异步视频模型）：
+  // 提交 POST /v1/videos/generations（带镜像 failover，与绘图提交同款）+ 查询 GET /v1/tasks/{task_id}
+  // （与绘图任务同一查询端点）。请求体不做字段转换，模型间参数差异由前端按视频目录构造。
+  // 任务号形如 task_01J9…（含下划线），校验正则比 /api/task/ 多放行 _。
+  if (pathname === "/api/apimart/video-generate" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 128 * 1024 * 1024);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey("apimart") || "";
+      delete payload._apiKey;
+      const { status, body: resBody } = await tryProxyRequest(
+        "POST",
+        "/v1/videos/generations",
+        { Authorization: `Bearer ${apiKey}` },
+        JSON.stringify(payload),
+        300000
+      );
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "apimart 视频任务提交失败: " + err.message } }));
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/apimart/video-task/") && req.method === "GET") {
+    try {
+      const taskId = decodeURIComponent(pathname.slice("/api/apimart/video-task/".length));
+      if (!/^[A-Za-z0-9._:\-_]{1,200}$/.test(taskId)) throw new Error("任务编号格式不正确");
+      const apiKey = requestApiKey("apimart") || "";
+      const { status, body: resBody } = await tryProxyRequest(
+        "GET",
+        "/v1/tasks/" + encodeURIComponent(taskId),
+        { Authorization: `Bearer ${apiKey}` },
+        null,
+        60000
+      );
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: "视频任务查询失败: " + err.message } }));
+    }
+    return;
+  }
+
   // 视频结果落盘：把上游返回的临时视频链接（约 24 小时有效）下载到 download/videos，
   // 节点只保存文件名，播放地址由前端按运行模式拼装（浏览器 /download/videos/…，桌面 canvasflow-videos.local）。
   if (pathname === "/api/download-video" && req.method === "POST") {
@@ -993,6 +1043,7 @@ async function requestHandler(req, res) {
       if (!site) throw new Error("缺少站点");
       const task = {
         id: `bt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        kind: payload.kind === "text" ? "text" : "image",
         site,
         pageUrl: String(payload.pageUrl || ""),
         newConversation: payload.newConversation === true,
@@ -1019,7 +1070,7 @@ async function requestHandler(req, res) {
   if (pathname === "/api/browser-task/pending" && req.method === "GET") {
     purgeBrowserTasks();
     const tasks = [...browserTasks.values()].filter(task => task.status === "pending")
-      .map(task => ({ id: task.id, site: task.site, pageUrl: task.pageUrl || "", newConversation: task.newConversation }));
+      .map(task => ({ id: task.id, kind: task.kind || "image", site: task.site, pageUrl: task.pageUrl || "", newConversation: task.newConversation }));
     res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
     res.end(JSON.stringify({ tasks }));
     return;
@@ -1038,7 +1089,7 @@ async function requestHandler(req, res) {
         task.status = "running";
         task.claimedAt = Date.now();
         task.claimOrigin = origin;
-        found = { id: task.id, site: task.site, prompt: task.prompt, images: task.images };
+        found = { id: task.id, kind: task.kind || "image", site: task.site, prompt: task.prompt, images: task.images };
         break;
       }
       res.writeHead(200, { "Content-Type": "application/json" });

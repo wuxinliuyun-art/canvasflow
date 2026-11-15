@@ -95,6 +95,7 @@ public partial class MainWindow : Window
           chooseImageFile: currentPath => invoke("desktop:choose-image-file", { currentPath: String(currentPath || "") }, 60000),
           openOutputFolder: folderPath => invoke("desktop:open-output-folder", { folderPath: String(folderPath || "") }),
           copyImage: (filePath, dataUrl = "") => invoke("desktop:copy-image", { filePath: String(filePath || ""), dataUrl: String(dataUrl || "") }, 60000),
+          saveImageAs: (sourcePath, dataUrl = "", suggestedName = "") => invoke("desktop:save-image-as", { sourcePath: String(sourcePath || ""), dataUrl: String(dataUrl || ""), suggestedName: String(suggestedName || "") }, 300000),
           openScreenshotWindow: () => invoke("desktop:open-screenshot-window"),
           applyWebUpdate: () => invoke("desktop:apply-web-update", {}, 600000),
           webReady: () => window.chrome.webview.postMessage({ type: "desktop:web-ready" }),
@@ -406,6 +407,11 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, CopyImageToClipboard(root)); }
                         catch (Exception copyError) { PostRpcResult(root, error: copyError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:save-image-as")
+                    {
+                        try { PostRpcResult(root, await SaveImageAsAsync(root)); }
+                        catch (Exception saveAsError) { PostRpcResult(root, error: saveAsError.Message); }
                     }
                     else if (type.GetString() == "desktop:get-ps-path")
                     {
@@ -1416,6 +1422,80 @@ public partial class MainWindow : Window
         bitmap.Freeze();
         return bitmap;
     }
+
+    private async Task<object> SaveImageAsAsync(JsonElement request)
+    {
+        var sourcePath = request.TryGetProperty("sourcePath", out var sourceElement) ? sourceElement.GetString() ?? "" : "";
+        var dataUrl = request.TryGetProperty("dataUrl", out var dataElement) ? dataElement.GetString() ?? "" : "";
+        var suggestedName = (request.TryGetProperty("suggestedName", out var nameElement) ? nameElement.GetString() ?? "" : "").Trim();
+        foreach (var invalidChar in Path.GetInvalidFileNameChars()) suggestedName = suggestedName.Replace(invalidChar, '_');
+
+        // 优先按本地原始文件另存（保留原始格式与 PNG 关键词元数据）；文件不存在时回退前端物化的 dataUrl
+        var useSourceFile = !string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath);
+        var ext = useSourceFile ? Path.GetExtension(sourcePath).ToLowerInvariant() : ExtensionFromDataUrl(dataUrl);
+        if (string.IsNullOrEmpty(ext)) ext = ".png";
+        if (string.IsNullOrEmpty(suggestedName)) suggestedName = "图片-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ext;
+
+        var picker = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "图片另存为",
+            FileName = suggestedName,
+            Filter = ImageSaveFilter(ext),
+            DefaultExt = ext,
+            AddExtension = true,
+            OverwritePrompt = true,
+        };
+        if (useSourceFile)
+        {
+            try
+            {
+                var sourceDirectory = Path.GetDirectoryName(Path.GetFullPath(sourcePath));
+                if (!string.IsNullOrWhiteSpace(sourceDirectory) && Directory.Exists(sourceDirectory)) picker.InitialDirectory = sourceDirectory;
+            }
+            catch (Exception error) { Log($"[图片另存为] 忽略无效的初始路径：{error.Message}", true); }
+        }
+        if (picker.ShowDialog(this) != true) return new { cancelled = true };
+        var targetPath = Path.GetFullPath(picker.FileName);
+
+        byte[] bytes;
+        if (useSourceFile)
+        {
+            bytes = await File.ReadAllBytesAsync(sourcePath, _shutdown.Token);
+        }
+        else if (!string.IsNullOrWhiteSpace(dataUrl) && dataUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && dataUrl.Contains(','))
+        {
+            bytes = Convert.FromBase64String(dataUrl[(dataUrl.IndexOf(',') + 1)..]);
+        }
+        else
+        {
+            throw new FileNotFoundException("图片内容不可用：本地文件不存在，也没有可用的内嵌图片数据", sourcePath);
+        }
+        await File.WriteAllBytesAsync(targetPath, bytes, _shutdown.Token);
+        Log($"[图片另存为] 已保存：{targetPath}", false);
+        return new { cancelled = false, path = targetPath };
+    }
+
+    private static string ExtensionFromDataUrl(string dataUrl)
+    {
+        var mime = dataUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? dataUrl[5..].Split(';')[0].Split(',')[0].Trim().ToLowerInvariant() : "";
+        return mime switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" or "image/jpg" => ".jpg",
+            "image/webp" => ".webp",
+            "image/gif" => ".gif",
+            _ => "",
+        };
+    }
+
+    private static string ImageSaveFilter(string ext) => ext switch
+    {
+        ".png" => "PNG 图片 (*.png)|*.png|所有文件|*.*",
+        ".jpg" or ".jpeg" => "JPEG 图片 (*.jpg;*.jpeg)|*.jpg;*.jpeg|所有文件|*.*",
+        ".webp" => "WebP 图片 (*.webp)|*.webp|所有文件|*.*",
+        ".gif" => "GIF 图片 (*.gif)|*.gif|所有文件|*.*",
+        _ => "所有文件|*.*",
+    };
 
     private string SafeAssetPath(string relativePath)
     {

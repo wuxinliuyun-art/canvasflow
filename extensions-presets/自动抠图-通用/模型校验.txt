@@ -1,0 +1,1 @@
+58f621f00f5d756097615970a88a791584600dcf7c45b18a0a6267535a1ebd3c  models/birefnet-general.onnx

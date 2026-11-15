@@ -585,6 +585,7 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
   const merged = {
     ...upstream,
     texts: [...(branch.texts || []), ...upstream.groupTexts],
+    branchTexts: branch.texts || [],
     images: branch.images,
     orderedRefs: branch.images,
   };
@@ -608,8 +609,104 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
   const upstream2 = collect2('ai');
   assert.equal(upstream2.branches.length, 0, '无入线时 branches 为空');
   assert.equal(upstream2.groupImages.length, 2, '组图收集不受影响');
-  const tasks2 = build(nodes.ai, { ...upstream2, texts: [...[], ...upstream2.groupTexts], images: [], orderedRefs: [] }, 'node-preview', 'run-2');
+  const tasks2 = build(nodes.ai, { ...upstream2, texts: [...[], ...upstream2.groupTexts], branchTexts: [], images: [], orderedRefs: [] }, 'node-preview', 'run-2');
   assert.equal(tasks2.length, 2);
   assert.equal(tasks2[0].prompt, '', '无上游文字时 prompt 为空(由发送层兜底)');
   assert.deepEqual([...tasks2[0].orderedImages].map(i => i.fileName), ['char-a.png'], 'orderedImages 只含组图');
+});
+
+// ===== 12. 纯文字组按文字节点拆任务（2026-11-14）：参考图→多任务(两文字)→AI = 两个任务 =====
+// 症状回归：组节点无组图时 taskSources 恒为 [null],组内两个文字被合并进同一条提示词,只出 1 个任务;
+// 与扇入语义"两条并列文字线 + 一张参考图 = 两个任务"不一致。
+// 锁死三个事实：① 纯文字组按组内文字数拆任务,各自提示词,上游参考图进每个任务;
+// ② 有组图时维持"每组图一任务、组内文字共享"(混合组不按文字拆);③ 单文字组不拆(1 个任务)。
+
+test('12 纯文字组按文字节点拆任务：参考图进每个任务,混合组仍按组图拆', async () => {
+  const collectStart = source.indexOf('function collectUpstreamForAI');
+  const collectSlice = source.slice(collectStart, source.indexOf('\nfunction ', collectStart + 10));
+  const buildStart = source.indexOf('function buildAiQueueTasks');
+  const buildSlice = source.slice(buildStart, source.indexOf('\nfunction ', buildStart + 10));
+
+  const nodes = {
+    img1: { id: 'img1', type: 'image', x: 280, y: 70, image: 'style-ref-data', fileName: 'style-ref.png', mime: 'image/png' },
+    grp: { id: 'grp', type: 'group', x: 545, y: 190, items: [
+      { id: 'g-t1', type: 'text', x: 520, y: 60, text: '赛博朋克风格' },
+      { id: 'g-t2', type: 'text', x: 700, y: 60, text: '水彩风格' },
+    ] },
+    ai: { id: 'ai', type: 'ai-image', x: 820, y: 230 },
+  };
+  const edges = [
+    { id: 'e1', from: { node: 'img1', port: 'out' }, to: { node: 'grp', port: 'in' } },
+    { id: 'e2', from: { node: 'grp', port: 'out' }, to: { node: 'ai', port: 'in' } },
+  ];
+  const context = {
+    findNode: id => nodes[id] || null,
+    buildIncomingIndex: () => {
+      const map = new Map();
+      for (const e of edges) { (map.get(e.to.node) || map.set(e.to.node, []).get(e.to.node)).push(e); }
+      return map;
+    },
+    expandTextNodeVariables: n => String(n.text || ''),
+    variableNodeOutput: () => '',
+    isLinkedUpscaleNode: () => false,
+    linkedUpscaleOutputs: () => [],
+    window: { CanvasFlowImageAnnotations: annotations },
+  };
+  const collect = vm.runInNewContext(`(${collectSlice})`, context);
+  const upstream = collect('ai');
+  assert.equal(upstream.branches.length, 1, '参考图入线为 1 条分支(汇聚节点语义)');
+  assert.deepEqual(JSON.parse(JSON.stringify(upstream.groupTexts)), ['赛博朋克风格', '水彩风格'], '组内文字归 groupTexts');
+  assert.equal(upstream.groupImages.length, 0, '纯文字组无组图');
+
+  const buildContext = {
+    queuedGenerationSettings: () => ({ _model: 'gpt-image-2', _count: 1, _resolution: '1k', _size: 'auto' }),
+    isImage25ExtModel: () => false,
+    currentPage: () => ({ name: '测试项目' }),
+    state: { activePageId: 'p1', nodes: [], settings: { exportFolderLabel: 'export' } },
+    aiTaskQueue: { nextId: 200 },
+    Math, Number, Date,
+  };
+  const build = vm.runInNewContext(`(${buildSlice})`, buildContext);
+  const branch = upstream.branches[0];
+  const compose = extra => ({
+    ...upstream,
+    texts: [...(branch.texts || []), ...upstream.groupTexts],
+    branchTexts: branch.texts || [],
+    images: branch.images,
+    orderedRefs: branch.images,
+    ...extra,
+  });
+
+  // ① 纯文字组:每个文字节点一个任务,各自提示词,上游参考图进每个任务,结果各自生成图片节点
+  const tasks = build(nodes.ai, compose(), 'node-preview', 'run-1');
+  assert.equal(tasks.length, 2, '纯文字组拆 2 个任务(每个文字节点一个)');
+  assert.equal(tasks[0].prompt, '赛博朋克风格', '任务1 prompt=第一个文字节点');
+  assert.equal(tasks[1].prompt, '水彩风格', '任务2 prompt=第二个文字节点');
+  for (const task of tasks) {
+    assert.equal(task.resultMode, 'image-node', '纯文字组任务结果各自生成图片节点');
+    assert.equal(task.groupImage, null, '纯文字组任务无组图');
+    assert.equal(task.groupIndex, -1, '纯文字组任务不占组图序号');
+    assert.deepEqual([...task.orderedImages].map(i => i.fileName), ['style-ref.png'], '上游参考图进每个任务');
+  }
+
+  // ② 混合组(组内文字+组图)不按文字拆:维持"每组图一任务、组内文字共享"
+  const mixedTasks = build(nodes.ai, compose({
+    groupImages: [
+      { image: 'char-a-data', fileName: 'char-a.png', mime: 'image/png', _x: 600 },
+      { image: 'char-b-data', fileName: 'char-b.png', mime: 'image/png', _x: 610 },
+    ],
+  }), 'node-preview', 'run-2');
+  assert.equal(mixedTasks.length, 2, '混合组按组图拆 2 个任务(文字不额外拆)');
+  assert.equal(mixedTasks[0].prompt, '赛博朋克风格，水彩风格', '混合组任务共享全部组内文字');
+  assert.deepEqual([...mixedTasks[0].orderedImages].map(i => i.fileName), ['style-ref.png', 'char-a.png'], '混合组任务=上游样式图+组图');
+  assert.deepEqual([...mixedTasks[1].orderedImages].map(i => i.fileName), ['style-ref.png', 'char-b.png'], '每个混合组任务携带对应组图');
+
+  // ③ 单文字组不拆:1 个任务
+  const singleTasks = build(nodes.ai, compose({
+    groupTexts: ['赛博朋克风格'],
+    texts: ['赛博朋克风格'],
+  }), 'node-preview', 'run-3');
+  assert.equal(singleTasks.length, 1, '单文字组不拆任务');
+  assert.equal(singleTasks[0].prompt, '赛博朋克风格');
+  assert.deepEqual([...singleTasks[0].orderedImages].map(i => i.fileName), ['style-ref.png']);
 });

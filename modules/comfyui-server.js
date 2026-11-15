@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const WORKFLOW_TYPES = new Set(["txt2img", "img2img", "upscale", "matting", "inpaint", "video-i2v", "video-t2v"]);
 const VIDEO_OUTPUT_EXTS = new Set(["mp4", "webm", "mov", "mkv", "gif"]);
 const tasks = new Map();
 
@@ -44,71 +43,84 @@ function workflowNodes(workflow) {
 function titleOf(node) { return String(node?._meta?.title || node?.title || "").toLowerCase(); }
 function firstField(node, names) { return names.find(name => Object.prototype.hasOwnProperty.call(node.inputs || {}, name)) || ""; }
 
-function detectWorkflowMapping(type, workflow) {
-  if (!WORKFLOW_TYPES.has(type)) throw new Error("不支持的本地 SD 功能类型");
+// "按文件名读图"的图片入口节点类（与 C# 侧 ComfyUiApi.cs 的入口正则逐项对齐）：
+// LoadImage 之外，PS 桥接(GetImageFromPS)、VHS_LoadImage、LoadImageFromPath 同样以文件名字段喂图
+const IMAGE_ENTRY_CLASS_RE = /^(LoadImage|VHS_LoadImage|LoadImageFromPath|GetImageFromPS)$/i;
+const IMAGE_ENTRY_FIELD_NAMES = ["image", "image_filename", "path"];
+
+// 映射检测"尽力而为"（2026-11-14 用户要求不限制用户）：除 workflowNodes 的两条格式错误外
+// 零抛错——能识别多少就映射多少，识别不到的字段不写键，运行时 preparePrompt 按存在的键打
+// 补丁，工作流其余部分原样执行。字段名与旧版 mapping 完全兼容（旧存档已导入工作流继续可用），
+// 新增可选 positiveField/negativeField（缺省 "text"，仅字段名不是 text 时写出）。
+function detectWorkflowMapping(workflow) {
   const nodes = workflowNodes(workflow);
-  const byClass = className => nodes.filter(node => node.class_type === className);
-  const textNodes = byClass("CLIPTextEncode");
-  const imageNodes = byClass("LoadImage");
   const samplerNodes = nodes.filter(node => /KSampler/.test(node.class_type));
   const outputNodes = nodes.filter(node => /^(SaveImage|PreviewImage|SaveAnimatedWEBP|SaveVideo)$/.test(node.class_type));
-  if (!outputNodes.length) throw new Error("工作流缺少 SaveImage、PreviewImage 或 SaveVideo 输出节点");
-
-  const mapping = { outputNodeIds: outputNodes.map(node => node.id) };
-  if (["txt2img", "img2img", "inpaint"].includes(type)) {
-    if (!textNodes.length) throw new Error("工作流缺少 CLIPTextEncode 提示词节点");
-    const negative = textNodes.find(node => /negative|负面|反向/.test(titleOf(node))) || textNodes[1] || null;
+  const mapping = {};
+  if (outputNodes.length) mapping.outputNodeIds = outputNodes.map(node => node.id);
+  // 文字节点泛化：有字符串 text/prompt 输入的节点都算（CLIPTextEncode / MiniMaxH3 /
+  // SeedVR2 的 prompt 节点等）。负面 = 标题含负面词者；否则仅当"恰好两个同字段文字节点"
+  // 时按惯例取第二个（避免把 MiniMaxH3 的 prompt 误当负面清空）。
+  const textFieldOf = node => (typeof node.inputs?.text === "string" ? "text" : typeof node.inputs?.prompt === "string" ? "prompt" : "");
+  const textNodes = nodes.filter(node => textFieldOf(node));
+  if (textNodes.length) {
+    const negative = textNodes.find(node => /negative|负面|反向/.test(titleOf(node)))
+      || (textNodes.length === 2 && textFieldOf(textNodes[0]) === textFieldOf(textNodes[1]) ? textNodes[1] : null);
     const positive = textNodes.find(node => node !== negative && /positive|正面|提示词/.test(titleOf(node))) || textNodes.find(node => node !== negative) || textNodes[0];
     mapping.positiveNodeId = positive.id;
-    mapping.negativeNodeId = negative?.id || "";
-  }
-  // 采样器映射对视频类型同样生效（视频模板也用经典 KSampler，便于改 seed）
-  if (["txt2img", "img2img", "inpaint", "video-i2v", "video-t2v"].includes(type)) {
-    if (samplerNodes.length > 1) throw new Error("工作流包含多个采样器，首版无法确定要修改哪一个");
-    if (samplerNodes.length) {
-      mapping.samplerNodeId = samplerNodes[0].id;
-      mapping.seedField = firstField(samplerNodes[0], ["seed", "noise_seed"]);
-      mapping.denoiseField = firstField(samplerNodes[0], ["denoise"]);
+    const positiveField = textFieldOf(positive);
+    if (positiveField !== "text") mapping.positiveField = positiveField;
+    if (negative) {
+      mapping.negativeNodeId = negative.id;
+      const negativeField = textFieldOf(negative);
+      if (negativeField !== "text") mapping.negativeField = negativeField;
     }
   }
-  // 视频类型：提示词与时长直接写在 MiniMaxH3 节点上（不走 CLIPTextEncode）
-  if (type === "video-i2v" || type === "video-t2v") {
-    const h3Nodes = nodes.filter(node => /^MiniMaxH3/.test(node.class_type));
-    if (h3Nodes.length !== 1) throw new Error("视频工作流需要恰好一个 MiniMaxH3 节点");
-    if (!Object.prototype.hasOwnProperty.call(h3Nodes[0].inputs || {}, "prompt")) throw new Error("MiniMaxH3 节点缺少 prompt 输入");
-    mapping.promptNodeId = h3Nodes[0].id;
-    mapping.promptField = "prompt";
-    if (Object.prototype.hasOwnProperty.call(h3Nodes[0].inputs, "length")) {
-      mapping.durationNodeId = h3Nodes[0].id;
-      mapping.durationField = "length";
-    }
+  // 采样器/种子：第一个 KSampler；无 KSampler 但某节点有数值型 seed 输入时兜底（SeedVR2 类）
+  if (samplerNodes.length) {
+    mapping.samplerNodeId = samplerNodes[0].id;
+    mapping.seedField = firstField(samplerNodes[0], ["seed", "noise_seed"]);
+    mapping.denoiseField = firstField(samplerNodes[0], ["denoise"]);
+  } else {
+    const seedNode = nodes.find(node => typeof node.inputs?.seed === "number");
+    if (seedNode) { mapping.samplerNodeId = seedNode.id; mapping.seedField = "seed"; }
   }
-  // 通用参数传导接口（预留）：params = [{ param, nodeId, field }, ...]，目前只实现 width/height
-  // （图片尺寸），后续可在此扩展 steps/cfg 等参数而无需改结构。尺寸目标 = 恰好一个同时具有
-  // 数值型 width/height 输入的节点（EmptyFlux2LatentImage / EmptySD3LatentImage / MiniMaxH3 等）。
-  if (["txt2img", "video-i2v", "video-t2v"].includes(type)) {
-    const isNumber = value => typeof value === "number" && Number.isFinite(value);
-    const sizeCandidates = nodes.filter(node => isNumber(node.inputs?.width) && isNumber(node.inputs?.height));
-    const sizeNode = sizeCandidates.length === 1 ? sizeCandidates[0]
-      : sizeCandidates.find(node => /Latent|MiniMaxH3/i.test(node.class_type)) || null;
-    if (sizeNode) {
-      mapping.params = [
-        { param: "width", nodeId: sizeNode.id, field: "width" },
-        { param: "height", nodeId: sizeNode.id, field: "height" },
-      ];
-    }
+  // 时长仍只认 MiniMaxH3 的 length 输入（通用视频工作流不瞎补）
+  const h3Node = nodes.find(node => /^MiniMaxH3/.test(node.class_type) && Object.prototype.hasOwnProperty.call(node.inputs || {}, "length"));
+  if (h3Node) {
+    mapping.durationNodeId = h3Node.id;
+    mapping.durationField = "length";
   }
-  if (["img2img", "upscale", "matting", "inpaint", "video-i2v"].includes(type)) {
-    if (!imageNodes.length) throw new Error("该功能工作流缺少 LoadImage 输入节点");
+  // 通用参数传导接口（预留）：params = [{ param, nodeId, field }, ...]，目前只实现 width/height。
+  // 尺寸目标限定在 Latent/Empty/MiniMaxH3 类节点，防止误改 img2img 等工作流里的随机数值节点。
+  const isNumber = value => typeof value === "number" && Number.isFinite(value);
+  const sizeCandidates = nodes.filter(node => /Latent|MiniMaxH3|Empty/i.test(node.class_type) && isNumber(node.inputs?.width) && isNumber(node.inputs?.height));
+  const sizeNode = sizeCandidates.length === 1 ? sizeCandidates[0]
+    : sizeCandidates.find(node => /Latent|MiniMaxH3/i.test(node.class_type)) || null;
+  if (sizeNode) {
+    mapping.params = [
+      { param: "width", nodeId: sizeNode.id, field: "width" },
+      { param: "height", nodeId: sizeNode.id, field: "height" },
+    ];
+  }
+  // 图片输入：识别"按文件名读图"的入口节点——LoadImage 之外，PS 桥接(GetImageFromPS)、
+  // VHS_LoadImage、LoadImageFromPath 同样以文件名字段喂图（上传后写回该字段）。
+  // mask = 标题含 mask|蒙版|遮罩 的入口；source = 非 mask 中标题含 source|image|原图|输入者优先。
+  // 找不到就不写字段（局部重绘需给蒙版节点设标题）。imageField/maskField 缺省 "image"。
+  const imageFieldOf = node => IMAGE_ENTRY_FIELD_NAMES.find(name => typeof node.inputs?.[name] === "string") || "";
+  const imageNodes = nodes.filter(node => IMAGE_ENTRY_CLASS_RE.test(node.class_type) && imageFieldOf(node));
+  if (imageNodes.length) {
     const mask = imageNodes.find(node => /mask|蒙版|遮罩/.test(titleOf(node)));
     const source = imageNodes.find(node => node !== mask && /source|image|原图|输入/.test(titleOf(node))) || imageNodes.find(node => node !== mask) || imageNodes[0];
     mapping.imageNodeId = source.id;
-    if (type === "inpaint") {
-      if (!mask) throw new Error("局部重绘工作流需要一个标题包含 mask、蒙版或遮罩的 LoadImage 节点");
+    const imageField = imageFieldOf(source);
+    if (imageField !== "image") mapping.imageField = imageField;
+    if (mask) {
       mapping.maskNodeId = mask.id;
+      const maskField = imageFieldOf(mask);
+      if (maskField !== "image") mapping.maskField = maskField;
     }
   }
-  if (type === "upscale" && !nodes.some(node => /Upscale|ScaleBy|ScaleToTotalPixels/.test(node.class_type))) throw new Error("放大工作流缺少可识别的 Upscale 节点");
   return mapping;
 }
 
@@ -152,7 +164,25 @@ function storePath(dataRoot) { return path.join(dataRoot, "data", "comfyui.json"
 function loadStore(dataRoot) {
   try {
     const parsed = JSON.parse(fs.readFileSync(storePath(dataRoot), "utf8").replace(/^\uFEFF/, ""));
-    return { config: { serverUrl: "http://127.0.0.1:8188", installPath: "", launchPath: "", ...(parsed.config || {}) }, workflows: Array.isArray(parsed.workflows) ? parsed.workflows : [] };
+    const store = { config: { serverUrl: "http://127.0.0.1:8188", installPath: "", launchPath: "", ...(parsed.config || {}) }, workflows: Array.isArray(parsed.workflows) ? parsed.workflows : [] };
+    // 内置工作流模板已整体下线（2026-11-14）：清扫旧版导入的 templateId=builtin-* 残留条目，
+    // 它们是"一键模板"时代的半成品（放大/局部重绘等需要连线/蒙版，孤立运行不了）。
+    const builtinLeftovers = store.workflows.filter(entry => /^builtin-/.test(String(entry?.templateId || "")));
+    if (builtinLeftovers.length) {
+      store.workflows = store.workflows.filter(entry => !/^builtin-/.test(String(entry?.templateId || "")));
+      console.log("[本地SD] 清理已下线的内置工作流模板残留：", builtinLeftovers.map(entry => entry.name).join("、"));
+    }
+    // 映射版本升级（v2 = 尽力而为映射 + PS 桥接类图片入口识别）：旧存档惰性重算，
+    // 用户无需手动"替换"工作流；升级即落盘，后续请求直接命中 v2 不再重算。
+    let upgraded = false;
+    for (const entry of store.workflows) {
+      if (entry?.workflow && entry.mappingVersion !== 2) {
+        try { entry.mapping = detectWorkflowMapping(entry.workflow); entry.mappingVersion = 2; upgraded = true; }
+        catch { /* 工作流损坏则保留旧映射 */ }
+      }
+    }
+    if (upgraded || builtinLeftovers.length) saveStore(dataRoot, store);
+    return store;
   } catch { return { config: { serverUrl: "http://127.0.0.1:8188", installPath: "", launchPath: "" }, workflows: [] }; }
 }
 function saveStore(dataRoot, store) {
@@ -201,6 +231,77 @@ async function fetchObjectInfo(serverUrl) {
   return response.json();
 }
 
+// 全参数面板用：只取工作流涉及节点类的 object_info（combo 选项/数值范围/多行标记）。
+// 优先逐类取 /object_info/{class}（payload 小）；任一失败回退整包一次再摘取。
+// 与 ComfyUiApi.cs 的 object-info 路由逐项对齐（双实现纪律）。导出供测试。
+async function fetchObjectInfoSubset(serverUrl, classes) {
+  const wanted = [...new Set((Array.isArray(classes) ? classes : []).map(cls => String(cls)).filter(Boolean))].slice(0, 24);
+  if (!wanted.length) return {};
+  const settled = await Promise.allSettled(wanted.map(async cls => {
+    const response = await comfyFetch(serverUrl, "/object_info/" + encodeURIComponent(cls), {}, 15000);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const parsed = await response.json();
+    const spec = parsed?.[cls] ?? parsed;
+    if (!spec || typeof spec !== "object") throw new Error(`ComfyUI 没有返回 ${cls} 的节点定义`);
+    return [cls, spec];
+  }));
+  if (settled.some(result => result.status === "rejected")) {
+    const full = await fetchObjectInfo(serverUrl);
+    const info = {};
+    for (const cls of wanted) if (full?.[cls]) info[cls] = full[cls];
+    return info;
+  }
+  return Object.fromEntries(settled.map(result => result.value));
+}
+
+// ComfyUI 已保存工作流的格式分类：UI 格式（nodes 数组，映射检测不认）与 API 格式（数字键 + class_type）。
+// API 导出文件顶层还可能带 extra_data/output 等附加键，不能简单按键数判断。
+function classifyUserWorkflow(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "unknown";
+  if (Array.isArray(parsed.nodes)) return "ui";
+  const hasApiNode = Object.values(parsed).some(entry => entry && typeof entry === "object" && !Array.isArray(entry) && typeof entry.class_type === "string");
+  return hasApiNode ? "api" : "unknown";
+}
+
+// 自动列出本机 ComfyUI 已保存的工作流（设置→本地SD→工作流库「从 ComfyUI 获取」）。
+// 端点形态 2026-11-14 在 ComfyUI(app/user_manager.py) 实测确定：
+//   列表 GET /v2/userdata?path=workflows（全子树遍历，path 相对用户根目录，type/size/modified）
+//   取文件 GET /userdata/<encodeURIComponent(path)> —— encodeURIComponent 把斜杠编码成 %2F
+//   才能命中 /userdata/{file} 单段路由（带斜杠的原始路径直接 404）。
+// 仅 API 格式条目携带 workflow 内容供前端直接走既有 import 路由；单文件失败不阻断整批。
+const USER_WORKFLOW_MAX_FILES = 40;
+
+function userWorkflowEntryMeta(entry) {
+  const path = String(entry.path || "");
+  const basename = path.split("/").pop() || path;
+  return { path, name: basename.replace(/\.json$/i, ""), size: Number(entry.size || 0), modified: Number(entry.modified || 0) };
+}
+
+async function fetchUserWorkflows(serverUrl) {
+  const response = await comfyFetch(serverUrl, "/v2/userdata?path=" + encodeURIComponent("workflows"), {}, 15000);
+  if (!response.ok) throw new Error(`读取 ComfyUI 工作流列表失败（HTTP ${response.status}）`);
+  const entries = await response.json().catch(() => null);
+  if (!Array.isArray(entries)) throw new Error("ComfyUI 工作流列表格式异常");
+  const files = entries
+    .filter(entry => entry && entry.type === "file" && typeof entry.path === "string" && entry.path.startsWith("workflows/") && /\.json$/i.test(entry.path))
+    .sort((a, b) => (Number(b.modified || 0)) - (Number(a.modified || 0)))
+    .slice(0, USER_WORKFLOW_MAX_FILES);
+  const settled = await Promise.allSettled(files.map(async entry => {
+    const fileResponse = await comfyFetch(serverUrl, "/userdata/" + encodeURIComponent(String(entry.path)), {}, 30000);
+    if (!fileResponse.ok) throw new Error(`HTTP ${fileResponse.status}`);
+    let parsed;
+    try { parsed = JSON.parse(await fileResponse.text()); } catch { throw new Error("文件不是合法 JSON"); }
+    const format = classifyUserWorkflow(parsed);
+    const meta = userWorkflowEntryMeta(entry);
+    return { ...meta, format, importable: format === "api", workflow: format === "api" ? parsed : undefined };
+  }));
+  return settled.map((result, index) => {
+    const meta = userWorkflowEntryMeta(files[index]);
+    if (result.status === "fulfilled") return result.value;
+    return { ...meta, format: "unknown", importable: false, error: result.reason?.message || String(result.reason) };
+  });
+}
+
 function comboOptions(objectInfo, node, field) {
   const value = objectInfo?.[node.class_type]?.input?.required?.[field]?.[0];
   return Array.isArray(value) ? value.map(entry => String(entry)) : null;
@@ -237,9 +338,10 @@ function fitWorkflowModels(workflow, hints, objectInfo) {
 async function preparePrompt(item, payload, serverUrl) {
   const workflow = clone(item.workflow);
   const map = item.mapping;
-  if (map.positiveNodeId) workflow[map.positiveNodeId].inputs.text = String(payload.prompt || "");
-  if (map.negativeNodeId) workflow[map.negativeNodeId].inputs.text = String(payload.negativePrompt || "");
-  // 视频类型：提示词/时长直接写在 MiniMaxH3 节点字段上（promptField/durationField 由映射给出）
+  // positiveField/negativeField 缺省 "text"（旧存档 mapping 无此键）；MiniMaxH3 等节点的
+  // 字段是 prompt，由映射显式给出。promptNodeId/promptField 是旧版视频映射的遗留路径。
+  if (map.positiveNodeId && workflow[map.positiveNodeId]?.inputs) workflow[map.positiveNodeId].inputs[map.positiveField || "text"] = String(payload.prompt || "");
+  if (map.negativeNodeId && workflow[map.negativeNodeId]?.inputs) workflow[map.negativeNodeId].inputs[map.negativeField || "text"] = String(payload.negativePrompt || "");
   if (map.promptNodeId && workflow[map.promptNodeId]?.inputs) workflow[map.promptNodeId].inputs[map.promptField || "prompt"] = String(payload.prompt || "");
   if (map.durationNodeId && workflow[map.durationNodeId]?.inputs) workflow[map.durationNodeId].inputs[map.durationField || "length"] = videoFrameLength(payload.duration);
   // 通用参数传导（预留接口，目前只开放 width/height）：尺寸由 分辨率(长边)+比例 换算
@@ -252,9 +354,65 @@ async function preparePrompt(item, payload, serverUrl) {
   }
   if (map.samplerNodeId && map.seedField && payload.seed !== undefined && payload.seed !== "") workflow[map.samplerNodeId].inputs[map.seedField] = Math.max(0, Math.floor(Number(payload.seed) || 0));
   if (map.samplerNodeId && map.denoiseField && payload.denoise !== undefined) workflow[map.samplerNodeId].inputs[map.denoiseField] = Math.max(0, Math.min(1, Number(payload.denoise) || 0));
-  if (map.imageNodeId) workflow[map.imageNodeId].inputs.image = await uploadImage(serverUrl, payload.imageData, "source");
-  if (map.maskNodeId) workflow[map.maskNodeId].inputs.image = await uploadImage(serverUrl, payload.maskData, "mask");
+  // 图片输入（2026-11-14 全参数面板扩展）：上游第一张图喂给**全部**图片入口节点
+  // （LoadImage/VHS_LoadImage/LoadImageFromPath/GetImageFromPS，按既有 imageField 优先序找字段），
+  // 不再只喂映射选中的那一个；蒙版入口排除（仍由 maskData 单独喂）。无图时不上传，
+  // 需图工作流由 /prompt 校验报错透传（前端在映射存在时已提前拦截）。
+  if (payload.imageData) {
+    const uploadedName = await uploadImage(serverUrl, payload.imageData, "source");
+    const maskId = map.maskNodeId ? String(map.maskNodeId) : "";
+    for (const [id, node] of Object.entries(workflow)) {
+      if (id === maskId || !IMAGE_ENTRY_CLASS_RE.test(String(node?.class_type || ""))) continue;
+      const field = IMAGE_ENTRY_FIELD_NAMES.find(f => typeof node.inputs?.[f] === "string");
+      if (field) node.inputs[field] = uploadedName;
+    }
+  }
+  if (map.maskNodeId) workflow[map.maskNodeId].inputs[map.maskField || "image"] = await uploadImage(serverUrl, payload.maskData, "mask");
+  // 全参数面板回传（2026-11-14）：mapping 补丁之后打 paramValues（后者优先），只覆盖已编辑的字段。
+  // 键形状 { [nodeId]: { [field]: value } }；与 ComfyUiApi.cs PreparePrompt 逐项对齐（双实现纪律）。
+  const paramValues = payload.paramValues;
+  if (paramValues && typeof paramValues === "object" && !Array.isArray(paramValues)) {
+    for (const [nodeId, fields] of Object.entries(paramValues)) {
+      const target = workflow[String(nodeId)];
+      if (!target?.inputs || !fields || typeof fields !== "object" || Array.isArray(fields)) continue;
+      for (const [field, value] of Object.entries(fields)) {
+        if (value === undefined || value === null) continue;
+        target.inputs[field] = value;
+      }
+    }
+  }
   return workflow;
+}
+
+// 虚拟输出注入：工作流没有 SaveImage/SaveVideo 类输出节点时（如 PS 桥接的 SendImageToPS、
+// 只回传不落盘的自定义节点），status 端点永远收不到结果——在执行的临时副本上注入一个
+// SaveImage 接到结果节点，存储原件不动。注入点判定（pickVirtualOutputNode）：
+// ①未被任何节点引用的"终端"节点，沿其 images/image 输入回溯一个节点（结果图生产者）；
+// ②无带图链的终端则取未被引用、自身消费图链的节点；③再退取末端最后一个。
+// 终端本身是 Save/Preview 类说明有正规输出（正常不会走到注入），返回空。
+const VIRTUAL_OUTPUT_ID = "canvasflow_output";
+function pickVirtualOutputNode(workflow) {
+  const nodes = Object.entries(workflow)
+    .map(([id, value]) => ({ id, class_type: value?.class_type, inputs: value?.inputs || {} }))
+    .filter(node => typeof node.class_type === "string");
+  const referenced = new Set();
+  for (const node of nodes) {
+    for (const value of Object.values(node.inputs)) {
+      if (Array.isArray(value) && typeof value[0] === "string") referenced.add(value[0]);
+    }
+  }
+  const terminals = nodes.filter(node => !referenced.has(node.id));
+  // 从最后一个终端倒序找（API 导出的输出端节点在末尾；倒序避免残缺分支里未引用的中间节点抢先命中）
+  for (const terminal of [...terminals].reverse()) {
+    if (/^(Save|Preview)/i.test(terminal.class_type)) return ""; // 有正规输出节点就不注入（能走到这里说明 mapping 未捕获到输出，二者互斥）
+    for (const [field, value] of Object.entries(terminal.inputs)) {
+      if (Array.isArray(value) && typeof value[0] === "string" && /image/i.test(field)) return value[0];
+    }
+  }
+  const endNodes = terminals.filter(node => !/^(Save|Preview|Send)/i.test(node.class_type));
+  if (!endNodes.length) return "";
+  const consumer = endNodes.find(node => Object.values(node.inputs).some(value => Array.isArray(value)));
+  return (consumer || endNodes[endNodes.length - 1]).id;
 }
 
 // 视频结果落盘：与 /api/download-video 同目录同命名风格（{数据根}/download/videos/），
@@ -272,9 +430,12 @@ async function historyOutputs(serverUrl, entry, outputNodeIds, dataRoot) {
   const images = [];
   const videos = [];
   const videoPaths = [];
-  for (const nodeId of outputNodeIds || []) {
+  // 导入时没识别出输出节点的工作流：兜底遍历全部节点输出（自定义保存节点仍能收结果）
+  const nodeIds = (Array.isArray(outputNodeIds) && outputNodeIds.length) ? outputNodeIds : Object.keys(entry?.outputs || {});
+  for (const nodeId of nodeIds) {
     const output = entry?.outputs?.[nodeId];
-    for (const image of output?.images || []) {
+    // VHS_VideoCombine 的输出键是 gifs，其余保存节点普遍是 images，两键都收
+    for (const image of [...(output?.images || []), ...(output?.gifs || [])]) {
       if (!image?.filename || !/^[^\\/\0]+$/.test(image.filename)) continue;
       const query = new URLSearchParams({ filename: image.filename, subfolder: String(image.subfolder || ""), type: String(image.type || "output") });
       const response = await comfyFetch(serverUrl, `/view?${query}`, {}, 60000);
@@ -313,6 +474,19 @@ async function handle(req, res, context) {
       if (!response.ok) throw new Error(`ComfyUI 返回 HTTP ${response.status}`);
       return json(res, 200, { ok: true, serverUrl });
     }
+    if (pathname === "/api/comfyui/workflows/user-list" && req.method === "POST") {
+      const body = await readJson(req);
+      const serverUrl = normalizeServerUrl(body.serverUrl || store.config.serverUrl);
+      const items = await fetchUserWorkflows(serverUrl);
+      return json(res, 200, { ok: true, serverUrl, items });
+    }
+    // 全参数面板：按类取 object_info 子集（combo 选项/数值范围/多行标记），见 fetchObjectInfoSubset
+    if (pathname === "/api/comfyui/object-info" && req.method === "POST") {
+      const body = await readJson(req);
+      const serverUrl = normalizeServerUrl(body.serverUrl || store.config.serverUrl);
+      const info = await fetchObjectInfoSubset(serverUrl, body.classes);
+      return json(res, 200, { ok: true, serverUrl, info });
+    }
     if (pathname === "/api/comfyui/workflows/import" && req.method === "POST") {
       const body = await readJson(req);
       const type = String(body.type || "") || detectWorkflowType(body.workflow);
@@ -326,7 +500,7 @@ async function handle(req, res, context) {
         const serverUrl = normalizeServerUrl(body.serverUrl || store.config.serverUrl);
         workflow = fitWorkflowModels(workflow, body.hints, await fetchObjectInfo(serverUrl));
       }
-      const mapping = detectWorkflowMapping(type, workflow);
+      const mapping = detectWorkflowMapping(workflow);
       const item = { id: crypto.randomUUID(), name: String(body.name || "").trim() || "未命名工作流", type, workflow, mapping, updatedAt: Date.now() };
       if (templateId) item.templateId = templateId;
       store.workflows.push(item); saveStore(context.dataRoot, store);
@@ -337,7 +511,7 @@ async function handle(req, res, context) {
       const item = store.workflows.find(entry => entry.id === body.id);
       if (!item) return json(res, 404, { error: "工作流不存在" });
       if (body.name !== undefined) item.name = String(body.name || "").trim() || item.name;
-      if (body.workflow) { item.workflow = body.workflow; item.mapping = detectWorkflowMapping(item.type, item.workflow); }
+      if (body.workflow) { item.workflow = body.workflow; item.mapping = detectWorkflowMapping(item.workflow); }
       item.updatedAt = Date.now(); saveStore(context.dataRoot, store);
       return json(res, 200, { ok: true });
     }
@@ -361,13 +535,22 @@ async function handle(req, res, context) {
       if (!item) return json(res, 404, { error: "工作流已删除或不存在" });
       const serverUrl = normalizeServerUrl(body.serverUrl || store.config.serverUrl);
       const prompt = await preparePrompt(item, body, serverUrl);
+      // 无正规输出节点的工作流（PS 桥接等）：注入 SaveImage 才能拿回结果（见 pickVirtualOutputNode）
+      let outputNodeIds = Array.isArray(item.mapping?.outputNodeIds) ? item.mapping.outputNodeIds : [];
+      if (!outputNodeIds.length) {
+        const virtualTarget = pickVirtualOutputNode(prompt);
+        if (virtualTarget) {
+          prompt[VIRTUAL_OUTPUT_ID] = { class_type: "SaveImage", inputs: { images: [virtualTarget, 0], filename_prefix: "canvasflow" }, _meta: { title: "CanvasFlow Output" } };
+          outputNodeIds = [VIRTUAL_OUTPUT_ID];
+        }
+      }
       const clientId = `canvasflow-${crypto.randomUUID()}`;
       const response = await comfyFetch(serverUrl, "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, client_id: clientId }) }, 60000);
       const result = await response.json().catch(() => ({}));
       const promptId = result.prompt_id;
       if (!response.ok || !promptId) throw new Error(result.error?.message || result.error || `提交工作流失败（HTTP ${response.status}）`);
       const taskId = crypto.randomUUID();
-      tasks.set(taskId, { taskId, promptId, serverUrl, outputNodeIds: item.mapping.outputNodeIds, createdAt: Date.now(), cancelled: false });
+      tasks.set(taskId, { taskId, promptId, serverUrl, outputNodeIds, createdAt: Date.now(), cancelled: false });
       return json(res, 200, { ok: true, taskId, promptId });
     }
     if (pathname.startsWith("/api/comfyui/status/") && req.method === "GET") {
@@ -381,7 +564,10 @@ async function handle(req, res, context) {
       if (!entry) return json(res, 200, { status: "running" });
       const messages = entry.status?.messages || [];
       const executionError = messages.find(message => message?.[0] === "execution_error");
-      if (executionError) return json(res, 200, { status: "failed", error: executionError[1]?.exception_message || "ComfyUI 执行失败" });
+      // 与 ComfyUiApi.cs 同步：执行错误也是终态，删除任务（前端收到 failed 后即停轮询）
+      if (executionError) { tasks.delete(taskId); return json(res, 200, { status: "failed", error: executionError[1]?.exception_message || "ComfyUI 执行失败" }); }
+      // 与 ComfyUiApi.cs 同步：中断也是失败终态，别落到“没有输出”兜底
+      if (messages.some(message => message?.[0] === "execution_interrupted")) { tasks.delete(taskId); return json(res, 200, { status: "failed", error: "ComfyUI 任务被中断" }); }
       const outputs = await historyOutputs(task.serverUrl, entry, task.outputNodeIds, context.dataRoot);
       if (!outputs.images.length && !outputs.videos.length) return json(res, 200, { status: "failed", error: "工作流已完成，但没有找到图片或视频输出" });
       tasks.delete(taskId);
@@ -402,4 +588,4 @@ async function handle(req, res, context) {
   }
 }
 
-module.exports = { handle, detectWorkflowMapping, detectWorkflowType, normalizeServerUrl, loadStore, fitWorkflowModels, fetchObjectInfo, videoFrameLength, sdImageSize };
+module.exports = { handle, detectWorkflowMapping, detectWorkflowType, normalizeServerUrl, loadStore, fitWorkflowModels, fetchObjectInfo, fetchObjectInfoSubset, fetchUserWorkflows, classifyUserWorkflow, videoFrameLength, sdImageSize, pickVirtualOutputNode, VIRTUAL_OUTPUT_ID, preparePrompt, IMAGE_ENTRY_CLASS_RE, IMAGE_ENTRY_FIELD_NAMES };

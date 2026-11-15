@@ -1,0 +1,8 @@
+# 运行产物与大文件不进 git；models 权重(928MB)与 .venv 依赖(476MB)本地就位即可用
+models/*.onnx
+.venv/
+.cache/
+__pycache__/
+input/
+output/
+params.json

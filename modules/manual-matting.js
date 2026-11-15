@@ -8,21 +8,28 @@ function runLocalRegionMatting(task) {
 async function executeLocalRegionMatting(task) {
   const image = task.orderedImages[0].image;
   const input = new Image(); input.src = image; await input.decode();
-  const runUrl = task.mattingEngine === "lite" ? "/api/extensions/auto-matting-u2net/run" : "/api/extensions/auto-matting-general/run";
-  const runInit = {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:[{name:"001.png",data:stripDataUrl(image)}],params:{}})};
-  const cfg = extensionSettings();
-  const base = cfg.serviceUrl.replace(/\/+$/, "");
-  let response;
-  try {
-    response = window.canvasflowDesktop?.apiRequest ? await apiFetch(runUrl,runInit) : await fetch(`${base}${runUrl}`,runInit);
-  } catch (error) {
-    throw new Error(`无法启动自动抠图拓展：${error.message || "请在设置 → 拓展中确认已安装并刷新"}`);
+  let outputData;
+  if (task.mattingEngine === "lite") {
+    // U²-Net 快速走内置 wasm 推理（u2netp 模型随安装包分发），不依赖 Python 拓展，任何安装形态恒可用
+    const builtin = await runBuiltinMatting([{ name: "001.png", data: stripDataUrl(image) }], {}, null);
+    if (!builtin.ok || !builtin.images?.[0]?.data) throw new Error(builtin.error || "内置 U²-Net 抠图没有返回图片");
+    outputData = builtin.images[0].data;
+  } else {
+    const runUrl = "/api/extensions/auto-matting-general/run";
+    const runInit = {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:[{name:"001.png",data:stripDataUrl(image)}],params:{}})};
+    const cfg = extensionSettings();
+    const base = cfg.serviceUrl.replace(/\/+$/, "");
+    try {
+      const response = window.canvasflowDesktop?.apiRequest ? await apiFetch(runUrl,runInit) : await fetch(`${base}${runUrl}`,runInit);
+      const result = await response.json().catch(()=>({ok:false,error:"拓展响应不是合法 JSON"}));
+      if (!response.ok || !result.ok) throw new Error(result.error || `自动抠图拓展返回状态 ${response.status}`);
+      outputData = result.images?.[0]?.data;
+      if (!outputData) throw new Error("自动抠图拓展没有返回图片");
+    } catch (error) {
+      throw new Error(`无法启动 BiRefNet 拓展：${error.message || "请在设置 → 拓展中确认已安装并刷新"}`);
+    }
   }
-  const result = await response.json().catch(()=>({ok:false,error:"拓展响应不是合法 JSON"}));
-  if (!response.ok || !result.ok) throw new Error(result.error || `自动抠图拓展返回状态 ${response.status}`);
-  const outputImage = result.images?.[0]?.data;
-  if (!outputImage) throw new Error("自动抠图拓展没有返回图片");
-  const output = new Image(); output.src = `data:image/png;base64,${outputImage}`; await output.decode();
+  const output = new Image(); output.src = `data:image/png;base64,${outputData}`; await output.decode();
   if (output.naturalWidth !== input.naturalWidth || output.naturalHeight !== input.naturalHeight) throw new Error("本地抠图结果尺寸与选区不一致");
   // Keep manual erasures even when the service replaces the input alpha channel.
   const canvas = document.createElement("canvas"); canvas.width=input.naturalWidth; canvas.height=input.naturalHeight;
@@ -32,6 +39,7 @@ async function executeLocalRegionMatting(task) {
 /* Region crops go straight into the existing AI queue; no intermediary nodes or wires. */
 async function openImageRegionMatting(node) {
   const pageId = state.activePageId;
+  await fetchToolExtensions(); // 「本地 BiRefNet」选项按拓展可用性显示，打开前刷新一次列表（失败不阻塞，列表为空即隐藏）
   try {
     const dataUrl = await resolveNodeImageDataUrl(node);
     if (!dataUrl) throw new Error("该节点没有可用图片");
@@ -127,6 +135,8 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   const signature = mattingImageSignature(original);
   const draft = findNode(sourceNodeId)?.mattingDraft;
   const regions = await restoreMattingRegions(draft, signature, original);
+  // 「本地 BiRefNet」依赖 auto-matting-general 拓展：不可用就不显示该选项（用户要求），U²-Net 走内置 wasm 恒可用
+  const hasBiRefNetExtension = enabledToolExtensions().some(ext => ext.id === "auto-matting-general");
   if (state.activePageId !== pageId || !findNode(sourceNodeId) || document.querySelector(".manual-matting")) return;
   const previousFocus = document.activeElement;
   const dialog = document.createElement("div");
@@ -139,7 +149,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
     <header><strong>手动分区抠图</strong><span>原图上拖动添加选框，选择选框后放大修整</span><button type="button" data-action="close" aria-label="关闭手动抠图">关闭</button></header>
     <div class="mm-workspace"><div class="mm-preview"><div class="mm-scroll"><div class="mm-surface"><canvas aria-label="图片选框和蒙版编辑区"></canvas><div class="mm-boxes"></div></div></div><p class="mm-status" role="status"></p></div>
     <aside aria-label="选区列表"><strong>原图与选框</strong><div class="mm-list"></div></aside></div>
-    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小；左方括号缩小，右方括号放大" title="快捷键：[ 缩小，] 放大" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option><option value="local">本地 BiRefNet</option><option value="local-lite">本地 U²-Net 快速</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
+    <footer><div class="mm-tools"><button type="button" data-action="original">添加选框</button><button type="button" data-action="restore">恢复画笔</button><button type="button" data-action="erase">擦除画笔</button><label>笔刷 <input aria-label="笔刷大小；左方括号缩小，右方括号放大" title="快捷键：[ 缩小，] 放大" class="mm-size" type="range" min="4" max="120" value="24"></label><button type="button" data-action="undo">撤销</button><label>缩放 <select class="mm-zoom" aria-label="预览缩放"><option value="fit">适合窗口</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label></div><div class="mm-tools"><label>抠图模型 <select class="mm-model" aria-label="抠图模型"><option value="image25">${activeApiType() === "apimart" ? "GPT Image 2.5 Flare" : "GPT Image 2.5"}</option>${hasBiRefNetExtension ? '<option value="local">本地 BiRefNet</option>' : ""}<option value="local-lite">本地 U²-Net 快速</option></select></label></div><div class="mm-actions"><button type="button" class="primary" data-action="export">确认</button></div></footer>
   </div>`;
   // Inherit the app's theme and user-customized semantic color variables.
   els.app.append(dialog);
@@ -150,6 +160,7 @@ async function openManualMatting(sourceCanvas, sourceNodeId) {
   const modelSelect = dialog.querySelector(".mm-model");
   modelSelect.onchange = () => { submissionError=""; redraw(); };
   if (draft?.signature === signature && String(draft.model || "").startsWith("local")) modelSelect.value=draft.model;
+  if (modelSelect.selectedIndex < 0) modelSelect.value="image25"; // 上次的本地模型不可用（选项已隐藏）时回退云端
   let selected = null, mode = "erase", drag = null, busy = false, counter = regions.reduce((max,region)=>Math.max(max,region.id),0), adding = false, submissionError = "", confirmation = null;
   const button = action => dialog.querySelector(`[data-action="${action}"]`);
   function close() {

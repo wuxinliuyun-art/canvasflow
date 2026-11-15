@@ -97,12 +97,13 @@ internal sealed class DesktopApi
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
-        or "/api/agtoken/video-generate" or "/api/download-video"
+        or "/api/agtoken/video-generate" or "/api/apimart/video-generate" or "/api/download-video"
         or "/api/chat/completions" or "/api/chat-custom/models"
-        or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/run" or "/api/comfyui/cancel"
+        or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/workflows/user-list" or "/api/comfyui/object-info" or "/api/comfyui/run" or "/api/comfyui/cancel"
         or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
         || path.StartsWith("/api/task/", StringComparison.Ordinal)
         || path.StartsWith("/api/agtoken/video-task/", StringComparison.Ordinal)
+        || path.StartsWith("/api/apimart/video-task/", StringComparison.Ordinal)
         || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal)
         || path.StartsWith("/api/comfyui/status/", StringComparison.Ordinal);
         
@@ -212,6 +213,23 @@ internal sealed class DesktopApi
                 var taskKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
                 return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/video/generations/" + Uri.EscapeDataString(videoTaskId), null, taskKey, cancellationToken);
             }
+            if (method == "POST" && path == "/api/apimart/video-generate")
+            {
+                // AI 视频节点（apimart）：统一视频接口提交，带镜像 failover，透传请求体不做字段转换
+                var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("视频生成参数为空");
+                var apimartPayloadKey = payload.TryGetPropertyValue("_apiKey", out var apimartKeyNode) ? apimartKeyNode?.GetValue<string>() ?? "" : "";
+                payload.Remove("_apiKey");
+                // ProxyApiAsync 内部对空 key 自动回落 _getApiKey()（apimart 槽）
+                var apimartKey = string.IsNullOrWhiteSpace(apimartPayloadKey) ? apiKey : apimartPayloadKey;
+                return await ProxyApiAsync(HttpMethod.Post, "/v1/videos/generations", payload.ToJsonString(), cancellationToken, apimartKey);
+            }
+            if (method == "GET" && path.StartsWith("/api/apimart/video-task/", StringComparison.Ordinal))
+            {
+                // 与绘图任务同一统一查询端点 /v1/tasks/{task_id}；任务号形如 task_01J9…（含下划线）
+                var apimartTaskId = Uri.UnescapeDataString(path["/api/apimart/video-task/".Length..]);
+                if (!Regex.IsMatch(apimartTaskId, @"^[A-Za-z0-9._:\-_]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
+                return await ProxyApiAsync(HttpMethod.Get, "/v1/tasks/" + Uri.EscapeDataString(apimartTaskId), null, cancellationToken);
+            }
             if (method == "POST" && path == "/api/download-video") return await DownloadVideoAsync(body, cancellationToken);
             if (method == "POST" && path == "/api/chat/completions")
             {
@@ -282,6 +300,7 @@ internal sealed class DesktopApi
                 BrowserTasks[taskId] = new JsonObject
                 {
                     ["id"] = taskId,
+                    ["kind"] = payload["kind"]?.GetValue<string>() == "text" ? "text" : "image",
                     ["site"] = site,
                     ["pageUrl"] = payload["pageUrl"]?.GetValue<string>() ?? "",
                     ["newConversation"] = payload["newConversation"]?.GetValue<bool>() == true,
@@ -297,7 +316,7 @@ internal sealed class DesktopApi
             {
                 PurgeBrowserTasks();
                 var tasks = BrowserTasks.Values.Where(task => task["status"]?.GetValue<string>() == "pending").OrderBy(task => task["createdAt"]?.GetValue<long>() ?? 0)
-                    .Select(task => new { id = task["id"]?.GetValue<string>(), site = task["site"]?.GetValue<string>(), pageUrl = task["pageUrl"]?.GetValue<string>() ?? "", newConversation = task["newConversation"]?.GetValue<bool>() == true }).ToArray();
+                    .Select(task => new { id = task["id"]?.GetValue<string>(), kind = task["kind"]?.GetValue<string>() ?? "image", site = task["site"]?.GetValue<string>(), pageUrl = task["pageUrl"]?.GetValue<string>() ?? "", newConversation = task["newConversation"]?.GetValue<bool>() == true }).ToArray();
                 return Json(200, new { tasks });
             }
             if (path == "/api/browser-task/next" && method == "GET")
@@ -324,6 +343,7 @@ internal sealed class DesktopApi
                     task = new
                     {
                         id = found["id"]?.GetValue<string>(),
+                        kind = found["kind"]?.GetValue<string>() ?? "image",
                         site = found["site"]?.GetValue<string>(),
                         prompt = found["prompt"]?.GetValue<string>(),
                         images = found["images"]?.DeepClone(),

@@ -56,4 +56,6 @@ test("group frame exposes run and stop controls", () => {
   assert.match(source, /data-group-action="\$\{groupRun \? "stop" : "run"\}"/);
   assert.match(source, /runCanvasGroup\(groupFrame\.dataset\.groupId\)/);
   assert.match(source, /stopCanvasGroup\(groupFrame\.dataset\.groupId\)/);
+  // 运行按钮是开发专用 UI：由 dev-flag.js 的 window.CANVASFLOW_DEV 门控，发布版隐藏（2026-11-14 用户要求）
+  assert.match(source, /window\.CANVASFLOW_DEV \? `<button type="button" class="node-group-run" data-group-action="\$\{groupRun/);
 });

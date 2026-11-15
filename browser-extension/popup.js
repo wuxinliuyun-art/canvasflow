@@ -17,7 +17,7 @@ async function refreshCalibrationInfo() {
   const stored = await chrome.storage.local.get("calibrations");
   const entry = (stored.calibrations || {})[origin];
   if (entry) {
-    $("calibrationInfo").textContent = `当前站点已校准（输入框与发送按钮均已记录于 ${new Date(entry.at).toLocaleString()}）`;
+    $("calibrationInfo").textContent = `当前站点已校准（输入框、发送按钮和回复区域记录于 ${new Date(entry.at).toLocaleString()}）`;
     $("clearCalibration").classList.remove("hidden");
   } else {
     $("calibrationInfo").textContent = "当前站点尚未校准，将使用内置默认选择器。";
@@ -56,7 +56,7 @@ $("autoFocusAfterTransfer").addEventListener("change", async event => {
 $("calibrate").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url?.startsWith("http")) { setStatus("请在 AI 站点的网页标签页上使用校准", "bad"); return; }
-  // 任意站点:先注册内容脚本(本页立即注入),再进入两步点选
+  // 任意站点:先注册内容脚本(本页立即注入),再进入三步点选
   const ensure = await chrome.runtime.sendMessage({ type: "ensureContentScript", tabUrl: tab.url }).catch(error => ({ ok: false, error: error.message }));
   if (!ensure?.ok) { setStatus(ensure?.error || "内容脚本注册失败", "bad"); return; }
   try {
@@ -64,7 +64,7 @@ $("calibrate").addEventListener("click", async () => {
   } catch { /* 已注入时重复执行无害(content.js 幂等注册) */ }
   const response = await chrome.tabs.sendMessage(tab.id, { type: "startCalibration" }).catch(error => ({ ok: false, error: error.message }));
   if (response?.ok) {
-    setStatus("校准开始：回到页面，依次点击输入框和发送按钮", "ok");
+    setStatus("校准开始：点输入框后会自动填入测试文字，再点发送按钮并等待回复", "ok");
     setTimeout(refreshCalibrationInfo, 4000);
   } else {
     setStatus(response?.error || "无法在该页面启动校准（浏览器内置页不支持）", "bad");

@@ -15,6 +15,7 @@ const WATCH_TIMEOUT_MS = 300000;
 const HARVEST_STABLE_CHECKS = 2;
 const MIN_IMAGE_SIZE = 200;
 const MAX_RESULT_IMAGES = 4;
+const CALIBRATION_TEST_PROMPT = "CanvasFlow 校准测试，请只回复：校准完成";
 
 // 内置站点默认选择器候选(按顺序尝试)。站点改版失效时用插件弹窗的"校准此页面"覆盖。
 const SITE_PRESETS = {
@@ -30,6 +31,7 @@ const SITE_PRESETS = {
       "button.send-button",
       "button[mattooltip*='Send']",
     ],
+    reply: ["model-response .markdown", "model-response message-content", "model-response"],
   },
   "chatgpt.com": {
     prompt: [
@@ -43,6 +45,7 @@ const SITE_PRESETS = {
       "button[aria-label*='发送']",
       "button[aria-label*='Send']",
     ],
+    reply: ["[data-message-author-role='assistant']", "article[data-testid^='conversation-turn'] .markdown", ".markdown"],
   },
   "chat.openai.com": {
     prompt: [
@@ -55,6 +58,7 @@ const SITE_PRESETS = {
       "button[aria-label*='发送']",
       "button[aria-label*='Send']",
     ],
+    reply: ["[data-message-author-role='assistant']", "article[data-testid^='conversation-turn'] .markdown", ".markdown"],
   },
 };
 
@@ -64,6 +68,12 @@ const GENERIC_SEND_CANDIDATES = [
   "button[aria-label*='Send']",
   "button[data-testid*='send']",
   "form button[type='submit']",
+];
+const GENERIC_REPLY_CANDIDATES = [
+  "[data-message-author-role='assistant']",
+  "model-response",
+  "[data-testid*='conversation-turn'] .markdown",
+  "main .markdown",
 ];
 
 let busy = false;
@@ -126,6 +136,29 @@ function buildSelector(element) {
   return parts.join(" > ");
 }
 
+// 回复正文需要匹配“以后生成的同类回复”，不能像输入框/发送按钮那样强求唯一。
+// 优先保留语义属性，其次用稳定 class 组合；全部不可用时才退回旧的唯一元素路径。
+function buildReplySelector(element) {
+  if (!(element instanceof Element)) return "";
+  let current = element;
+  for (let depth = 0; current && current.tagName !== "BODY" && depth < 4; depth += 1, current = current.parentElement) {
+    for (const attr of ["data-message-author-role", "data-testid", "data-test", "role"]) {
+      const value = current.getAttribute(attr);
+      if (!value || value.length > 80) continue;
+      const selector = `${current.tagName.toLowerCase()}[${attr}="${CSS.escape(value)}"]`;
+      try { if ([...document.querySelectorAll(selector)].includes(current)) return selector; } catch { /* 继续降级 */ }
+    }
+    const classes = [...current.classList]
+      .filter(name => /^[A-Za-z_][\w-]{1,60}$/.test(name) && !/^(active|selected|focus|hover|loading|streaming|last|first)$/i.test(name))
+      .slice(0, 3);
+    for (let count = classes.length; count >= 1; count -= 1) {
+      const selector = `${current.tagName.toLowerCase()}${classes.slice(0, count).map(name => `.${CSS.escape(name)}`).join("")}`;
+      try { if ([...document.querySelectorAll(selector)].includes(current)) return selector; } catch { /* 继续降级 */ }
+    }
+  }
+  return buildSelector(element);
+}
+
 function isVisible(element) {
   if (!element) return false;
   const rect = element.getBoundingClientRect();
@@ -166,6 +199,56 @@ async function findSendButton() {
     } catch { /* 选择器非法则跳过 */ }
   }
   return null;
+}
+
+async function replyCandidates() {
+  const calibration = await getCalibration();
+  const preset = SITE_PRESETS[hostOf(location.origin)];
+  const selectors = [
+    ...(calibration?.replySel ? [calibration.replySel] : []),
+    ...(preset?.reply || []),
+    ...GENERIC_REPLY_CANDIDATES,
+  ];
+  const elements = [];
+  for (const selector of selectors) {
+    try {
+      for (const element of document.querySelectorAll(selector)) {
+        if (isVisible(element) && !elements.includes(element)) elements.push(element);
+      }
+    } catch { /* 选择器非法则跳过 */ }
+  }
+  return elements;
+}
+
+async function snapshotReplies() {
+  const snapshot = new Map();
+  for (const element of await replyCandidates()) snapshot.set(element, String(element.innerText || element.textContent || "").trim());
+  return snapshot;
+}
+
+async function waitForTextResult(beforeReplies) {
+  const startedAt = Date.now();
+  let lastText = "";
+  let stableChecks = 0;
+  for (;;) {
+    await new Promise(resolve => setTimeout(resolve, WATCH_INTERVAL_MS));
+    if (Date.now() - startedAt > WATCH_TIMEOUT_MS) break;
+    checkBrowserAttention();
+    const changed = [];
+    for (const element of await replyCandidates()) {
+      const text = String(element.innerText || element.textContent || "").trim();
+      if (text && beforeReplies.get(element) !== text) changed.push(text);
+    }
+    const nextText = changed.at(-1) || "";
+    if (nextText) {
+      stableChecks = nextText === lastText ? stableChecks + 1 : 0;
+      lastText = nextText;
+      if (stableChecks >= HARVEST_STABLE_CHECKS && Date.now() - startedAt > 5000) return lastText;
+    } else {
+      stableChecks = 0;
+    }
+  }
+  return lastText;
 }
 
 async function dataUrlToFile(dataUrl, index) {
@@ -313,6 +396,7 @@ async function runTask(task) {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   const beforeSet = snapshotImages();
+  const beforeReplies = task.kind === "text" ? await snapshotReplies() : null;
   promptBox.focus();
   const originalText = promptBox.value ?? promptBox.textContent;
   let enterHandled = false;
@@ -323,6 +407,11 @@ async function runTask(task) {
   await new Promise(resolve => setTimeout(resolve, 1000));
   const currentSend = await findSendButton();
   if (!enterHandled && currentSend && !currentSend.disabled && currentSend.getAttribute("aria-disabled") !== "true" && (promptBox.value ?? promptBox.textContent) === originalText) currentSend.click();
+  if (task.kind === "text") {
+    const text = await waitForTextResult(beforeReplies);
+    if (!text) throw new Error("等待超时：没有识别到新的文字回复，请重新校准并点选一条助手回复");
+    return { images: [], text };
+  }
   const images = await waitForResults(beforeSet);
   if (!images.length) throw new Error("等待超时：页面上没有出现新生成的图片（可在插件弹窗校准选择器，或站点响应较慢请重试）");
   return { images, text: "" };
@@ -351,7 +440,7 @@ function pollLoop() {
 }
 pollLoop();
 
-// ---------- 手动校准:两步点选(输入框 → 发送按钮),记录选择器按 origin 保存 ----------
+// ---------- 手动校准:三步点选(输入框 → 发送按钮 → 助手回复),记录选择器按 origin 保存 ----------
 
 let calibrationState = null;
 
@@ -407,14 +496,29 @@ async function onCalibrationClick(event) {
   event.preventDefault();
   event.stopPropagation();
   event.stopImmediatePropagation();
-  const element = event.target;
+  const clicked = event.target;
   if (calibrationState.step === "prompt") {
+    const element = clicked.closest?.("textarea, input, [contenteditable='true']") || clicked;
     calibrationState.promptSel = buildSelector(element);
+    fillPrompt(element, CALIBRATION_TEST_PROMPT);
     calibrationState.step = "send";
-    showCalibrationBanner("已记录输入框，请点击页面上的【发送按钮】");
+    showCalibrationBanner("已记录输入框并填入校准文字，请点击页面上的【发送按钮】");
   } else if (calibrationState.step === "send") {
+    const element = clicked.closest?.("button, [role='button']") || clicked;
     calibrationState.sendSel = buildSelector(element);
-    const entry = { promptSel: calibrationState.promptSel, sendSel: calibrationState.sendSel, at: Date.now() };
+    calibrationState.step = "reply";
+    showCalibrationBanner("校准文字已发送；请等待回复出现，再点击【助手回复正文】");
+    // 当前捕获监听会阻止页面按钮的原始点击；记录完成后临时移除监听，主动补发这一次点击。
+    document.removeEventListener("click", onCalibrationClick, true);
+    setTimeout(() => {
+      try { element.click(); } catch { /* 页面已重建按钮时由用户重新开始校准 */ }
+      setTimeout(() => {
+        if (calibrationState?.step === "reply") document.addEventListener("click", onCalibrationClick, true);
+      }, 300);
+    }, 0);
+  } else if (calibrationState.step === "reply") {
+    calibrationState.replySel = buildReplySelector(clicked);
+    const entry = { promptSel: calibrationState.promptSel, sendSel: calibrationState.sendSel, replySel: calibrationState.replySel, at: Date.now() };
     await saveCalibration(entry);
     clearCalibrationListeners();
     calibrationState = null;
@@ -432,11 +536,11 @@ function onCalibrationKeydown(event) {
 function startCalibration() {
   if (calibrating) return;
   calibrating = true;
-  calibrationState = { step: "prompt", promptSel: "", sendSel: "" };
+  calibrationState = { step: "prompt", promptSel: "", sendSel: "", replySel: "" };
   document.addEventListener("mousemove", onCalibrationHover, true);
   document.addEventListener("click", onCalibrationClick, true);
   document.addEventListener("keydown", onCalibrationKeydown, true);
-  showCalibrationBanner("请点击页面上的【对话输入框】");
+  showCalibrationBanner("请点击页面上的【对话输入框】，插件会自动填入一条校准文字");
   const release = () => { calibrating = false; document.removeEventListener("click", release, true); };
   document.addEventListener("click", release, true);
 }

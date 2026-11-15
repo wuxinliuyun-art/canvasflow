@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CanvasFlow 浏览器桥",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "在 CanvasFlow 与网页之间传送提示词、图片和选中文字，并保留返回原网页的入口。",
   "permissions": ["storage", "scripting", "activeTab", "tabs", "alarms", "contextMenus"],
   "host_permissions": ["<all_urls>"],

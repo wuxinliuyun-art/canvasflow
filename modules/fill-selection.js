@@ -363,6 +363,8 @@ function writeSketchFillPixel(output, original, offset, color, keepInk) {
   }
 }
 
+if (typeof module !== "undefined" && module.exports) module.exports.writeSketchFillPixel = writeSketchFillPixel;
+
 function prepareSketchSelection(source, inkThreshold = 85, gapRadius = 1) {
   const { width, height, data } = source;
   const total = width * height;

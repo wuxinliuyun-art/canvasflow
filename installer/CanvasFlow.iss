@@ -38,10 +38,7 @@ Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}\app"; Excludes: "extensions-presets\*,export\*,data\*,download\*,projects\*,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hant\*,*.pdb,*.xml,*.lib"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; -- 预制拓展（image-to-pptx，安装目录名保持「图片置入pptx」）。
-Source: "{#PublishDir}\extensions-presets\图片置入ppt\*"; DestDir: "{app}\拓展\图片置入pptx"; Excludes: "_work\*,_staging\*,_upscale_tmp\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
-Source: "..\拓展脚本规范.md"; DestDir: "{app}\拓展"; Flags: ignoreversion uninsneveruninstall
-Source: "{#PublishDir}\extensions-presets\自动抠图-U2Net\*"; DestDir: "{app}\拓展\自动抠图-U2Net"; Excludes: "input\*,output\*,_work\*,params.json,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
-Source: "{#PublishDir}\extensions-presets\图片矢量化\*"; DestDir: "{app}\拓展\图片矢量化"; Excludes: "input\*,output\*,*.log,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "{#PublishDir}\extensions-presets\拓展脚本规范.md"; DestDir: "{app}\拓展"; Flags: ignoreversion uninsneveruninstall
 
 ; Program files are replaced by [Files]. Keep legacy folders and all user documents.
 

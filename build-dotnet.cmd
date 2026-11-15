@@ -32,8 +32,14 @@ for /d %%E in ("%EXT_SOURCE%\*") do (
   if exist "%%~fE\*.json" if not exist "%%~fE\rembg-LICENSE.txt" (
     xcopy "%%~fE" "%EXT_PRESETS%\%%~nxE\" /e /i /y >nul
     if errorlevel 1 exit /b 1
+    if exist "%EXT_PRESETS%\%%~nxE\.runtime-deps" rmdir /s /q "%EXT_PRESETS%\%%~nxE\.runtime-deps"
+    findstr /s /m /c:"image-vectorize" /c:"image-to-pptx" /c:"auto-matting-u2net" "%EXT_PRESETS%\%%~nxE\*.json" >nul 2>&1
+    if not errorlevel 1 rmdir /s /q "%EXT_PRESETS%\%%~nxE"
   )
 )
+rem -- Ship the extension authoring spec (root-level .md files) with the presets.
+if exist "%EXT_SOURCE%\*.md" copy /y "%EXT_SOURCE%\*.md" "%EXT_PRESETS%\" >nul
+if errorlevel 1 exit /b 1
 
 rem -- Release rule: ship an empty export folder, never pack user exports
 if not exist "%PUBLISH_DIR%\export" mkdir "%PUBLISH_DIR%\export"

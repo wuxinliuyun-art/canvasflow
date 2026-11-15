@@ -92,3 +92,36 @@ test("explicit keys still win: request header over secret, request body over sec
   await fetch(base + "api/task/task-123");
   assert.equal(captured[4].authorization, "Bearer sk-apimart-fallback");
 });
+
+test("ai-video routes: apimart submits to /v1/videos/generations and polls /v1/tasks, agtoken keeps its own endpoint", async t => {
+  const { instance, restore } = await startFixture();
+  t.after(async () => { await instance.close(); restore(); });
+  const base = instance.url;
+
+  captured.length = 0;
+  // apimart 视频提交：走镜像 failover 首选 host，body._apiKey 优先，剥离后不透传
+  await post(base + "api/apimart/video-generate", { model: "MiniMax-H3", prompt: "cat", _apiKey: "sk-video-body" });
+  assert.equal(captured[0].host, "api.apib.ai");
+  assert.equal(captured[0].path, "/v1/videos/generations");
+  assert.equal(captured[0].authorization, "Bearer sk-video-body");
+
+  // 无 body key 时回落 apimart 槽（mac getApiKey / Windows secrets 语义）
+  await post(base + "api/apimart/video-generate", { model: "MiniMax-H3-Max", prompt: "cat" });
+  assert.equal(captured[1].authorization, "Bearer sk-apimart-fallback");
+
+  // 任务号形如 task_01J9…（含下划线），查询走与绘图相同的 /v1/tasks 端点
+  const poll = await fetch(base + "api/apimart/video-task/task_01J9HA7JPQ9A0Z6JZ3V8M9W6PZ");
+  assert.equal(poll.status, 200);
+  assert.equal(captured[2].path, "/v1/tasks/task_01J9HA7JPQ9A0Z6JZ3V8M9W6PZ");
+  assert.equal(captured[2].authorization, "Bearer sk-apimart-fallback");
+
+  // 非法任务号（含斜杠等）拒绝
+  const bad = await fetch(base + "api/apimart/video-task/" + encodeURIComponent("bad/id"));
+  assert.equal(bad.status, 400);
+
+  // agtoken 视频链路回归：仍走 /v1/video/generations 与 agtoken 槽（非法任务号不发上游,故此处是第 4 条捕获）
+  await post(base + "api/agtoken/video-generate", { model: "doubao-seedance-2-0-260128（国内）", prompt: "cat" });
+  assert.equal(captured[3].host, "agtoken.vip");
+  assert.equal(captured[3].path, "/v1/video/generations");
+  assert.equal(captured[3].authorization, "Bearer sk-agtoken-fallback");
+});

@@ -4,6 +4,7 @@
 input/ 里每张图片 → output/ 按日期时间与序号命名的 .svg（落 CanvasFlow export）+ _preview .png（回画布预览）。
 使用扁平插画配置，其他选项由 params.json 传入。
 """
+import importlib
 import importlib.util
 import json
 import re
@@ -17,6 +18,12 @@ from pathlib import Path
 MAX_SIDE = 4096        # 描线前统一长边
 DIST_THRESHOLD = 48    # 与调色板的最小色距，超过视为"离群色"
 MAX_EXTRA = 8          # 点彩保护最多补进调色板的颜色数
+DEPS_DIR = Path(__file__).resolve().parent / ".runtime-deps"
+
+# 拓展可能位于普通用户无法写入的安装目录，依赖固定落到
+# 拓展自己的可写目录，不要求管理员权限或污染全局 Python。
+if str(DEPS_DIR) not in sys.path:
+    sys.path.insert(0, str(DEPS_DIR))
 
 
 def ensure_deps():
@@ -28,15 +35,36 @@ def ensure_deps():
             missing.append(pkg)
     if missing:
         print("正在安装依赖：" + "、".join(missing))
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing,
-                                   "-i", "https://pypi.tuna.tsinghua.edu.cn/simple"])
-        except subprocess.CalledProcessError:
+        indexes = (
+            "https://pypi.tuna.tsinghua.edu.cn/simple",
+            # 必须显式指定官方源：裸 `pip install` 会继续读取用户的
+            # pip.ini，当全局配置仍是清华镜像时，原先的“回退”实际上没换源。
+            "https://pypi.org/simple",
+        )
+        for index in indexes:
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", "install", *missing,
+                    "--index-url", index,
+                    "--target", str(DEPS_DIR),
+                ])
+                # 上面的缺失检查会缓存“目录不存在”的导入结果，
+                # 首次安装完必须失效该缓存，否则同一进程仍找不到新包。
+                importlib.invalidate_caches()
+                break
             except subprocess.CalledProcessError:
-                print("依赖安装失败：请手动执行 pip install " + " ".join(missing) + " 后重试")
-                sys.exit(1)
+                continue
+        else:
+            version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+            print(
+                f"依赖安装失败（Python {version}）。"
+                f"请检查网络，或手动执行：\n"
+                f'"{sys.executable}" -m pip install {" ".join(missing)} '
+                "--index-url https://pypi.org/simple "
+                f'--target "{DEPS_DIR}"',
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
 
 ensure_deps()
@@ -301,7 +329,7 @@ def straighten_path(data, tolerance, smooth_curves=False):
 def vectorize(im, pal, out_svg, settings):
     if settings.get("binary_lineart"):
         ink = im.convert("L").point(lambda value: 0 if value < 145 else 255)
-        with tempfile.TemporaryDirectory(dir=out_svg.parent) as temp:
+        with tempfile.TemporaryDirectory(prefix="canvasflow-vector-") as temp:
             mask = Path(temp) / "ink.png"
             ink.save(mask)
             vtracer.convert_image_to_svg_py(str(mask), str(out_svg), colormode="binary",
@@ -332,7 +360,7 @@ def vectorize(im, pal, out_svg, settings):
         )
 
     base = reconstruct_vertical_panels(assign.reshape(arr.shape[:2]), len(pal)) if settings.get("editable_layers") else None
-    with tempfile.TemporaryDirectory(dir=out_svg.parent) as temp:
+    with tempfile.TemporaryDirectory(prefix="canvasflow-vector-") as temp:
         tmp = Path(temp) / "trace.png"
         if base is None:
             trace(quant, tmp, out_svg)

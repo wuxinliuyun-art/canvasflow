@@ -1,6 +1,6 @@
 {
   "name": "canvasflow",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "description": "CanvasFlow visual AI image workflow",
   "author": "wuxinliuyun-art",
   "license": "MIT",
@@ -12,6 +12,8 @@
     "build:windows": "dotnet publish desktop-dotnet/CanvasFlow.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true"
   },
   "dependencies": {
+    "onnxruntime-web": "^1.23.2",
+    "pptxgenjs": "^4.0.1",
     "three": "0.186.1"
   }
 }
