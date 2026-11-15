@@ -5735,11 +5735,14 @@ function openChatHtmlPreview(node, messageIndex, initialMode = "preview") {
   const backdrop = document.createElement("div");
   backdrop.className = chatOverlayClass("chat-html-preview-backdrop");
   backdrop.innerHTML = `<section class="chat-html-preview-dialog" role="dialog" aria-modal="true" aria-label="HTML 网页预览与代码">`
-    + `<header><div><strong>HTML 网页</strong><span data-html-view-description></span></div><div class="chat-html-view-actions" role="group" aria-label="HTML 查看方式">`
-    + `<button type="button" data-html-view="preview">预览</button><button type="button" data-html-view="code">代码</button><button type="button" data-html-copy-code>复制代码</button><button type="button" data-html-save>保存 HTML</button>`
-    + `<button type="button" data-html-view-close aria-label="关闭 HTML 查看器"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></header>`
+    + `<div class="chat-html-preview-main">`
+    + `<header><div><strong>HTML 网页</strong><span data-html-view-description></span></div></header>`
     + `<iframe title="HTML 网页完整预览" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>`
-    + `<textarea class="chat-html-code" aria-label="完整 HTML 代码" readonly spellcheck="false"></textarea></section>`;
+    + `<textarea class="chat-html-code" aria-label="完整 HTML 代码" readonly spellcheck="false"></textarea></div>`
+    + `<aside class="chat-html-view-rail" role="group" aria-label="HTML 查看方式">`
+    + `<button type="button" data-html-view="preview">预览</button><button type="button" data-html-view="code">代码</button><button type="button" data-html-copy-code>复制代码</button><button type="button" data-html-save>保存 HTML</button>`
+    + `<span class="chat-html-view-rail-spacer"></span>`
+    + `<button type="button" data-html-view-close aria-label="关闭 HTML 查看器"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></aside></section>`;
   const close = () => backdrop.remove();
   const frame = backdrop.querySelector("iframe");
   const code = backdrop.querySelector(".chat-html-code");
@@ -5806,6 +5809,18 @@ function chatHtmlEditorDocument(html) {
   return new DOMParser().parseFromString(String(html || ""), "text/html");
 }
 
+function chatHtmlColorToHex(value) {
+  const source = String(value || "").trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(source);
+  if (hex) {
+    const body = hex[1].length === 3 ? hex[1].split("").map(ch => ch + ch).join("") : hex[1];
+    return `#${body.toLowerCase()}`;
+  }
+  const rgb = /^rgba?\(\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})/i.exec(source);
+  if (rgb) return `#${[1, 2, 3].map(part => Number(rgb[part]).toString(16).padStart(2, "0")).join("")}`;
+  return "";
+}
+
 function chatHtmlEditorElement(doc, index) {
   return [...doc.body.querySelectorAll("*")][Number(index)] || null;
 }
@@ -5824,7 +5839,7 @@ function buildChatHtmlEditorPreview(html) {
   const editorInverseText = appStyle.getPropertyValue("--inverse-text").trim();
   const bridge = doc.createElement("script");
   bridge.setAttribute("data-cf-editor-bridge", "1");
-  bridge.textContent = `(()=>{if(window.__cfVisualEditor)return;window.__cfVisualEditor=true;const primary=${JSON.stringify(editorPrimary)},inverseText=${JSON.stringify(editorInverseText)};let selected=null,hover=null;const root=document.createElement('div'),hoverBox=document.createElement('div'),selectedBox=document.createElement('div'),label=document.createElement('div');root.style.cssText='position:fixed;inset:0;z-index:299;pointer-events:none';hoverBox.style.cssText='position:fixed;display:none;border:2px dashed '+primary+';pointer-events:none';selectedBox.style.cssText='position:fixed;display:none;border:2px solid '+primary+';pointer-events:none';label.style.cssText='position:fixed;display:none;padding:2px 6px;border-radius:4px;background:'+primary+';color:'+inverseText+';font:12px/1.5 inherit;pointer-events:none';root.append(hoverBox,selectedBox,label);(document.body||document.documentElement).append(root);const draw=(box,el)=>{if(!el){box.style.display='none';return}const r=el.getBoundingClientRect();box.style.display='block';box.style.left=r.left+'px';box.style.top=r.top+'px';box.style.width=r.width+'px';box.style.height=r.height+'px'};const tick=()=>{draw(hoverBox,hover===selected?null:hover);draw(selectedBox,selected);if(selected){const r=selected.getBoundingClientRect();label.style.display='block';label.style.left=Math.max(0,r.left)+'px';label.style.top=Math.max(0,r.top-22)+'px';label.textContent=selected.tagName.toLowerCase()}else label.style.display='none';requestAnimationFrame(tick)};document.addEventListener('mousemove',e=>{hover=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null},true);document.addEventListener('click',e=>{const el=e.target instanceof Element?e.target.closest('[data-cf-edit-id]'):null;if(!el)return;e.preventDefault();e.stopPropagation();selected=el;const style=getComputedStyle(el);parent.postMessage({type:'cf-html-element-selected',id:Number(el.getAttribute('data-cf-edit-id')),tag:el.tagName.toLowerCase(),text:el.children.length?'':el.textContent||'',isImage:el.tagName==='IMG',src:el.getAttribute('src')||'',style:{color:style.color,backgroundColor:style.backgroundColor,fontSize:style.fontSize,fontWeight:style.fontWeight,textAlign:style.textAlign,borderRadius:style.borderRadius,width:style.width,height:style.height}},'*')},true);document.addEventListener('submit',e=>e.preventDefault(),true);tick()})()`;
+  bridge.textContent = `(()=>{if(window.__cfVisualEditor)return;window.__cfVisualEditor=true;const primary=${JSON.stringify(editorPrimary)},inverseText=${JSON.stringify(editorInverseText)};let selected=null,hover=null;const root=document.createElement('div'),hoverBox=document.createElement('div'),selectedBox=document.createElement('div'),label=document.createElement('div');root.style.cssText='position:fixed;inset:0;z-index:299;pointer-events:none';hoverBox.style.cssText='position:fixed;display:none;border:2px dashed '+primary+';pointer-events:none';selectedBox.style.cssText='position:fixed;display:none;border:2px solid '+primary+';pointer-events:none';label.style.cssText='position:fixed;display:none;padding:2px 6px;border-radius:4px;background:'+primary+';color:'+inverseText+';font:12px/1.5 inherit;pointer-events:none';root.append(hoverBox,selectedBox,label);(document.body||document.documentElement).append(root);const draw=(box,el)=>{if(!el){box.style.display='none';return}const r=el.getBoundingClientRect();box.style.display='block';box.style.left=r.left+'px';box.style.top=r.top+'px';box.style.width=r.width+'px';box.style.height=r.height+'px'};const tick=()=>{draw(hoverBox,hover===selected?null:hover);draw(selectedBox,selected);if(selected){const r=selected.getBoundingClientRect();label.style.display='block';label.style.left=Math.max(0,r.left)+'px';label.style.top=Math.max(0,r.top-22)+'px';label.textContent=selected.tagName.toLowerCase()}else label.style.display='none';requestAnimationFrame(tick)};const pick=(x,y,fallback)=>{let best=fallback,bestArea=Infinity;if(best){const r=best.getBoundingClientRect();bestArea=r.width*r.height}const stack=document.elementsFromPoint?document.elementsFromPoint(x,y):[];for(const el of stack){if(!(el instanceof Element)||root.contains(el)||!el.hasAttribute('data-cf-edit-id'))continue;const r=el.getBoundingClientRect();if(r.width<1||r.height<1)continue;const a=r.width*r.height;if(a<bestArea){bestArea=a;best=el}}for(;;){let child=null,childArea=Infinity;for(const c of best?best.children:[]){if(!c.hasAttribute('data-cf-edit-id'))continue;const r=c.getBoundingClientRect();if(r.width<1||r.height<1||x<r.left||x>r.right||y<r.top||y>r.bottom)continue;const a=r.width*r.height;if(a<childArea){childArea=a;child=c}}if(!child)break;best=child;bestArea=childArea}return best};document.addEventListener('mousemove',e=>{hover=e.target instanceof Element?pick(e.clientX,e.clientY,e.target.closest('[data-cf-edit-id]')):null},true);document.addEventListener('click',e=>{const el=e.target instanceof Element?pick(e.clientX,e.clientY,e.target.closest('[data-cf-edit-id]')):null;if(!el)return;e.preventDefault();e.stopPropagation();selected=el;const style=getComputedStyle(el);parent.postMessage({type:'cf-html-element-selected',id:Number(el.getAttribute('data-cf-edit-id')),tag:el.tagName.toLowerCase(),text:el.children.length?'':el.textContent||'',isImage:el.tagName==='IMG',src:el.getAttribute('src')||'',style:{color:style.color,backgroundColor:style.backgroundColor,fontSize:style.fontSize,fontWeight:style.fontWeight,textAlign:style.textAlign,borderRadius:style.borderRadius,width:style.width,height:style.height}},'*')},true);document.addEventListener('submit',e=>e.preventDefault(),true);tick()})()`;
   doc.body.appendChild(bridge);
   return serializeEditedHtml(doc, html);
 }
@@ -5866,6 +5881,8 @@ function refreshChatHtmlEditor({ preview = true, selection = true } = {}) {
   const computed = state.selectedInfo?.style || {};
   root.querySelector("[data-html-property-color]").value = element.style.color || computed.color || "";
   root.querySelector("[data-html-property-bg]").value = element.style.backgroundColor || computed.backgroundColor || "";
+  root.querySelector("[data-html-property-color-picker]").value = chatHtmlColorToHex(element.style.color || computed.color) || "#000000";
+  root.querySelector("[data-html-property-bg-picker]").value = chatHtmlColorToHex(element.style.backgroundColor || computed.backgroundColor) || "#000000";
   root.querySelector("[data-html-property-size]").value = element.style.fontSize || computed.fontSize || "";
   root.querySelector("[data-html-property-weight]").value = element.style.fontWeight || computed.fontWeight || "";
   root.querySelector("[data-html-property-align]").value = element.style.textAlign || computed.textAlign || "";
@@ -5896,7 +5913,7 @@ function openChatHtmlEditor(node, messageIndex) {
     + `<aside class="chat-html-editor-properties"><div class="chat-html-editor-panel-title"><strong>属性</strong><span data-html-selected-tag>未选择</span></div>`
     + `<div class="chat-html-editor-empty">请在左侧网页中点击文字、图片或容器。</div><div class="chat-html-editor-fields" hidden>`
     + `<label class="is-wide">文字内容<textarea data-html-property-text rows="5" placeholder="包含子元素的容器不能直接修改文字"></textarea></label>`
-    + `<label>文字颜色<input type="text" data-html-property-color placeholder="#222 或 rgb(...) "></label><label>背景颜色<input type="text" data-html-property-bg placeholder="transparent"></label>`
+    + `<label>文字颜色<span class="chat-html-editor-color-row"><input type="color" data-html-property-color-picker aria-label="文字颜色取色器"><input type="text" data-html-property-color placeholder="#222 或 rgb(...)"></span></label><label>背景颜色<span class="chat-html-editor-color-row"><input type="color" data-html-property-bg-picker aria-label="背景颜色取色器"><input type="text" data-html-property-bg placeholder="transparent"></span></label>`
     + `<label>字号<input type="text" data-html-property-size placeholder="例如 24px"></label><label>字重<input type="text" data-html-property-weight placeholder="400 / 700"></label>`
     + `<label>对齐<select data-html-property-align><option value="">继承</option><option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option><option value="justify">两端对齐</option></select></label><label>圆角<input type="text" data-html-property-radius placeholder="例如 12px"></label>`
     + `<label>宽度<input type="text" data-html-property-width placeholder="auto / 100% / 320px"></label><label>高度<input type="text" data-html-property-height placeholder="auto / 240px"></label>`
@@ -5958,6 +5975,14 @@ function openChatHtmlEditor(node, messageIndex) {
     };
     if (target.matches("[data-html-property-text]")) {
       if (updateChatHtmlEditorElement(element => { element.textContent = target.value; })) refreshChatHtmlEditor();
+      return;
+    }
+    const pickerMap = { htmlPropertyColorPicker: ["color", "[data-html-property-color]"], htmlPropertyBgPicker: ["backgroundColor", "[data-html-property-bg]"] };
+    const pickerKey = Object.keys(pickerMap).find(name => target.dataset[name] !== undefined);
+    if (pickerKey) {
+      const [property, textSelector] = pickerMap[pickerKey];
+      backdrop.querySelector(textSelector).value = target.value;
+      if (updateChatHtmlEditorElement(element => { element.style[property] = target.value; })) refreshChatHtmlEditor();
       return;
     }
     const key = Object.keys(propertyMap).find(name => target.dataset[name] !== undefined);
@@ -17701,8 +17726,8 @@ function paletteMarkup(node) {
       ].map(([key, label, path]) => `<button type="button" data-palette-action="layout" data-layout="${key}" aria-label="${label}" title="${label}" aria-pressed="${key === widget.layout}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor"/></svg></button>`).join("")}</div>
       <button type="button" class="palette-help-button" data-palette-action="help" title="调色盘使用教程" aria-label="调色盘使用教程" aria-haspopup="dialog" aria-controls="paletteHelpDialog">?</button>
     </header>
-    <div class="quick-palette-heading"><select class="palette-scheme-select" data-palette-action="scheme" aria-label="选择配色方案"><option value="" ${palette ? "" : "selected"}>选择配色方案</option>${globalLibrary.palettes.map(item =>
-      `<option value="${escapeHtml(item.id)}" ${palette && item.id === palette.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}${palette ? '<option value="__rename__">重命名方案…</option>' : ""}</select>
+    <div class="quick-palette-heading"><div class="palette-scheme-combo"><input type="text" class="palette-scheme-name" value="${escapeHtml(palette?.name || "")}" placeholder="选择配色方案" aria-label="配色方案名称，可直接改名" ${palette ? "" : "readonly"} title="${palette ? "点击可直接改名" : "点右侧箭头选择配色方案"}"><button type="button" class="palette-scheme-arrow" data-palette-action="scheme-menu" aria-label="选择配色方案" aria-haspopup="listbox" title="选择配色方案"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="palette-scheme-menu hidden" role="listbox" aria-label="配色方案列表">${globalLibrary.palettes.map(item =>
+      `<button type="button" class="palette-scheme-item" data-palette-action="scheme-pick" data-id="${escapeHtml(item.id)}" aria-selected="${palette && item.id === palette.id}">${escapeHtml(item.name)}</button>`).join("")}</div></div>
       <button type="button" data-palette-action="new" title="新建配色方案" aria-label="新建配色方案">＋新建</button>
       <button type="button" class="palette-widget-icon" data-palette-action="copy" aria-label="复制全套 HEX" title="复制全套 HEX"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1" fill="none" stroke="currentColor"/><path d="M3 10V4a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor"/></svg></button>
       <button type="button" class="palette-widget-icon" data-palette-action="delete" aria-label="删除当前方案" title="删除当前方案" ${palette ? "" : "disabled"}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8h5.6l.7-8M7 7v3m2-3v3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -17778,37 +17803,6 @@ function choosePalette(node, id, select) {
 function findPaletteByName(name) {
   const key = String(name || "").trim().toLowerCase();
   return key ? globalLibrary.palettes.find(item => item.name.trim().toLowerCase() === key) || null : null;
-}
-
-// 方案下拉「重命名方案…」：复用确认弹窗（与编组重命名同款，Enter 提交、IME 组合守卫）
-async function renamePaletteDialog(palette) {
-  let value = palette.name;
-  const onInput = event => { if (event.target?.matches?.(".group-rename-input")) value = event.target.value; };
-  const onKeyDown = event => {
-    if (!event.target?.matches?.(".group-rename-input")) return;
-    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
-    event.preventDefault();
-    event.target.closest(".canvas-confirm-panel")?.querySelector("[data-dialog-confirm]")?.click();
-  };
-  document.addEventListener("input", onInput, true);
-  document.addEventListener("keydown", onKeyDown, true);
-  const dialogPromise = showCanvasDialog({
-    title: "重命名配色方案",
-    message: `正在重命名「${palette.name}」（${palette.colors.length} 个颜色）。`,
-    content: `<input type="text" class="group-rename-input" maxlength="40" placeholder="配色方案名称" aria-label="配色方案名称" value="${escapeHtml(palette.name)}" />`,
-    confirmText: "保存",
-    cancelText: "取消",
-  });
-  setTimeout(() => document.querySelector(".group-rename-input")?.select(), 0);
-  const confirmed = await dialogPromise;
-  document.removeEventListener("input", onInput, true);
-  document.removeEventListener("keydown", onKeyDown, true);
-  if (!confirmed) return;
-  const name = value.trim().slice(0, 40);
-  if (!name || name === palette.name) return;
-  if (findPaletteByName(name)) { toast(`已存在同名方案「${name}」，请换一个名称`); return; }
-  palette.name = name;
-  refreshPalettes();
 }
 
 function paletteHsvHex([h, s, v]) {
@@ -18188,15 +18182,15 @@ document.addEventListener("change", event => {
     saveWidgetColor(node, widget, event.target.value.toUpperCase());
     return;
   }
-  if (event.target.matches('[data-palette-action="scheme"]')) {
-    // 方案下拉：永远列全部方案（不被输入文字过滤），选中即切换；空值项 = 解绑；「重命名方案…」走弹窗
-    const id = event.target.value;
-    if (id === "__rename__") {
-      event.target.value = palette?.id || ""; // 复位选中项，别停在"重命名方案…"上
-      if (palette) renamePaletteDialog(palette);
-      return;
-    }
-    if ((palette?.id || "") !== id) choosePalette(node, id, event.target);
+  if (event.target.matches(".palette-scheme-name")) {
+    // 方案名称框：点击即编辑（无方案时只读占位），回车/失焦提交改名；重名/空名回退旧值
+    const input = event.target;
+    if (!palette) { input.value = ""; return; }
+    const name = input.value.trim().slice(0, 40);
+    if (!name || name === palette.name) { input.value = palette.name; return; }
+    if (findPaletteByName(name)) { toast(`已存在同名方案「${name}」，请换一个名称`); input.value = palette.name; return; }
+    palette.name = name;
+    refreshPalettes();
     return;
   }
 });
@@ -18204,10 +18198,20 @@ document.addEventListener("change", event => {
 // 名称框回车立即提交：datalist 候选弹层/浏览器差异下 Enter 不一定触发 change，
 // 统一 preventDefault 后 blur，由 blur 稳定走上面的 change 提交（值没变过则不会重复提交）
 document.addEventListener("keydown", event => {
-  const input = event.target.closest?.(".palette-name-input");
+  const input = event.target.closest?.(".palette-name-input, .palette-scheme-name");
   if (!input || event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
   event.preventDefault();
   input.blur();
+});
+
+// 方案菜单：点击 combo 之外任意处关闭全部已展开菜单；Esc 同样关闭
+document.addEventListener("click", event => {
+  if (event.target.closest(".palette-scheme-combo")) return;
+  for (const menu of document.querySelectorAll(".palette-scheme-menu:not(.hidden)")) menu.classList.add("hidden");
+});
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  for (const menu of document.querySelectorAll(".palette-scheme-menu:not(.hidden)")) menu.classList.add("hidden");
 });
 
 document.addEventListener("click", event => {
@@ -18249,6 +18253,22 @@ document.addEventListener("click", event => {
         else picker.click();
       }
       return;
+    case "scheme-menu": {
+      // 方案菜单开关：点箭头才展开；同时关掉其他调色盘实例上已展开的菜单
+      const combo = button.closest(".palette-scheme-combo");
+      const menu = combo?.querySelector(".palette-scheme-menu");
+      if (!menu) return;
+      const opening = menu.classList.contains("hidden");
+      for (const other of document.querySelectorAll(".palette-scheme-menu:not(.hidden)")) other.classList.add("hidden");
+      if (opening) menu.classList.remove("hidden");
+      return;
+    }
+    case "scheme-pick": {
+      // 菜单项：选择方案（含解绑空值）；choosePalette 会局部重渲染 widget，菜单随旧 DOM 一起移除
+      const id = button.dataset.id || "";
+      if ((palette?.id || "") !== id) choosePalette(node, id, button);
+      return;
+    }
     case "add-current": {
       // 虚线＋：把当前取色（吸管/色板选中）显式加入方案；已在方案里时不渲染该按钮
       const hex = widget.selected;

@@ -52,3 +52,21 @@ test('details stay in two columns and strips use reduced heights', () => {
   assert.match(css, /\[data-layout="strip"\] button \{ height: 88px/);
   assert.match(css, /\[data-palette-action="pick"\] \{ width: 100%; height: 64px/);
 });
+
+test('scheme selector is a name input + arrow menu combo, not a bare dropdown', () => {
+  const markup = source.slice(source.indexOf('function paletteMarkup('), source.indexOf('function renderEditorPalette('));
+  // 名称框：点击即编辑，无方案时只读占位
+  assert.match(markup, /class="palette-scheme-combo"/);
+  assert.match(markup, /class="palette-scheme-name"[^>]*readonly/);
+  assert.doesNotMatch(markup, /palette-scheme-select/);
+  assert.match(markup, /data-palette-action="scheme-menu"/);
+  assert.doesNotMatch(markup, /scheme-pick" data-id=""/);
+  assert.doesNotMatch(markup, /__rename__/);
+  // 改名提交走 change（重名回退），弹窗改名函数已删除
+  assert.match(source, /已存在同名方案「\$\{name\}」，请换一个名称`\); input\.value = palette\.name/);
+  assert.doesNotMatch(source, /async function renamePaletteDialog/);
+  // 箭头开关与其他实例菜单互斥；外部点击/Esc 关闭
+  assert.match(source, /case "scheme-menu"/);
+  assert.match(source, /case "scheme-pick"/);
+  assert.match(source, /\.palette-scheme-menu:not\(\.hidden\)/);
+});

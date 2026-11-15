@@ -29,8 +29,8 @@ test("chat thread styles and cache versions ship together", () => {
   assert.match(styles, /\.chat-messages\s*\{/);
   assert.match(styles, /\.chat-message\.is-user/);
   assert.match(styles, /\.chat-message-actions/);
-  assert.match(index, /styles\.css\?v=20261115-colorunify1/);
-  assert.match(index, /app\.js\?v=20261115-appnotes1/);
+  assert.match(index, /styles\.css\?v=20261115-palrename1/);
+  assert.match(index, /app\.js\?v=20261115-palrename1/);
   assert.match(styles, /\.chat-compact-card\s*\{/);
   assert.match(styles, /\.chat-compact-summary\s*\{/);
   assert.doesNotMatch(styles, /chat-compact-card-stats/);
@@ -67,6 +67,12 @@ test("complete HTML replies get sandboxed previews", () => {
   assert.match(app, /data-role="chat-html-save"/);
   assert.match(app, /function saveChatHtmlFile\(html\)/);
   assert.match(app, /class="chat-html-code"/);
+  assert.match(app, /class="chat-html-preview-main"/);
+  assert.match(app, /class="chat-html-view-rail"/);
+  assert.match(styles, /\.chat-html-view-rail\s*\{/);
+  assert.match(styles, /\.chat-html-view-rail button\.is-active/);
+  assert.doesNotMatch(app, /chat-html-view-actions/);
+  assert.doesNotMatch(styles, /chat-html-view-actions/);
   assert.match(app, /完整文档已生成/);
   assert.doesNotMatch(app, /data-chat-html-preview=/);
   const start = app.indexOf("function extractHtmlDocument(text)");
@@ -117,6 +123,10 @@ test("complete HTML replies can be edited without creating a chat branch", () =>
   assert.match(app, /cf-html-element-selected/);
   assert.match(app, /data-html-property-text/);
   assert.match(app, /data-html-property-color/);
+  assert.match(app, /data-html-property-color-picker/);
+  assert.match(app, /function chatHtmlColorToHex\(value\)/);
+  assert.match(app, /document\.elementsFromPoint\?document\.elementsFromPoint\(x,y\)/);
+  assert.match(styles, /\.chat-html-editor-color-row/);
   assert.match(app, /function chatHtmlEditorTextEditable\(element\)/);
   assert.match(app, /H\[1-6\]\|P\|SPAN/);
   assert.match(app, /message\.content = replaceHtmlDocumentInMessage/);
