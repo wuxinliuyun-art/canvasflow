@@ -153,14 +153,18 @@
           <div id="updateActions" class="update-actions hidden"><button id="installWebUpdateBtn" class="primary hidden" type="button">立即热更新</button><a id="releasePageLink" href="https://github.com/wuxinliuyun-art/canvasflow/releases" target="_blank" rel="noopener noreferrer">下载完整安装包</a></div>
           <label class="check-row"><input id="updateQuietToggle" type="checkbox">启动更新提醒免打扰</label>
           <details class="update-notes">
-            <summary class="update-notes-title">v2.7.3 更新说明</summary>
+            <summary class="update-notes-title">v2.8.1 更新说明</summary>
             <ul>
-              <li>新增交互·增加节点：长按节点，放置到连线上，松手接入连线</li>
-              <li>新增交互·删减节点：长按节点不动，松手隔离该节点（前后连线自动接通）</li>
-              <li>新增「以项目名称创建文件夹导出」开关，生成图片自动按项目名归档保存</li>
-              <li>AI 绘图设置新增默认分辨率、默认比例，并与默认模型一起移到 API 设置下方</li>
-              <li>任务运行中可直接新建、切换项目，完成后结果自动落回原项目</li>
-              <li>任务队列显示任务所属项目</li>
+              <li>AI 视频模型库扩充到 12 个（接入 APIMart），下拉显示价格与模型能力说明</li>
+              <li>本地 SD（ComfyUI）全面重构：先选工作流、参数直接在画布编辑、导入零限制、支持 PS 桥接；内置模板下线并自动清理</li>
+              <li>提取线稿改用 AI 模型，线稿更接近真实插画，支持任意尺寸与透明背景</li>
+              <li>调色盘材质换色引擎全新实现：换色保留材质明暗纹理，灰白色部件也能换色，支持撤销/重做</li>
+              <li>图片批注编辑移入双击图片的大图界面，右侧统一列批注</li>
+              <li>编组可收纳成一行窄条，名称可直接在外框标签上编辑</li>
+              <li>纯文字的多任务组按文字节点拆分，各自出图</li>
+              <li>图片矢量化、图片置入 ppt、自动抠图改为内置工具节点，矢量化新增实时预览</li>
+              <li>分区抠图：本地 U²-Net 不再依赖 Python 拓展；本地 BiRefNet 白边自动消除</li>
+              <li>拓展列表支持拖动排序与启停开关</li>
             </ul>
           </details>
         </section>
@@ -635,7 +639,7 @@
   <script src="modules/fill-selection.js?v=20261115-brushshade1"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
   <script src="dev-flag.js"></script>
-  <script src="app.js?v=20261115-lineartonnx4"></script>
+  <script src="app.js?v=20261115-appnotes1"></script>
   <script src="modules/manual-matting.js?v=20261115-mmlocal1"></script>
   <script src="modules/region-hue.js?v=20261115-editredo1"></script>
 </body>
