@@ -2094,7 +2094,7 @@ function nodeHeightForType(type) {
     : type === "ai-video" ? VIDEO_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
-    : type === "palette" ? 640
+    : type === "palette" ? 780
     : type === "tool-node" ? TOOL_NODE_HEIGHT
       : type === "image" ? IMAGE_NODE_HEIGHT
         : type === "chat" ? CHAT_NODE_HEIGHT
@@ -2322,7 +2322,7 @@ function revealCreatedNode(node) {
 }
 
 function addNode(type, x = 160, y = 120, commit = true, placementOptions = {}) {
-  const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : type === "palette" ? 300 : NODE_WIDTH);
+  const width = placementOptions.width || (type === "chat" ? CHAT_NODE_WIDTH : type === "palette" ? 340 : NODE_WIDTH);
   const height = placementOptions.height || nodeHeightForType(type);
   let position = placementOptions.avoidOverlap === false
     ? { x: snap(x), y: snap(y) }

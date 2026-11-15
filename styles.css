@@ -4520,8 +4520,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .palette-mask-surface canvas { grid-area: 1 / 1; max-width: 100%; max-height: 52vh; object-fit: contain; }
 .palette-mask-surface canvas:last-child { opacity: .55; cursor: crosshair; touch-action: none; }
 .line-art-dialog .palette-mask-surface canvas:last-child { opacity: 1; cursor: default; touch-action: auto; }
-.node.palette .node-body { max-height: calc(100% - 48px); overflow: auto; }
-.hide-node-titles .node.palette .node-body { max-height: 100%; }
+/* 调色盘节点：默认高度给足（nodeHeightForType 780），body 不做盒子钳制——内容完整铺开，用户仍可拖拽缩放（minWidth 220） */
 .node.palette .quick-palette { gap: 8px; }
 @media (max-width: 767px) {
   .lightbox-left-tools { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
