@@ -4380,7 +4380,8 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .region-hue-dialog .quick-palette-row { gap: 8px; margin-top: 8px; }
 .region-hue-dialog :is(button, select, input) { cursor: pointer; }
 .region-hue-dialog :is(button, select, input):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.region-hue-inline { width: 100%; max-width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); display: flex; flex-direction: column; gap: 8px; }
+/* 参数面板绝对定位在画布右侧（左侧留给调色盘，2026-11-15）；112px = 镜像工具条 80px + 两侧 16px 间距 */
+.region-hue-inline { position: absolute; z-index: 20; right: 112px; top: 96px; width: clamp(224px, 16vw, 304px); max-width: 100%; max-height: calc(100% - 32px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); display: flex; flex-direction: column; gap: 8px; }
 .region-hue-inline .palette-mask-surface { display: none; }
 .region-hue-inline h2 { font-size: 14px; margin: 0; }
 .region-hue-inline p { font-size: 12px; line-height: 1.4; margin: 0; }
@@ -4393,13 +4394,14 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .region-hue-mode-row select { flex: 1; min-width: 0; max-width: 100%; }
 .region-hue-paint-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .region-hue-paint-row input { width: 40px; height: 28px; padding: 0; cursor: pointer; }
-.region-hue-base-swatch { display: block; flex: 0 0 28px; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 4px; background: var(--region-base-color, var(--panel-2)); }
+.region-hue-base-swatch { display: block; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--region-base-color, var(--panel-2)); cursor: pointer; }
+.region-hue-base-picker { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .region-hue-size { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .region-hue-dialog .region-hue-size input { flex: 1; width: auto; min-width: 0; }
 .region-hue-tools .lightbox-icon-btn { position: relative; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; flex: 0 0 32px; }
 .region-hue-tools .lightbox-icon-btn svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; width: 20px; height: 20px; pointer-events: none; }
 .region-hue-tools .lightbox-icon-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--primary); color: var(--primary); }
-.region-material-brush-ring { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--inverse-text); border-radius: 50%; box-shadow: 0 0 0 1px var(--bg); }
+.region-material-brush-ring { position: fixed; left: 0; top: 0; z-index: 270; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--inverse-text); border-radius: 50%; box-shadow: 0 0 0 1px var(--bg); }
 .region-material-brush-ring::before { content: ""; position: absolute; inset: 1px; border: 1px dashed var(--text); border-radius: 50%; }
 .palette-mask-result { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .palette-mask-result .quick-palette-chip > span { width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--swatch-color); }
@@ -4519,11 +4521,27 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .palette-mask-surface { display: grid; justify-items: center; margin-top: 8px; }
 .palette-mask-surface canvas { grid-area: 1 / 1; max-width: 100%; max-height: 52vh; object-fit: contain; }
 .palette-mask-surface canvas:last-child { opacity: .55; cursor: crosshair; touch-action: none; }
+.batch-matting-mask-dialog { width: 98vw; max-width: 98vw; height: 94vh; max-height: 94vh; overflow: hidden; }
+.batch-matting-mask-dialog[open] { display: flex; flex-direction: column; }
+.batch-matting-mask-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.batch-matting-mask-toolbar label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.batch-matting-mask-toolbar strong { margin-left: auto; font-size: 14px; }
+.batch-matting-mask-tools { display: flex; gap: 4px; }
+.batch-matting-mask-tools button[aria-pressed="true"] { color: var(--primary); border-color: var(--primary); background: var(--accent-soft); }
+.batch-matting-zoom-tools { display: flex; align-items: center; gap: 4px; }
+.batch-matting-zoom-tools span { min-width: 112px; color: var(--muted); font-size: 12px; text-align: right; }
+.batch-matting-mask-surface { position: relative; flex: 1 1 0; min-height: 240px; max-height: none; overflow: auto; align-content: start; justify-content: start; padding: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.batch-matting-mask-surface canvas { max-width: none; max-height: none; }
+.batch-matting-mask-surface canvas:last-child { opacity: .55; }
+.batch-matting-brush-ring { position: fixed; z-index: 299; box-sizing: border-box; border: 1px dashed var(--inverse-text); border-radius: 50%; box-shadow: 0 0 0 1px var(--text); pointer-events: none; transform: translate(-50%, -50%); }
+.batch-matting-mask-caption { margin-top: 8px; color: var(--muted); font-size: 12px; text-align: center; }
+.batch-matting-mask-actions { align-items: center; }
 .line-art-dialog .palette-mask-surface canvas:last-child { opacity: 1; cursor: default; touch-action: auto; }
 /* 调色盘节点：默认高度给足（nodeHeightForType 780），body 不做盒子钳制——内容完整铺开，用户仍可拖拽缩放（minWidth 220） */
 .node.palette .quick-palette { gap: 8px; }
 @media (max-width: 767px) {
   .lightbox-left-tools { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
+  .region-hue-inline { right: 16px; top: 16px; width: 192px; max-height: 44vh; }
 }
 
 .update-prompt-dialog::backdrop { background: color-mix(in srgb, var(--text) 36%, transparent); }

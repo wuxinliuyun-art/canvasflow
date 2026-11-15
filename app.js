@@ -3699,6 +3699,190 @@ async function runBuiltinMatting(payloadImages, values, onProgress) {
   return { ok: true, images: results, files: [], duration: 0 };
 }
 
+function isAutoMattingTool(node) {
+  return node?.type === "tool-node" && String(node.toolMeta?.id || "").startsWith("auto-matting");
+}
+
+async function askBatchMattingMask(count) {
+  return showCanvasDialog({
+    title: "批量自动抠图",
+    message: `检测到多任务中的 ${count} 张图片。是否先绘制排除蒙版？涂抹区域会从抠图结果中移除。`,
+    confirmText: "绘制排除蒙版",
+    cancelText: "直接抠图",
+  });
+}
+
+async function editBatchMattingMasks(payloadImages) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "palette-mask-dialog batch-matting-mask-dialog";
+  dialog.setAttribute("aria-label", "批量抠图排除蒙版");
+  dialog.innerHTML = `<h2>批量抠图 · 排除蒙版</h2>
+    <p>用画笔涂抹需要从抠图结果中排除的区域。每张图片的蒙版独立保存。</p>
+    <div class="batch-matting-mask-toolbar">
+      <div class="batch-matting-mask-tools" role="group" aria-label="蒙版绘制工具">
+        <button type="button" data-batch-mask-tool="brush" aria-pressed="true">画笔</button>
+        <button type="button" data-batch-mask-tool="eraser" aria-pressed="false">橡皮擦</button>
+      </div>
+      <label>画笔大小 <input data-batch-mask-size type="range" min="8" max="160" value="48" title="快捷键：[ 缩小，] 放大" aria-label="排除蒙版画笔大小；左方括号缩小，右方括号放大"></label>
+      <div class="batch-matting-zoom-tools" role="group" aria-label="图片缩放">
+        <button type="button" data-batch-mask-zoom-reset>适应窗口</button>
+        <span data-batch-mask-zoom-value>100% · 滚轮缩放</span>
+      </div>
+      <button type="button" data-batch-mask-clear>清空当前蒙版</button>
+      <strong data-batch-mask-position></strong>
+    </div>
+    <div class="palette-mask-surface batch-matting-mask-surface"><canvas aria-label="当前原图"></canvas><canvas aria-label="排除蒙版绘制区"></canvas></div>
+    <div class="batch-matting-mask-caption" data-batch-mask-caption></div>
+    <div class="canvas-confirm-actions batch-matting-mask-actions">
+      <button type="button" data-batch-mask-cancel>取消整批</button>
+      <button type="button" data-batch-mask-prev>上一张</button>
+      <button type="button" data-batch-mask-next>下一张</button>
+      <button type="button" class="primary" data-batch-mask-confirm>开始抠图</button>
+    </div>`;
+  document.body.appendChild(dialog);
+  const [base, paint] = dialog.querySelectorAll("canvas");
+  const size = dialog.querySelector("[data-batch-mask-size]");
+  const position = dialog.querySelector("[data-batch-mask-position]");
+  const caption = dialog.querySelector("[data-batch-mask-caption]");
+  const surface = dialog.querySelector(".batch-matting-mask-surface");
+  const zoomValue = dialog.querySelector("[data-batch-mask-zoom-value]");
+  const previousButton = dialog.querySelector("[data-batch-mask-prev]");
+  const nextButton = dialog.querySelector("[data-batch-mask-next]");
+  const brushRing = document.createElement("div");
+  brushRing.className = "batch-matting-brush-ring hidden";
+  brushRing.setAttribute("aria-hidden", "true");
+  dialog.appendChild(brushRing);
+  const masks = payloadImages.map(() => null);
+  const zooms = payloadImages.map(() => 1);
+  const fitScales = payloadImages.map(() => 1);
+  let index = 0, drawing = false, previousPoint = null, settled = false, tool = "brush";
+
+  function saveMask() {
+    masks[index] = paint.width && paint.height ? paint.toDataURL("image/png") : null;
+  }
+  function applyZoom() {
+    const scale = fitScales[index] * zooms[index];
+    const width = Math.max(1, Math.round(base.width * scale));
+    const height = Math.max(1, Math.round(base.height * scale));
+    for (const canvas of [base, paint]) { canvas.style.width = `${width}px`; canvas.style.height = `${height}px`; }
+    zoomValue.textContent = `${Math.round(zooms[index] * 100)}% · 滚轮缩放`;
+  }
+  async function showImage(nextIndex) {
+    if (paint.width) saveMask();
+    index = nextIndex;
+    const image = await loadHtmlImage(payloadDataUrl(payloadImages[index]));
+    const scale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
+    base.width = paint.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    base.height = paint.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    base.getContext("2d").drawImage(image, 0, 0, base.width, base.height);
+    if (masks[index]) {
+      const saved = await loadHtmlImage(masks[index]);
+      paint.getContext("2d").drawImage(saved, 0, 0, paint.width, paint.height);
+    }
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    fitScales[index] = Math.min(1, Math.max(.05, (surface.clientWidth - 24) / base.width), Math.max(.05, (surface.clientHeight - 24) / base.height));
+    applyZoom();
+    surface.scrollTo({ left: 0, top: 0 });
+    position.textContent = `${index + 1} / ${payloadImages.length}`;
+    caption.textContent = payloadImages[index].name || `图片 ${index + 1}`;
+    previousButton.disabled = index === 0;
+    nextButton.disabled = index === payloadImages.length - 1;
+  }
+  function canvasPoint(event) {
+    const rect = paint.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * paint.width / rect.width, y: (event.clientY - rect.top) * paint.height / rect.height };
+  }
+  function drawStroke(from, to) {
+    const rect = paint.getBoundingClientRect();
+    const scale = paint.width / Math.max(1, rect.width);
+    const context = paint.getContext("2d");
+    context.save();
+    context.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+    context.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--danger").trim();
+    context.globalAlpha = 1;
+    context.lineWidth = Number(size.value) * scale;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+    context.restore();
+  }
+  function updateBrushRing(event) {
+    const rect = paint.getBoundingClientRect();
+    const displayedSize = Number(size.value) * rect.width / Math.max(1, paint.width);
+    brushRing.classList.remove("hidden");
+    brushRing.style.left = `${event.clientX}px`;
+    brushRing.style.top = `${event.clientY}px`;
+    brushRing.style.width = `${displayedSize}px`;
+    brushRing.style.height = `${displayedSize}px`;
+  }
+  paint.addEventListener("pointerdown", event => {
+    drawing = true; previousPoint = canvasPoint(event); paint.setPointerCapture(event.pointerId);
+    drawStroke(previousPoint, previousPoint); updateBrushRing(event); event.preventDefault();
+  });
+  paint.addEventListener("pointermove", event => {
+    updateBrushRing(event);
+    if (!drawing) return;
+    const point = canvasPoint(event); drawStroke(previousPoint, point); previousPoint = point;
+  });
+  paint.addEventListener("pointerup", () => { drawing = false; previousPoint = null; saveMask(); });
+  paint.addEventListener("pointercancel", () => { drawing = false; previousPoint = null; });
+  paint.addEventListener("pointerleave", () => { if (!drawing) brushRing.classList.add("hidden"); });
+  for (const button of dialog.querySelectorAll("[data-batch-mask-tool]")) button.onclick = () => {
+    tool = button.dataset.batchMaskTool;
+    for (const item of dialog.querySelectorAll("[data-batch-mask-tool]")) item.setAttribute("aria-pressed", String(item === button));
+  };
+  surface.addEventListener("wheel", event => {
+    event.preventDefault();
+    const surfaceRect = surface.getBoundingClientRect();
+    const oldZoom = zooms[index];
+    const nextZoom = Math.max(.25, Math.min(3, oldZoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    if (nextZoom === oldZoom) return;
+    const focusX = surface.scrollLeft + event.clientX - surfaceRect.left;
+    const focusY = surface.scrollTop + event.clientY - surfaceRect.top;
+    zooms[index] = nextZoom;
+    applyZoom();
+    const ratio = nextZoom / oldZoom;
+    surface.scrollLeft = focusX * ratio - (event.clientX - surfaceRect.left);
+    surface.scrollTop = focusY * ratio - (event.clientY - surfaceRect.top);
+  }, { passive: false });
+  dialog.querySelector("[data-batch-mask-zoom-reset]").onclick = () => { zooms[index] = 1; applyZoom(); surface.scrollTo({ left: 0, top: 0 }); };
+  dialog.addEventListener("keydown", event => adjustRangeByBracketKey(event, size));
+  dialog.querySelector("[data-batch-mask-clear]").onclick = () => { paint.getContext("2d").clearRect(0, 0, paint.width, paint.height); masks[index] = null; };
+  previousButton.onclick = () => showImage(index - 1);
+  nextButton.onclick = () => showImage(index + 1);
+  const result = new Promise(resolve => {
+    const finish = value => { if (settled) return; settled = true; if (value) saveMask(); dialog.close(); resolve(value ? masks : null); };
+    dialog.querySelector("[data-batch-mask-confirm]").onclick = () => finish(true);
+    dialog.querySelector("[data-batch-mask-cancel]").onclick = () => finish(false);
+    dialog.addEventListener("cancel", event => { event.preventDefault(); finish(false); });
+    dialog.addEventListener("close", () => { brushRing.remove(); dialog.remove(); if (!settled) { settled = true; resolve(null); } }, { once: true });
+  });
+  dialog.showModal();
+  await showImage(0);
+  return result;
+}
+
+async function applyBatchMattingMasks(images, masks) {
+  if (!masks?.some(Boolean)) return images;
+  const output = [];
+  for (let index = 0; index < images.length; index++) {
+    const image = images[index];
+    if (!masks[index]) { output.push(image); continue; }
+    const source = await loadHtmlImage(`data:${toolMimeFromName(image.name)};base64,${image.data}`);
+    const mask = await loadHtmlImage(masks[index]);
+    const canvas = document.createElement("canvas"); canvas.width = source.naturalWidth; canvas.height = source.naturalHeight;
+    const context = canvas.getContext("2d");
+    context.drawImage(source, 0, 0);
+    context.globalCompositeOperation = "destination-out";
+    context.drawImage(mask, 0, 0, canvas.width, canvas.height);
+    output.push({ ...image, name: image.name || `${String(index + 1).padStart(3, "0")}.png`, data: canvas.toDataURL("image/png").split(",")[1] });
+  }
+  return output;
+}
+
 function toolNodeBody(node) {
   const builtin = builtinToolMeta(node.toolMeta?.id);
   if (builtin) {
@@ -3751,7 +3935,7 @@ async function runToolNode(nodeId) {
   try {
     const collected = collectUpstreamForAI(nodeId, buildIncomingIndex());
     let refs;
-    if (node.toolMeta.id === "image-to-pptx") {
+    if (node.toolMeta.id === "image-to-pptx" || isAutoMattingTool(node)) {
       const seen = new Set();
       refs = [];
       for (const branch of [...collected.branches.map(item => item.images), ...(collected.groupImages.length ? [collected.groupImages] : [])]) {
@@ -3785,6 +3969,14 @@ async function runToolNode(nodeId) {
       // 工具脚本按文件名排序读取 input/，用三位序号命名让页序严格等于画布自上而下的节点顺序
       payloadImages.push({ name: `${String(index + 1).padStart(3, "0")}.${ext}`, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl });
     }
+    let batchMattingMasks = null;
+    if (isAutoMattingTool(node) && collected.groupImages.length && await askBatchMattingMask(payloadImages.length)) {
+      batchMattingMasks = await editBatchMattingMasks(payloadImages);
+      if (!batchMattingMasks) {
+        node.toolStatus = { state: "cancelled", message: "已取消批量抠图" };
+        return;
+      }
+    }
     let data;
     if (BUILTIN_TOOL_IDS.has(node.toolMeta.id)) {
       node.toolStatus = { state: "running", message: "正在加载内置矢量化引擎…" };
@@ -3810,6 +4002,7 @@ async function runToolNode(nodeId) {
       data = await resp.json().catch(() => ({ ok: false, error: "服务响应不是合法 JSON" }));
       if (!resp.ok || !data.ok) throw new Error(data.error || `服务返回状态 ${resp.status}`);
     }
+    if (isAutoMattingTool(node) && batchMattingMasks) data.images = await applyBatchMattingMasks(data.images || [], batchMattingMasks);
     if (canvasGroupNodeRunIsStopped(node)) { node.toolStatus = { state: "cancelled", message: "编组运行已停止，结果已丢弃" }; return; }
 
     const outputNodeIds = [];
@@ -5307,7 +5500,7 @@ function collectUpstreamForAI(nodeId, incoming) {
       if (n.items) {
         for (const item of n.items) {
           if (item.type === "text" && item.text && item.text.trim()) result.groupTexts.push(item.text.trim());
-          if (item.type === "image" && item.image) result.groupImages.push(imageRef({ ...n, fileName: item.fileName, mime: item.mime }, item.image, item.assetId));
+          if (item.type === "image" && (item.image || item.imageAssetId)) result.groupImages.push(imageRef({ ...n, fileName: item.fileName, mime: item.mime }, item.image, item.imageAssetId));
           if (item.type === "ai-image" && item.generatedImage) result.groupImages.push(imageRef({ ...n, fileName: item.fileName, mime: item.mime }, item.generatedImage, item.generatedAssetId));
         }
       }
@@ -6203,7 +6396,8 @@ async function generateBrowserImage(nodeId) {
   const prompt = String(node.prompt || "").trim() || upstreamText;
   const images = [];
   for (const ref of [...(collected.branches || []).flatMap(branch => branch.images || []), ...(collected.groupImages || [])].filter((ref, index, refs) => refs.findIndex(other => (other.assetId || other.image || other._nodeId) === (ref.assetId || ref.image || ref._nodeId)) === index).slice(0, 4)) {
-    const url = await materializeReferenceImage(ref);
+      // 自动抠图必须使用素材仓库原图；原图缺失时明确阻止执行，不能静默用 420px 画布缩略图生成低分辨率结果。
+      const url = await materializeReferenceImage(ref, { requireOriginal: isAutoMattingTool(node) });
     if (typeof url === "string" && url.startsWith("data:image/")) images.push(url);
   }
   if (!prompt && !images.length) {
@@ -11679,7 +11873,17 @@ function lightboxNext() {
   updateLightboxImage();
 }
 
+function lightboxEditorHasEdits() {
+  return lightboxPainting && (lightboxEditUndoStack.length > 0 || lightboxEditRedoStack.length > 0);
+}
+
 function hideLightbox() {
+  // 中途退出不丢稿（2026-11-15 用户要求）：编辑过却没点“确认并生成节点”（取消/×/Esc）
+  // 也按确认同款流程把当前编辑落成画布图片节点；没动过笔才直接关闭
+  if (lightboxEditorHasEdits()) {
+    saveLightboxEditsToNode("未点确认，已自动保存为图片节点");
+    return;
+  }
   cancelLightboxPaint();
   flushLightboxAnnotationDraft();
   exitLightboxAnnotation();
@@ -11688,6 +11892,40 @@ function hideLightbox() {
   lightboxImages = [];
   lightboxIdx = 0;
   lightboxSourceNodeId = "";
+}
+
+// “确认并生成节点”与中途退出自动保存共用的落图流程；toastText 区分入口文案
+async function saveLightboxEditsToNode(toastText) {
+  if (!lightboxPainting) return;
+  try {
+    if (lightboxCropRect && !lightboxCropApply.disabled) applyLightboxCrop();
+    clearLightboxCrop();
+    clearCompositeHover();
+    const source = findNode(lightboxSourceNodeId);
+    lightboxPlacedSelected = false;
+    renderLightboxPaintComposite();
+    const image = els.lightboxPaintCanvas.toDataURL("image/png");
+    const x = source ? source.x + NODE_WIDTH + 40 : lastPointerWorld.x;
+    const y = source ? source.y : lastPointerWorld.y;
+    const node = addNode("image", x, y, false);
+    node.image = image;
+    node.fileName = `局部修改_${Date.now()}.png`;
+    node.mime = "image/png";
+    // 来源图本身带配色标注(重编辑时旧标注已烘焙进底图):产物继承标记,任务发送时据此内置颜色修改提示词
+    // 灯箱箭头标注已下线,画笔不会再产生新标注;此继承只服务存量旧图
+    if (source?.hasColorArrowNotes) node.hasColorArrowNotes = true;
+    await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+    pushHistory();
+    render();
+    // 清空编辑痕迹再关灯箱：hideLightbox 的自动保存分支据此不会二次落图
+    lightboxEditUndoStack = [];
+    lightboxEditRedoStack = [];
+    hideLightbox();
+    toast(toastText);
+  } catch (error) {
+    // 落图失败（如图片写出失败）：灯箱留在原地、编辑痕迹保留，用户可直接重试
+    toast(`保存图片节点失败：${error.message || "无法写出图片"}`);
+  }
 }
 
 async function startLightboxPaint() {
@@ -12334,7 +12572,7 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
       if (!alpha) return;
       const hex = "#" + [r, g, b].map(value => value.toString(16).padStart(2, "0")).join("");
       els.lightboxPaintColor.value = hex;
-      scheduleLightboxFillReapply();
+      // 取色只换之后下笔的颜色，不重涂已画好的填色
       // 取色后留在吸管模式（不自动切回画笔），再点一次吸管按钮或点其他工具才退出；
       // 同步到调色盘面板：未收藏时「已选颜色」出现虚线＋，点它才入库
       const editorWidget = paletteWidget("editor");
@@ -12807,7 +13045,7 @@ async function applyLightboxFillAt(point) {
       if (lightboxLastFill === action) commitLightboxLastFill();
       markLightboxFillLayerDirty();
     });
-    // 在 push 之后标记，允许随后拖动滑块/改色实时重算本次填色
+    // 在 push 之后标记，允许随后拖动容差/线宽滑块实时重算本次填色（改色不重涂，只影响之后的下笔）
     lightboxLastFill = action;
     syncLightboxFillControls();
     renderLightboxPaintComposite();
@@ -12839,20 +13077,16 @@ function scheduleLightboxFillReapply() {
 function reapplyLightboxLastFill() {
   const action = lightboxLastFill;
   if (!action || !action.source || !lightboxFillActions.includes(action)) return;
-  const color = els.lightboxPaintColor.value;
+  // 改色只影响之后的下笔；已画好的填色保持落下时的颜色，仅容差/线宽仍实时调整本次填色
   const tolerance = Number(els.lightboxFillTolerance.value);
   const lineWidth = Number(els.lightboxFillLineWidth.value);
-  const selectionChanged = tolerance !== action.tolerance || lineWidth !== action.lineWidth;
-  if (!selectionChanged && color === action.color) return;
-  if (selectionChanged) {
-    action.mask = action.material
-      ? selectMaterialRegion(action.source, action.seed.x, action.seed.y, { tolerance }).mask
-      : lightboxSketchMask(action.selectionSource, action.seed, tolerance, lineWidth, action.preprocess)
-        || new Uint8Array(action.source.width * action.source.height);
-  }
-  action.color = color;
+  if (tolerance === action.tolerance && lineWidth === action.lineWidth) return;
   action.tolerance = tolerance;
   action.lineWidth = lineWidth;
+  action.mask = action.material
+    ? selectMaterialRegion(action.source, action.seed.x, action.seed.y, { tolerance }).mask
+    : lightboxSketchMask(action.selectionSource, action.seed, tolerance, lineWidth, action.preprocess)
+      || new Uint8Array(action.source.width * action.source.height);
   Object.assign(action, buildLightboxFillLayer(action.mask, action.source, action.color, action.material ? action.seed : null));
   markLightboxFillLayerDirty();
   renderLightboxPaintComposite();
@@ -12868,7 +13102,6 @@ $("lightboxColorPicker").onclick = () => {
   lightboxPickReturnMode = lightboxPaintMode === "color-brush" ? "color-brush" : "fill";
   setLightboxPaintMode("pick-color");
 };
-els.lightboxPaintColor.addEventListener("input", scheduleLightboxFillReapply);
 els.lightboxFillTolerance.addEventListener("input", () => {
   els.lightboxFillToleranceValue.textContent = String(els.lightboxFillTolerance.value);
   scheduleLightboxFillReapply();
@@ -13000,30 +13233,7 @@ function flipLightboxSelection(axis) {
 els.lightboxFlipHorizontal.onclick = () => flipLightboxSelection("x");
 els.lightboxFlipVertical.onclick = () => flipLightboxSelection("y");
 els.lightboxPaintCancel.onclick = hideLightbox;
-els.lightboxPaintConfirm.onclick = async () => {
-  if (!lightboxPainting) return;
-  if (lightboxCropRect && !lightboxCropApply.disabled) applyLightboxCrop();
-  clearLightboxCrop();
-  clearCompositeHover();
-  const source = findNode(lightboxSourceNodeId);
-  lightboxPlacedSelected = false;
-  renderLightboxPaintComposite();
-  const image = els.lightboxPaintCanvas.toDataURL("image/png");
-  const x = source ? source.x + NODE_WIDTH + 40 : lastPointerWorld.x;
-  const y = source ? source.y : lastPointerWorld.y;
-  const node = addNode("image", x, y, false);
-  node.image = image;
-  node.fileName = `局部修改_${Date.now()}.png`;
-  node.mime = "image/png";
-  // 来源图本身带配色标注(重编辑时旧标注已烘焙进底图):产物继承标记,任务发送时据此内置颜色修改提示词
-  // 灯箱箭头标注已下线,画笔不会再产生新标注;此继承只服务存量旧图
-  if (source?.hasColorArrowNotes) node.hasColorArrowNotes = true;
-  await externalizeImageField(node, "image", "imageAssetId", node.fileName);
-  pushHistory();
-  render();
-  hideLightbox();
-  toast("已生成局部修改图片节点");
-};
+els.lightboxPaintConfirm.onclick = () => saveLightboxEditsToNode("已生成局部修改图片节点");
 
 els.lightboxClose.onclick = hideLightbox;
 els.lightboxPrev.onclick = lightboxPrev;
@@ -18290,10 +18500,12 @@ document.addEventListener("click", event => {
     case "pick": {
       const hex = button.dataset.color;
       widget.selected = hex;
-      // 选色只更新当前工具的色值（画笔/上色共用），不强制切换工具（2026-11-12 用户要求）
+      // 选色只更新当前工具的色值（画笔/上色共用），不强制切换工具（2026-11-12 用户要求）；
+      // 改色不重涂已画好的填色，只影响之后的下笔（2026-11-15 用户要求）；
+      // 材质面板打开时调色盘保留在左侧，派发 input 让面板里的上色颜色跟着换
       if (!node && lightboxPainting) {
         els.lightboxPaintColor.value = hex;
-        scheduleLightboxFillReapply();
+        els.lightboxPaintColor.dispatchEvent(new Event("input"));
       }
       if (button.dataset.paletteAction !== "sample" || !saveWidgetColor(node, widget, hex)) {
         for (const item of root.querySelectorAll("[data-color][aria-pressed]")) item.setAttribute("aria-pressed", String(item.dataset.color === hex));

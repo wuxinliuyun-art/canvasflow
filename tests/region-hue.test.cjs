@@ -109,6 +109,9 @@ test('region selection shows a color swatch and brush / eraser buttons without s
   const script = fs.readFileSync(path.join(__dirname, '../modules/region-hue.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
   assert.match(script, /class="region-hue-base-swatch"/);
+  assert.match(script, /data-action="base-color"[^>]*aria-label="双击修改基色"/);
+  assert.match(script, /action\("base-color"\)\.addEventListener\("dblclick"/);
+  assert.match(script, /event\.target === field\("base-picker"\)/);
   assert.match(script, /setProperty\("--region-base-color", hex\)/);
   assert.match(script, /data-action="brush"[^>]*aria-label="笔刷添加选区"/);
   assert.match(script, /data-action="erase"[^>]*aria-label="橡皮擦除选区"/);
@@ -186,4 +189,22 @@ test('dashed brush size follows display scale and hides during picking', () => {
   assert.equal(hidden.has('hidden'), false);
   context.picking = true; context.syncBrushRing();
   assert.equal(hidden.has('hidden'), true);
+});
+
+test('材质笔刷光标圈必须浮在灯箱层之上（z-index 高于 .lightbox）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
+  const readZ = selector => {
+    const cssLines = css.split('\n');
+    const start = cssLines.findIndex(entry => entry.startsWith(`${selector} {`));
+    assert.ok(start >= 0, `${selector} 样式必须存在`);
+    let block = '';
+    for (let index = start; index < cssLines.length && !block.includes('}'); index++) block += cssLines[index];
+    return Number(block.match(/z-index: (\d+)/)?.[1]);
+  };
+  const ringZ = readZ('.region-material-brush-ring');
+  const lightboxZ = readZ('.lightbox');
+  assert.ok(Number.isFinite(ringZ) && Number.isFinite(lightboxZ) && ringZ > lightboxZ,
+    `笔刷圈 z-index(${ringZ}) 必须高于灯箱 z-index(${lightboxZ})，否则虚线圈永远被盖住看不见`);
 });

@@ -71,3 +71,20 @@ test('integrated brush matches the original free-color brush shading at full str
   assert.deepEqual([...result.slice(12,15)], [200,100,50]);
   assert.ok(result[4] < result[8] && result[8] < result[12]);
 });
+
+test('paintMaterial 携带笔刷像素时按每笔落下时的颜色上色，改色不影响已涂区域', () => {
+  const source = new Uint8ClampedArray([255,255,255,255, 255,255,255,255, 255,255,255,255, 255,255,255,255]);
+  const mask = new Uint8ClampedArray(4).fill(255);
+  // 两笔不同颜色（红/蓝），笔刷像素按 RGBA 携带颜色
+  const brushPixels = new Uint8ClampedArray([255,0,0,255, 255,0,0,255, 0,0,255,255, 0,0,255,255]);
+  const result = paintMaterial(source, mask, '#00FF00', 100, brushPixels);
+  assert.deepEqual([...result.slice(0,3)], [255,0,0], '前两像素应为笔刷里的红色而非当前色');
+  assert.deepEqual([...result.slice(4,7)], [255,0,0]);
+  assert.deepEqual([...result.slice(8,11)], [0,0,255], '后两像素应为笔刷里的蓝色');
+  // 笔刷像素透明（alpha=0）时回退到统一 hex 色
+  const fallback = paintMaterial(source, mask, '#00FF00', 100, new Uint8ClampedArray(16));
+  assert.deepEqual([...fallback.slice(0,3)], [0,255,0]);
+  // 不传笔刷像素保持旧行为（整片统一色），老调用方不受影响
+  const legacy = paintMaterial(source, mask, '#00FF00');
+  assert.deepEqual([...legacy.slice(0,3)], [0,255,0]);
+});

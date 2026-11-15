@@ -165,12 +165,19 @@
     return { mask, count };
   }
 
-  function paintMaterial(source, mask, hex, opacity = 100) {
+  // brushPixels（可选）：笔刷画布的像素，携带每笔落下时的颜色——改色只影响之后的笔画，
+  // 已涂区域保持各自的颜色（2026-11-15 用户要求，与草图上色油漆桶同语义）；缺省时整片用 hex
+  function paintMaterial(source, mask, hex, opacity = 100, brushPixels = null) {
     const rgb = [1, 3, 5].map(start => parseInt(hex.slice(start, start + 2), 16));
     const output = new Uint8ClampedArray(source);
     const strength = Math.max(0, Math.min(100, opacity)) / 100;
     for (let index = 0; index < mask.length; index++) {
       if (!mask[index] || !source[index * 4 + 3]) continue;
+      if (brushPixels?.[index * 4 + 3]) {
+        rgb[0] = brushPixels[index * 4];
+        rgb[1] = brushPixels[index * 4 + 1];
+        rgb[2] = brushPixels[index * 4 + 2];
+      }
       const amount = mask[index] / 255 * strength;
       shadeBrushPixel(output, source, index * 4, rgb, true);
       for (let channel = 0; channel < 3; channel++) output[index * 4 + channel] = source[index * 4 + channel] * (1 - amount) + output[index * 4 + channel] * amount;
@@ -210,7 +217,7 @@
       <label class="region-hue-mode-row">作用范围 <select data-field="range-mode"><option value="base">按基色识别</option><option value="brush">直接使用笔刷范围</option></select></label>
       <label class="region-hue-mode-row">修改方式 <select data-field="edit-mode"><option value="hue">调色相</option><option value="paint">笔刷涂色</option></select></label>
       <div class="quick-palette-row region-hue-controls"><button type="button" data-action="pick" aria-pressed="false">吸管取色</button><span data-base-label>自动取主色</span></div>
-      <label class="region-hue-base-row">基色 <span class="region-hue-base-swatch" aria-hidden="true"></span><input data-field="base" type="text" placeholder="#RRGGBB" maxlength="7" aria-label="输入待修改基色的六位 HEX 色号"></label>
+      <label class="region-hue-base-row">基色 <button type="button" class="region-hue-base-swatch" data-action="base-color" aria-label="双击修改基色" title="双击修改基色"></button><input data-field="base-picker" class="region-hue-base-picker" type="color" aria-label="选择待修改基色"><input data-field="base" type="text" placeholder="#RRGGBB" maxlength="7" aria-label="输入待修改基色的六位 HEX 色号"></label>
       <div class="quick-palette-row region-hue-tools" role="group" aria-label="选区绘制工具">
         <button type="button" class="lightbox-icon-btn" data-action="brush" title="笔刷添加选区" aria-label="笔刷添加选区" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V4a3 3 0 0 1 6 0v7M5 11h14v5H5zM6 16v6h12v-6M10 19v3M14 19v3"/></svg></button>
         <button type="button" class="lightbox-icon-btn" data-action="erase" title="橡皮擦除选区" aria-label="橡皮擦除选区" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4-4a2 2 0 0 1 0-3L14 3a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3L10 21ZM5 12l7 7M7 21h15"/></svg></button>
@@ -272,7 +279,7 @@
     const adjustmentNames = ["hue", "brightness"];
     const adjustments = () => Object.fromEntries(adjustmentNames.map(name => [name, Number(field(name).value)]));
     const hasAdjustments = () => field("edit-mode").value === "paint" || adjustmentNames.some(name => Number(field(name).value) !== 0);
-    const renderPixels = (pixels, mask, width, height, options, cached) => field("edit-mode").value === "paint" ? paintMaterial(pixels, mask, field("paint-color").value, Number(field("paint-opacity").value)) : adjustMaterial(pixels, mask, width, height, options, cached);
+    const renderPixels = (pixels, mask, width, height, options, cached, brushPixels = null) => field("edit-mode").value === "paint" ? paintMaterial(pixels, mask, field("paint-color").value, Number(field("paint-opacity").value), brushPixels) : adjustMaterial(pixels, mask, width, height, options, cached);
     const snapshot = () => brushContext.getImageData(0, 0, brush.width, brush.height);
     const toolHistory = createColorToolHistory(() => ({ brush: snapshot(), base: baseColor?.slice() || null, manual: manualBase, fields: Object.fromEntries([...dialog.querySelectorAll("[data-field]")].map(input => [input.dataset.field, input.type === "checkbox" ? input.checked : input.value])) }), state => {
       brushContext.putImageData(state.brush, 0, 0);
@@ -285,7 +292,7 @@
       frame = 0;
       const options = adjustments();
       if (!materialBlur && selection.count && options.brightness && field("edit-mode").value === "hue") materialBlur = blurMaterialPixels(source.data, selection.mask, preview.width, preview.height);
-      const pixels = field("compare").checked ? source.data : renderPixels(source.data, selection.mask, preview.width, preview.height, options, materialBlur);
+      const pixels = field("compare").checked ? source.data : renderPixels(source.data, selection.mask, preview.width, preview.height, options, materialBlur, snapshot().data);
       context.putImageData(new ImageData(pixels, preview.width, preview.height), 0, 0);
       overlayContext.clearRect(0, 0, overlay.width, overlay.height);
       if (!field("compare").checked) {
@@ -338,6 +345,7 @@
     function showBaseColor() {
       const hex = baseColor ? "#" + baseColor.map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase() : "";
       field("base").value = hex;
+      if (baseColor) field("base-picker").value = hex;
       if (baseColor) dialog.style.setProperty("--region-base-color", hex);
       else dialog.style.removeProperty("--region-base-color");
       dialog.querySelector("[data-base-label]").textContent = manualBase ? "手动基色" : "自动取主色";
@@ -353,6 +361,8 @@
       const bounds = eventCanvas.getBoundingClientRect();
       const point = { x: (event.clientX - bounds.left) * overlay.width / bounds.width, y: (event.clientY - bounds.top) * overlay.height / bounds.height };
       brushContext.globalCompositeOperation = brushTool === "erase" ? "destination-out" : "source-over";
+      // 把下笔时的颜色烙进笔刷画布：改色只影响之后的笔画，已涂区域保持各自颜色
+      brushContext.strokeStyle = brushContext.fillStyle = field("paint-color").value;
       brushContext.lineWidth = Number(field("size").value);
       brushContext.lineCap = "round";
       brushContext.beginPath();
@@ -389,9 +399,17 @@
     onCanvas("pointercancel", finish);
     onCanvas("lostpointercapture", finish);
     dialog.addEventListener("pointerdown", event => { if (!busy && event.target.closest("input,select")) toolHistory.remember(); });
+    action("base-color").addEventListener("dblclick", event => {
+      event.preventDefault();
+      if (busy) return;
+      toolHistory.remember();
+      field("base-picker").click();
+    });
     dialog.addEventListener("input", event => {
       if (event.target === field("paint-color")) els.lightboxPaintColor.value = field("paint-color").value;
-      if (event.target === field("base")) {
+      if (event.target === field("base-picker")) {
+        setBaseColor(event.target.value);
+      } else if (event.target === field("base")) {
         if (/^#[0-9a-f]{6}$/i.test(event.target.value)) setBaseColor(event.target.value);
       } else if (event.target === field("tolerance") || event.target === field("range-mode")) { picking = false; identifySelection(); }
       else {
@@ -411,7 +429,9 @@
     });
     const surface = dialog.querySelector(".palette-mask-surface");
     surface.hidden = true;
-    const hiddenControls = [document.getElementById("editorPalette"), document.getElementById("lightboxPaletteTools"), els.lightboxPaintToolbar];
+    // 调色盘（配色方案卡）保留在左侧（2026-11-15 用户要求），面板挪到画布右侧；
+    // 工具行仍收起：面板打开时点油漆桶/橡皮会同时触发两套画布处理器，必须挡住
+    const hiddenControls = [els.lightboxPaintToolbar, document.getElementById("lightboxPaletteTools")];
     const previousHidden = hiddenControls.map(control => control.classList.contains("hidden"));
     hiddenControls.forEach(control => control.classList.add("hidden"));
     const sizeObserver = new ResizeObserver(schedule);
@@ -429,6 +449,8 @@
     action("cancel").onclick = () => dialog.close();
     action("view-reset").onclick = resetLightboxImageView;
     eventCanvas.addEventListener("canvasflow-image-view-change", () => { syncBrushRing(); schedule(); }, { signal: sessionEvents.signal });
+    // 调色盘点色（面板打开时保留在左侧）→ 同步上色颜色；颜色只影响之后的笔画，无需重绘
+    els.lightboxPaintColor.addEventListener("input", () => { field("paint-color").value = els.lightboxPaintColor.value; }, { signal: sessionEvents.signal });
     action("pick").onclick = () => { picking = !picking; schedule(); };
     action("brush").onclick = () => { brushTool = "paint"; picking = false; schedule(); };
     action("erase").onclick = () => { brushTool = "erase"; picking = false; schedule(); };
@@ -454,16 +476,26 @@
       try {
         const fullContext = original.getContext("2d", { willReadFrequently: true });
         const full = fullContext.getImageData(0, 0, original.width, original.height);
-        const fullMask = new Uint8ClampedArray(original.width * original.height);
         const painted = snapshot().data;
+        const fullMask = new Uint8ClampedArray(original.width * original.height);
+        // 笔刷画布按原尺寸最近邻放大，颜色随 alpha 一起带过去（每笔落下时的颜色）
+        const fullBrush = new Uint8ClampedArray(original.width * original.height * 4);
         for (let vertical = 0; vertical < original.height; vertical++) {
           const row = Math.min(preview.height - 1, Math.floor(vertical * preview.height / original.height));
-          for (let horizontal = 0; horizontal < original.width; horizontal++) fullMask[vertical * original.width + horizontal] = painted[(row * preview.width + Math.min(preview.width - 1, Math.floor(horizontal * preview.width / original.width))) * 4 + 3];
+          for (let horizontal = 0; horizontal < original.width; horizontal++) {
+            const offset = (row * preview.width + Math.min(preview.width - 1, Math.floor(horizontal * preview.width / original.width))) * 4;
+            const target = (vertical * original.width + horizontal) * 4;
+            fullMask[target / 4] = painted[offset + 3];
+            fullBrush[target] = painted[offset];
+            fullBrush[target + 1] = painted[offset + 1];
+            fullBrush[target + 2] = painted[offset + 2];
+            fullBrush[target + 3] = painted[offset + 3];
+          }
         }
         const exported = document.createElement("canvas");
         exported.width = original.width; exported.height = original.height;
         const fullSelection = materialSelection(full.data, fullMask, field("range-mode").value, Number(field("tolerance").value), baseColor);
-        exported.getContext("2d").putImageData(new ImageData(renderPixels(full.data, fullSelection.mask, original.width, original.height, { ...adjustments(), pixelScale: original.width / preview.width }), original.width, original.height), 0, 0);
+        exported.getContext("2d").putImageData(new ImageData(renderPixels(full.data, fullSelection.mask, original.width, original.height, { ...adjustments(), pixelScale: original.width / preview.width }, null, fullBrush), original.width, original.height), 0, 0);
         const previousEdit = { base: lightboxEditBase, actions: lightboxPaintActions, fills: lightboxFillActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
         lightboxEditBase = exported;
         lightboxPaintActions = []; lightboxFillActions = []; lightboxPlacedImage = null; lightboxPlacedSelected = false;
@@ -483,7 +515,8 @@
         for (const control of dialog.querySelectorAll("button,input,select")) control.disabled = false;
       } finally { busy = false; if (!closed) schedule(); }
     };
-    document.getElementById("lightboxLeftTools").append(dialog);
+    // 参数面板挂灯箱根部，CSS 绝对定位到画布右侧（调色盘留在左侧不动）
+    els.lightbox.append(dialog);
     sizeObserver.observe(eventCanvas);
     closeObserver.observe(els.lightbox, { attributes: true, attributeFilter: ["class"] });
     syncLightboxPaletteTop(); draw();
