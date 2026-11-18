@@ -13,7 +13,7 @@ const { startCanvasFlowServer } = require("../server");
 const captured = [];
 const realRequest = https.request;
 https.request = function fakeRequest(options, callback) {
-  captured.push({ host: options.hostname, path: options.path, authorization: (options.headers && options.headers.Authorization) || "" });
+  captured.push({ host: options.hostname, path: options.path, authorization: (options.headers && options.headers.Authorization) || "", contentType: (options.headers && options.headers["Content-Type"]) || "", headers: options.headers });
   const request = new EventEmitter();
   request.write = () => { };
   request.end = () => { };
@@ -124,4 +124,39 @@ test("ai-video routes: apimart submits to /v1/videos/generations and polls /v1/t
   assert.equal(captured[3].host, "agtoken.vip");
   assert.equal(captured[3].path, "/v1/video/generations");
   assert.equal(captured[3].authorization, "Bearer sk-agtoken-fallback");
+});
+
+test("video-reference upload route: filePath/base64 multipart to /v1/uploads/videos with slotted key", async t => {
+  const { instance, restore } = await startFixture();
+  t.after(async () => { await instance.close(); restore(); });
+  const base = instance.url;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "canvasflow-videoref-"));
+  const videoPath = path.join(tmpDir, "ref.mp4");
+  fs.writeFileSync(videoPath, Buffer.from("fake-mp4-bytes"));
+
+  captured.length = 0;
+  // filePath 模式：_apiKey 优先，multipart 直达 apimart 上传接口，固定 3 天档
+  const first = await post(base + "api/apimart/video-upload", { filePath: videoPath, fileName: "ref.mp4", _apiKey: "sk-upload-body" });
+  assert.equal(first.status, 502, "fake 上游无 url → 归一为 502（不是 404，路由已注册）");
+  assert.equal(captured[0].host, "api.apimart.ai");
+  assert.equal(captured[0].path, "/v1/uploads/videos?retention_days=3");
+  assert.equal(captured[0].authorization, "Bearer sk-upload-body");
+  assert.ok(/^multipart\/form-data; boundary=/.test(captured[0].contentType), "multipart Content-Type 覆盖默认 JSON");
+
+  // 无 body key 回落 apimart 槽
+  await post(base + "api/apimart/video-upload", { filePath: videoPath, fileName: "ref.mp4" });
+  assert.equal(captured[1].authorization, "Bearer sk-apimart-fallback");
+
+  // base64 模式（浏览器拖拽拿不到路径）：dataURL 前缀剥掉再解码
+  await post(base + "api/apimart/video-upload", { fileName: "clip.webm", base64: "data:video/webm;base64,dGVzdA==" });
+  assert.equal(captured[2].path, "/v1/uploads/videos?retention_days=3");
+
+  // 前置校验：缺来源 / 扩展名白名单外 → 400 且不发上游
+  const missing = await post(base + "api/apimart/video-upload", { fileName: "ref.mp4" });
+  assert.equal(missing.status, 400);
+  const badExt = await post(base + "api/apimart/video-upload", { filePath: videoPath.replace(/mp4$/, "avi"), fileName: "ref.avi" });
+  assert.equal(badExt.status, 400);
+  assert.equal(captured.length, 3, "前置拒绝不发上游");
+
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });

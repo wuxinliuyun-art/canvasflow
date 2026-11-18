@@ -8089,17 +8089,17 @@ function enqueueVideoNode(nodeId) {
     .slice(0, VIDEO_TASK_MAX_IMAGES);
   const prompt = upstream.texts.join("，");
   const entry = videoCatalogEntry(node._model);
-  const maxVideos = entry?.maxVideos || 0;
   const allVideoRefs = collectVideoRefInputs(nodeId);
+  const maxVideos = entry?.maxVideos || 0;
+  // 目录未声明 maxVideos 的模型（agtoken 全系等）没有参考视频通道——先拒绝再截取，避免 slice(0,0) 短路成"全空"
+  if (allVideoRefs.length && !maxVideos) {
+    toast(`当前模型（${entry?.label || node._model}）不支持参考视频，请改用 Seedance 2.0 系（APIMart）`);
+    return 0;
+  }
   const videoRefs = allVideoRefs.slice(0, maxVideos);
   const overflowVideos = allVideoRefs.length - videoRefs.length;
   if (!prompt.trim() && !images.length && !videoRefs.length) {
     toast("视频节点需要连接文字、参考图或视频引用");
-    return 0;
-  }
-  if (videoRefs.length && !maxVideos) {
-    // 目录未声明 maxVideos 的模型（agtoken 全系等）没有参考视频通道
-    toast(`当前模型（${entry?.label || node._model}）不支持参考视频，请改用 Seedance 2.0 系（APIMart）`);
     return 0;
   }
   const page = currentPage();
