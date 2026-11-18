@@ -202,6 +202,7 @@
     if (!lightboxPainting || document.querySelector(".region-hue-dialog")) return;
     const pageId = state.activePageId;
     const sourceNodeId = lightboxSourceNodeId;
+
     commitLightboxLastFill();
     setLightboxPaintMode("idle");
     clearLightboxCrop();
@@ -245,7 +246,7 @@
     let brushPoint = null;
     function syncBrushRing(event) {
       if (event) brushPoint = { x: event.clientX, y: event.clientY };
-      if (!brushPoint || picking || busy || lightboxPanSpaceDown || lightboxViewDrag) { brushRing.classList.add("hidden"); return; }
+      if (!brushPoint || picking || busy || lightboxPaintMode !== "idle" || lightboxPanSpaceDown || lightboxViewDrag) { brushRing.classList.add("hidden"); return; }
       const bounds = eventCanvas.getBoundingClientRect();
       const diameter = Number(field("size").value) * bounds.width / preview.width;
       brushRing.style.width = `${diameter}px`; brushRing.style.height = `${diameter}px`;
@@ -253,6 +254,7 @@
       brushRing.classList.remove("hidden");
     }
     const onCanvas = (name, handler) => eventCanvas.addEventListener(name, event => {
+      if (lightboxPaintMode !== "idle") return;
       event.stopImmediatePropagation();
       handler(event);
     }, { capture: true, signal: sessionEvents.signal });
@@ -323,6 +325,7 @@
       action("save").disabled = busy || !selection.count || !hasAdjustments() || pointer !== null;
       action("brush").setAttribute("aria-pressed", String(brushTool === "paint"));
       action("erase").setAttribute("aria-pressed", String(brushTool === "erase"));
+      if (!["idle", "pen"].includes(lightboxPaintMode)) return;
       const mainContext = eventCanvas.getContext("2d");
       mainContext.clearRect(0, 0, eventCanvas.width, eventCanvas.height);
       mainContext.drawImage(preview, 0, 0, eventCanvas.width, eventCanvas.height);
@@ -331,13 +334,18 @@
     }
     function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
     function identifySelection() {
+      const penSelection = lightboxSelection;
       const painted = snapshot().data;
       if (!manualBase && pointer === null) {
         baseColor = dominantBaseColor(source.data, painted);
         showBaseColor();
       }
       const coverage = new Uint8ClampedArray(preview.width * preview.height);
-      for (let index = 0; index < coverage.length; index++) coverage[index] = painted[index * 4 + 3];
+      for (let index = 0; index < coverage.length; index++) {
+        const x = Math.min(original.width - 1, Math.floor((index % preview.width) * original.width / preview.width));
+        const y = Math.min(original.height - 1, Math.floor(Math.floor(index / preview.width) * original.height / preview.height));
+        coverage[index] = !penSelection || penSelection.mask[y * original.width + x] ? painted[index * 4 + 3] : 0;
+      }
       selection = materialSelection(source.data, coverage, field("range-mode").value, Number(field("tolerance").value), baseColor);
       materialBlur = null;
       schedule();
@@ -358,8 +366,15 @@
       identifySelection();
     }
     function paint(event) {
+      const penSelection = lightboxSelection;
       const bounds = eventCanvas.getBoundingClientRect();
       const point = { x: (event.clientX - bounds.left) * overlay.width / bounds.width, y: (event.clientY - bounds.top) * overlay.height / bounds.height };
+      brushContext.save();
+      if (penSelection) {
+        brushContext.scale(preview.width / original.width, preview.height / original.height);
+        brushContext.clip(penSelection.clip);
+        brushContext.scale(original.width / preview.width, original.height / preview.height);
+      }
       brushContext.globalCompositeOperation = brushTool === "erase" ? "destination-out" : "source-over";
       // 把下笔时的颜色烙进笔刷画布：改色只影响之后的笔画，已涂区域保持各自颜色
       brushContext.strokeStyle = brushContext.fillStyle = field("paint-color").value;
@@ -368,6 +383,7 @@
       brushContext.beginPath();
       if (previous) { brushContext.moveTo(previous.x, previous.y); brushContext.lineTo(point.x, point.y); brushContext.stroke(); }
       else { brushContext.arc(point.x, point.y, brushContext.lineWidth / 2, 0, Math.PI * 2); brushContext.fill(); }
+      brushContext.restore();
       previous = point;
       identifySelection();
     }
@@ -429,11 +445,7 @@
     });
     const surface = dialog.querySelector(".palette-mask-surface");
     surface.hidden = true;
-    // 调色盘（配色方案卡）保留在左侧（2026-11-15 用户要求），面板挪到画布右侧；
-    // 工具行仍收起：面板打开时点油漆桶/橡皮会同时触发两套画布处理器，必须挡住
-    const hiddenControls = [els.lightboxPaintToolbar, document.getElementById("lightboxPaletteTools")];
-    const previousHidden = hiddenControls.map(control => control.classList.contains("hidden"));
-    hiddenControls.forEach(control => control.classList.add("hidden"));
+    // 保留调色盘与底部工具条，画布指针事件按当前工具分流。
     const sizeObserver = new ResizeObserver(schedule);
     const closeObserver = new MutationObserver(() => { if (!lightboxPainting || els.lightbox.classList.contains("hidden")) dialog.close(); });
     let closed = false;
@@ -442,21 +454,24 @@
       closed = true;
       brushRing.remove();
       sessionEvents.abort(); sizeObserver.disconnect(); closeObserver.disconnect(); cancelAnimationFrame(frame);
-      hiddenControls.forEach((control, index) => control.classList.toggle("hidden", previousHidden[index]));
       dialog.remove();
-      if (lightboxPainting) { renderLightboxPaintComposite(); syncLightboxPaletteTop(); }
+      if (lightboxPainting) { renderLightboxPaintComposite(); syncLightboxPaletteTop(); syncLightboxSelectionOverlay(); }
     };
     action("cancel").onclick = () => dialog.close();
     action("view-reset").onclick = resetLightboxImageView;
     eventCanvas.addEventListener("canvasflow-image-view-change", () => { syncBrushRing(); schedule(); }, { signal: sessionEvents.signal });
     // 调色盘点色（面板打开时保留在左侧）→ 同步上色颜色；颜色只影响之后的笔画，无需重绘
     els.lightboxPaintColor.addEventListener("input", () => { field("paint-color").value = els.lightboxPaintColor.value; }, { signal: sessionEvents.signal });
-    action("pick").onclick = () => { picking = !picking; schedule(); };
-    action("brush").onclick = () => { brushTool = "paint"; picking = false; schedule(); };
-    action("erase").onclick = () => { brushTool = "erase"; picking = false; schedule(); };
+    action("pick").onclick = () => { setLightboxPaintMode("idle"); picking = !picking; schedule(); };
+    const resumeBrush = () => { setLightboxPaintMode("idle"); brushTool = "paint"; picking = false; schedule(); };
+    action("brush").onclick = resumeBrush;
+    eventCanvas.addEventListener("canvasflow-selection-change", identifySelection, { signal: sessionEvents.signal });
+    eventCanvas.addEventListener("canvasflow-image-tool-change", () => { syncBrushRing(); schedule(); }, { signal: sessionEvents.signal });
+    action("erase").onclick = () => { setLightboxPaintMode("idle"); brushTool = "erase"; picking = false; schedule(); };
     action("reset").onclick = () => { toolHistory.remember(); for (const name of adjustmentNames) field(name).value = 0; if (field("edit-mode").value === "paint") brushContext.clearRect(0, 0, brush.width, brush.height); identifySelection(); };
     action("clear").onclick = () => { toolHistory.remember(); brushContext.clearRect(0, 0, brush.width, brush.height); identifySelection(); };
     document.addEventListener("keydown", event => {
+      if (lightboxPaintMode !== "idle") return;
       if (event.key === "Escape") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!busy) dialog.close();
@@ -474,6 +489,7 @@
       dialog.querySelector('[role="status"]').textContent = "正在按原图尺寸生成…";
       await new Promise(resolve => setTimeout(resolve, 0));
       try {
+        const penSelection = lightboxSelection;
         const fullContext = original.getContext("2d", { willReadFrequently: true });
         const full = fullContext.getImageData(0, 0, original.width, original.height);
         const painted = snapshot().data;
@@ -485,7 +501,7 @@
           for (let horizontal = 0; horizontal < original.width; horizontal++) {
             const offset = (row * preview.width + Math.min(preview.width - 1, Math.floor(horizontal * preview.width / original.width))) * 4;
             const target = (vertical * original.width + horizontal) * 4;
-            fullMask[target / 4] = painted[offset + 3];
+            fullMask[target / 4] = !penSelection || penSelection.mask[target / 4] ? painted[offset + 3] : 0;
             fullBrush[target] = painted[offset];
             fullBrush[target + 1] = painted[offset + 1];
             fullBrush[target + 2] = painted[offset + 2];
@@ -515,11 +531,34 @@
         for (const control of dialog.querySelectorAll("button,input,select")) control.disabled = false;
       } finally { busy = false; if (!closed) schedule(); }
     };
+    // 常驻工具条可继续操作：切换到普通编辑工具前先落下当前笔刷调整，
+    // 防止两套编辑状态覆盖；没有落笔时直接退出当前调色会话。
+    let switchingTool = false;
+    els.lightbox.addEventListener("click", async event => {
+      const button = event.target.closest?.("button");
+      if (!button) return;
+      if (button === els.lightboxPaintUndo && lightboxPaintMode === "idle") {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!busy && pointer === null) toolHistory.undo();
+        return;
+      }
+      const ordinaryTool = button.closest("#lightboxMainTools,#lightboxPaletteTools") ||
+        [els.lightboxPaintCancel, els.lightboxPaintConfirm].includes(button);
+      if (!ordinaryTool) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (busy || pointer !== null || switchingTool) return;
+      switchingTool = true;
+      try {
+        if (selection.count && hasAdjustments()) await action("save").onclick();
+        else dialog.close();
+        if (closed && lightboxPainting) button.click();
+      } finally { switchingTool = false; }
+    }, { capture: true, signal: sessionEvents.signal });
     // 参数面板挂灯箱根部，CSS 绝对定位到画布右侧（调色盘留在左侧不动）
     els.lightbox.append(dialog);
     sizeObserver.observe(eventCanvas);
     closeObserver.observe(els.lightbox, { attributes: true, attributeFilter: ["class"] });
-    syncLightboxPaletteTop(); draw();
+    syncLightboxPaletteTop(); syncLightboxSelectionOverlay(); identifySelection(); draw();
   }
   document.getElementById("lightboxRegionHue").addEventListener("click", () => openRegionHue().catch(error => toast(`无法打开材质颜色修改：${error.message}`)));
   document.getElementById("lightboxColorBrush").onclick = () => openRegionHue("paint").catch(error => toast(`无法打开自由上色：${error.message}`));

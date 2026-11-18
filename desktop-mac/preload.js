@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("canvasflowDesktop", {
   getPsPath: () => invoke("desktop:get-ps-path"),
   savePsPath: value => invoke("desktop:save-ps-path", { path: String(value || "") }),
   choosePsExe: () => invoke("desktop:choose-ps-exe"),
+  chooseVideoFile: () => invoke("desktop:choose-video-file"),
   launchInPs: (outputPath, fileName, assetId) => invoke("desktop:launch-in-ps", {
     outputPath: String(outputPath || ""),
     fileName: String(fileName || ""),

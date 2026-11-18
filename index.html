@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261115-batchmask3">
+  <link rel="stylesheet" href="styles.css?v=20261118-mirrorbuttons1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -135,6 +135,8 @@
           <label class="check-row"><input id="autoAlignToggle" type="checkbox" checked><span>创建节点或连线时自动对齐</span></label>
           <label class="check-row"><input id="editOnOverlapToggle" type="checkbox" checked><span>图片重叠时打开图片编辑</span></label>
           <label class="check-row"><input id="textMergeOnOverlapToggle" type="checkbox" checked><span>文字节点重叠时合并文案</span></label>
+          <label class="check-row"><input id="aiResultAsImageNodeToggle" type="checkbox"><span>AI 绘图结果新建图片节点并连线</span></label>
+          <div class="hint">开启后，单张结果在 AI 节点右侧新建图片节点并连线；关闭则留在原节点预览。多任务、多张结果仍分别保留图片节点。设置对新加入队列的任务生效。</div>
         </section>
         <section class="settings-card">
           <h3>右键菜单节点</h3>
@@ -536,6 +538,7 @@
           <button id="lightboxColorPicker" class="lightbox-icon-btn" type="button" title="吸管取色" aria-label="吸管取色" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 7 5 5M14 5l2-2a3 3 0 0 1 4 4l-2 2M14 9l-9 9v3h3l9-9"/></svg></button>
           <button id="lightboxPaintEraser" class="lightbox-icon-btn" type="button" aria-pressed="false" title="橡皮擦" aria-label="橡皮擦"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4-4a2 2 0 0 1 0-3L14 3a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3L10 21ZM5 12l7 7M7 21h15"/></svg></button>
         </div>
+
         <div id="lightboxToolColor" class="quick-palette-row hidden"></div>
         <section id="lightboxColorBrushOptions" class="lightbox-color-brush-options hidden" aria-label="自由上色笔刷设置"><strong>自由上色</strong></section>
         <div id="lightboxFillOptions" class="hidden">
@@ -575,6 +578,11 @@
           <label id="lightboxPaintSizeField">大小 <input id="lightboxPaintSize" type="range" min="4" max="120" value="36" title="快捷键：[ 缩小，] 放大" aria-label="画笔大小；左方括号缩小，右方括号放大"></label>
         </div>
       </div>
+        <section class="lightbox-selection-options" aria-label="钢笔与选区">
+          <button id="lightboxPenTool" type="button" aria-pressed="false" title="点击加点，拖拽拉出贝塞尔手柄">钢笔选区</button>
+          <label>选区方式 <select id="lightboxSelectionOperation"><option value="replace">新建选区</option><option value="add">加选</option><option value="subtract">减选</option></select></label>
+          <div class="lightbox-selection-actions"><button id="lightboxPenClose" type="button" disabled>闭合路径</button><button id="lightboxSelectionClear" type="button" disabled>取消选区</button><button id="lightboxSelectionFill" type="button" disabled>填充选区</button></div>
+        </section>
       <div class="lightbox-toolbar-divider" aria-hidden="true"></div>
       <button id="lightboxPaintUndo" type="button" disabled>撤销</button>
       <button id="lightboxImageReset" type="button" title="恢复图片适应窗口的缩放与位置，不修改编辑内容">图片复位</button>
@@ -583,6 +591,7 @@
         <button id="lightboxPaintConfirm" class="primary">确认并生成节点</button>
       </div>
     </div>
+
     <div id="lightboxCanvasPicker" class="lightbox-canvas-picker hidden">
       <div class="lightbox-canvas-picker-head"><strong>从画布置入</strong><button id="lightboxCanvasPickerClose" type="button" title="关闭">×</button></div>
       <div id="lightboxCanvasPickerList" class="lightbox-canvas-picker-list"></div>
@@ -633,14 +642,14 @@
       <div class="update-prompt-actions"><button type="submit" autofocus>知道了</button></div>
     </form>
   </dialog>
-  <script src="model-catalog.js?v=20261114-videoapimart4"></script>
-  <script src="canvas-runtime.js?v=20261114-videoapimart4"></script>
+  <script src="model-catalog.js?v=20261118-videoref1"></script>
+  <script src="canvas-runtime.js?v=20261118-videoref1"></script>
   <script src="modules/local-sd.js?v=20261114-sdpanel1"></script>
-  <script src="modules/fill-selection.js?v=20261115-brushshade1"></script>
+  <script src="modules/fill-selection.js?v=20261118-penentry7"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
   <script src="dev-flag.js"></script>
-  <script src="app.js?v=20261115-batchmask4"></script>
+  <script src="app.js?v=20261118-penentry7"></script>
   <script src="modules/manual-matting.js?v=20261115-mmlocal1"></script>
-  <script src="modules/region-hue.js?v=20261115-basecolor1"></script>
+  <script src="modules/region-hue.js?v=20261118-penentry7"></script>
 </body>
 </html>

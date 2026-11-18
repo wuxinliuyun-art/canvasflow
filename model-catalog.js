@@ -65,6 +65,10 @@
   //   durationLimitsByResolution 可选：某分辨率档下的时长白名单（如 Hailuo 1080p 仅支持 6 秒）
   //   audio       是否显示"声音"开关（generate_audio）；H3 系/wan3.0 自带音轨无开关，保持 false
   //   maxImages   参考图上限（agtoken images[] / apimart image_urls 的取图上限）
+  //   maxVideos   参考视频上限（apimart 顶层 video_urls[]；缺省 0 = 不支持参考视频）。
+  //               仅 apimart seedance-2.0 系声明：≤3 个、公网 URL（本地文件经 /api/apimart/video-upload
+  //               上传换 URL）、单文件 ≤50MB、素材 480-720P、1.8s<总时长<15.2s、与首尾帧互斥；
+  //               agtoken 视频参考需要自有公网直链（无上传通道），不声明此字段
   //   imageMode   apimart 图片传法："reference" = image_urls 参考图（H3 系/seedance 系/wan3.0），
   //               "first_frame" = first_frame_image 首帧图（Hailuo-2.3 系图生视频，必须有图）；
   //               agtoken 恒走 images[]，不需要此字段
@@ -201,10 +205,11 @@
         durations: [5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         audio: true,
         maxImages: 9,
+        maxVideos: 3,
         imageMode: "reference",
         priceTag: "≈$0.066/秒",
         note: "约 $0.066 / 秒（0.66 Credits/秒）",
-        tips: "文生/图生视频（≤9 张参考图）；时长 4-15 秒；可开声音",
+        tips: "文生/图生/参考视频生视频（≤9 张参考图 + ≤3 个参考视频）；参考视频 480-720P、总时长 1.8-15.2s、与首尾帧互斥；时长 4-15 秒；可开声音",
         pricingUrl: "https://apimart.ai/",
       },
       {
@@ -216,10 +221,11 @@
         durations: [5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         audio: true,
         maxImages: 9,
+        maxVideos: 3,
         imageMode: "reference",
         priceTag: "≈$0.0398/秒",
         note: "约 $0.0398 / 秒（0.3984 Credits/秒，带音频 +20%）",
-        tips: "2.0 快速版，参数同标准版（≤9 张参考图，时长 4-15 秒）；可开声音",
+        tips: "2.0 快速版，参数同标准版（≤9 张参考图 + ≤3 个参考视频，参考视频 480-720P、总时长 1.8-15.2s、与首尾帧互斥，时长 4-15 秒）；可开声音",
         pricingUrl: "https://apimart.ai/",
       },
       {
@@ -231,10 +237,11 @@
         durations: [5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         audio: true,
         maxImages: 9,
+        maxVideos: 3,
         imageMode: "reference",
         priceTag: "≈$0.0182/秒",
         note: "约 $0.0182 / 秒（0.18151 Credits/秒，带音频 +20%）",
-        tips: "2.0 迷你版（最便宜），参数同标准版（≤9 张参考图，时长 4-15 秒）；可开声音",
+        tips: "2.0 迷你版（最便宜），参数同标准版（≤9 张参考图 + ≤3 个参考视频，参考视频 480-720P、总时长 1.8-15.2s、与首尾帧互斥，时长 4-15 秒）；可开声音",
         pricingUrl: "https://apimart.ai/",
       },
       {

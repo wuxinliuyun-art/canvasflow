@@ -28,6 +28,12 @@ const VIDEO_NODE_HEIGHT = 430;
 const VIDEO_TASK_POLL_MS = 5000;
 const VIDEO_TASK_MAX_ATTEMPTS = 360; // 5 秒一轮 × 360 ≈ 30 分钟总超时
 const VIDEO_TASK_MAX_IMAGES = 9;
+// 视频引用节点（video-ref）：只存本地视频文件的绝对路径或已上传 URL，不存文件字节——
+// 发送时经 /api/apimart/video-upload 按路径/内容上传 apimart 换公网 URL 再进 video_urls[]
+const VIDEO_REF_NODE_WIDTH = 280;
+const VIDEO_REF_NODE_HEIGHT = 190;
+const VIDEO_REF_MAX_BYTES = 50 * 1024 * 1024; // apimart 上传接口默认单文件上限 50MB
+const VIDEO_REF_EXPIRY_MARGIN_MS = 10 * 60 * 1000; // URL 过期前余量，到点自动重传
 const BROWSER_SITES = [
   { id: "gemini", label: "Gemini" },
   { id: "chatgpt", label: "ChatGPT" },
@@ -172,8 +178,7 @@ const UI_EN = {
   "角度变化": "Angle Change", "添加角度变化节点": "Add Angle Change Node",
   "截图功能节点": "Screenshot Input Node", "添加截图功能节点": "Add Screenshot Input Node", "使用画布节点输入": "Use Canvas Node Input",
   "AI对话": "AI Chat", "添加对话节点": "Add Chat Node", "清空对话记忆": "Clear chat memory", "停止生成": "Stop generating", "对话模型": "Chat model",
-  "发送消息": "Send message", "批量": "Batch", "复制消息": "Copy message", "拆成文字节点": "Split into text nodes", "重新生成": "Regenerate", "清空对话": "Clear chat",
-  "批量提示词：要求 AI 按 a. b. 序号输出；收到回复后可手动拆成文字节点": "Batch prompts: ask AI for a. b. numbered items, then split the reply manually",
+  "发送消息": "Send message", "复制消息": "Copy message", "拆成文字节点": "Split into text nodes", "重新生成": "Regenerate", "清空对话": "Clear chat",
   "浏览器生图": "Browser Image", "添加浏览器生图节点": "Add Browser Image Node", "自定义站点…": "Custom site…", "站点网址": "Site URL", "取消等待": "Cancel waiting", "清除结果": "Clear result",
   "右键菜单节点": "Context Menu Nodes", "关闭后只隐藏画布右键菜单中的新建入口，已有节点不受影响。": "Turning an item off only hides its create entry in the canvas context menu. Existing nodes are unaffected.",
   "显示浏览器生图节点": "Show Browser Image Node", "显示截图功能节点": "Show Screenshot Input Node",
@@ -261,7 +266,7 @@ const UI_EN = {
   "请至少选择 2 个文字、图片或 AI 绘图节点": "Select at least 2 text, image, or AI image nodes", "所选节点已经依次连接": "The selected nodes are already connected in sequence",
   "打开本地文件夹": "Open Local Folder", "断开连接": "Disconnect", "复制": "Copy", "复制节点": "Copy Nodes", "删除节点": "Delete Nodes", "粘贴节点": "Paste Nodes", "另存为": "Save As", "切换启用/停用": "Toggle Enabled/Disabled", "批量停用": "Disable Selected", "批量启用": "Enable Selected",
   "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
-  "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加矢量化节点": "Add Vectorize Node", "图片矢量化": "Vectorize Image", "图片置入ppt": "Images to PPT", "自动抠图": "Auto Cutout", "添加图片置入ppt节点": "Add Images-to-PPT Node", "添加自动抠图节点": "Add Auto Cutout Node", "添加AI视频节点": "Add AI Video Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
+  "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加矢量化节点": "Add Vectorize Node", "图片矢量化": "Vectorize Image", "图片置入ppt": "Images to PPT", "自动抠图": "Auto Cutout", "添加图片置入ppt节点": "Add Images-to-PPT Node", "添加自动抠图节点": "Add Auto Cutout Node", "添加AI视频节点": "Add AI Video Node", "添加视频引用节点": "Add Video Reference Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
   "已新建标签页": "New project created", "至少保留一个项目": "At least one project must remain", "已删除项目（Ctrl+Z 可撤回）": "Project deleted (Ctrl+Z to restore)",
   "上传图片文件": "Upload Image Files", "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
   "文件夹上传": "Folder Upload", "确认导入图片": "Confirm Image Import", "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。": "Only thumbnails are stored on the canvas. AI tasks read the local originals, so keep the source folder in place while using the project.",
@@ -621,7 +626,7 @@ const state = {
   canvasGroupCollapsed: {},
   selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -871,6 +876,7 @@ const els = {
   hideNodeTitles: $("hideNodeTitlesToggle"),
   editOnOverlap: $("editOnOverlapToggle"),
   textMergeOnOverlap: $("textMergeOnOverlapToggle"),
+  aiResultAsImageNode: $("aiResultAsImageNodeToggle"),
   showBrowserNodeMenu: $("showBrowserNodeMenuToggle"),
   showLocalSdNodeMenu: $("showLocalSdNodeMenuToggle"),
   showScreenshotNodeMenu: $("showScreenshotNodeMenuToggle"),
@@ -1232,7 +1238,7 @@ function restoreData(data) {
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
   state.selectedAnnotationId = "";
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
@@ -1305,6 +1311,11 @@ function restoreData(data) {
   walkNodes(state.nodes, node => {
     if (node.type !== "ai-video") return;
     normalizeVideoNode(node);
+  });
+  // 视频引用节点:补齐缺省字段;上传中状态不跨会话残留
+  walkNodes(state.nodes, node => {
+    if (node.type !== "video-ref") return;
+    normalizeVideoRefNode(node);
   });
   walkNodes(state.nodes, node => {
     if (node.type !== "ai-image" && node.type !== "ai-video" && node.type !== "angle-image") return;
@@ -1475,6 +1486,7 @@ function syncSettingsPanel() {
   els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
   els.textMergeOnOverlap.checked = state.settings.textMergeOnOverlap !== false;
+  els.aiResultAsImageNode.checked = state.settings.aiResultAsImageNode === true;
   els.showBrowserNodeMenu.checked = state.settings.showBrowserNodeMenu !== false;
   els.showBrowserNodeMenu.disabled = state.settings.browserExtensionEnabled === false;
   if (els.browserExtensionEnabled) els.browserExtensionEnabled.checked = state.settings.browserExtensionEnabled !== false;
@@ -2092,6 +2104,7 @@ const NODE_PLACEMENT_GAP = 24;
 function nodeHeightForType(type) {
   return type === "ai-image" ? AI_NODE_HEIGHT
     : type === "ai-video" ? VIDEO_NODE_HEIGHT
+    : type === "video-ref" ? VIDEO_REF_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
     : type === "palette" ? 780
@@ -2264,7 +2277,6 @@ function buildNodeObject(type, position, width, height) {
     screenshotSeq: type === "screenshot-input" ? nextScreenshotNodeSequence() : undefined,
     variableRows: type === "variable" ? [{ id: uid("vrow"), definitionId: "", optionId: "", variableNameSnapshot: "", valueLabelSnapshot: "" }] : undefined,
     _chatModel: type === "chat" ? (String(state.settings.chatDefaultModel || "") || chatDefaultModelForSite() || window.CANVASFLOW_CHAT_CATALOG?.defaultModel || "") : undefined,
-    _chatEnumerated: type === "chat" ? false : undefined,
     chatMessages: type === "chat" ? [] : undefined,
     chatText: type === "chat" ? "" : undefined,
     chatDraft: type === "chat" ? "" : undefined,
@@ -2286,6 +2298,11 @@ function buildNodeObject(type, position, width, height) {
     _videoResolution: type === "ai-video" ? "1080p" : undefined,
     _videoDuration: type === "ai-video" ? 5 : undefined,
     _videoAudio: type === "ai-video" ? true : undefined,
+    videoPath: type === "video-ref" ? "" : undefined,
+    videoUrl: type === "video-ref" ? "" : undefined,
+    videoUrlExpiresAt: type === "video-ref" ? 0 : undefined,
+    videoBytes: type === "video-ref" ? 0 : undefined,
+    _videoRefUploading: type === "video-ref" ? false : undefined,
   };
 }
 
@@ -3001,6 +3018,10 @@ function cloneNodeForClipboard(n) {
       delete node._queueRunId;
       delete node._pendingVideoUrl;
     }
+    if (node.type === "video-ref") {
+      // 副本共享同一份文件引用(路径/已上传 URL),上传中状态不跟随副本
+      node._videoRefUploading = false;
+    }
     if (node.type === "local-sd") {
       node.generating = false;
       node._sdTaskId = "";
@@ -3058,6 +3079,11 @@ function pasteNodes(data, anchor = null) {
       h: n.type === "ai-image" ? Math.max(Number(n.h) || 0, AI_NODE_HEIGHT) : n.type === "angle-image" ? Math.max(Number(n.h) || 0, ANGLE_NODE_HEIGHT) : n.type === "screenshot-input" ? Math.max(Number(n.h) || 0, SCREENSHOT_NODE_HEIGHT) : n.type === "image" ? Math.max(Number(n.h) || 0, 160) : (n.type === "group" || n.type === "folder") ? Math.max(Number(n.h) || 0, GROUP_NODE_HEIGHT) : NODE_HEIGHT,
       created: Date.now() + state.nextNode,
     };
+    if (nn.type === "video-ref") {
+      // 视频引用节点固定宽高档：默认 NODE_WIDTH/172 会把内容挤坏
+      nn.w = VIDEO_REF_NODE_WIDTH;
+      nn.h = Math.max(Number(n.h) || 0, VIDEO_REF_NODE_HEIGHT);
+    }
     if (n.canvasGroupId && data.nodes.filter(item => item.canvasGroupId === n.canvasGroupId).length > 1) {
       // 新组 ID，避免和原组混在一起；组内成员保留原始宽高以维持组内布局
       if (!groupMap.has(n.canvasGroupId)) groupMap.set(n.canvasGroupId, uid("canvas-group"));
@@ -4379,7 +4405,7 @@ function chatModelEntry(modelId) {
 
 function createChatSession(node, overrides = {}) {
   const now = Date.now();
-  const session = { id: uid("chat-session"), title: "新对话", closed: false, model: node?._chatModel || chatCatalogModels()[0]?.id || "", enumerated: false, messages: [], text: "", draft: "", attachments: [], createdAt: now, updatedAt: now, ...overrides };
+  const session = { id: uid("chat-session"), title: "新对话", closed: false, model: node?._chatModel || chatCatalogModels()[0]?.id || "", messages: [], text: "", draft: "", attachments: [], createdAt: now, updatedAt: now, ...overrides };
   session.title = String(session.title || "新对话").trim() || "新对话";
   return session;
 }
@@ -4396,7 +4422,7 @@ function normalizeChatSession(session, node) {
   const fallbackId = session?.id || uid("chat-session");
   const fallbackModel = node?._chatModel || chatCatalogModels()[0]?.id || "";
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  return { ...session, id: String(fallbackId), title: String(session?.title || "新对话").trim() || "新对话", closed: session?.closed === true, model: String(session?.model || fallbackModel), enumerated: session?.enumerated === true, messages: messages.filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim()).slice(-CHAT_HISTORY_LIMIT), text: String(session?.text || ""), draft: String(session?.draft || ""), attachments: Array.isArray(session?.attachments) ? session.attachments : [], createdAt: Number(session?.createdAt) || now, updatedAt: Number(session?.updatedAt) || now };
+  return { ...session, id: String(fallbackId), title: String(session?.title || "新对话").trim() || "新对话", closed: session?.closed === true, model: String(session?.model || fallbackModel), messages: messages.filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim()).slice(-CHAT_HISTORY_LIMIT), text: String(session?.text || ""), draft: String(session?.draft || ""), attachments: Array.isArray(session?.attachments) ? session.attachments : [], createdAt: Number(session?.createdAt) || now, updatedAt: Number(session?.updatedAt) || now };
 }
 
 function activeChatSession(node) {
@@ -4413,7 +4439,6 @@ function saveActiveChatSession(node, touch = false) {
   const session = activeChatSession(node);
   if (!session) return null;
   session.model = node._chatModel || "";
-  session.enumerated = node._chatEnumerated === true;
   session.messages = node.chatMessages || [];
   session.text = node.chatText || "";
   session.draft = node.chatDraft || "";
@@ -4428,7 +4453,6 @@ function loadChatSession(node, sessionId) {
   node.activeChatSessionId = session.id;
   session.closed = false;
   node._chatModel = session.model || chatCatalogModels()[0]?.id || "";
-  node._chatEnumerated = session.enumerated === true;
   node.chatMessages = session.messages;
   node.chatText = session.text;
   node.chatDraft = session.draft;
@@ -4439,7 +4463,7 @@ function loadChatSession(node, sessionId) {
 
 function ensureChatSessions(node) {
   if (!Array.isArray(node.chatSessions) || !node.chatSessions.length) {
-    const migrated = createChatSession(node, { title: chatSessionTitleFromMessages(node.chatMessages) || "对话 1", model: node._chatModel, enumerated: node._chatEnumerated === true, messages: Array.isArray(node.chatMessages) ? node.chatMessages : [], text: node.chatText || "", draft: node.chatDraft || "", attachments: Array.isArray(node.chatAttachments) ? node.chatAttachments : [] });
+    const migrated = createChatSession(node, { title: chatSessionTitleFromMessages(node.chatMessages) || "对话 1", model: node._chatModel, messages: Array.isArray(node.chatMessages) ? node.chatMessages : [], text: node.chatText || "", draft: node.chatDraft || "", attachments: Array.isArray(node.chatAttachments) ? node.chatAttachments : [] });
     node.chatSessions = [migrated];
     node.activeChatSessionId = migrated.id;
   } else {
@@ -4466,7 +4490,6 @@ function normalizeChatNode(node) {
     const visible = chatCatalogModels();
     node._chatModel = (preferred && visible.some(model => model.id === preferred) ? preferred : visible[0]?.id) || "";
   }
-  node._chatEnumerated = node._chatEnumerated === true;
   node.chatAttachments = (Array.isArray(node.chatAttachments) ? node.chatAttachments : [])
     .filter(item => item && (typeof item.image === "string" || typeof item.assetId === "string"))
     .map(item => ({
@@ -5206,8 +5229,11 @@ function videoUpstreamSummary(node) {
   const textCount = upstream.texts.filter(text => String(text || "").trim()).length;
   const entry = videoCatalogEntry(node._model);
   const maxImages = entry?.maxImages || VIDEO_TASK_MAX_IMAGES;
+  const videoCount = collectVideoRefInputs(node.id).length;
+  const maxVideos = entry?.maxVideos || 0;
   const parts = [`${textCount} 条文字`];
   parts.push(imageCount > maxImages ? `前 ${maxImages} 张参考图（共 ${imageCount} 张，超出部分不发送）` : `${imageCount} 张参考图`);
+  if (maxVideos > 0) parts.push(videoCount > maxVideos ? `前 ${maxVideos} 个参考视频（共 ${videoCount} 个，超出部分不发送）` : `${videoCount} 个参考视频`);
   return parts.join(" · ");
 }
 
@@ -5265,6 +5291,204 @@ function videoNodeBody(node) {
   }
   return `${summary}<div class="ai-preview is-empty video-preview-empty">等待生成视频</div>
     <div class="node-hover-controls"><div class="ai-actions"><button data-role="ai-video-generate" class="ai-generate-btn">生成</button></div>${videoNodeControls(node)}</div>${progress}`;
+}
+
+// ---------- 视频引用节点（video-ref）：本地视频文件引用，不复制文件进项目数据 ----------
+
+function normalizeVideoRefNode(node) {
+  if (!node || node.type !== "video-ref") return node;
+  node.videoPath = typeof node.videoPath === "string" ? node.videoPath : "";
+  node.videoUrl = typeof node.videoUrl === "string" ? node.videoUrl : "";
+  node.videoUrlExpiresAt = Number(node.videoUrlExpiresAt) || 0;
+  node.videoBytes = Number(node.videoBytes) || 0;
+  node.fileName = typeof node.fileName === "string" ? node.fileName : "";
+  node._videoRefUploading = node._videoRefUploading === true;
+  return node;
+}
+
+function videoRefExtensionOk(fileName) {
+  return /\.(mp4|mov|webm)$/i.test(String(fileName || ""));
+}
+
+function videoRefExpired(node) {
+  // 留 10 分钟余量：发送耗时可能较长，临界 URL 直接重传更稳妥
+  return !node.videoUrl || !node.videoUrlExpiresAt || Date.now() + VIDEO_REF_EXPIRY_MARGIN_MS >= node.videoUrlExpiresAt;
+}
+
+function formatVideoRefBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+// 确保引用可用：url 未过期直接用；否则有 path 走服务端读盘上传（桌面/服务器模式都能读本地路径）。
+// 既无 url 又无 path（浏览器拖入后 URL 过期）只能提示重新选择文件。
+async function ensureVideoRefUrl(node) {
+  normalizeVideoRefNode(node);
+  if (!videoRefExpired(node)) return node.videoUrl;
+  if (!node.videoPath && !node._pendingVideoBase64) {
+    throw new Error(`视频「${node.fileName || "未命名"}」的上传链接已过期，请在节点上重新选择文件`);
+  }
+  const url = await uploadVideoRef(node);
+  return url;
+}
+
+// 视频引用内容变化后，下游 AI 视频节点的输入摘要需要联动刷新
+function refreshDownstreamVideoPrompts(nodeId) {
+  for (const edge of state.edges) {
+    if (edge.from.node !== nodeId) continue;
+    if (findNode(edge.to.node)?.type === "ai-video") refreshAiVideoPrompt(edge.to.node);
+  }
+}
+
+// 上传一条引用到 apimart 换公网 URL（3 天档）：有 path 走服务端读盘，否则用暂存的 base64。
+// 文件字节只在上传瞬间经过内存，不写入存档、不复制到数据目录。
+async function uploadVideoRef(node) {
+  normalizeVideoRefNode(node);
+  if (!videoRefExtensionOk(node.fileName)) throw new Error("参考视频仅支持 MP4 / MOV / WebM 文件");
+  if (node.videoBytes > VIDEO_REF_MAX_BYTES) throw new Error(`视频文件超过 apimart 上传上限（${formatVideoRefBytes(node.videoBytes)} > 50MB）`);
+  node._videoRefUploading = true;
+  renderNodes();
+  try {
+    const body = {};
+    if (node.videoPath) body.filePath = node.videoPath;
+    else if (node._pendingVideoBase64) body.base64 = node._pendingVideoBase64;
+    else throw new Error("没有可上传的视频源（既无本地路径也无暂存内容），请重新选择文件");
+    body.fileName = node.fileName || "reference.mp4";
+    const resp = await apiFetch("/api/apimart/video-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.url) throw new Error(data.error || `上传失败（HTTP ${resp.status}）`);
+    node.videoUrl = data.url;
+    node.videoUrlExpiresAt = Number(data.expiresAt) || 0;
+    node.videoBytes = Number(data.bytes) || node.videoBytes;
+    return node.videoUrl;
+  } finally {
+    node._videoRefUploading = false;
+    markDirty();
+    renderNodes();
+  }
+}
+
+// 从拖拽的 File 建立引用：能拿原路径（mac Electron）只存路径，否则读内容暂存 base64 并立即上传
+async function adoptVideoRefFile(node, file) {
+  normalizeVideoRefNode(node);
+  const localPath = typeof file.path === "string" && file.path ? file.path : "";
+  node.fileName = file.name || `reference.${videoRefExtensionOk(file.name) ? "mp4" : "bin"}`;
+  node.videoBytes = Number(file.size) || 0;
+  if (!videoRefExtensionOk(node.fileName)) throw new Error("参考视频仅支持 MP4 / MOV / WebM 文件");
+  if (node.videoBytes > VIDEO_REF_MAX_BYTES) throw new Error(`视频文件超过上传上限 50MB（当前 ${formatVideoRefBytes(node.videoBytes)}），请先压缩`);
+  node.videoUrl = "";
+  node.videoUrlExpiresAt = 0;
+  if (localPath) {
+    node.videoPath = localPath;
+    // 有路径不急于上传：发送时按路径读盘上传，文件保持原地不动
+    delete node._pendingVideoBase64;
+    refreshDownstreamVideoPrompts(node.id);
+    return;
+  }
+  node.videoPath = "";
+  const dataUrl = await fileToDataUrl(file);
+  // dataURL 剥掉前缀只留纯 base64（服务端按 base64 解码）
+  node._pendingVideoBase64 = String(dataUrl || "").replace(/^data:[^;,]*;base64,/, "");
+  try {
+    await uploadVideoRef(node);
+    refreshDownstreamVideoPrompts(node.id);
+  } finally {
+    // 上传成功/失败都不保留字节暂存：成功后 URL 有效，失败时重新拖拽即可
+    delete node._pendingVideoBase64;
+  }
+}
+
+function videoRefStatusBadge(node) {
+  normalizeVideoRefNode(node);
+  if (node._videoRefUploading) return `<span class="video-ref-badge is-uploading">上传中…</span>`;
+  if (node.videoUrl && !videoRefExpired(node)) {
+    const days = Math.max(1, Math.ceil((node.videoUrlExpiresAt - Date.now()) / 86400000));
+    return `<span class="video-ref-badge is-ready">已上传 · 约 ${days} 天内有效</span>`;
+  }
+  if (node.videoPath) return `<span class="video-ref-badge is-path">引用原路径 · 发送时上传</span>`;
+  return `<span class="video-ref-badge is-empty">未选择视频</span>`;
+}
+
+function videoRefNodeBody(node) {
+  normalizeVideoRefNode(node);
+  const name = node.fileName || "尚未选择视频文件";
+  const meta = [node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "", node.videoPath ? node.videoPath : ""].filter(Boolean).join(" · ");
+  return `<div class="video-ref-body">
+    <div class="video-ref-file" title="${escapeHtml(node.videoPath || name)}">
+      <span class="video-ref-name">${escapeHtml(name)}</span>
+      ${meta ? `<span class="video-ref-meta">${escapeHtml(meta)}</span>` : ""}
+    </div>
+    <div class="video-ref-status">${videoRefStatusBadge(node)}</div>
+    <div class="video-ref-actions">
+      <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频文件</button>
+      ${node.videoPath || node.videoUrl ? `<button type="button" data-role="video-ref-upload" title="立即上传到 APIMart 换取公网链接（3 天有效，免费额度内免费）">立即上传</button>` : ""}
+    </div>
+    <div class="video-ref-hint">连线到 AI 视频节点作为参考视频（仅 Seedance 2.0 系支持；文件不会被复制，只在生成时上传）</div>
+  </div>`;
+}
+
+// 选择文件入口：桌面版走壳的 chooseVideoFile 对话框（拿到绝对路径，文件原地不动），
+// 浏览器/WebView2 拿不到路径，读内容立即上传换 URL（字节只在内存）。
+async function chooseVideoRefFile(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "video-ref") return;
+  if (desktop?.chooseVideoFile) {
+    let result;
+    try {
+      result = await desktop.chooseVideoFile();
+    } catch (error) {
+      toast(`选择视频失败：${error.message || "系统文件选择器发生错误"}`);
+      return;
+    }
+    if (!result || result.cancelled || !result.path) return;
+    if (!videoRefExtensionOk(result.name || result.path)) return toast("参考视频仅支持 MP4 / MOV / WebM 文件");
+    node.fileName = result.name || result.path.split(/[\\/]/).pop() || "reference.mp4";
+    node.videoPath = result.path;
+    node.videoBytes = Number(result.bytes) || 0;
+    node.videoUrl = "";
+    node.videoUrlExpiresAt = 0;
+    delete node._pendingVideoBase64;
+    if (node.videoBytes > VIDEO_REF_MAX_BYTES) toast(`注意：文件 ${formatVideoRefBytes(node.videoBytes)} 超过上传上限 50MB，生成前需先压缩`);
+    refreshDownstreamVideoPrompts(node.id);
+    pushHistory();
+    render();
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      await adoptVideoRefFile(node, file);
+      pushHistory();
+      render();
+      toast(node.videoUrl ? "视频已上传为参考链接（约 3 天内有效）" : "已引用本地视频");
+    } catch (error) {
+      console.error("[视频引用] 文件读取/上传失败", error);
+      toast(`视频引用失败：${error.message || "文件无法读取"}`);
+      render();
+    }
+  };
+  input.click();
+}
+
+async function manualUploadVideoRef(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "video-ref" || node._videoRefUploading) return;
+  try {
+    await uploadVideoRef(node);
+    pushHistory();
+    render();
+    toast("参考视频已上传（约 3 天内有效，免费额度内免费）");
+  } catch (error) {
+    console.error("[视频引用] 上传失败", error);
+    toast(`上传失败：${error.message || "请稍后重试"}`);
+    render();
+  }
 }
 
 
@@ -5573,6 +5797,34 @@ function collectUpstreamForAI(nodeId, incoming) {
   return result;
 }
 
+// 视频引用收集：独立于扇入分支语义（fan-in 规则只管辖 AI 绘图，视频节点单任务）——
+// 沿入线向上游收集 video-ref 节点，文字/变量/图片/组节点透传，
+// AI/角度/浏览器生图/本地SD/对话/放大节点是语义边界（截断）。
+// 结果按视频引用节点画布 x 排序去重，消费方按 entry.maxVideos 截取。
+function collectVideoRefInputs(nodeId) {
+  const incoming = buildIncomingIndex();
+  const visited = new Set([nodeId]);
+  const refs = [];
+  const seen = new Set();
+  function visit(id) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const n = findNode(id);
+    if (!n || n.disabled) return;
+    if (n.type === "video-ref") {
+      normalizeVideoRefNode(n);
+      if ((n.videoPath || n.videoUrl) && !seen.has(n.id)) { seen.add(n.id); refs.push(n); }
+      return;
+    }
+    if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image" || n.type === "local-sd" || n.type === "chat" || n.type === "ai-video") return;
+    if (isLinkedUpscaleNode(n)) return;
+    for (const edge of incoming.get(id) || []) visit(edge.from.node);
+  }
+  for (const edge of incoming.get(nodeId) || []) visit(edge.from.node);
+  refs.sort((a, b) => (a.x || 0) - (b.x || 0));
+  return refs;
+}
+
 function refreshAiPrompt(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "ai-image") return;
@@ -5633,9 +5885,6 @@ function screenshotNodeSummary(node) {
   const input = directScreenshotNodeInputs(node.id);
   return `${input.texts.length} 条文字 · ${input.images.length} 张参考图 · ${input.batchImages.length} 张批量图 · 单图生成 ${Math.max(1, Number(node._count) || 1)} 张`;
 }
-
-// 批量提示词:点击按钮后追加到本轮提问末尾的指令,要求模型按 a. b. c. 序号输出多条
-const CHAT_ENUMERATED_INSTRUCTION = "请针对上面的内容输出多条不同的提示词方案：每条独占一行，以英文字母序号开头（a. b. c. …），序号后直接跟提示词本身；不要输出序号条目以外的任何标题、说明或结尾。";
 
 // 按首条结果分隔线把框内文字切成两区:关键词区(用户指令,长期保留可编辑)与结果区(展示最新回复,每次整体替换)
 function findChatResultDivider(text) {
@@ -5735,8 +5984,7 @@ async function sendChatNodeMessage(nodeId, options = {}) {
     syncChatNodeBody(node);
     return;
   }
-  const baseRequestText = userText || translateUiString("请分析这些图片");
-  const requestText = retryUser ? baseRequestText : (node._chatEnumerated === true ? `${baseRequestText}\n\n${CHAT_ENUMERATED_INSTRUCTION}` : baseRequestText);
+  const requestText = userText || translateUiString("请分析这些图片");
   let imageDataUrls = [];
   if (imageRefs.length) {
     try {
@@ -6297,25 +6545,17 @@ document.addEventListener("input", event => {
 document.addEventListener("change", async event => {
   const backdrop = event.target.closest?.(".chat-workspace-backdrop");
   const role = event.target.dataset?.role;
-  if (!backdrop || (role !== "chat-model" && role !== "chat-enumerate-toggle")) return;
+  if (!backdrop || role !== "chat-model") return;
   const node = findNode(backdrop.dataset.nodeId);
   if (!node) return;
   const compactControl = node && els.nodes.querySelector(`.node[data-id="${CSS.escape(node.id)}"] [data-role="${CSS.escape(role)}"]`);
   if (compactControl) {
-    if (role === "chat-model") compactControl.value = event.target.value;
-    else compactControl.checked = event.target.checked;
+    compactControl.value = event.target.value;
     compactControl.dispatchEvent(new Event("change", { bubbles: true }));
     return;
   }
   // 紧凑卡上没有同名控件时直接写回节点（与画布 change 委托同款语义）
-  if (role === "chat-model") {
-    await changeChatNodeModel(node, event.target.value);
-  } else {
-    // 批量提示词开关:只落盘不渲染(checkbox 自身持态),下次回车发送即生效
-    node._chatEnumerated = event.target.checked;
-    saveActiveChatSession(node, true);
-    markDirty();
-  }
+  await changeChatNodeModel(node, event.target.value);
 });
 
 document.addEventListener("dblclick", event => {
@@ -7759,7 +7999,7 @@ function enqueueAiNode(nodeId, resultMode = "node-preview") {
     const runId = `run-${Date.now()}-${aiTaskQueue.nextId}`;
     node._queueRunId = runId;
     // 扇入(图片线或文字/变量线并列)时按线拆任务;多任务结果各自生成图片节点
-    const effectiveResultMode = branches.length > 1 ? "image-node" : resultMode;
+    const effectiveResultMode = branches.length > 1 || state.settings.aiResultAsImageNode === true ? "image-node" : resultMode;
     const generationSettings = queuedGenerationSettings(node);
     const imagesPerRequest = isImage25ExtModel(generationSettings._model) ? Math.max(1, Math.min(4, Number(generationSettings._count) || 1)) : 1;
     const existingResultCount = state.nodes.filter(item => item.type === "image" && item.aiSourceNodeId === node.id).length;
@@ -7848,8 +8088,18 @@ function enqueueVideoNode(nodeId) {
     .sort((a, b) => (a._x || 0) - (b._x || 0))
     .slice(0, VIDEO_TASK_MAX_IMAGES);
   const prompt = upstream.texts.join("，");
-  if (!prompt.trim() && !images.length) {
-    toast("视频节点需要连接文字或参考图");
+  const entry = videoCatalogEntry(node._model);
+  const maxVideos = entry?.maxVideos || 0;
+  const allVideoRefs = collectVideoRefInputs(nodeId);
+  const videoRefs = allVideoRefs.slice(0, maxVideos);
+  const overflowVideos = allVideoRefs.length - videoRefs.length;
+  if (!prompt.trim() && !images.length && !videoRefs.length) {
+    toast("视频节点需要连接文字、参考图或视频引用");
+    return 0;
+  }
+  if (videoRefs.length && !maxVideos) {
+    // 目录未声明 maxVideos 的模型（agtoken 全系等）没有参考视频通道
+    toast(`当前模型（${entry?.label || node._model}）不支持参考视频，请改用 Seedance 2.0 系（APIMart）`);
     return 0;
   }
   const page = currentPage();
@@ -7870,6 +8120,7 @@ function enqueueVideoNode(nodeId) {
     regularImages: images.map(image => ({ ...image })),
     groupImage: null,
     orderedImages: images.map(image => ({ ...image })),
+    referenceVideos: videoRefs.map(ref => ({ nodeId: ref.id, fileName: ref.fileName, videoPath: ref.videoPath, videoUrl: ref.videoUrl, videoUrlExpiresAt: ref.videoUrlExpiresAt, videoBytes: ref.videoBytes })),
     groupIndex: -1,
     referenceName: images[0]?.fileName || "生成视频",
     thumbnail: images[0]?.image || "",
@@ -7884,6 +8135,7 @@ function enqueueVideoNode(nodeId) {
     progress: 0,
     created: Date.now(),
   };
+  if (overflowVideos > 0) toast(`${overflowVideos} 个参考视频超出当前模型上限（${maxVideos} 个），已忽略多余部分`);
   aiTaskQueue.items.push(task);
   node.generating = true;
   node._aiProgress = null;
@@ -7926,16 +8178,31 @@ async function submitVideoGeneration(task) {
     if (dataUrl) images.push(dataUrl);
   }
   const prompt = String(task.prompt || "").trim();
-  if (!prompt && !images.length) throw new Error("视频任务需要提示词或参考图");
+  const maxVideos = entry?.maxVideos || 0;
+  const rawVideoRefs = task.referenceVideos || [];
+  if (rawVideoRefs.length && !maxVideos) throw new Error("当前模型不支持参考视频，请改用 Seedance 2.0 系（APIMart）");
+  // 参考视频：发送前确保每条引用都有未过期的公网 URL（过期且有路径时按路径重新上传）
+  const videoUrls = [];
+  for (const ref of rawVideoRefs.slice(0, maxVideos)) {
+    const liveNode = findNode(ref.nodeId);
+    const live = liveNode && liveNode.type === "video-ref" ? liveNode : ref;
+    videoUrls.push(await ensureVideoRefUrl(live));
+  }
+  if (!prompt && !images.length && !videoUrls.length) throw new Error("视频任务需要提示词、参考图或参考视频");
   const duration = Number(settings._videoDuration) || 5;
   let payload;
   if (apiType === "apimart") {
     payload = { model: settings._model, prompt, duration };
     if (entry.imageMode === "first_frame") {
       if (!images.length) throw new Error("该模型为图生视频，需要至少一张参考图作为首帧");
+      if (videoUrls.length) throw new Error("该模型不支持参考视频（参考视频与首尾帧互斥），请去掉视频引用节点或换用 Seedance 2.0 系");
       payload.first_frame_image = images[0];
     } else if (images.length) {
       payload.image_urls = images;
+    }
+    if (videoUrls.length) {
+      // 顶层 video_urls[]（apimart seedance-2.0 系）：公网 URL，与首尾帧 image_with_roles 互斥
+      payload.video_urls = videoUrls;
     }
     if (entry.resolutions?.length) payload.resolution = settings._videoResolution;
     if (entry.ratios?.length && entry.imageMode !== "first_frame") payload.aspect_ratio = settings._videoRatio;
@@ -8394,6 +8661,19 @@ function addAiVideoNode(x, y, sourceIds) {
   pushHistory();
   render();
   toast("已创建 AI 视频节点");
+  return node;
+}
+
+function addVideoRefNode(x, y, sourceId = null) {
+  const node = addNode("video-ref", x, y, false, { width: VIDEO_REF_NODE_WIDTH });
+  normalizeVideoRefNode(node);
+  if (sourceId) {
+    const source = findNode(sourceId);
+    if (source && source.type !== "output") state.edges.push({ id: uid("e"), from: { node: sourceId, port: "out" }, to: { node: node.id, port: "in" } });
+  }
+  state.selected = new Set([node.id]);
+  pushHistory();
+  render();
   return node;
 }
 
@@ -9396,7 +9676,6 @@ function chatAttachmentBar(node, entry, busy) {
 }
 
 // 对话节点正文 = 顶部模型条 + 整块可输入文本框 + 底部图片附件栏。
-// 「批量」是发送前勾选的开关:勾选后本轮请求自动追加 a. b. 序号输出指令；拆分由消息按钮触发。
 function chatMessageActions(message, index, lastAssistantIndex, busy, previousHasImages) {
   const copy = `<button type="button" data-role="chat-message-copy" data-message-index="${index}" aria-label="复制消息">复制</button>`;
   if (message.role !== "assistant") return copy;
@@ -9502,8 +9781,7 @@ function chatNodeBody(node, expanded = false) {
   const expandTool = `<button class="chat-tool-btn" data-role="chat-expand" type="button" title="编辑对话" aria-label="展开编辑对话"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>`;
   const historyTool = busy
     ? `<button class="chat-tool-btn is-busy" data-role="chat-stop" type="button" title="停止生成" aria-label="停止生成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>`
-    : `<label class="chat-enumerate-toggle" title="批量提示词：要求 AI 按 a. b. 序号输出；收到回复后可手动拆成文字节点"><input type="checkbox" data-role="chat-enumerate-toggle" ${node._chatEnumerated ? "checked" : ""} ${busy ? "disabled" : ""}><span>批量</span></label>`
-      + `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+    : `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
   return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
     + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
     + `<div class="chat-messages" role="log" aria-label="对话记录">${chatMessagesHtml(node, busy)}</div>`
@@ -9545,7 +9823,7 @@ function textPromptActionsHtml(node) {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "video-ref" ? "视频引用" : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
@@ -9630,6 +9908,8 @@ function nodeTemplate(node) {
     body = aiImageBody(node) + aiNodeProgressMarkup(node);
   } else if (node.type === "ai-video") {
     body = videoNodeBody(node);
+  } else if (node.type === "video-ref") {
+    body = videoRefNodeBody(node);
   } else if (node.type === "palette") {
     body = paletteMarkup(node);
   } else if (node.type === "tool-node") {
@@ -11031,13 +11311,6 @@ els.nodes.addEventListener("change", async ev => {
       await changeChatNodeModel(node, ev.target.value);
       return;
     }
-    if (role === "chat-enumerate-toggle") {
-      // 批量提示词开关:只落盘不渲染(checkbox 自身持态),下次回车发送即生效
-      node._chatEnumerated = ev.target.checked;
-      saveActiveChatSession(node, true);
-      markDirty();
-      return;
-    }
     return;
   }
   if (node.type === "browser-image") {
@@ -11288,6 +11561,8 @@ els.nodes.addEventListener("click", async ev => {
     pushHistory(); render();
   }
   if (actionRole === "video-redownload" && node.type === "ai-video") redownloadVideoResult(node.id);
+  if (actionRole === "video-ref-choose" && node.type === "video-ref") chooseVideoRefFile(node.id);
+  if (actionRole === "video-ref-upload" && node.type === "video-ref") manualUploadVideoRef(node.id);
   if (actionRole === "ai-redownload") redownloadAiResults(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);
   if (ev.target.dataset.role === "angle-generate") generateAngleImage(node.id);
@@ -11741,6 +12016,221 @@ const lightboxFillSettings = { sketchTolerance: 5, lineWidth: 3, keepLines: true
 let lightboxEditBase = null;
 let lightboxCropRect = null;
 let lightboxCropDrag = null;
+let lightboxPenPoints = [];
+let lightboxPenDrag = null;
+let lightboxPenSelected = -1;
+let lightboxSelection = null;
+let lightboxPenOperation = "replace";
+let lightboxPenClosed = false;
+let lightboxPenBaseSelection = null;
+const lightboxSelectionOverlay = document.createElement("canvas");
+lightboxSelectionOverlay.className = "lightbox-selection-overlay hidden";
+lightboxSelectionOverlay.setAttribute("aria-hidden", "true");
+els.lightbox.appendChild(lightboxSelectionOverlay);
+
+function captureLightboxSelection() {
+  return { selection: lightboxSelection, points: structuredClone(lightboxPenPoints), selected: lightboxPenSelected, operation: lightboxPenOperation, closed: lightboxPenClosed, base: lightboxPenBaseSelection };
+}
+
+function restoreLightboxSelection(value) {
+  lightboxSelection = value?.selection || null;
+  lightboxPenPoints = structuredClone(value?.points || []);
+  lightboxPenSelected = value?.selected ?? -1;
+  lightboxPenOperation = value?.operation || "replace";
+  lightboxPenClosed = value?.closed || false;
+  lightboxPenBaseSelection = value?.base || null;
+  lightboxPenDrag = null;
+  syncLightboxSelectionOverlay();
+}
+
+function rememberLightboxSelection(previous) {
+  const undo = () => restoreLightboxSelection(previous);
+  undo.selectionOnly = true;
+  pushLightboxEditUndo(undo);
+}
+
+function syncLightboxSelectionOverlay() {
+  const canvas = els.lightboxPaintCanvas, overlay = lightboxSelectionOverlay;
+  if (overlay.selection !== lightboxSelection) {
+    overlay.selection = lightboxSelection;
+    canvas.dispatchEvent(new Event("canvasflow-selection-change"));
+  }
+  const visible = lightboxPainting && (lightboxSelection || lightboxPenPoints.length);
+  overlay.classList.toggle("hidden", !visible);
+  $("lightboxPenClose").disabled = lightboxPenClosed || lightboxPenPoints.length < 3;
+  $("lightboxSelectionClear").disabled = !lightboxSelection && !lightboxPenPoints.length;
+  $("lightboxSelectionFill").disabled = !lightboxSelection?.hasPixels || !!document.querySelector?.(".region-hue-dialog");
+  if (!visible) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  overlay.style.left = `${rect.left}px`; overlay.style.top = `${rect.top}px`;
+  overlay.style.width = `${rect.width}px`; overlay.style.height = `${rect.height}px`;
+  // 显示层只按屏幕分辨率绘制，原图路径和掩膜不降采样。
+  const ratio = window.devicePixelRatio || 1;
+  overlay.width = Math.max(1, Math.round(rect.width * ratio));
+  overlay.height = Math.max(1, Math.round(rect.height * ratio));
+  const ctx = overlay.getContext("2d");
+  ctx.scale(overlay.width / canvas.width, overlay.height / canvas.height);
+  const unit = canvas.width / rect.width;
+  const tokens = getComputedStyle(canvas);
+  // 只显示矢量钢笔路径，不叠加像素掩膜边界；笔刷模式也保留这条路径。
+  ctx.strokeStyle = tokens.getPropertyValue("--primary").trim();
+  ctx.fillStyle = tokens.getPropertyValue("--panel-solid").trim();
+  ctx.lineWidth = 1.5 * unit;
+  ctx.stroke(new Path2D(penSelectionPathData(lightboxPenPoints, lightboxPenClosed)));
+  if (lightboxPaintMode !== "pen") return;
+  for (let i = 0; i < lightboxPenPoints.length; i++) {
+    const p = lightboxPenPoints[i];
+    for (const h of [p.in, p.out]) {
+      if (Math.hypot(h.x - p.x, h.y - p.y) < unit) continue;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(h.x, h.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(h.x, h.y, 3 * unit, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = tokens.getPropertyValue(i === lightboxPenSelected ? "--primary" : "--panel-solid").trim();
+    ctx.fillRect(p.x - 4 * unit, p.y - 4 * unit, 8 * unit, 8 * unit);
+    ctx.strokeRect(p.x - 4 * unit, p.y - 4 * unit, 8 * unit, 8 * unit);
+    ctx.fillStyle = tokens.getPropertyValue("--panel-solid").trim();
+  }
+}
+
+function makeLightboxSelection(mask, width, height) {
+  const clip = new Path2D();
+  // 扫描连续像素段只生成实际裁切范围，不生成第二套可视边界。
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width;) {
+      if (!mask[y * width + x]) { x++; continue; }
+      const start = x;
+      while (x < width && mask[y * width + x]) x++;
+      clip.rect(start, y, x - start, 1);
+    }
+  }
+  return { mask, clip, width, height, hasPixels: mask.some(Boolean) };
+}
+
+function closeLightboxPenPath() {
+  if (lightboxPenClosed || lightboxPenPoints.length < 3 || lightboxPenDrag) return;
+  const previous = captureLightboxSelection();
+  lightboxPenClosed = true;
+  updateLightboxPenMask();
+  rememberLightboxSelection(previous);
+  syncLightboxSelectionOverlay();
+}
+
+function updateLightboxPenMask() {
+  const canvas = els.lightboxPaintCanvas;
+  const raster = document.createElement("canvas");
+  raster.width = canvas.width; raster.height = canvas.height;
+  const ctx = raster.getContext("2d");
+  ctx.fill(new Path2D(penSelectionPathData(lightboxPenPoints, true)));
+  const pixels = ctx.getImageData(0, 0, raster.width, raster.height).data;
+  const incoming = new Uint8Array(raster.width * raster.height);
+  for (let i = 0; i < incoming.length; i++) incoming[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0;
+  const mask = combinePenSelectionMasks(lightboxPenBaseSelection?.mask, incoming, lightboxPenOperation);
+  lightboxSelection = makeLightboxSelection(mask, raster.width, raster.height);
+}
+
+function beginLightboxPen(event, point) {
+  if (lightboxPenDrag) return;
+  const previous = captureLightboxSelection();
+  const radius = 8 * point.scale;
+  const near = p => Math.hypot(p.x - point.x, p.y - point.y) <= radius;
+  // 首点闭合；按 Ctrl/Cmd 拖首点可移动它，避免闭合与编辑冲突。
+  if (!lightboxPenClosed && lightboxPenPoints.length >= 3 && near(lightboxPenPoints[0]) && !event.ctrlKey && !event.metaKey) {
+    closeLightboxPenPath(); return;
+  }
+  let index = lightboxPenPoints.findIndex(near), part = "anchor", fresh = false;
+  if (index < 0) {
+    for (let i = lightboxPenPoints.length - 1; i >= 0; i--) {
+      for (const handle of ["in", "out"]) {
+        if (near(lightboxPenPoints[i][handle])) { index = i; part = handle; break; }
+      }
+      if (index >= 0) break;
+    }
+  }
+  if (index < 0) {
+    if (lightboxPenClosed) { lightboxPenPoints = []; lightboxPenClosed = false; }
+    if (!lightboxPenPoints.length) {
+      lightboxPenBaseSelection = lightboxSelection;
+      lightboxPenOperation = event.altKey ? "subtract" : event.shiftKey ? "add" : $("lightboxSelectionOperation").value;
+    }
+    index = lightboxPenPoints.length; fresh = true; part = "out";
+    lightboxPenPoints.push({ x: point.x, y: point.y, in: { x: point.x, y: point.y }, out: { x: point.x, y: point.y } });
+  }
+  const handleFromAnchor = !fresh && part === "anchor" && event.altKey;
+  if (handleFromAnchor) part = "out";
+  lightboxPenSelected = index;
+  lightboxPenDrag = { index, part, fresh, handleFromAnchor, start: point, previous, pointerId: event.pointerId };
+  els.lightboxPaintCanvas.setPointerCapture(event.pointerId);
+  syncLightboxSelectionOverlay();
+}
+
+function moveLightboxPen(event) {
+  const drag = lightboxPenDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const p = paintCanvasPoint(event);
+  if (drag.fresh && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < 3 * p.scale) return;
+  movePenSelectionPoint(lightboxPenPoints[drag.index], p, drag.part, event.altKey && !drag.fresh && !drag.handleFromAnchor);
+  syncLightboxSelectionOverlay();
+}
+
+function finishLightboxPen(event) {
+  const drag = lightboxPenDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return false;
+  if (event.type === "pointerup") moveLightboxPen(event);
+  lightboxPenDrag = null;
+  if (event.type === "pointercancel") restoreLightboxSelection(drag.previous);
+  else if (JSON.stringify(drag.previous.points) !== JSON.stringify(lightboxPenPoints)) {
+    if (lightboxPenClosed) updateLightboxPenMask();
+    rememberLightboxSelection(drag.previous);
+  }
+  syncLightboxSelectionOverlay();
+  return true;
+}
+
+$("lightboxPenTool").onclick = () => setLightboxPaintMode("pen");
+$("lightboxPenClose").onclick = closeLightboxPenPath;
+$("lightboxSelectionOperation").onchange = event => {
+  if (lightboxPenClosed || !lightboxPenPoints.length) return;
+  const previous = captureLightboxSelection();
+  lightboxPenOperation = event.target.value;
+  rememberLightboxSelection(previous); syncLightboxSelectionOverlay();
+};
+$("lightboxSelectionClear").onclick = () => {
+  if (lightboxPenDrag) return;
+  const previous = captureLightboxSelection();
+  restoreLightboxSelection(null); rememberLightboxSelection(previous);
+};
+$("lightboxSelectionFill").onclick = () => {
+  if (!lightboxSelection?.hasPixels || document.querySelector(".region-hue-dialog")) return;
+  const source = lightboxFillSourceImageData(true);
+  const color = els.lightboxPaintColor.value;
+  const action = { kind: "fill", color, ...buildLightboxFillLayer(lightboxSelection.mask, source, color), mask: lightboxSelection.mask };
+  lightboxFillActions.push(action);
+  pushLightboxEditUndo(() => { lightboxFillActions.splice(lightboxFillActions.indexOf(action), 1); markLightboxFillLayerDirty(); });
+  markLightboxFillLayerDirty(); renderLightboxPaintComposite();
+};
+els.lightboxPaintCanvas.addEventListener("canvasflow-image-view-change", syncLightboxSelectionOverlay);
+document.addEventListener("keydown", event => {
+  if (!lightboxPainting || lightboxPaintMode !== "pen" || event.target.closest?.("input,textarea,select,[contenteditable='true']")) return;
+  if (!["Escape", "Enter", "Delete", "Backspace"].includes(event.key)) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (lightboxPenDrag) return;
+  if (event.key === "Enter") return closeLightboxPenPath();
+  const previous = captureLightboxSelection();
+  if (event.key === "Escape") {
+    if (!lightboxPenPoints.length) return setLightboxPaintMode("idle");
+    if (lightboxPenClosed) return setLightboxPaintMode("idle");
+    lightboxPenPoints = [];
+  }
+  else if (lightboxPenSelected >= 0) lightboxPenPoints.splice(lightboxPenSelected, 1);
+  else return;
+  lightboxPenSelected = lightboxPenPoints.length - 1;
+  if (lightboxPenClosed) {
+    if (lightboxPenPoints.length < 3) { lightboxPenClosed = false; lightboxSelection = lightboxPenBaseSelection; }
+    else updateLightboxPenMask();
+  }
+  rememberLightboxSelection(previous); syncLightboxSelectionOverlay();
+}, true);
 const lightboxCropBtn = $("lightboxCropBtn");
 const lightboxCropApply = $("lightboxCropApply");
 
@@ -11785,7 +12275,7 @@ function applyLightboxCrop() {
   if (!lightboxPainting || lightboxCropApply.disabled || !lightboxCropRect) return;
   const canvas = els.lightboxPaintCanvas;
   const rect = { ...lightboxCropRect };
-  const previous = { base: lightboxEditBase, width: canvas.width, height: canvas.height, actions: lightboxPaintActions, fills: lightboxFillActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
+  const previous = { selectionState: captureLightboxSelection(), base: lightboxEditBase, width: canvas.width, height: canvas.height, actions: lightboxPaintActions, fills: lightboxFillActions, placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
   clearLightboxCrop();
   lightboxPlacedSelected = false;
   renderLightboxPaintComposite();
@@ -11793,6 +12283,7 @@ function applyLightboxCrop() {
   cropped.width = rect.w;
   cropped.height = rect.h;
   cropped.getContext("2d").drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  restoreLightboxSelection(null);
   lightboxEditBase = cropped;
   canvas.width = rect.w;
   canvas.height = rect.h;
@@ -11806,6 +12297,7 @@ function applyLightboxCrop() {
   lightboxBaseFlipY = false;
   pushLightboxEditUndo(() => {
     clearLightboxCrop();
+    restoreLightboxSelection(previous.selectionState);
     lightboxEditBase = previous.base;
     canvas.width = previous.width;
     canvas.height = previous.height;
@@ -11874,7 +12366,7 @@ function lightboxNext() {
 }
 
 function lightboxEditorHasEdits() {
-  return lightboxPainting && (lightboxEditUndoStack.length > 0 || lightboxEditRedoStack.length > 0);
+  return lightboxPainting && (lightboxEditUndoStack.some(action => !action.selectionOnly) || lightboxEditRedoStack.some(entry => !entry.undoAction.selectionOnly));
 }
 
 function hideLightbox() {
@@ -11958,6 +12450,7 @@ async function startLightboxPaint() {
   lightboxTransformDrag = null;
   lightboxEditUndoStack = [];
   lightboxEditRedoStack = [];
+  restoreLightboxSelection(null);
   resetLightboxFillState();
   setLightboxPaintMode("idle");
   updateLightboxPaintUndo();
@@ -12031,6 +12524,7 @@ function cancelLightboxPaint() {
   lightboxTransformDrag = null;
   lightboxEditUndoStack = [];
   lightboxEditRedoStack = [];
+  restoreLightboxSelection(null);
   resetLightboxFillState();
   lightboxBaseFlipX = false;
   lightboxBaseFlipY = false;
@@ -12113,7 +12607,7 @@ window.addEventListener("blur", () => {
 els.lightbox.addEventListener("pointerdown", event => {
   if (!lightboxPainting || !(event.button === 1 || event.button === 0 && lightboxPanSpaceDown)) return;
   if (event.target !== els.lightbox && !event.target.closest("#lightboxPaintCanvas,.lightbox-bg")) return;
-  if (lightboxDrawing || lightboxTransformDrag || lightboxCropDrag) return;
+  if (lightboxDrawing || lightboxPenDrag || lightboxTransformDrag || lightboxCropDrag) return;
   event.preventDefault(); event.stopImmediatePropagation();
   lightboxViewDrag = { ...lightboxViewOffset, startX: event.clientX, startY: event.clientY, pointerId: event.pointerId };
   els.lightbox.setPointerCapture(event.pointerId);
@@ -12163,10 +12657,11 @@ let lightboxPickReturnMode = "fill";
 
 function setLightboxPaintMode(mode) {
   clearLightboxCrop();
-  lightboxPaintMode = ["brush", "color-brush", "eraser", "arrow", "rect", "fill", "pick-color", "transform", "crop"].includes(mode) ? mode : "idle";
+  lightboxPaintMode = ["brush", "color-brush", "eraser", "arrow", "rect", "fill", "pick-color", "transform", "crop", "pen"].includes(mode) ? mode : "idle";
+  els.lightboxPaintCanvas.dispatchEvent(new Event("canvasflow-image-tool-change"));
   lightboxCropBtn.classList.toggle("active", lightboxPaintMode === "crop");
   lightboxCropApply.classList.toggle("hidden", lightboxPaintMode !== "crop");
-  els.lightboxPaintCanvas.style.cursor = ["crop", "fill", "pick-color"].includes(lightboxPaintMode) ? "crosshair" : "";
+  els.lightboxPaintCanvas.style.cursor = ["crop", "fill", "pick-color", "pen"].includes(lightboxPaintMode) ? "crosshair" : "";
   const sizeRange = lightboxPaintSizeRanges[lightboxPaintMode];
   if (sizeRange) {
     els.lightboxPaintSize.min = sizeRange.min;
@@ -12174,6 +12669,9 @@ function setLightboxPaintMode(mode) {
     lightboxPaintSizes[lightboxPaintMode] = Math.max(sizeRange.min, Math.min(sizeRange.max, lightboxPaintSizes[lightboxPaintMode]));
     els.lightboxPaintSize.value = lightboxPaintSizes[lightboxPaintMode];
   }
+  $("lightboxPenTool").classList.toggle("active", lightboxPaintMode === "pen");
+  $("lightboxPenTool").setAttribute("aria-pressed", String(lightboxPaintMode === "pen"));
+  syncLightboxSelectionOverlay();
   const isFill = lightboxPaintMode === "fill";
   const isColorBrush = lightboxPaintMode === "color-brush";
   const toolColor = $("lightboxToolColor");
@@ -12191,7 +12689,7 @@ function setLightboxPaintMode(mode) {
   els.lightboxPaintFill.setAttribute("aria-pressed", String(isFill));
   $("lightboxColorBrush").setAttribute("aria-pressed", String(isColorBrush));
   $("lightboxColorPicker").setAttribute("aria-pressed", String(lightboxPaintMode === "pick-color"));
-  const annotateColor = isColorBrush || lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || isFill;
+  const annotateColor = isColorBrush || lightboxPaintMode === "brush" || lightboxPaintMode === "arrow" || lightboxPaintMode === "rect" || lightboxPaintMode === "pen" || isFill;
   els.lightboxPaintFill.classList.toggle("active", isFill);
   els.lightboxPaintSizeField.classList.toggle("hidden", isFill);
   if (!isFill) commitLightboxLastFill();
@@ -12203,7 +12701,7 @@ function setLightboxPaintMode(mode) {
   els.lightboxPaintEraser.setAttribute("aria-pressed", String(lightboxPaintMode === "eraser"));
   els.lightboxPaintArrow.classList.toggle("active", lightboxPaintMode === "arrow");
   els.lightboxPaintRect.classList.toggle("active", lightboxPaintMode === "rect");
-  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop", "fill", "pick-color", "color-brush"].includes(lightboxPaintMode));
+  els.lightboxPaintOptions.classList.toggle("hidden", ["idle", "transform", "crop", "fill", "pick-color", "color-brush", "pen"].includes(lightboxPaintMode));
   els.lightboxPaintColorField.classList.toggle("hidden", !annotateColor);
   els.lightboxPaintColor.disabled = !annotateColor;
   els.lightboxPaintCanvas.classList.toggle("transform-mode", lightboxPaintMode === "transform");
@@ -12243,6 +12741,7 @@ function hideLightboxBrushRing() {
 
 function drawLightboxPaintSegment(context, action, from, to) {
   context.save();
+  if (action.selection) context.clip(action.selection.clip);
   context.globalCompositeOperation = action.mode === "eraser" ? "destination-out" : "source-over";
   context.strokeStyle = (lightboxFillSettings.keepLines && action.inkPattern) || action.color;
   context.lineWidth = action.size;
@@ -12260,6 +12759,7 @@ function drawLightboxShape(context, action) {
   const end = action.points[action.points.length - 1];
   if (!start || !end) return;
   context.save();
+  if (action.selection) context.clip(action.selection.clip);
   context.globalCompositeOperation = "source-over";
   context.strokeStyle = action.color;
   context.fillStyle = action.color;
@@ -12422,10 +12922,11 @@ function updateLightboxPaintUndo() {
 }
 
 function captureLightboxEditState() {
-  return { base: lightboxEditBase, width: els.lightboxPaintCanvas.width, height: els.lightboxPaintCanvas.height, actions: lightboxPaintActions.slice(), fills: lightboxFillActions.slice(), placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
+  return { selectionState: captureLightboxSelection(), base: lightboxEditBase, width: els.lightboxPaintCanvas.width, height: els.lightboxPaintCanvas.height, actions: lightboxPaintActions.slice(), fills: lightboxFillActions.slice(), placed: cloneLightboxPlacedImage(), selected: lightboxPlacedSelected, flipX: lightboxBaseFlipX, flipY: lightboxBaseFlipY };
 }
 
 function restoreLightboxEditState(snapshot) {
+  restoreLightboxSelection(snapshot.selectionState);
   lightboxEditBase = snapshot.base;
   els.lightboxPaintCanvas.width = lightboxPaintOverlay.width = snapshot.width;
   els.lightboxPaintCanvas.height = lightboxPaintOverlay.height = snapshot.height;
@@ -12438,7 +12939,7 @@ function restoreLightboxEditState(snapshot) {
 }
 
 function undoLightboxPaint() {
-  if (!lightboxPainting || lightboxDrawing || !lightboxEditUndoStack.length) return;
+  if (!lightboxPainting || lightboxDrawing || lightboxPenDrag || !lightboxEditUndoStack.length) return;
   clearLightboxCrop();
   lightboxDrawing = false;
   lightboxPaintCurrentAction = null;
@@ -12453,7 +12954,7 @@ function undoLightboxPaint() {
 }
 
 function redoLightboxPaint() {
-  if (!lightboxPainting || lightboxDrawing || !lightboxEditRedoStack.length) return;
+  if (!lightboxPainting || lightboxDrawing || lightboxPenDrag || !lightboxEditRedoStack.length) return;
   clearLightboxCrop();
   lightboxDrawing = false; lightboxPaintCurrentAction = null;
   const entry = lightboxEditRedoStack.pop();
@@ -12564,6 +13065,7 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   ev.stopPropagation();
   if (lightboxPaintMode === "idle") return;
   const p = paintCanvasPoint(ev);
+  if (lightboxPaintMode === "pen") return beginLightboxPen(ev, p);
   if (lightboxPaintMode === "pick-color") {
     const canvas = els.lightboxPaintCanvas;
     if (p.x < 0 || p.y < 0 || p.x >= canvas.width || p.y >= canvas.height) return;
@@ -12606,13 +13108,13 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
   lightboxDrawing = true;
   els.lightboxPaintCanvas.setPointerCapture(ev.pointerId);
   if (lightboxPaintMode === "arrow" || lightboxPaintMode === "rect") {
-    lightboxPaintCurrentAction = { kind: lightboxPaintMode, mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p, { ...p }] };
+    lightboxPaintCurrentAction = { selection: lightboxSelection, kind: lightboxPaintMode, mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p, { ...p }] };
     lightboxPaintActions.push(lightboxPaintCurrentAction);
     rebuildLightboxPaintOverlay();
     updateLightboxPaintUndo();
     return;
   }
-  lightboxPaintCurrentAction = { mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p] };
+  lightboxPaintCurrentAction = { selection: lightboxSelection, mode: lightboxPaintMode, color: els.lightboxPaintColor.value, size: Number(els.lightboxPaintSize.value) * p.scale, points: [p] };
   if (lightboxPaintMode === "color-brush") {
     const action = lightboxPaintCurrentAction;
     try {
@@ -12650,6 +13152,7 @@ els.lightboxPaintCanvas.addEventListener("pointerdown", ev => {
 
 els.lightboxPaintCanvas.addEventListener("pointermove", ev => {
   if (lightboxViewDrag) return;
+  if (lightboxPenDrag) return moveLightboxPen(ev);
   if (lightboxCropDrag) return updateLightboxCrop(paintCanvasPoint(ev));
   if (lightboxTransformDrag) return updateLightboxPlacedTransform(paintCanvasPoint(ev));
   if (lightboxPaintMode === "transform") {
@@ -12678,6 +13181,7 @@ els.lightboxPaintCanvas.addEventListener("pointerleave", () => {
 });
 
 function finishLightboxPointerAction(ev) {
+  if (finishLightboxPen(ev)) return;
   if (lightboxViewDrag) return;
   if (lightboxCropDrag) {
     if (ev.type === "pointercancel") clearLightboxCrop();
@@ -13016,6 +13520,8 @@ async function applyLightboxFillAt(point) {
   const canvas = els.lightboxPaintCanvas;
   const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(point.x)));
   const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(point.y)));
+  const selection = lightboxSelection;
+  if (selection && !selection.mask[y * canvas.width + x]) return;
   const session = lightboxFillActions;
   lightboxFillBusy = true;
   canvas.style.cursor = "progress";
@@ -13034,9 +13540,10 @@ async function applyLightboxFillAt(point) {
     const seed = { x, y };
     const mask = material ? selectMaterialRegion(source, x, y, { tolerance }).mask
       : lightboxSketchMask(selectionSource, seed, tolerance, lineWidth, preprocess);
+    if (selection && mask) for (let i = 0; i < mask.length; i++) mask[i] &= selection.mask[i];
     if (!mask?.some(Boolean)) return;
     const action = { kind: "fill", seed, color, tolerance, lineWidth, ...buildLightboxFillLayer(mask, source, color, material ? seed : null),
-      source, selectionSource, mask, preprocess, material };
+      source, selectionSource, mask, preprocess, material, selection };
     lightboxFillActions.push(action);
     markLightboxFillLayerDirty();
     pushLightboxEditUndo(() => {
@@ -13087,6 +13594,7 @@ function reapplyLightboxLastFill() {
     ? selectMaterialRegion(action.source, action.seed.x, action.seed.y, { tolerance }).mask
     : lightboxSketchMask(action.selectionSource, action.seed, tolerance, lineWidth, action.preprocess)
       || new Uint8Array(action.source.width * action.source.height);
+  if (action.selection) for (let i = 0; i < action.mask.length; i++) action.mask[i] &= action.selection.mask[i];
   Object.assign(action, buildLightboxFillLayer(action.mask, action.source, action.color, action.material ? action.seed : null));
   markLightboxFillLayerDirty();
   renderLightboxPaintComposite();
@@ -13244,7 +13752,7 @@ els.lightbox.addEventListener("wheel", ev => {
   if (lightboxPainting) {
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    if (!ev.target.closest("#lightboxPaintCanvas, .lightbox-bg") || lightboxDrawing || lightboxTransformDrag || lightboxCropDrag || lightboxViewDrag) return;
+    if (!ev.target.closest("#lightboxPaintCanvas, .lightbox-bg") || lightboxDrawing || lightboxPenDrag || lightboxTransformDrag || lightboxCropDrag || lightboxViewDrag) return;
     const rect = els.lightboxPaintCanvas.getBoundingClientRect();
     const nextZoom = Math.max(.25, Math.min(16, lightboxViewZoom * Math.exp(-ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? window.innerHeight : 1) * .0015)));
     const ratio = nextZoom / lightboxViewZoom;
@@ -13817,7 +14325,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
     );
-    items.push(["添加AI视频节点", () => addAiVideoNode(p.x, p.y, [])], ["添加对话节点", () => addNode("chat", p.x, p.y)]);
+    items.push(["添加AI视频节点", () => addAiVideoNode(p.x, p.y, [])], ["添加视频引用节点", () => addVideoRefNode(p.x, p.y)], ["添加对话节点", () => addNode("chat", p.x, p.y)]);
     if (state.settings.showBrowserNodeMenu !== false) items.push(["添加浏览器生图节点", () => addNode("browser-image", p.x, p.y)]);
     if (state.settings.showLocalSdNodeMenu !== false) items.push(["添加本地 SD 节点", () => addNode("local-sd", p.x, p.y, true, { width: 340, height: 430 })]);
     items.push(
@@ -13855,7 +14363,7 @@ function toolMenuItems(p) {
 // 其中三个「添加××节点」入口沿用常规页「右键菜单节点」卡的独立开关（CONTEXT_MENU_FLAG_ITEMS），其余存 settings.hiddenMenuItems。
 // 基础入口常驻（2026-11-14 用户要求）：不进管理清单、isMenuItemHidden 短路，任何设置（含历史 hiddenMenuItems 残留）都隐藏不了。
 const RESIDENT_CONTEXT_MENU_ITEMS = new Set([
-  "粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加对话节点", "拓展",
+  "粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加视频引用节点", "添加对话节点", "拓展",
 ]);
 const CONTEXT_MENU_MANAGER_GROUPS = [
   { title: "画布空白处", items: [
@@ -14163,7 +14671,7 @@ els.viewport.addEventListener("dragover", ev => {
   ev.preventDefault();
   if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
   els.nodes.querySelectorAll(".image-drop-target").forEach(el => el.classList.remove("image-drop-target"));
-  ev.target.closest(".node.image")?.classList.add("image-drop-target");
+  ev.target.closest(".node.image, .node.video-ref")?.classList.add("image-drop-target");
 });
 
 els.viewport.addEventListener("dragleave", ev => {
@@ -14171,10 +14679,39 @@ els.viewport.addEventListener("dragleave", ev => {
   if (!imageDragDepth || !els.viewport.contains(ev.relatedTarget)) clearImageDragState();
 });
 
+// 拖入的是视频文件（MP4/MOV/WebM）→ 走视频引用链路，不进图片分支
+function droppedVideoFile(dataTransfer) {
+  return Array.from(dataTransfer?.files || []).find(file => /\.(mp4|mov|webm)$/i.test(file.name || "")) || null;
+}
+
+async function adoptDroppedVideoRef(targetNodeId, file, worldPos) {
+  const node = targetNodeId ? findNode(targetNodeId) : addVideoRefNode(worldPos.x, worldPos.y);
+  if (!node || node.type !== "video-ref") return;
+  try {
+    await adoptVideoRefFile(node, file);
+    state.selected = new Set([node.id]);
+    pushHistory();
+    render();
+    toast(node.videoPath ? `已引用本地视频「${node.fileName}」（生成时按路径上传）` : `视频已上传为参考链接（约 3 天内有效）：${node.fileName}`);
+  } catch (error) {
+    console.error("[视频引用] 拖入失败", error);
+    toast(`视频引用失败：${error.message || "文件无法读取"}`);
+    render();
+  }
+}
+
 els.viewport.addEventListener("drop", async ev => {
   ev.preventDefault();
   if (ev.dataTransfer?.getData("application/x-canvasflow-internal-image") === "1") {
     clearImageDragState();
+    return;
+  }
+  const droppedVideo = droppedVideoFile(ev.dataTransfer);
+  if (droppedVideo) {
+    const targetVideoRefEl = ev.target.closest(".node.video-ref");
+    clearImageDragState();
+    const p = screenToWorld(ev.clientX, ev.clientY);
+    await adoptDroppedVideoRef(targetVideoRefEl?.dataset.id || "", droppedVideo, p);
     return;
   }
   const targetNodeEl = ev.target.closest(".node.image");
@@ -15553,6 +16090,11 @@ els.hideNodeTitles.onchange = () => {
 
 els.editOnOverlap.onchange = () => {
   state.settings.editOnOverlap = els.editOnOverlap.checked;
+  pushHistory();
+};
+
+els.aiResultAsImageNode.onchange = () => {
+  state.settings.aiResultAsImageNode = els.aiResultAsImageNode.checked;
   pushHistory();
 };
 

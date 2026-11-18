@@ -316,6 +316,21 @@ async function chooseImageFile(currentPath) {
   return { cancelled: false, name: path.basename(selected), mime, size: stat.size, data: fs.readFileSync(selected).toString("base64") };
 }
 
+// 视频引用节点选文件：只返回绝对路径与大小，不读内容不落盘（文件原地不动，上传按路径读盘）
+async function chooseVideoFile() {
+  const options = {
+    title: "选择参考视频（MP4 / MOV / WebM）",
+    filters: [{ name: "视频文件", extensions: ["mp4", "mov", "webm"] }],
+    properties: ["openFile"],
+  };
+  const result = await dialog.showOpenDialog(mainWindow, options);
+  if (result.canceled || !result.filePaths.length) return { cancelled: true, path: "" };
+  const selected = result.filePaths[0];
+  let size = 0;
+  try { size = fs.statSync(selected).size; } catch { size = 0; }
+  return { cancelled: false, path: selected, name: path.basename(selected), bytes: size };
+}
+
 async function choosePsExe() {
   const isWin = process.platform === "win32";
   const options = {
@@ -371,6 +386,7 @@ function registerIpc() {
   ipcMain.handle("desktop:get-ps-path", () => wrapIpc(() => psInterop.getPsPath()));
   ipcMain.handle("desktop:save-ps-path", (_event, payload) => wrapIpc(() => psInterop.savePsPath(payload.path)));
   ipcMain.handle("desktop:choose-ps-exe", () => choosePsExe());
+  ipcMain.handle("desktop:choose-video-file", () => chooseVideoFile());
   ipcMain.handle("desktop:launch-in-ps", async (_event, payload) => {
     try {
       return await psInterop.launchInPs(payload.outputPath, payload.fileName, payload.assetId);

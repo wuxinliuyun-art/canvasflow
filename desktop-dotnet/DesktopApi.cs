@@ -97,7 +97,7 @@ internal sealed class DesktopApi
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
-        or "/api/agtoken/video-generate" or "/api/apimart/video-generate" or "/api/download-video"
+        or "/api/agtoken/video-generate" or "/api/apimart/video-generate" or "/api/apimart/video-upload" or "/api/download-video"
         or "/api/chat/completions" or "/api/chat-custom/models"
         or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/workflows/user-list" or "/api/comfyui/object-info" or "/api/comfyui/run" or "/api/comfyui/cancel"
         or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
@@ -229,6 +229,13 @@ internal sealed class DesktopApi
                 var apimartTaskId = Uri.UnescapeDataString(path["/api/apimart/video-task/".Length..]);
                 if (!Regex.IsMatch(apimartTaskId, @"^[A-Za-z0-9._:\-_]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
                 return await ProxyApiAsync(HttpMethod.Get, "/v1/tasks/" + Uri.EscapeDataString(apimartTaskId), null, cancellationToken);
+            }
+            if (method == "POST" && path == "/api/apimart/video-upload")
+            {
+                // 视频引用上传：本地参考视频换 apimart 公网 URL（3 天档，免费额度内免费）。
+                // 与 server.js 同名路由逐项对齐：body {filePath}（读盘，文件原地不动）或 {fileName, base64}
+                //（浏览器拖拽拿不到路径，读内存上传）；文件字节不落盘、不进存档。单上游直连，无镜像。
+                return await UploadVideoReferenceAsync(body, apiKey, cancellationToken);
             }
             if (method == "POST" && path == "/api/download-video") return await DownloadVideoAsync(body, cancellationToken);
             if (method == "POST" && path == "/api/chat/completions")
@@ -535,6 +542,89 @@ internal sealed class DesktopApi
             return Json(200, new { base64 = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}" });
         }
         throw new HttpRequestException("图片下载重定向次数过多");
+    }
+
+    // 视频引用上传：本地参考视频换 apimart 公网 URL（3 天档）。与 server.js /api/apimart/video-upload
+    // 逐项对齐：filePath 读盘 / base64 解码（浏览器拖拽），50MB 上限、扩展名白名单、剥 _apiKey、
+    // 文件字节不落盘不进存档；响应归一为 {url, expiresAt, bytes, fileName}，失败 {error:"<字符串>"}。
+    private async Task<DesktopApiResponse> UploadVideoReferenceAsync(string body, string apiKey, CancellationToken cancellationToken)
+    {
+        var payload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("上传参数为空");
+        var uploadPayloadKey = payload.TryGetPropertyValue("_apiKey", out var uploadKeyNode) ? uploadKeyNode?.GetValue<string>() ?? "" : "";
+        payload.Remove("_apiKey");
+        var uploadApiKey = string.IsNullOrWhiteSpace(uploadPayloadKey) ? apiKey : uploadPayloadKey;
+        if (string.IsNullOrWhiteSpace(uploadApiKey)) uploadApiKey = _getApiKey();
+
+        var fileName = payload.TryGetPropertyValue("fileName", out var uploadNameNode) ? uploadNameNode?.GetValue<string>() ?? "" : "";
+        fileName = Regex.Replace(fileName, @"[\\/]", "_").Trim();
+        if (fileName.Length > 120 || fileName.Length == 0) fileName = "reference.mp4";
+        byte[] fileBytes;
+        var sourcePath = payload.TryGetPropertyValue("filePath", out var uploadPathNode) ? uploadPathNode?.GetValue<string>() ?? "" : "";
+        if (!string.IsNullOrWhiteSpace(sourcePath))
+        {
+            if (!Regex.IsMatch(sourcePath, @"\.(mp4|mov|webm)$", RegexOptions.IgnoreCase)) throw new InvalidDataException("参考视频仅支持 MP4 / MOV / WebM 文件");
+            if (!File.Exists(sourcePath)) throw new InvalidDataException("找不到视频文件：" + sourcePath + "（文件可能已被移动或删除）");
+            var info = new FileInfo(sourcePath);
+            if (info.Length > 50L * 1024 * 1024) throw new InvalidDataException($"视频文件超过上传上限 50MB（当前 {info.Length / 1024.0 / 1024.0:F1}MB）");
+            if (payload["fileName"] is null) fileName = info.Name;
+            fileBytes = await File.ReadAllBytesAsync(sourcePath, cancellationToken);
+        }
+        else if (payload.TryGetPropertyValue("base64", out var uploadB64Node) && !string.IsNullOrWhiteSpace(uploadB64Node?.GetValue<string>()))
+        {
+            var clean = uploadB64Node!.GetValue<string>()!;
+            var prefix = clean.IndexOf(";base64,", StringComparison.Ordinal);
+            if (clean.StartsWith("data:", StringComparison.Ordinal) && prefix >= 0) clean = clean[(prefix + ";base64,".Length)..];
+            try { fileBytes = Convert.FromBase64String(clean); }
+            catch (FormatException) { throw new InvalidDataException("视频内容不是有效的 base64 数据，请重新选择文件"); }
+            if (fileBytes.Length == 0) throw new InvalidDataException("视频内容为空，请重新选择文件");
+            if (fileBytes.Length > 50L * 1024 * 1024) throw new InvalidDataException($"视频文件超过上传上限 50MB（当前 {fileBytes.Length / 1024.0 / 1024.0:F1}MB）");
+        }
+        else
+        {
+            throw new InvalidDataException("缺少视频来源（filePath 或 base64）");
+        }
+
+        var mime = fileName.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ? "video/quicktime"
+            : fileName.EndsWith(".webm", StringComparison.OrdinalIgnoreCase) ? "video/webm" : "video/mp4";
+        var boundary = "----canvasflow" + Guid.NewGuid().ToString("N")[..16];
+        using var multipart = new MultipartFormDataContent(boundary);
+        var fileContent = new ByteArrayContent(fileBytes);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mime);
+        // 与 server.js 同款：multipart 文件名走百分号编码，避免非 ASCII 文件名直接进 Content-Disposition
+        multipart.Add(fileContent, "file", Uri.EscapeDataString(fileName));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.apimart.ai/v1/uploads/videos?retention_days=3");
+        request.Version = HttpVersion.Version11;
+        request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", uploadApiKey.Trim());
+        request.Content = multipart;
+        _log($"[视频引用] 上传 {fileName}（{fileBytes.Length / 1024.0 / 1024.0:F1} MB）到 apimart", false);
+        using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        JsonObject? upstream = null;
+        try { upstream = JsonNode.Parse(responseBody)?.AsObject(); } catch { /* 非 JSON 响应按原状态报错 */ }
+
+        string? ReadJsonString(JsonNode? node)
+        {
+            if (node is null || node.GetValueKind() != JsonValueKind.String) return null;
+            return node.GetValue<string>();
+        }
+        var upstreamUrl = ReadJsonString(upstream?["url"]) ?? "";
+        if ((int)response.StatusCode is < 200 or >= 300 || string.IsNullOrWhiteSpace(upstreamUrl))
+        {
+            var message = (upstream?["error"] is JsonObject errObj ? ReadJsonString(errObj["message"]) : ReadJsonString(upstream?["error"]))
+                ?? ReadJsonString(upstream?["message"]);
+            if (string.IsNullOrWhiteSpace(message)) message = $"视频上传失败（HTTP {(int)response.StatusCode}）";
+            _log($"[视频引用] 上传失败 HTTP {(int)response.StatusCode}: {message}", true);
+            var mappedStatus = (int)response.StatusCode is 401 or 402 or 413 ? (int)response.StatusCode : 502;
+            return Json(mappedStatus, new { error = message });
+        }
+        var expiresAt = 0L;
+        if (upstream?["expires_at"] is JsonValue expiresVal && expiresVal.GetValueKind() == JsonValueKind.Number)
+        {
+            try { expiresAt = expiresVal.GetValue<long>() * 1000L; } catch { expiresAt = 0L; }
+        }
+        _log($"[视频引用] 上传成功 {fileName}（有效期至 {expiresAt}）", false);
+        return Json(200, new { url = upstreamUrl, expiresAt, bytes = fileBytes.Length, fileName });
     }
 
     // 视频成片落盘：把上游临时视频链接下载到 {数据根}\download\videos，节点只保存文件名；

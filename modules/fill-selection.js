@@ -1,5 +1,41 @@
 const LIGHTBOX_FILL_HARD_MARGIN = 15;
 
+// 钢笔几何独立于 DOM；坐标始终使用原图像素，缩放不改变路径。
+function penSelectionPathData(points, closed = false) {
+  if (!points.length) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  const count = points.length - 1 + (closed ? 1 : 0);
+  for (let i = 0; i < count; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    d += ` C ${a.out.x} ${a.out.y} ${b.in.x} ${b.in.y} ${b.x} ${b.y}`;
+  }
+  return d + (closed ? " Z" : "");
+}
+
+function movePenSelectionPoint(point, target, part, independent = false) {
+  if (part === "anchor") {
+    const dx = target.x - point.x, dy = target.y - point.y;
+    for (const handle of [point.in, point.out]) { handle.x += dx; handle.y += dy; }
+    point.x = target.x; point.y = target.y;
+  } else {
+    point[part] = { x: target.x, y: target.y };
+    if (!independent) point[part === "in" ? "out" : "in"] = { x: 2 * point.x - target.x, y: 2 * point.y - target.y };
+  }
+}
+
+function combinePenSelectionMasks(previous, incoming, operation) {
+  const result = new Uint8Array(incoming.length);
+  for (let i = 0; i < result.length; i++) {
+    result[i] = operation === "add" ? Number(!!previous?.[i] || !!incoming[i])
+      : operation === "subtract" ? Number(!!previous?.[i] && !incoming[i]) : Number(!!incoming[i]);
+  }
+  return result;
+}
+
+if (typeof module !== "undefined" && module.exports) Object.assign(module.exports, {
+  penSelectionPathData, movePenSelectionPoint, combinePenSelectionMasks,
+});
+
 // 二值掩膜的可分离膨胀：半径 radius 内任一像素为 1 则输出 1；tmp 为同尺寸暂存
 function dilateBinaryMask(src, width, height, radius, dst, tmp) {
   if (radius <= 0) { dst.set(src); return dst; }

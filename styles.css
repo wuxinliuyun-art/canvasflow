@@ -998,10 +998,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .chat-tool-btn.is-busy { color: var(--danger); }
 .chat-tool-btn.is-send { color: var(--text); }
 .chat-tool-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
-.chat-enumerate-toggle { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; line-height: 1; cursor: pointer; user-select: none; }
-.chat-enumerate-toggle input { width: 14px; height: 14px; margin: 0; accent-color: var(--primary); cursor: pointer; }
-.chat-enumerate-toggle:has(input:checked) { color: var(--text); }
-.chat-enumerate-toggle input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .chat-node-error { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .chat-messages {
   flex: 1 1 auto;
@@ -2214,14 +2210,13 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .lightbox-brush-ring { position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; border: 1px dashed rgba(255,255,255,.95); border-radius: 50%; }
 .lightbox-brush-ring::before { content: ""; position: absolute; inset: 1px; border: 1px dashed rgba(0,0,0,.6); border-radius: 50%; }
 .lightbox-paint-canvas.transform-mode.is-rotate-target { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M18.4 7.2A8 8 0 1 0 20 12' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='m16 3 3 4-5 1' fill='%23fff' stroke='%23000' stroke-width='.8'/%3E%3Cpath d='M18.4 7.2A8 8 0 1 0 20 12' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair; }
-.lightbox-mirror-tools { position: fixed; z-index: 4; display: grid; gap: 6px; transform: translateY(-50%); }
+.lightbox-mirror-tools { position: fixed; z-index: 4; display: grid; gap: 4px; transform: translateY(-50%); }
 .lightbox.is-editing.is-view-pan #lightboxPaintCanvas { cursor: grab !important; }
 .lightbox.is-editing.is-view-pan-active #lightboxPaintCanvas { cursor: grabbing !important; }
-.lightbox-mirror-tools button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 9px; background: #17181c; color: var(--inverse-text); font-size: 18px; line-height: 1; box-shadow: 0 8px 22px rgba(0,0,0,.42); }
-.lightbox-mirror-tools svg { display: block; width: 20px; height: 20px; }
+.lightbox-mirror-tools button { position: relative; display: grid; place-items: center; width: 80px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-solid); color: var(--text); font-size: 12px; line-height: 1; box-shadow: none; }
+.lightbox-mirror-tools svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; width: 20px; height: 20px; }
 .lightbox-side-actions { display: grid; gap: 4px; max-height: 48vh; overflow-y: auto; }
-.lightbox-side-actions button { width: 80px; height: 32px; border-radius: 8px; background: var(--panel-solid); color: var(--text); border-color: var(--line); font-size: 12px; box-shadow: none; }
-.lightbox-side-actions button:is(:hover, .active) { background: var(--panel-2); }
+.lightbox-mirror-tools button:is(:hover, .active) { background: var(--panel-2); }
 .lightbox-canvas-picker { position: fixed; z-index: 5; left: 50%; bottom: 92px; width: min(540px, calc(100vw - 32px)); max-height: min(510px, calc(100vh - 150px)); overflow: hidden; transform: translateX(-50%); border: 1px solid rgba(255,255,255,.22); border-radius: 13px; background: rgba(20,20,24,.96); color: var(--inverse-text); box-shadow: 0 18px 60px rgba(0,0,0,.45); }
 .lightbox-canvas-picker-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.14); }
 .lightbox-canvas-picker-head button { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--inverse-text); font-size: 20px; }
@@ -4278,6 +4273,79 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   accent-color: var(--primary);
   cursor: pointer;
 }
+
+/* 视频引用节点（video-ref）：本地视频文件引用，不复制文件进项目数据 */
+.video-ref-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px 12px;
+}
+
+.video-ref-file {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--panel-solid);
+}
+
+.video-ref-name {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.video-ref-meta {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.video-ref-status { display: flex; }
+
+.video-ref-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.video-ref-badge.is-ready { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, var(--line)); }
+.video-ref-badge.is-uploading { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
+.video-ref-badge.is-path { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
+
+.video-ref-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.video-ref-actions button {
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.video-ref-actions button:hover { background: color-mix(in srgb, var(--primary) 12%, var(--panel-solid)); }
+.video-ref-actions button:active { opacity: .75; }
+
+.video-ref-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 /* Shared palette controls. Swatch colors are user data. */
 :root, .theme-dark { --palette-ink-dark: #454545; --palette-ink-light: #fff; }
 .quick-palette { display: grid; gap: 4px; min-width: 0; }
@@ -4381,7 +4449,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .region-hue-dialog :is(button, select, input) { cursor: pointer; }
 .region-hue-dialog :is(button, select, input):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* 参数面板绝对定位在画布右侧（左侧留给调色盘，2026-11-15）；112px = 镜像工具条 80px + 两侧 16px 间距 */
-.region-hue-inline { position: absolute; z-index: 20; right: 112px; top: 96px; width: clamp(224px, 16vw, 304px); max-width: 100%; max-height: calc(100% - 32px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); display: flex; flex-direction: column; gap: 8px; }
+.region-hue-inline { position: absolute; z-index: 20; right: 112px; top: 50%; transform: translateY(-50%); width: clamp(224px, 16vw, 304px); max-width: 100%; max-height: calc(100vh - 256px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); display: flex; flex-direction: column; gap: 8px; }
 .region-hue-inline .palette-mask-surface { display: none; }
 .region-hue-inline h2 { font-size: 14px; margin: 0; }
 .region-hue-inline p { font-size: 12px; line-height: 1.4; margin: 0; }
@@ -4541,7 +4609,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .node.palette .quick-palette { gap: 8px; }
 @media (max-width: 767px) {
   .lightbox-left-tools { left: 16px; top: 16px; transform: none; width: 192px; max-height: 44vh; }
-  .region-hue-inline { right: 16px; top: 16px; width: 192px; max-height: 44vh; }
+  .region-hue-inline { right: 16px; top: 50%; width: 192px; max-height: calc(100vh - 256px); }
 }
 
 .update-prompt-dialog::backdrop { background: color-mix(in srgb, var(--text) 36%, transparent); }
@@ -4711,3 +4779,16 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   line-height: 16px;
   cursor: pointer;
 }
+
+/* 钢笔选区：提示层独立于输出图片，所有尺寸随原图坐标同步。 */
+.lightbox-selection-overlay { position: fixed; z-index: 3; pointer-events: none; }
+/* 钢笔与选区并入原有底部黑色工具条。 */
+.lightbox.is-editing .lightbox-paint-toolbar { bottom: 24px; flex-wrap: wrap; justify-content: center; padding: 8px; max-height: calc(100vh - 64px); overflow: auto; }
+.lightbox-selection-options { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: inherit; }
+.lightbox-selection-options label { display: flex; align-items: center; gap: 8px; color: inherit; }
+.lightbox-selection-options select { min-width: 104px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--node-control); color: var(--text); font-size: 12px; }
+.lightbox-selection-options button { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+.lightbox-selection-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* 钢笔参数只在选中钢笔时展开，工具入口保持常显。 */
+.lightbox-selection-options #lightboxPenTool[aria-pressed="false"] ~ :not(button) { display: none; }

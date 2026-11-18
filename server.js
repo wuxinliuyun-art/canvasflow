@@ -930,6 +930,68 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // 视频引用上传：把本地参考视频换成 apimart 公网 URL（3 天档，免费额度内免费）。
+  // body 两种来源：{filePath}（桌面/服务器按路径读盘，文件原地不动）或 {fileName, base64}
+  // （浏览器拖拽拿不到路径，读内存上传）。文件字节不落盘、不进存档。
+  if (pathname === "/api/apimart/video-upload" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 96 * 1024 * 1024);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey("apimart") || "";
+      delete payload._apiKey;
+      let fileBuffer = null;
+      let fileName = String(payload.fileName || "reference.mp4").replace(/[\\/]/g, "_").slice(0, 120) || "reference.mp4";
+      if (payload.filePath) {
+        const filePath = String(payload.filePath);
+        if (!/\.(mp4|mov|webm)$/i.test(filePath)) throw new Error("参考视频仅支持 MP4 / MOV / WebM 文件");
+        if (!fs.existsSync(filePath)) throw new Error("找不到视频文件：" + filePath + "（文件可能已被移动或删除）");
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) throw new Error("目标路径不是文件：" + filePath);
+        if (stat.size > 50 * 1024 * 1024) throw new Error(`视频文件超过上传上限 50MB（当前 ${(stat.size / 1024 / 1024).toFixed(1)}MB）`);
+        fileBuffer = fs.readFileSync(filePath);
+        fileName = payload.fileName || filePath.split(/[\\/]/).pop() || fileName;
+      } else if (payload.base64) {
+        const clean = String(payload.base64).replace(/^data:[^;,]*;base64,/, "");
+        fileBuffer = Buffer.from(clean, "base64");
+        if (!fileBuffer.length) throw new Error("视频内容为空，请重新选择文件");
+        if (fileBuffer.length > 50 * 1024 * 1024) throw new Error(`视频文件超过上传上限 50MB（当前 ${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB）`);
+      } else {
+        throw new Error("缺少视频来源（filePath 或 base64）");
+      }
+      const mime = /\.mov$/i.test(fileName) ? "video/quicktime" : /\.webm$/i.test(fileName) ? "video/webm" : "video/mp4";
+      const boundary = "----canvasflow" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      const multipart = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${encodeURIComponent(fileName)}"\r\nContent-Type: ${mime}\r\n\r\n`),
+        fileBuffer,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+      // 上传接口直连主域名（无镜像通道），multipart 体不走 tryProxyRequest 的 JSON 包装
+      const { status, body: resBody } = await proxyRequest(
+        "POST",
+        "https://api.apimart.ai/v1/uploads/videos?retention_days=3",
+        { Authorization: `Bearer ${apiKey}`, "Content-Type": `multipart/form-data; boundary=${boundary}` },
+        multipart,
+        300000
+      );
+      let upstream = {};
+      try { upstream = JSON.parse(resBody.toString()); } catch (_) { /* 非 JSON 响应按原样报错 */ }
+      if (status < 200 || status >= 300 || !upstream.url) {
+        const message = upstream.error?.message || upstream.message || `视频上传失败（HTTP ${status}）`;
+        console.log(`[VideoUpload] apimart 上传失败 HTTP ${status}: ${message}`);
+        res.writeHead(status === 401 || status === 402 || status === 413 ? status : 502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+        return;
+      }
+      console.log(`[VideoUpload] apimart 上传成功 ${fileName} ${upstream.bytes || fileBuffer.length}B 有效期至 ${upstream.expires_at || "?"}`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ url: upstream.url, expiresAt: Number(upstream.expires_at) * 1000 || 0, bytes: Number(upstream.bytes) || fileBuffer.length, fileName }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message || "视频上传失败" }));
+    }
+    return;
+  }
+
   // 视频结果落盘：把上游返回的临时视频链接（约 24 小时有效）下载到 download/videos，
   // 节点只保存文件名，播放地址由前端按运行模式拼装（浏览器 /download/videos/…，桌面 canvasflow-videos.local）。
   if (pathname === "/api/download-video" && req.method === "POST") {

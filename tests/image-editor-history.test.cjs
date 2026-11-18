@@ -11,7 +11,8 @@ function editor() {
     lightboxPainting: true, lightboxEditUndoStack: [], lightboxEditRedoStack: [],
     lightboxPaintActions: [], lightboxFillActions: [], lightboxEditBase: null,
     lightboxPlacedImage: null, lightboxPlacedSelected: false, lightboxBaseFlipX: false, lightboxBaseFlipY: false,
-    lightboxLastFill: null, lightboxPaintOverlay: {}, lightboxDrawing: false, lightboxPaintCurrentAction: null,
+    lightboxLastFill: null, lightboxPaintOverlay: {}, lightboxDrawing: false, lightboxPenDrag: null, lightboxPaintCurrentAction: null,
+    captureLightboxSelection: () => ({}), restoreLightboxSelection() {},
     els: { lightboxPaintCanvas: { width: 100, height: 80 }, lightboxPaintUndo: {} },
     clearLightboxCrop() {}, syncLightboxPlacedControls() {}, rebuildLightboxPaintOverlay() {},
     markLightboxFillLayerDirty() {}, updateLightboxPaintDisplaySize() {}, commitLightboxLastFill() {}

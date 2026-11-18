@@ -110,6 +110,7 @@ public partial class MainWindow : Window
           getPsPath: () => invoke("desktop:get-ps-path"),
           savePsPath: path => invoke("desktop:save-ps-path", { path: String(path || "") }),
           choosePsExe: () => invoke("desktop:choose-ps-exe", {}, 60000),
+          chooseVideoFile: () => invoke("desktop:choose-video-file", {}, 60000),
           launchInPs: (filePath, fileName, assetId) => invoke("desktop:open-in-ps", { filePath: String(filePath || ""), fileName: String(fileName || ""), assetId: String(assetId || "") }, 60000),
           chooseComfyFolder: currentPath => invoke("desktop:choose-comfy-folder", { currentPath: String(currentPath || "") }, 60000),
           launchComfy: launchPath => invoke("desktop:launch-comfy", { launchPath: String(launchPath || "") }, 60000),
@@ -433,6 +434,12 @@ public partial class MainWindow : Window
                     {
                         try { PostRpcResult(root, ChoosePsExe()); }
                         catch (Exception psChooseError) { PostRpcResult(root, error: psChooseError.Message); }
+                    }
+                    else if (type.GetString() == "desktop:choose-video-file")
+                    {
+                        // 视频引用节点选文件：只返回绝对路径与大小，不读内容不落盘（文件原地不动）
+                        try { PostRpcResult(root, ChooseVideoFile()); }
+                        catch (Exception videoChooseError) { PostRpcResult(root, error: videoChooseError.Message); }
                     }
                     else if (type.GetString() == "desktop:open-in-ps")
                     {
@@ -1265,6 +1272,21 @@ public partial class MainWindow : Window
         File.WriteAllText(PsPathFilePath, picker.FileName, Encoding.UTF8);
         Log($"[PS互传] 已选择 Photoshop 路径：{picker.FileName}", false);
         return new { path = picker.FileName };
+    }
+
+    private object ChooseVideoFile()
+    {
+        // 视频引用节点专用：返回绝对路径，文件字节不经过此桥（上传由 /api/apimart/video-upload 按路径读盘）
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择参考视频（MP4 / MOV / WebM）",
+            Filter = "视频文件 (*.mp4;*.mov;*.webm)|*.mp4;*.mov;*.webm|所有文件 (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (picker.ShowDialog(this) != true) return new { cancelled = true, path = "" };
+        var info = new FileInfo(picker.FileName);
+        Log($"[视频引用] 已选择视频：{picker.FileName}", false);
+        return new { cancelled = false, path = picker.FileName, name = info.Name, bytes = info.Exists ? info.Length : 0L };
     }
 
     private object ChooseComfyFolder(JsonElement request)

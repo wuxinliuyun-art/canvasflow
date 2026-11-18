@@ -11,7 +11,7 @@ function harness() {
   let captured = null, updated = 0;
   const context = {
     lightboxPainting: true, lightboxPanSpaceDown: false, lightboxViewZoom: 3, lightboxViewOffset: { x: 100, y: 80 }, lightboxViewDrag: null,
-    lightboxDrawing: false, lightboxTransformDrag: null, lightboxCropDrag: null,
+    lightboxDrawing: false, lightboxPenDrag: null, lightboxTransformDrag: null, lightboxCropDrag: null,
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     Event: class {}, hideLightboxBrushRing: () => {}, updateLightboxPaintDisplaySize: () => { updated++; },
     els: {
