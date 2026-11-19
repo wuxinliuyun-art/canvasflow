@@ -177,6 +177,11 @@
 - 规则:所有 AI 绘图模型都显示"生成张数"1-4。gpt-image-2.5 系(flare/sunburst,即 `isImage25ExtModel`)上游支持单任务 `n>1`,仍走"一个任务带 n=张数";其余模型在 `buildAiQueueTasks` 拆成 N 个独立任务(每任务 n=1),复用现有队列/并发(上限 5)/单任务取消机制。落位:预览模式下第一张进节点预览、其余各自生成图片节点(image-node),与扇入多支线"多任务各自生成图片节点"的语义一致;"执行全部"对话框的任务数预估必须乘以 `taskCountFactor`(非 ext 模型 = 张数)。
 - 避免:拆分不得改成改 `submitGeneration` 内部循环(那会串起截图任务等所有调用方);预览模式下多图任务的图片节点必须从 baseOrder 起紧凑排布(第一张占预览,不占网格 0 号位),不得恢复"网格空 0 号位"的旧布局;组图/多支线场景全部走 image-node 模式,不适用"首张进预览"调整;新模型若原生支持 n>1,需在 `isImage25ExtModel`/提交流程中显式接入,不能默认拆任务。
 
+### 复制/保存 AI 节点保留内置结果图（2026-11-19，用户要求"收录作图过程"）
+
+- 规则：复制粘贴 AI 绘图/角度变化节点（含跨项目粘贴）**保留生成结果**——`cloneNodeForClipboard` 不再剥离 `generatedImage`（缩略图 dataURL）/`generatedAssetId`（素材仓库原图引用），只清运行态（taskId/generating）。渲染依赖 `generatedImage` 直接作 `<img src>`，缩略图+素材引用的组合正是存档外部化后的标准形态，粘贴后直接可见。桌面跨实例复制由 `copySelection` 既有的 `materializeNodeAssetsForPortableSave` 把 `generatedAssetId` 物化成完整 dataURL 进剪贴板 HTML；同实例粘贴 assetId 全局解析（素材仓库跨项目共享）。保存自定义组件（`captureMultiTemplateImages`）同步保留：AI 节点内置图收进模板（新字段 `templateGeneratedId`，与图片节点的 `templateImageId` 同机制，`hydrateMultiTemplateImages` 回填并 `externalizeImageField(node,"generatedImage","generatedAssetId",…)` 外部化）；**AI/角度结果图片节点**（`aiSourceNodeId`/`angleSourceNodeId`）不再被排除出收录，其 `generationPrompt` 保留（作图过程可追溯），普通图片节点仍剥提示词。单节点「保存为自定义图片」本就经 `resolveNodeImageDataUrl` 含生成图，无需改。
+- 避免：`cloneNodeForClipboard` 的桩测试必须让 `walkNodes` **执行回调**（运行态清零经它分发，空桩会让清零断言落空）；`materializeNodeAssetsForPortableSave`/`migrateNodeAssets` 已统一处理 generatedAssetId 的物化与外部化，勿在别处重复；模板捕获后节点本体的图置空（由 hydrate 回填），capture 与 hydrate 必须成对改。测试 `tests/keep-generated-image.test.cjs`（6 用例：克隆保留/模板捕获/结果节点收录/hydrate 回填/缺记录报错）。
+
 ### 生成图片按提示词「名字：」前缀命名（2026-11-14）
 
 - 规则（用户要求）：AI 生成图片落盘时，若任务提示词以「名字：」起头（如「谷玄一：白底角色立绘，成年男性，黄金铠甲」）→ 文件名直接用「谷玄一」；多段提示词（空行分段、每段段首带名字）→ 名字按出现顺序用「-」连接（如「朗修-夜殇」）。实现：app.js `promptSubjectNameLabels`（纯函数）+ `generatedResultFileName` 改造——提取到名字即整体替换旧的 `YYMMDD-项目-序号` 格式（多图任务的 `_02` 结果序号后缀保留）；提取不到一律回退旧命名（角度变化/截图类任务天然回退）。

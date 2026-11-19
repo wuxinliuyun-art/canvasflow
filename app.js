@@ -2428,30 +2428,33 @@ async function storeMultiTemplateImage(dataUrl, originalName, mime, imageFiles) 
 }
 
 function clearGeneratedTemplateState(node) {
+  // 只清运行态与陈旧的输出路径；生成结果图（AI 节点内置图 / 结果图片节点的图）保留——
+  // 模板插入后要能看到作图结果（用户要求：收录作图过程时图片不丢）
   node.generating = false;
   node.taskId = null;
   node.outputPath = "";
   node._aiProgress = null;
   delete node._queueRunId;
-  if (node.type === "ai-image" || node.type === "angle-image") {
-    node.generatedImage = null;
-    delete node.generatedAssetId;
-    if (Array.isArray(node.batchTasks)) node.batchTasks = [];
-  }
-  if (node.type === "image" && (node.aiSourceNodeId || node.angleSourceNodeId)) {
-    node.image = null;
-    delete node.imageAssetId;
-  }
+  if ((node.type === "ai-image" || node.type === "angle-image") && Array.isArray(node.batchTasks)) node.batchTasks = [];
 }
 
 async function captureMultiTemplateImages(nodes, imageFiles) {
   for (const node of nodes || []) {
     clearGeneratedTemplateState(node);
-    if (node.type === "image" && !node.aiSourceNodeId && !node.angleSourceNodeId && (node.image || node.imageAssetId)) {
+    if ((node.type === "ai-image" || node.type === "angle-image") && (node.generatedImage || node.generatedAssetId)) {
+      // AI 节点内置结果图一并收进模板（templateGeneratedId 与图片节点的 templateImageId 同机制）
+      const dataUrl = await materializeReferenceImage({ image: node.generatedImage || "", assetId: node.generatedAssetId || "", fileName: node.fileName || "generated.png" });
+      node.templateGeneratedId = await storeMultiTemplateImage(dataUrl, node.fileName || "generated.png", node.mime, imageFiles);
+      node.generatedImage = null;
+      delete node.generatedAssetId;
+    }
+    if (node.type === "image" && (node.image || node.imageAssetId)) {
+      // AI/角度结果图片节点（aiSourceNodeId/angleSourceNodeId）同样收录；其生成提示词保留，作图过程可追溯
+      const isResultNode = !!(node.aiSourceNodeId || node.angleSourceNodeId);
       const dataUrl = await materializeReferenceImage({ image: node.image || "", assetId: node.imageAssetId || "", fileName: node.fileName || "template.png" });
       node.templateImageId = await storeMultiTemplateImage(dataUrl, node.fileName, node.mime, imageFiles);
       node.image = null;
-      delete node.generationPrompt;
+      if (!isResultNode) delete node.generationPrompt;
       delete node.imageAssetId;
     }
     for (const image of node.images || []) {
@@ -2493,6 +2496,16 @@ async function saveSelectionAsMultiNodeTemplate() {
 async function hydrateMultiTemplateImages(nodes, imageFiles) {
   const byId = new Map((imageFiles || []).map(image => [image.id, image]));
   for (const node of nodes || []) {
+    if (node.templateGeneratedId) {
+      // AI 节点内置结果图回填：与图片节点同机制读素材副本并外部化（桌面版存缩略图+素材仓库原图）
+      const image = byId.get(node.templateGeneratedId);
+      if (!image?.fileName) throw new Error(`模板图片记录不存在：${node.fileName || node.templateGeneratedId}`);
+      const resp = await fetch(customMaterialImageUrl(image.fileName));
+      if (!resp.ok) throw new Error(`模板图片无法读取：${image.fileName}`);
+      node.generatedImage = await blobToBase64(await resp.blob());
+      delete node.templateGeneratedId;
+      await externalizeImageField(node, "generatedImage", "generatedAssetId", node.fileName || image.fileName);
+    }
     if (node.templateImageId) {
       const image = byId.get(node.templateImageId);
       if (!image?.fileName) throw new Error(`模板图片记录不存在：${node.fileName || node.templateImageId}`);
@@ -3005,8 +3018,9 @@ function cloneNodeForClipboard(n) {
   // 组合两侧语义:master 的完整重置(图/视频/SD) + 旧线的 walkNodes 层级(编组内嵌套节点同样重置)
   walkNodes([copy], node => {
     if (node.type === "ai-image" || node.type === "angle-image") {
-      node.generatedImage = null;
-      delete node.generatedAssetId;
+      // 副本保留生成结果图（generatedImage 缩略图 + generatedAssetId 原图引用随节点走）——
+      // 跨项目粘贴要能看到作图结果（用户要求：收录作图过程时图片不丢）；桌面跨实例由
+      // copySelection 的 materializeNodeAssetsForPortableSave 把素材物化成完整 dataURL。只清运行态。
       node.taskId = null;
       node.generating = false;
     }
