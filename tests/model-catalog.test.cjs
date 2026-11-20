@@ -29,7 +29,9 @@ test("AGToken offers the official-channel GPT Image 2 fallback model", () => {
   const catalog = loadCatalog();
   const model = catalog.agtoken.models.find(entry => entry.id === "gpt-image-2官渠");
   assert(model, "gpt-image-2官渠 should exist in the agtoken catalog");
-  assert.equal(model.hidden, undefined, "官渠 model stays selectable in the dropdown");
+  // 2026-11-19 用户要求官渠系全部收进设置→AI绘图「模型管理」勾选启用：hidden=true 不进下拉，
+  // 但条目必须保留（2K 固定路由 + 渠道兜底都指向它），normalize 对 hidden 条目仍认可
+  assert.equal(model.hidden, true, "官渠 model is opt-in via the management card, not the dropdown");
   assert.deepEqual(Array.from(model.resolutions), ["1k", "2k", "4k"]);
   assert.equal(model.quality, false, "官渠 pricing is flat per image; quality param stays off");
 });

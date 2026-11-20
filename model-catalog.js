@@ -15,40 +15,68 @@
   const RATIOS_EXT = ["1:1", "auto", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"];
 
   window.CANVASFLOW_MODEL_CATALOG = {
+    // 绘图价格字段（2026-11-20 估算价格功能，AI 节点价格行显示）：
+    //   currency          桶级计价货币符号（apimart "$" / agtoken "¥"）
+    //   priceByResolution 分辨率分档牌价（每张；键与 resolutions 字面值一致小写）
+    //   pricePerImage     各档同价的每张牌价
+    //   pricePerCall      按次/按动作计费（如 Midjourney 默认档）
+    // 数据来源（2026-11-20 实测）：APIMart 公开 /api/pricing/models/all 的 image 段（USD/张，
+    // flare/sunburst 走 gpt-image-2.5-ext 的 version_resolution 分档；gpt-image-2-official 与
+    // gpt-image-2.5 按 Token 计费无每张价）；agtoken 公开 /api/pricing 的「图片」分类（¥/张，
+    // model_price×7.3；官渠标准渠道 ¥0.15/张各档同价——广场卡片右上角 ¥0.1/请求 是「官渠-1毛」特价渠道）。
     apimart: {
       label: "APIMart",
+      // 站点以「积分(Credits)」计价展示（2026-11-20 用户指正：站点文案 credits=积分、余额=积分余额）；
+      // 价格接口字段标 usd_per_image，数值与积分 1:1，展示层一律写「积分」不写美元
+      currency: "积分",
       defaultModel: "gpt-image-2.5-flare",
       models: [
         { id: "gpt-image-2-official", label: "GPT Image 2（官方）", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
-        { id: "midjourney", label: "Midjourney", quality: false, qualities: [], resolutions: ["auto"], sizes: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"], versions: ["8.2", "8.1", "7", "6.1", "5.2", "5.1"], speeds: ["relax", "fast", "turbo"], pricingUrl: "https://apib.ai/zh/model/midjourney" },
-        { id: "gpt-image-2", label: "GPT Image 2（ext · 便宜）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
+        { id: "midjourney", label: "Midjourney", quality: false, qualities: [], resolutions: ["auto"], sizes: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"], versions: ["8.2", "8.1", "7", "6.1", "5.2", "5.1"], speeds: ["relax", "fast", "turbo"], pricePerCall: 0.0563, pricingUrl: "https://apib.ai/zh/model/midjourney" },
+        { id: "gpt-image-2", label: "GPT Image 2（ext · 便宜）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, priceByResolution: { "1k": 0.010625, "2k": 0.01875, "4k": 0.0275 }, pricingUrl: "https://apib.ai/zh/model/gpt-image-2" },
         // maxImages = 已验证的参考图上限（仅采信来源明确的数值；未声明的模型视为未知，功能侧保守降级）
         // gpt-image-2.5-ext / gpt-image-2.5：APIMart 官方文档 image_urls 最多 16 张（2026-11-07 核实）
-        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
-        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
+        // quality 五档与 agtoken 同款（同上游模型支持 low/medium/high/xhigh/max，五档同价），提交层随 ext 请求透传
+        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, priceByResolution: { "1k": 0.010625, "2k": 0.0375, "4k": 0.05 }, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
+        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 16, priceByResolution: { "1k": 0.010625, "2k": 0.0375, "4k": 0.05 }, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-sunburst" },
         { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["auto", "low", "medium", "high"], resolutions: ["1k"], sizes: RATIOS_FULL, maxImages: 16, pricingUrl: "https://apib.ai/zh/model/gpt-image-2-5-flare" },
-        { id: "gemini-3.1-flash-image-preview", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricingUrl: "https://apib.ai/zh/model/nano-banana-3-api" },
+        { id: "gemini-3.1-flash-image-preview", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, priceByResolution: { "1k": 0.015, "2k": 0.0175, "4k": 0.0225 }, pricingUrl: "https://apib.ai/zh/model/nano-banana-3-api" },
         // Nano Banana Pro（Gemini 3 Pro Image）：比例仅接受 RATIOS_EXT 档，分辨率 1K/2K/4K，n 仅支持 1，不支持 quality；参考图最多 14 张
-        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 14, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
+        { id: "gemini-3-pro-image-preview", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, maxImages: 14, priceByResolution: { "1k": 0.0375, "2k": 0.0375, "4k": 0.05 }, pricingUrl: "https://apib.ai/zh/model/nano-banana-2-api" },
       ],
     },
     agtoken: {
       label: "AGToken",
+      currency: "¥",
       defaultModel: "gpt-image-2.5-flare",
       models: [
-        { id: "gpt-image-2.5", label: "GPT Image 2.5", hidden: true, quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
-        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT },
-        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT },
+        // gpt-image-2.5（标准生成型）已删除（2026-11-19 用户拍板与 Flare/Sunburst 重复）：
+        // 旧存档节点引用它时经 normalizeAiNodeSettings 回退默认模型（flare）
+        { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare（快速）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, priceByResolution: { "1k": 0.02, "2k": 0.03, "4k": 0.04 } },
+        { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst（质量）", quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, priceByResolution: { "1k": 0.02, "2k": 0.03, "4k": 0.04 } },
+        // gpt-image-2.6 系（2026-11-19 模型广场"图片"分类核实）：hidden=true 不进绘图下拉，在
+        // 设置→AI绘图「模型管理」卡勾选启用；quality 五档同价（low/medium/high/xhigh/max，默认
+        // medium）；size=1k/2k/4k；原生支持 output_format=gif/svg（CanvasFlow 暂不透传该参数，
+        // 默认 png 输出）；参考图走 /v1/images/edits（gpt-image 系通道）
+        { id: "gpt-image-2.6-flare", label: "GPT Image 2.6 Flare（快速）", hidden: true, quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, priceByResolution: { "1k": 0.02, "2k": 0.03, "4k": 0.04 }, note: "快速生产型 · 原生 gif/svg 输出" },
+        { id: "gpt-image-2.6-sunburst", label: "GPT Image 2.6 Sunburst（质量）", hidden: true, quality: true, qualities: ["low", "medium", "high", "xhigh", "max"], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_EXT, priceByResolution: { "1k": 0.02, "2k": 0.03, "4k": 0.04 }, note: "精修设计型 · 原生 gif/svg 输出" },
         // AGToken currently has no distributor channel for the derived gpt-image-2-4k model.
         // Keep 4K available on models whose upstream channels support it instead of submitting a known-invalid combination.
-        { id: "gpt-image-2", label: "GPT Image 2", quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k"], sizes: RATIOS_FULL },
-        // gpt-image-2官渠：官方直连满血版，原生 1K/2K/4K 各档同价（约 ¥0.15/张），支持 image-edits；
-        // 同时承担两件事（见 app.js）：gpt-image-2 的 2K 档固定路由到官渠提交（agtokenSubmitModelId），
-        // 以及 gpt-image-2 派生渠道不可用（No available channel）时的自动兜底（agtokenChannelFallbackModelId）
-        { id: "gpt-image-2官渠", label: "GPT Image 2 官渠（满血）", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL },
-        // nano-banana-2 / nano-banana-pro：size 传 1k/2k/4k 档，比例仅接受标准档（任意宽高比会被上游 400 拒绝）；不支持 quality
-        { id: "nano-banana-2", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"] },
-        { id: "nano-banana-pro", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"] },
+        { id: "gpt-image-2", label: "GPT Image 2", quality: true, qualities: ["low", "medium", "high"], resolutions: ["1k", "2k"], sizes: RATIOS_FULL, priceByResolution: { "1k": 0.02, "2k": 0.03 } },
+        // gpt-image-2官渠：官方直连满血版，原生 1K/2K/4K 各档同价（约 ¥0.15/张），支持 image-edits。
+        // hidden=true 不进绘图下拉（2026-11-19 用户要求所有官渠收进「模型管理」勾选启用），但它仍是
+        // 提交层固定路由/兜底目标（agtokenSubmitModelId 的 2K 固定路由 + agtokenChannelFallbackModelId
+        // 的渠道兜底），勿删条目；normalize 对 hidden 条目仍认可，兜底切到官渠的节点不会被回退
+        { id: "gpt-image-2官渠", label: "GPT Image 2 官渠（满血）", hidden: true, quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricePerImage: 0.15, note: "官方直连满血 · 各档同价约 ¥0.15/张" },
+        // gpt-image-2.5 官渠系（2026-11-19 模型广场"图片"分类核实）：官方直连满血版，原生 1K/2K/4K
+        // 各档同价（约 ¥0.15/张），无 quality 档（按次计费），hidden=true 在「模型管理」勾选启用。
+        // gpt-image-2.5-flare官渠 已按用户要求删除（2026-11-19 拍板，勿加回）：flare 本来就是快速看
+        // 效果用的便宜档（1K ¥0.02 / 2K ¥0.03 / 4K ¥0.04 每张），没必要用官渠满血 ¥0.15/张 各档同价
+        // 的贵渠道；sunburst 官渠（质量型）保留在「模型管理」按需启用
+        { id: "gpt-image-2.5-sunburst官渠", label: "GPT Image 2.5 Sunburst 官渠（满血）", hidden: true, quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: RATIOS_FULL, pricePerImage: 0.15, note: "官方直连满血 · 各档同价约 ¥0.15/张" },
+        // nano-banana-2 / nano-banana-pro：size 传 1k/2k/4k 档，比例仅接受标准档（任意宽高比会被上游 400 拒绝）；不支持 quality；各档同价 ¥0.1/张
+        { id: "nano-banana-2", label: "Nano Banana 2", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"], pricePerImage: 0.1 },
+        { id: "nano-banana-pro", label: "Nano Banana Pro", quality: false, qualities: [], resolutions: ["1k", "2k", "4k"], sizes: ["1:1", "2:3", "3:2", "4:3", "3:4", "16:9", "9:16"], pricePerImage: 0.1 },
       ],
     },
   };
@@ -275,15 +303,19 @@
     siteDefaults: { apimart: "gpt-6-luna", agtoken: "gemini-3.8-flash" },
     models: [
       { id: "gpt-5.2-chat-latest", label: "GPT-5.2 Chat（多模态·APIMart）", hidden: true, apiType: "apimart", multimodal: true, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
-      // APIMart 官网公开价格，单位 Credits / 百万 Token；优惠可能随平台调整。
-      // 暂按纯文本接入，未确认视觉能力前不发送参考图。
-      { id: "gpt-6-luna", label: "GPT-6 Luna（APIMart）", note: "便宜", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
-      { id: "gpt-6.1-sol", label: "GPT-6.1 Sol（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
-      { id: "gemini-4-argon", label: "Gemini 4 Argon（APIMart）", note: "文笔好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
-      { id: "claude-opus-5-5", label: "Claude Opus 5.5（APIMart）", note: "美术及性能好", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude?id=claude-opus-5-5" },
-      { id: "deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash（APIMart）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/deepseek" },
-      { id: "gpt-6-sol", label: "GPT-6 Sol（AGToken）", apiType: "agtoken", multimodal: false },
-      { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", note: "便宜", apiType: "agtoken", multimodal: false },
+      // APIMart 官方价格来源：公开端点 /api/pricing/models/all 的 llm 段（2026-11-20 实测，
+      // 单位 USD / 百万 Token，billing=tiered_token；站点另有整站折扣与会员价，随时可变，note 只写牌价）。
+      // 暂按纯文本接入，未确认视觉能力前不发送参考图。隐藏条目 gpt-5.2-chat-latest 无独立牌价（价格段无此 id）。
+      { id: "gpt-6-luna", label: "GPT-6 Luna（APIMart）", note: "便宜：输入 0.1 / 输出 0.5（积分/百万 Token）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
+      { id: "gpt-6.1-sol", label: "GPT-6.1 Sol（APIMart）", note: "输入 2 / 输出 10（积分/百万 Token）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gpt" },
+      { id: "gemini-4-argon", label: "Gemini 4 Argon（APIMart）", note: "文笔好：输入 2 / 输出 10（积分/百万 Token）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/gemini" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5（APIMart）", note: "美术及性能好：输入 4 / 输出 20（积分/百万 Token）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/claude?id=claude-opus-5-5" },
+      { id: "deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash（APIMart）", note: "输入 0.29 / 输出 1.14（积分/百万 Token）", apiType: "apimart", multimodal: false, pricingUrl: "https://apib.ai/zh/model/llm/deepseek" },
+      // 价格来源：agtoken 公开 /api/pricing（2026-11-20 核实，每百万 Token，基准=¥14.6/M×model_ratio×completion_ratio）；
+      // astra 实为 输入 ¥2.2 / 输出 ¥11（输出价 ≈ sol 的 3.7 倍）——「便宜」曾误标在 astra，勿标回。
+      // gemini-3.8-flash 不在该公开价格接口（43 条）里，无牌价可写，勿编数字。
+      { id: "gpt-6-sol", label: "GPT-6 Sol（AGToken）", note: "便宜：输入 ¥0.5 / 输出 ¥3（每百万 Token）", apiType: "agtoken", multimodal: false },
+      { id: "gpt-6-astra", label: "GPT-6 Astra（AGToken）", note: "输入 ¥2.2 / 输出 ¥11（每百万 Token）", apiType: "agtoken", multimodal: false },
       { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash（AGToken）", apiType: "agtoken", multimodal: false },
     ],
   };

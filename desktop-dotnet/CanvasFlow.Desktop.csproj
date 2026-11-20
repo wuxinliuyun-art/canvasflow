@@ -37,11 +37,13 @@
     <Content Include="..\modules\manual-matting.js" Link="modules\manual-matting.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\region-hue.js" Link="modules\region-hue.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\modules\image-annotations.js" Link="modules\image-annotations.js" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\modules\canvas-examples.js" Link="modules\canvas-examples.js" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\styles.css" Link="styles.css" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\package.json" Link="package.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\canvasflow-logo.png" Link="assets\canvasflow-logo.png" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\browser-extension-help\*.png" LinkBase="assets\browser-extension-help\" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\assets\examples\*.*" LinkBase="assets\examples\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\builtin-templates\**\*.*" LinkBase="builtin-templates\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\cep-panel\**\*.*" Exclude="..\cep-panel\*.bat;..\cep-panel\*.md" LinkBase="cep-panel\" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\uxp-panel\**\*.*" LinkBase="uxp-panel\" CopyToPublishDirectory="PreserveNewest" />

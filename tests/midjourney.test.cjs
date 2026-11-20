@@ -13,6 +13,7 @@ function fixture(overrides = {}) {
   vm.runInContext(fs.readFileSync(require.resolve('../model-catalog.js'), 'utf8'), context);
   context.modelCatalogEntry = id => context.window.CANVASFLOW_MODEL_CATALOG.apimart.models.find(m => m.id === id);
   vm.runInContext(app.slice(app.indexOf('async function submitGeneration('), app.indexOf('async function fetchImageAsBase64(')), context);
+  vm.runInContext(app.slice(app.indexOf('function aiNodePriceEstimateText('), app.indexOf('function imageModelPricingHtml(')), context);
   vm.runInContext(app.slice(app.indexOf('function imageModelPricingHtml('), app.indexOf('function aiNodeControls(')), context);
   return context;
 }

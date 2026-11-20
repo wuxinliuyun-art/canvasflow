@@ -30,3 +30,8 @@ recovery/
 /tmp/
 图片放大工具.zip
 自动抠图.zip
+# 拓展运行时产物（输入收图/输出结果/参数记忆/字节码缓存）不入库
+extensions-presets/**/input/
+extensions-presets/**/output/
+extensions-presets/**/__pycache__/
+extensions-presets/**/params.json

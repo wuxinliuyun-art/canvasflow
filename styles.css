@@ -48,6 +48,7 @@
   --checker-b: #d9dce1;
   --queue-sidebar-width: min(390px, 92vw);
   --settings-sidebar-width: min(760px, 92vw);
+  --examples-sidebar-width: min(560px, 92vw);
 }
 
 * { box-sizing: border-box; }
@@ -999,6 +1000,9 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .chat-tool-btn.is-send { color: var(--text); }
 .chat-tool-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .chat-node-error { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+/* 中转站费用提示：模型条下方常驻说明（对话工作区内 order:0 置顶，画布卡片用 .chat-compact-fee） */
+.chat-node-fee-hint { flex: 0 0 auto; padding: 2px 12px 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.chat-workspace-body .chat-node-fee-hint { order: 0; padding: 0; }
 .chat-messages {
   flex: 1 1 auto;
   min-height: 72px;
@@ -1336,7 +1340,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 /* 浏览器生图节点 */
 .node.browser-image .node-head { height: 40px; padding: 0 12px; }
 .node.browser-image .node-body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; overflow: hidden; height: calc(100% - 40px); }
-.hide-node-titles .node.browser-image .node-body { height: 100%; padding-top: 12px; }
 .node.browser-image .ai-node-settings { flex: 0 0 auto; margin-top: 0; gap: 8px; }
 .node.browser-image .ai-node-settings label { gap: 4px; }
 .node.browser-image .ai-model-field { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
@@ -1387,7 +1390,6 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 .comfy-user-actions { display: flex; justify-content: flex-end; }
 .comfy-builtin-badge { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: normal; }
 .node.local-sd .node-body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
-.hide-node-titles .node.local-sd .node-body { padding-top: 12px; }
 /* 紧凑参数卡：无内置预览窗，图片结果在节点后方生成；仅视频结果保留 190px 小播放条 */
 .node.local-sd .video-preview { flex: 0 0 auto; height: 190px; }
 .node.local-sd .video-preview video { width: 100%; height: 100%; object-fit: contain; border-radius: 10px; background: var(--node-control); }
@@ -1938,12 +1940,18 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 
 /* AI 对话设置页签：模型分组与自定义 OpenAI 兼容站点卡 */
+.chat-model-card-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--text); font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.chat-model-card-caret { flex: 0 0 auto; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.chat-model-card-toggle[aria-expanded="true"] .chat-model-card-caret { transform: rotate(90deg); }
+.chat-model-card-toggle:hover { color: var(--selected); }
+.chat-model-card-body { margin-top: 8px; }
 .chat-model-group { margin-bottom: 12px; }
 .chat-model-group:last-child { margin-bottom: 0; }
 .chat-model-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
 .chat-toggle-hint { color: var(--muted); font-size: 12px; font-weight: 400; }
 .chat-model-toggle { margin: 4px 0; }
-.chat-model-note { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
+/* 模型备注（价格/能力说明）：块级独占一行，显示在模型名下方，避免长文案在名称行内错位 */
+.chat-model-note { display: block; margin: 2px 0 0; overflow: hidden; color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .chat-model-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .chat-model-add { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 180px; }
 .chat-model-add-input { flex: 1; min-width: 0; }
@@ -3102,7 +3110,6 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   border-radius: 0 0 16px 16px;
   background: transparent;
 }
-.theme-dark.hide-node-titles .node > .node-body { border-radius: 16px; }
 .node.selected { outline: 2px solid var(--selected); outline-offset: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--selected) 12%, transparent), var(--soft-shadow); }
 .node-head {
   height: 46px;
@@ -3117,10 +3124,6 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   font-size: 12px;
   font-weight: 400;
 }
-.hide-node-titles .node-head { display: none; }
-.hide-node-titles .node-body { padding-top: 12px; }
-.hide-node-titles .node.variable .node-body { padding: 12px 12px 20px; }
-.hide-node-titles .node.text .node-body { height: 100%; }
 .node.group .node-body { min-height: 0; overflow: hidden; }
 .node.group .image-actions { flex: 0 0 auto; }
 .node.text .node-body {
@@ -3130,7 +3133,6 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   min-height: 0;
   overflow: hidden;
 }
-.hide-node-titles .node.text .node-body { padding-top: 12px; }
 .node.text textarea {
   flex: 1 1 auto;
   width: 100%;
@@ -3184,21 +3186,6 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 
 /* Reusable action surface for preview-first nodes. New functional nodes can opt in with this wrapper. */
 .node-hover-controls { position: relative; }
-.hide-node-titles .node:has(.node-hover-controls) {
-  z-index: 1;
-  height: auto !important;
-}
-.hide-node-titles .node:has(.node-hover-controls) > .port { top: var(--port-anchor-y, 50%); }
-.hide-node-titles .node:has(.node-hover-controls):hover,
-.hide-node-titles .node:has(.node-hover-controls):focus-within { z-index: 24; }
-.hide-node-titles .node .node-hover-controls {
-  display: none;
-}
-.hide-node-titles .node:hover .node-hover-controls,
-.hide-node-titles .node:focus-within .node-hover-controls,
-.hide-node-titles .node.select-menu-open .node-hover-controls {
-  display: block;
-}
 
 /* 素材异常标记：图片素材文件丢失时显示在节点标题栏，悬停查看说明 */
 .node-asset-flag {
@@ -3434,6 +3421,44 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   left: calc((100vw - var(--settings-sidebar-width) - var(--queue-sidebar-width)) / 2);
   max-width: calc(100vw - var(--settings-sidebar-width) - var(--queue-sidebar-width) - 36px);
 }
+.examples-panel {
+  position: fixed;
+  z-index: 82;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--examples-sidebar-width);
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-left: 1px solid var(--panel-2);
+  border-radius: 0;
+  color: var(--text);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+}
+.examples-panel.hidden { display: none; }
+.examples-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 18px 14px; border-bottom: 1px solid var(--panel-2); }
+.examples-head > div { display: grid; gap: 3px; }
+.examples-head strong { font-size: 18px; font-weight: 600; }
+.examples-head span { color: var(--muted); font-size: 12px; }
+.examples-grid { flex: 1 1 auto; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 18px 20px; align-content: start; }
+.example-card { display: grid; gap: 8px; padding: 0; border: 1px solid var(--panel-2); border-radius: 12px; overflow: hidden; text-align: left; background: var(--panel); color: var(--text); cursor: pointer; transition: border-color .15s, opacity .15s; }
+.example-card:hover { border-color: var(--primary); }
+.example-card:active { opacity: .9; }
+.example-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.example-cover { display: block; width: 100%; height: 140px; object-fit: cover; object-position: left top; background: var(--panel-2); }
+.example-card-body { display: grid; gap: 2px; padding: 0 12px 12px; }
+.example-card-body strong { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.example-card-body small { color: var(--muted); font-size: 12px; }
+.examples-empty { grid-column: 1 / -1; padding: 32px 0; color: var(--muted); font-size: 13px; text-align: center; }
+.examples-sidebar-open .minimap-panel { right: calc(var(--examples-sidebar-width) + 18px); bottom: 86px; }
+.examples-sidebar-open .composer-dock {
+  left: calc((100vw - var(--examples-sidebar-width)) / 2);
+  max-width: calc(100vw - var(--examples-sidebar-width) - 36px);
+}
 .minimap { width: 150px; height: 96px; display: block; border: 1px solid var(--panel-2); border-radius: 11px; background: var(--minimap-bg); box-shadow: none; backdrop-filter: none; cursor: crosshair; touch-action: none; }
 .minimap.is-navigating { cursor: grabbing; }
 .minimap:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -3567,7 +3592,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .settings-title-block p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .panel-head .icon-btn { border-color: var(--panel-2); background: color-mix(in srgb, var(--text) 5%, transparent); }
 .settings-layout { flex: 1 1 auto; grid-template-columns: 190px minmax(0, 1fr); min-height: 0; max-height: none; border: 0; border-radius: 0; background: transparent; }
-.settings-side-nav { gap: 8px; padding: 18px 12px; border-right-color: var(--panel-2); background: color-mix(in srgb, var(--panel-solid) 72%, var(--bg)); }
+.settings-side-nav { gap: 8px; padding: 18px 12px; border-right-color: var(--panel-2); background: color-mix(in srgb, var(--panel-solid) 72%, var(--bg)); overflow-y: auto; }
 .settings-tab-btn { grid-template-columns: 24px 1fr; min-height: 46px; padding: 0 14px; border-radius: 13px; font-size: 14px; font-weight: 400; line-height: 1; }
 .settings-tab-btn.active { color: var(--text); background: color-mix(in srgb, var(--text) 12%, transparent); }
 .settings-nav-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
@@ -3632,6 +3657,11 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .onboarding-settings-head h3 { margin: 0 0 4px; }
 .onboarding-settings-head p { margin: 0; }
 .onboarding-settings-head button { flex: 0 0 auto; }
+.faq-groups { display: grid; gap: 20px; margin-top: 16px; }
+.faq-group-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text); }
+.faq-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.faq-list li { position: relative; padding-left: 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.faq-list li::before { content: ""; position: absolute; left: 4px; top: .6em; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
 
 .onboarding-tour { --onboarding-mask: rgba(9, 11, 15, .7); position: fixed; z-index: 203; inset: 0; color: var(--text); pointer-events: none; }
 .app.theme-dark ~ .onboarding-tour {
@@ -3700,7 +3730,8 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 @media (max-width: 680px) {
   .queue-sidebar-open .minimap-panel,
-  .settings-sidebar-open .minimap-panel { display: none; }
+  .settings-sidebar-open .minimap-panel,
+  .examples-sidebar-open .minimap-panel { display: none; }
   .topbar { padding-left: 0; }
   .project-name-btn { width: 132px; }
   .composer-dock { right: 18px; left: 18px; max-width: none; transform: none; }

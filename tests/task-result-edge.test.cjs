@@ -29,6 +29,7 @@ function buildHarness({ page = null, existingPageEdges = [] } = {}) {
     state,
     embedGenerationMetadata: (dataUrl, meta) => { context.lastMetadata = meta; return dataUrl; },
     generationMetadataFor: () => ({ prompt: '提示词', 'CanvasFlow.Project': '项目', 'CanvasFlow.Time': '0', 'CanvasFlow.TaskId': 'q1' }),
+    workflowMetaForTask: () => null,
     saveGeneratedOutput: async () => ({ fileName: 'result.png', outputPath: 'out/result.png', assetId: 'asset-1' }),
     taskTargetPage: () => page,
     nodeFromPageData: (pg, nodeId) => pg?.data?.nodes?.find(node => node.id === nodeId) || null,

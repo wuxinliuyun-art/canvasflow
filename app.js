@@ -199,7 +199,7 @@ const UI_EN = {
   "上传图片": "Upload Image", "创建节点": "Create Node", "创建": "Create", "关闭": "Close",
   "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
   "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping", "平滑连线": "Smooth edges",
-  "创建节点或连线时自动对齐": "Auto-align when creating nodes or edges", "隐藏节点名称": "Hide node titles",
+  "创建节点或连线时自动对齐": "Auto-align when creating nodes or edges",
   "图片重叠时打开图片编辑": "Open image editor when images overlap",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
@@ -255,7 +255,7 @@ const UI_EN = {
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
   "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "取消编组": "Ungroup",
-  "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组或多任务": "Create a group or multi-task from selected nodes",
+  "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组": "Create a group from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
   "无图片": "No image", "上传": "Upload", "图片节点粘贴后为空": "Image node is empty after pasting", "停用": "Disabled", "启用": "Enabled",
@@ -329,6 +329,57 @@ const UI_EN = {
   "无参考图": "No reference image", "暂停等待任务": "Pause queued task", "继续任务": "Resume task", "向前移动": "Move up", "向后移动": "Move down", "删除等待任务": "Remove queued task",
   "打开生成图片所在文件夹": "Open Generated Image Folder", "复制生成图片路径": "Copy Generated Image Path",
   "帮助与引导": "Help & Tour", "重新查看项目、底部操作区、右上工具和 API Key 设置说明。": "Review the project area, bottom controls, top-right tools, and API Key setup.", "查看新手引导": "View Getting Started Tour",
+  "使用教程": "Tutorials", "新手引导与内置案例。": "Getting-started tour and built-in examples.", "新手引导": "Getting Started Tour",
+  "常见问题": "FAQ", "按主题整理的常见问题，便于快速定位功能与排查问题。": "Common questions grouped by topic to help you find features and troubleshoot.",
+  "案例": "Examples", "点击卡片，在当前画布插入对应案例编组": "Click a card to insert its example group into the current canvas", "内置案例": "Built-in Examples", "常见用法已做成案例，点开后在当前画布插入对应编组。": "Common workflows ship as examples; open the panel to insert a group into the current canvas.", "打开案例面板": "Open Examples Panel", "添加到画布": "Add to canvas",
+  "API 与账号": "API & Accounts",
+  "API Key 在哪里填写？支持哪些渠道？": "Where do I enter my API Key? Which providers are supported?",
+  "API Key 会保存在哪里？安全吗？": "Where is my API Key stored? Is it safe?",
+  "APIMart 中转站和 agtoken 官方渠道有什么区别？": "What is the difference between the APIMart relay and the agtoken official channel?",
+  "生成时提示余额不足或鉴权失败怎么办？": "What should I do about insufficient balance or authentication errors?",
+  "不同模型的计费方式和价格在哪里看？": "Where can I see billing and pricing for each model?",
+  "提示词怎么写出图效果更好？": "How do I write prompts for better results?",
+  "怎么给 AI 节点传参考图？多张参考图有什么讲究？": "How do I pass reference images to an AI node? What matters with multiple references?",
+  "多条线连进同一个节点时，任务是怎么拆分的？": "How are tasks split when multiple wires enter one node?",
+  "「生成张数」最多几张？不同模型有区别吗？": "How many images can I generate at once? Does it differ by model?",
+  "分辨率、画质、比例在哪里设置？": "Where do I set resolution, quality, and aspect ratio?",
+  "任务显示已完成，画布上却看不到图片怎么办？": "A task says finished but no image appears on the canvas — what now?",
+  "生成图片的文件名「名字：」前缀是怎么回事？": "How does the \"Name:\" prefix in generated file names work?",
+  "画布与节点": "Canvas & Nodes",
+  "怎么新建各类节点？右键菜单里都有什么？": "How do I create each node type? What is in the right-click menu?",
+  "文字节点里的变量怎么定义和使用？": "How do I define and use variables inside text nodes?",
+  "怎么把一个多行文字节点拆成多个节点？": "How do I split a multi-line text node into separate nodes?",
+  "节点叠放在一起会发生什么？": "What happens when nodes overlap on the canvas?",
+  "怎么把多个节点保存成组件反复使用？": "How do I save several nodes as a reusable component?",
+  "编组是什么？怎么收纳成一行窄条？": "What are groups? How do I collapse one into a slim bar?",
+  "怎么在已有连线中间插入一个节点？": "How do I insert a node into an existing connection?",
+  "图片编辑": "Image Editing",
+  "双击图片节点能进入哪些编辑功能？": "Which editing tools open when I double-click an image node?",
+  "怎么给图片加批注让 AI 按批注修改？": "How do I annotate an image so the AI edits it by the notes?",
+  "抠图有哪几种方式？本地和云端有什么区别？": "What matting options exist, and how do local and cloud differ?",
+  "怎么提取线稿、矢量化或高清放大？": "How do I extract line art, vectorize, or upscale?",
+  "调色盘节点怎么给多个部件换色？": "How does the palette node recolor multiple parts?",
+  "AI 对话与视频": "AI Chat & Video",
+  "AI 对话节点怎么用？怎么让它读上游图片？": "How does the chat node work? How does it read upstream images?",
+  "为什么有些对话或视频模型在下拉里看不到？": "Why are some chat or video models missing from the dropdown?",
+  "AI 视频支持哪些模型和参数？": "Which models and parameters does AI video support?",
+  "参考视频支持哪些模型？上传的视频会保存多久？": "Which models accept reference videos? How long are uploads kept?",
+  "视频生成后播放链接失效了怎么办？": "The video link expired after generation — what now?",
+  "本地 SD（ComfyUI）": "Local SD (ComfyUI)",
+  "怎么连接本机或局域网的 ComfyUI？": "How do I connect to a local or LAN ComfyUI?",
+  "工作流 JSON 从哪里导出、怎么导入？": "How do I export and import workflow JSON?",
+  "为什么导入的工作流跑不起来或收不到结果？": "Why does an imported workflow fail to run or return no results?",
+  "节点上的参数面板和 ComfyUI 里的参数是什么关系？": "How does the on-node parameter panel relate to ComfyUI's own parameters?",
+  "项目与数据": "Projects & Data",
+  "项目数据保存在哪里？换电脑怎么迁移？": "Where is project data stored? How do I move it to another computer?",
+  "会自动备份吗？数据丢了怎么恢复？": "Is there automatic backup? How do I recover lost data?",
+  "生成的图片和视频保存在哪个文件夹？": "Which folder holds generated images and videos?",
+  "导出项目时都包含哪些内容？": "What is included when exporting a project?",
+  "软件更新与安全": "Updates & Security",
+  "界面热更新和完整安装包有什么区别？": "What is the difference between a web update and the full installer?",
+  "更新后界面还是旧版怎么办？": "The interface still looks old after updating — what now?",
+  "杀毒软件提示风险怎么办？": "Antivirus flags the app as risky — what should I do?",
+  "端口被占用或服务启动失败怎么办？": "The port is taken or the service fails to start — what now?",
   "截图工具": "Capture Tool", "截取固定屏幕区域，并使用默认提示词快速发送 AI 绘图任务。": "Capture a fixed screen region and send it to AI with a saved prompt.",
   "打开截图窗口": "Open Capture Window",
   "画布背景": "Canvas Background", "网格线": "Grid Lines", "网格 + 十字焦点": "Grid + Cross Focus", "点状": "Dots"
@@ -626,7 +677,7 @@ const state = {
   canvasGroupCollapsed: {},
   selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -873,7 +924,6 @@ const els = {
   snap: $("snapToggle"),
   smoothEdges: $("smoothEdgesToggle"),
   autoAlign: $("autoAlignToggle"),
-  hideNodeTitles: $("hideNodeTitlesToggle"),
   editOnOverlap: $("editOnOverlapToggle"),
   textMergeOnOverlap: $("textMergeOnOverlapToggle"),
   aiResultAsImageNode: $("aiResultAsImageNodeToggle"),
@@ -946,6 +996,11 @@ const els = {
   chatSiteKeyHint: $("chatSiteKeyHint"),
   chatCustomSiteArea: $("chatCustomSiteArea"),
   chatModelToggleList: $("chatModelToggleList"),
+  imageModelCardToggle: $("imageModelCardToggle"),
+  imageModelCardBody: $("imageModelCardBody"),
+  imageModelManageList: $("imageModelManageList"),
+  chatModelCardToggle: $("chatModelCardToggle"),
+  chatModelCardBody: $("chatModelCardBody"),
   chatCustomSiteList: $("chatCustomSiteList"),
   chatAddCustomSiteBtn: $("chatAddCustomSiteBtn"),
   balanceDisplay: $("balanceDisplay"),
@@ -1064,6 +1119,11 @@ const els = {
   taskQueuePauseBtn: $("taskQueuePauseBtn"),
   taskQueueClearBtn: $("taskQueueClearBtn"),
   taskQueueList: $("taskQueueList"),
+  examplesPanel: $("examplesPanel"),
+  examplesBtn: $("examplesBtn"),
+  examplesCloseBtn: $("examplesCloseBtn"),
+  examplesOpenBtn: $("examplesOpenBtn"),
+  examplesGrid: $("examplesGrid"),
   replayOnboardingBtn: $("replayOnboardingBtn"),
   apiSettingsCard: $("apiSettingsCard"),
   onboardingTour: $("onboardingTour"),
@@ -1238,15 +1298,16 @@ function restoreData(data) {
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
   state.selectedAnnotationId = "";
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, hideNodeTitles: false, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
   }
   state.settings.gridSize = Math.min(200, Math.max(10, Math.round(Number(state.settings.gridSize) || 40)));
-  if (!activeCatalog().models.some(model => model.id === state.settings.defaultImageModel)) {
+  if (!catalogModels().some(model => model.id === state.settings.defaultImageModel)) {
     console.warn("[默认绘图模型] 存档值在当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
-    state.settings.defaultImageModel = activeCatalog().defaultModel;
+    // 按勾选视图校验：存档默认若是已隐藏/被取消勾选的模型（如官渠），回退到第一个可用模型
+    state.settings.defaultImageModel = catalogModels()[0]?.id || activeCatalog().defaultModel;
   }
   const legacyAiSettings = { model: state.settings.model, resolution: state.settings.resolution, quality: state.settings.quality, size: state.settings.defaultRatio };
   delete state.settings.geminiAutomation;
@@ -1452,7 +1513,7 @@ function applyUiColors() {
 }
 
 function applySettings() {
-  els.app.className = `app theme-${state.settings.theme} mode-ai${state.settings.hideNodeTitles ? " hide-node-titles" : ""}`;
+  els.app.className = `app theme-${state.settings.theme} mode-ai`;
   document.documentElement.style.colorScheme = state.settings.theme;
   applyUiColors();
   if (!["grid", "cross", "dots"].includes(state.settings.canvasBackground)) state.settings.canvasBackground = "grid";
@@ -1483,7 +1544,6 @@ function syncSettingsPanel() {
   els.snap.checked = state.settings.snap;
   els.smoothEdges.checked = state.settings.smoothEdges === true;
   els.autoAlign.checked = state.settings.autoAlign !== false;
-  els.hideNodeTitles.checked = state.settings.hideNodeTitles === true;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
   els.textMergeOnOverlap.checked = state.settings.textMergeOnOverlap !== false;
   els.aiResultAsImageNode.checked = state.settings.aiResultAsImageNode === true;
@@ -3253,6 +3313,17 @@ function activeCatalog(apiType = activeApiType()) {
   return catalog && Array.isArray(catalog.models) && catalog.models.length ? catalog : fallback;
 }
 
+// ---- AI绘图设置「模型管理」卡（2026-11-19，镜像 AI对话页签同款设计）----
+// settings.imageModelToggles[apiType][modelId] = true|false 勾选覆盖；缺省 = !entry.hidden。
+// 官渠系/2.6 系等 hidden 条目不进绘图下拉，在「模型管理」卡勾选后经 catalogModels() 进下拉视图。
+// activeCatalog 本身不过滤：normalize/modelCatalogEntry 对 hidden 与被取消勾选的模型仍然认可——
+// 提交层固定路由（gpt-image-2 2K → 官渠）与渠道兜底切换后的节点不能被归一化回退。
+function imageModelEnabled(apiType, entry) {
+  const map = state.settings.imageModelToggles?.[apiType];
+  const flag = map && typeof map === "object" ? map[entry.id] : undefined;
+  return flag === undefined ? !entry.hidden : flag === true;
+}
+
 function modelCatalogEntry(model, apiType = activeApiType()) {
   return activeCatalog(apiType).models.find(item => item.id === model) || null;
 }
@@ -3265,7 +3336,8 @@ function annotationModelImageLimit(settings) {
 }
 
 function catalogModels() {
-  return activeCatalog().models.filter(model => !model.hidden);
+  // 「模型管理」勾选视图：官方下拉只出勾选启用的模型（hidden 条目默认不勾选）
+  return activeCatalog().models.filter(model => imageModelEnabled(activeApiType(), model));
 }
 
 // ---- 拓展（扩展服务 + 拓展节点）----
@@ -4764,15 +4836,50 @@ function imageModelOptions(selected) {
   return selectOptions(catalogModels().map(model => [model.id, model.label]), selected);
 }
 
+// 估算价格（2026-11-20 用户要求）：按目录牌价（priceByResolution/pricePerImage/pricePerCall，
+// 见 model-catalog.js 头注释）× 当前分辨率/张数估算；仅展示牌价，不含站点折扣与会员价。
+function aiNodePriceEstimateText(entry, node, apiType = activeApiType()) {
+  if (!entry) return "";
+  const currency = String((window.CANVASFLOW_MODEL_CATALOG || {})[apiType]?.currency || "");
+  const count = Math.max(1, Math.min(4, Number(node?._count) || 1));
+  const unitWord = entry.id === "midjourney" ? "次" : "张";
+  let unit = null;
+  let basis = "";
+  const byResolution = entry.priceByResolution;
+  if (byResolution && typeof byResolution === "object") {
+    const key = String(node?._resolution || "").toLowerCase();
+    if (Number.isFinite(byResolution[key])) {
+      unit = byResolution[key];
+      basis = `${key.toUpperCase()} `;
+    }
+  }
+  if (unit === null && Number.isFinite(entry.pricePerImage)) {
+    unit = entry.pricePerImage;
+    basis = "各档同价 ";
+  }
+  if (unit === null && Number.isFinite(entry.pricePerCall)) {
+    unit = entry.pricePerCall;
+    basis = "按动作默认档 ";
+  }
+  if (unit === null) return "";
+  // 货币符号（$/¥）前置，文字单位（积分）后置：apimart 站点以积分计价展示（1 积分=1 数值，勿写美元）
+  const prefixCurrency = currency === "$" || currency === "¥";
+  const format = value => (prefixCurrency
+    ? `${currency}${Math.round(value * 10000) / 10000}`
+    : `${Math.round(value * 10000) / 10000} ${currency}`.trim());
+  return `预计约 ${format(unit * count)}（${basis}${format(unit)}/${unitWord} × ${count} ${unitWord}）`;
+}
+
 function imageModelPricingHtml(entry, node, apiType = activeApiType()) {
+  const estimate = `<span>${escapeHtml(aiNodePriceEstimateText(entry, node, apiType))}</span>`;
   if (apiType === "agtoken" && entry) {
-    return '<div class="ai-model-pricing"><a href="https://agtoken.vip/pricing" target="_blank" rel="noopener noreferrer" title="在 AGToken 模型广场查看对应模型及渠道价格">AGToken · 查看模型广场价格 ↗</a></div>';
+    return `<div class="ai-model-pricing">${estimate}<a href="https://agtoken.vip/pricing" target="_blank" rel="noopener noreferrer" title="在 AGToken 模型广场查看对应模型及渠道价格">AGToken · 查看模型广场价格 ↗</a></div>`;
   }
   if (apiType !== "apimart" || !entry?.pricingUrl) return "";
   const hint = entry.id === "gpt-image-2"
     ? "打开后向下查看 gpt-image-2-ext（gpt-image-2）价格表；页面上方为官方版价格。"
     : "查看 APIMart 对应模型价格，以页面当前渠道和规格为准。";
-  return '<div class="ai-model-pricing"><a href="' + escapeHtml(entry.pricingUrl) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(hint) + '">APIMart · 查看模型广场价格 ↗</a></div>';
+  return '<div class="ai-model-pricing">' + estimate + '<a href="' + escapeHtml(entry.pricingUrl) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(hint) + '">APIMart · 查看模型广场价格 ↗</a></div>';
 }
 
 function aiNodeControls(node) {
@@ -6906,9 +7013,10 @@ async function submitGeneration(prompt, imageUrls, node) {
     resolution: extVersion ? String(node._resolution || "1k").toUpperCase() : node._resolution,
   };
   if (extVersion) payload.version = extVersion;
-if (node._model === "gpt-image-2-official" || isImage25StandardModel(node._model)) {
+  // quality 透传：官方/标准模型 + ext 版 flare/sunburst（目录声明 quality 的模型；同上游五档同价）
+  if (node._model === "gpt-image-2-official" || isImage25StandardModel(node._model) || (extVersion && modelSupportsQuality(node._model))) {
     payload.quality = node._quality || "medium";
-}
+  }
   if (imageUrls.length) payload.image_urls = await Promise.all(imageUrls.map(materializeReferenceImage));
 
   if (node._model === "midjourney") {
@@ -7367,6 +7475,28 @@ function generationMetadataFor(prompt, projectName, taskId) {
   };
 }
 
+// 作图流程元数据:参考图内容哈希清单 + 模型 id,写进生成 PNG 的 iTXt,供「还原作图流程」重建链路。
+// 素材仓库 originals 按 sha256 内容寻址,凭哈希即可精确取回原图字节。
+// 只认标准 AI 绘图任务(本地抠图/截图/角度变化不写);参考图未外部化(非桌面模式无 assetId)时返回 null,
+// 没有 References 就没有还原依据——右键菜单按这个判据隐藏,符合"只有包含作图流程才显示"。
+function workflowMetaForTask(task, node) {
+  if (!task || task.localMatting || task.source === "screenshot") return null;
+  if (!node || node.type !== "ai-image") return null;
+  const refs = [...new Set(
+    (task.orderedImages || (task.groupImage ? [...task.regularImages, task.groupImage] : task.regularImages) || [])
+      .map(image => String(image?.assetId || "").trim())
+      .filter(Boolean)
+  )];
+  if (!refs.length) return null;
+  return { references: JSON.stringify(refs), model: String(task.generationSettings?._model || "").trim() };
+}
+
+function workflowReferencesFromMeta(meta) {
+  let raw = [];
+  try { raw = JSON.parse(String(meta?.["CanvasFlow.References"] || "[]")); } catch (_) { raw = []; }
+  return Array.isArray(raw) ? [...new Set(raw.map(id => String(id).trim()).filter(Boolean))] : [];
+}
+
 // 勾选"以项目名称创建文件夹导出"时,生成图片保存到 ai_generated/项目名/ 子文件夹(保存接口支持文件名带子目录并自动建目录)
 function projectExportFileName(fileName, projectName) {
   if (!state.settings.projectExportFolder) return fileName;
@@ -7387,7 +7517,13 @@ async function saveGeneratedOutput(dataUrl, task, node) {
 }
 
 async function applyQueuedResult(task, node, rawResultDataUrl) {
-  const dataUrl = embedGenerationMetadata(rawResultDataUrl, generationMetadataFor(task.prompt, task.projectName, task.id));
+  const workflow = workflowMetaForTask(task, node);
+  const meta = generationMetadataFor(task.prompt, task.projectName, task.id);
+  if (workflow) {
+    meta["CanvasFlow.References"] = workflow.references;
+    if (workflow.model) meta["CanvasFlow.Model"] = workflow.model;
+  }
+  const dataUrl = embedGenerationMetadata(rawResultDataUrl, meta);
   let saved = null;
   try {
     saved = await saveGeneratedOutput(dataUrl, task, node);
@@ -7410,6 +7546,7 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     node.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
     node.generationPrompt = task.prompt || "";
     node.outputPath = saved?.outputPath || "";
+    if (workflow) node.hasWorkflowMeta = true; else delete node.hasWorkflowMeta;
     await externalizeImageField(node, "generatedImage", "generatedAssetId", fileName, saved?.assetId);
   } else {
     const columns = Math.min(3, Math.max(1, Number(task.resultCount) || 1));
@@ -7424,6 +7561,7 @@ async function applyQueuedResult(task, node, rawResultDataUrl) {
     resultNode.mime = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || "image/png";
     resultNode.generationPrompt = task.prompt || "";
     resultNode.aiSourceNodeId = node.id;
+    if (workflow) resultNode.hasWorkflowMeta = true;
     if (task.source === "region-matting") {
       resultNode.mattingSourceRect = task.mattingSourceRect?.slice();
       resultNode.mattingSourceSize = task.mattingSourceSize?.slice();
@@ -8749,12 +8887,6 @@ function normalizeNodeSizes() {
   state.nodes.forEach(n => {
     if (!n.w) n.w = NODE_WIDTH;
     if (!n.h) n.h = n.type === "ai-image" ? AI_NODE_HEIGHT : n.type === "angle-image" ? ANGLE_NODE_HEIGHT : n.type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT : n.type === "image" ? IMAGE_NODE_HEIGHT : (n.type === "group" || n.type === "folder") ? GROUP_NODE_HEIGHT : NODE_HEIGHT;
-    if (n.type === "text") {
-      const titlesHidden = state.settings.hideNodeTitles === true;
-      const sizedForHiddenTitles = n._titleHiddenSized === true;
-      if (titlesHidden !== sizedForHiddenTitles) n.h = Math.max(120, n.h + (titlesHidden ? -46 : 46));
-      n._titleHiddenSized = titlesHidden;
-    }
     if (n.type === "ai-image" && n.h === 400) n.h = AI_NODE_HEIGHT;
     if (n.type === "angle-image") normalizeAngleNodeSettings(n);
     if (n.type === "screenshot-input") {
@@ -9532,6 +9664,7 @@ function renderNodes(options = {}) {
       `</div>` +
       // 两个按钮必须同住一个定位容器：各自绝对定位会在右上角完全重叠
       `<div class="node-group-actions">` +
+      `<button type="button" class="node-group-run" data-group-action="ungroup" aria-label="取消编组" title="取消编组（保留节点与内容）">取消编组</button>` +
       `<button type="button" class="node-group-run" data-group-action="${collapsed ? "expand" : "collapse"}" aria-label="${collapsed ? "展开编组" : "收纳编组"}">${collapsed ? "展开" : "收纳"}</button>` +
       // 编组运行按钮是开发专用 UI：dev-flag.js 只在源码工作区存在，发布版 window.CANVASFLOW_DEV 为 undefined → 按钮隐藏（2026-11-14 用户要求）
       (window.CANVASFLOW_DEV ? `<button type="button" class="node-group-run" data-group-action="${groupRun ? "stop" : "run"}" aria-label="${groupRun ? "停止编组运行" : "运行整个编组"}">${groupRun ? "停止" : "运行"}</button>` : "") +
@@ -9570,11 +9703,6 @@ function renderNodes(options = {}) {
     div.style.height = `${node.h}px`;
     if (Number(node._portAnchorY) > 0) div.style.setProperty("--port-anchor-y", `${node._portAnchorY}px`);
     div.innerHTML = nodeTemplate(node);
-    if (state.settings.hideNodeTitles && div.querySelector(".node-hover-controls")) {
-      const syncHoverEdges = () => window.requestAnimationFrame(renderEdges);
-      div.addEventListener("mouseenter", syncHoverEdges);
-      div.addEventListener("mouseleave", syncHoverEdges);
-    }
     els.nodes.appendChild(div);
   }
   syncContentDrivenNodeHeights();
@@ -9593,17 +9721,13 @@ function syncContentDrivenNodeHeights() {
     const head = nodeElement.querySelector(":scope > .node-head");
     const body = nodeElement.querySelector(":scope > .node-body");
     if (!body) return;
-    const usesStableAnchor = state.settings.hideNodeTitles && !!nodeElement.querySelector(".node-hover-controls");
     const bodyStyle = getComputedStyle(body);
     const bodyPadding = (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0);
-    const preview = body.firstElementChild;
-    const collapsedBodyHeight = preview ? preview.offsetHeight + bodyPadding : body.scrollHeight;
-    const desiredHeight = Math.max(88, Math.ceil((head?.offsetHeight || 0) + (usesStableAnchor ? collapsedBodyHeight : body.scrollHeight) + 2));
-    const desiredAnchor = usesStableAnchor ? desiredHeight / 2 : 0;
-    if (Math.abs((Number(node._portAnchorY) || 0) - desiredAnchor) >= 1) {
-      node._portAnchorY = desiredAnchor || undefined;
-      if (desiredAnchor) nodeElement.style.setProperty("--port-anchor-y", `${desiredAnchor}px`);
-      else nodeElement.style.removeProperty("--port-anchor-y");
+    const desiredHeight = Math.max(88, Math.ceil((head?.offsetHeight || 0) + body.scrollHeight + 2));
+    if (node._portAnchorY !== undefined) {
+      // 旧「隐藏节点名称」功能的端口锚点残留，随功能删除就地清理
+      node._portAnchorY = undefined;
+      nodeElement.style.removeProperty("--port-anchor-y");
       changed = true;
     }
     if (Math.abs((Number(node.h) || 0) - desiredHeight) < 2) return;
@@ -9781,13 +9905,15 @@ function chatNodeBody(node, expanded = false) {
   normalizeChatNode(node);
   const busy = node._chatBusy === true;
   const entry = chatModelEntry(node._chatModel);
+  // 中转站费用提示（2026-11-20 用户要求）：画布卡片与对话工作区各显示一处
+  const feeHint = "中转站对话费用较高，不推荐使用昂贵模型";
   if (!expanded) {
     const messageCount = (node.chatMessages || []).length;
     const hasHtml = (node.chatMessages || []).some(message => message.role === "assistant" && extractHtmlDocument(message.content));
     const summary = busy ? "正在生成…" : node._chatError ? "生成失败，点击查看" : hasHtml ? "含网页回复，可预览编辑" : "";
     return `<button class="chat-compact-card${busy ? " is-busy" : ""}${node._chatError ? " has-error" : ""}" data-role="chat-expand" type="button" aria-label="打开 AI 对话侧边栏">`
       + `<span class="chat-compact-card-head"><span class="chat-compact-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3ZM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span><span><strong>AI 对话</strong><small>${escapeHtml(entry?.label || "选择模型")}</small></span><span class="chat-compact-status-dot" aria-hidden="true"></span></span>`
-      + `<span class="chat-compact-summary"><strong>${messageCount ? `${messageCount} 条消息` : "尚未开始"}</strong>${summary ? `<small>${escapeHtml(summary)}</small>` : ""}</span>`
+      + `<span class="chat-compact-summary"><strong>${messageCount ? `${messageCount} 条消息` : "尚未开始"}</strong>${summary ? `<small>${escapeHtml(summary)}</small>` : ""}<small class="chat-compact-fee">${feeHint}</small></span>`
       + `<span class="chat-compact-card-foot"><span>打开侧边栏</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>`
       + `</button><span class="resize-handle" title="拖拽缩放"></span>`;
   }
@@ -9797,6 +9923,7 @@ function chatNodeBody(node, expanded = false) {
     ? `<button class="chat-tool-btn is-busy" data-role="chat-stop" type="button" title="停止生成" aria-label="停止生成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>`
     : `<button class="chat-tool-btn" data-role="chat-clear" type="button" title="清空对话（保留输入框草稿）" aria-label="清空对话" ${(node.chatMessages || []).length ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
   return `<div class="chat-node-bar"><select data-role="chat-model" aria-label="对话模型" ${busy ? "disabled" : ""}>${models}</select>${expandTool}${historyTool}</div>`
+    + `<div class="chat-node-fee-hint">${feeHint}</div>`
     + (node._chatError ? `<div class="chat-node-error">${escapeHtml(node._chatError)}</div>` : "")
     + `<div class="chat-messages" role="log" aria-label="对话记录">${chatMessagesHtml(node, busy)}</div>`
     + `<div class="chat-composer"><textarea data-role="chat-text" placeholder="输入新消息，Enter 发送；Shift+Enter 换行" ${busy ? "disabled" : ""}>${escapeHtml(node.chatDraft || "")}</textarea>`
@@ -10640,16 +10767,18 @@ function updateCompositeHover(dragState) {
   if (!dragState?.moved || dragState.original.length !== 1) return clearCompositeHover();
   const source = findNode(dragState.original[0].id);
   if (!source) return clearCompositeHover();
-  // 文字节点重合=文案合并(独立开关);其余走图片叠放编辑(独立开关)
+  // 文字节点重合=文案合并(独立开关);其余走图片叠放编辑(独立开关);
+  // 图片节点拖到空 AI 绘图节点=放回内部预览(独立语义,不受叠放编辑开关影响)
   const textMergeMode = state.settings.textMergeOnOverlap !== false
     && source.type === "text" && String(source.text || "").trim().length > 0;
   const imageMode = state.settings.editOnOverlap !== false && Boolean(nodeImageReference(source));
-  if (!textMergeMode && !imageMode) return clearCompositeHover();
+  const aiInjectMode = source.type === "image" && Boolean(nodeImageReference(source));
+  if (!textMergeMode && !imageMode && !aiInjectMode) return clearCompositeHover();
   let bestTarget = null;
   let bestRatio = 0;
   for (const target of state.nodes) {
     if (target.id === source.id || state.selected.has(target.id)) continue;
-    if (textMergeMode ? (target.type !== "text") : !nodeImageReference(target)) continue;
+    if (textMergeMode ? (target.type !== "text") : (!nodeImageReference(target) && !aiPreviewInjectTarget(target))) continue;
     const overlapWidth = Math.max(0, Math.min(source.x + source.w, target.x + target.w) - Math.max(source.x, target.x));
     const overlapHeight = Math.max(0, Math.min(source.y + source.h, target.y + target.h) - Math.max(source.y, target.y));
     const ratio = overlapWidth * overlapHeight / Math.max(1, Math.min(source.w * source.h, target.w * target.h));
@@ -10688,6 +10817,49 @@ function mergeTextNodeTexts(target, source) {
   render();
   toast("已合并文案（Ctrl+Z 可撤销）");
   console.log("[文字节点合并]", { targetId: target.id, removedId: source.id });
+}
+
+// 空结果的 AI 绘图节点可作为"放回内部预览"的置入目标(生成中不收;已有结果时保持叠放编辑语义)
+function aiPreviewInjectTarget(target) {
+  return target?.type === "ai-image" && !target.generating && !nodeImageReference(target);
+}
+
+// 把图片写进 AI 绘图节点内部预览槽(generatedImage):外部化到素材仓库 generated 类;
+// PNG 内嵌的上一轮提示词经 externalizeImageField 自动回填 generationPrompt,无元数据则保持为空
+async function injectImageIntoAiPreview(target, payload) {
+  target.generatedImage = payload.image;
+  target.fileName = payload.fileName || target.fileName || "";
+  target.mime = payload.mime || target.mime || "image/png";
+  delete target.generatedAssetId;
+  delete target.generationPrompt;
+  delete target.outputPath;
+  // 放入的图带参考图清单(上一轮 CanvasFlow.References)时点亮还原入口;换成了没有流程信息的图则同步熄灭
+  if (workflowReferencesFromMeta(readGenerationMetadataFromPng(payload.image) || {}).length) target.hasWorkflowMeta = true;
+  else delete target.hasWorkflowMeta;
+  await externalizeImageField(target, "generatedImage", "generatedAssetId", target.fileName);
+}
+
+// 拖图片节点到空 AI 绘图节点松开 = 结果放回节点内部(演示截图用),外部独立图片节点删除、连线一并清理,Ctrl+Z 可整体撤销
+async function injectImageIntoAiNode(target, source) {
+  const reference = nodeImageReference(source);
+  if (!target || target.type !== "ai-image" || target.generating || !reference) return;
+  try {
+    const image = await materializeReferenceImage(reference);
+    if (!/^data:image/.test(String(image || ""))) throw new Error("原图无法读取");
+    await injectImageIntoAiPreview(target, { image, fileName: source.fileName, mime: source.mime });
+    state.nodes = state.nodes.filter(node => node.id !== source.id);
+    state.edges = state.edges.filter(edge => edge.from.node !== source.id && edge.to.node !== source.id);
+    state.selected.delete(source.id);
+    state.selected.add(target.id);
+    pushHistory();
+    render();
+    toast("已把图片放回 AI 节点内部（Ctrl+Z 可撤销）");
+    console.log("[AI节点置入] 结果图已放回节点预览", { targetId: target.id, removedId: source.id });
+  } catch (error) {
+    console.error("[AI节点置入] 失败", error);
+    toast(`放回 AI 节点失败：${error.message || "图片无法读取"}`);
+    render();
+  }
 }
 
 // 文字节点按换行拆分:每个非空行一个文字节点,首个留在原节点,其余在右侧排成一列
@@ -10896,6 +11068,11 @@ els.viewport.addEventListener("mousedown", ev => {
       else if (action === "collapse") toggleCanvasGroupCollapse(groupFrame.dataset.groupId, true);
       else if (action === "expand") toggleCanvasGroupCollapse(groupFrame.dataset.groupId, false);
       else if (action === "rename") beginCanvasGroupRename(groupFrame.dataset.groupId);
+      else if (action === "ungroup") {
+        // 头部按钮点击走不到组选择的 pointerdown 分支,先补选中再取消编组
+        state.selected = new Set(canvasGroupMembers(groupFrame.dataset.groupId).map(node => node.id));
+        ungroupCanvasSelection();
+      }
       else runCanvasGroup(groupFrame.dataset.groupId);
       return;
     }
@@ -11021,8 +11198,13 @@ window.addEventListener("mouseup", ev => {
     if (source && target) {
       source.x = drag.original[0].x;
       source.y = drag.original[0].y;
-      // 文字节点重合=合并文案;图片照旧打开叠放编辑
-      compositeRequest = { source, target, textMerge: source.type === "text" && target.type === "text" };
+      // 文字节点重合=合并文案;图片拖到空 AI 绘图节点=放回内部预览;图片照旧打开叠放编辑
+      compositeRequest = {
+        source,
+        target,
+        textMerge: source.type === "text" && target.type === "text",
+        aiInject: source.type === "image" && aiPreviewInjectTarget(target),
+      };
       render();
     }
   } else if (drag?.type === "nodes") {
@@ -11071,6 +11253,8 @@ window.addEventListener("mouseup", ev => {
   if (compositeRequest) {
     if (compositeRequest.textMerge) {
       mergeTextNodeTexts(compositeRequest.target, compositeRequest.source);
+    } else if (compositeRequest.aiInject) {
+      void injectImageIntoAiNode(compositeRequest.target, compositeRequest.source);
     } else {
       console.log("[节点叠放合成] 已触发编辑", { baseNodeId: compositeRequest.target.id, placedNodeId: compositeRequest.source.id });
       void openNodeCompositeEditor(compositeRequest.target, compositeRequest.source);
@@ -14148,6 +14332,77 @@ function generationKeywordMenuItems(node) {
   return supported && hasImage ? [["提取生成所用关键词", () => extractGenerationKeywords(node)]] : [];
 }
 
+// 「还原作图流程」只在图片真的带参考图清单时显示(hasWorkflowMeta 由生成落盘/预览置入时按 PNG 元数据判定)
+function generationWorkflowMenuItems(node) {
+  const supported = ["image", "ai-image"].includes(node?.type);
+  return supported && node?.hasWorkflowMeta === true ? [["还原作图流程", () => restoreAiWorkflowFromNode(node)]] : [];
+}
+
+async function restoreAiWorkflowFromNode(node) {
+  if (!node) return;
+  const assetBridge = window.canvasflowDesktop || desktop;
+  if (!assetBridge?.readAsset) return toast("还原参考图需要桌面版素材仓库；当前运行方式无法取回原图");
+  if (node._workflowRestoring) return;
+  node._workflowRestoring = true;
+  try {
+    const dataUrl = await resolveNodeImageDataUrl(node);
+    if (!/^data:image/.test(String(dataUrl || ""))) return toast("无法读取该图片的原图，无法还原作图流程");
+    const meta = readGenerationMetadataFromPng(dataUrl) || {};
+    const refs = workflowReferencesFromMeta(meta);
+    if (!refs.length) return toast("该图片没有参考图清单，无法还原完整作图流程（只有关键词可用「提取生成所用关键词」）");
+    const prompt = String(node.generationPrompt || meta.prompt || "").trim();
+    const model = String(meta["CanvasFlow.Model"] || "").trim();
+    // 重建链路:新 AI 节点放结果节点左侧,输入列(关键词+参考图)再往左一列;按发送顺序纵排(同列同 x 按 created 排序)
+    const aiPos = findFreeNodePosition(node.x - (NODE_WIDTH + 60), node.y, NODE_WIDTH, AI_NODE_HEIGHT);
+    const aiNode = addNode("ai-image", aiPos.x, aiPos.y, false);
+    if (model && modelCatalogEntry(model)) aiNode._model = model;
+    const inputX = aiNode.x - (NODE_WIDTH + 60);
+    let cursorY = aiNode.y;
+    const createdIds = [aiNode.id];
+    if (prompt) {
+      const textPos = findFreeNodePosition(inputX, cursorY, NODE_WIDTH, NODE_HEIGHT);
+      const textNode = addNode("text", textPos.x, textPos.y, false);
+      textNode.text = prompt;
+      state.edges.push({ id: uid("e"), from: { node: textNode.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
+      createdIds.push(textNode.id);
+      cursorY = textPos.y + NODE_HEIGHT + 40;
+    }
+    let restored = 0;
+    const failed = [];
+    for (const assetId of refs) {
+      let record = null;
+      try {
+        record = await assetBridge.readAsset(assetId);
+      } catch (error) {
+        console.warn("[还原作图流程] 参考原图读取失败", { assetId, message: error.message });
+      }
+      if (!/^data:image/.test(String(record?.dataUrl || ""))) { failed.push(assetId); continue; }
+      const pos = findFreeNodePosition(inputX, cursorY, NODE_WIDTH, IMAGE_NODE_HEIGHT);
+      const refNode = addNode("image", pos.x, pos.y, false);
+      refNode.image = record.dataUrl;
+      refNode.fileName = String(record.fileName || "") || `参考图-${restored + 1}.png`;
+      refNode.mime = String(record.mime || (record.dataUrl.match(/^data:([^;,]+)/)?.[1]) || "image/png");
+      await externalizeImageField(refNode, "image", "imageAssetId", refNode.fileName);
+      state.edges.push({ id: uid("e"), from: { node: refNode.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
+      createdIds.push(refNode.id);
+      cursorY = pos.y + (Number(refNode.h) || IMAGE_NODE_HEIGHT) + 40;
+      restored++;
+    }
+    state.selected = new Set(createdIds);
+    pushHistory();
+    render();
+    toast(failed.length
+      ? `已还原作图流程（${restored} 张参考图，${failed.length} 张原图已不在素材仓库）`
+      : `已还原作图流程（${restored} 张参考图）；AI 节点未自动生成，检查后点「生成」`);
+    console.log("[还原作图流程] 已重建链路", { sourceNodeId: node.id, aiNodeId: aiNode.id, refs: refs.length, restored, failed: failed.length });
+  } catch (error) {
+    console.error("[还原作图流程] 失败", error);
+    toast(`还原作图流程失败：${error.message || "未知错误"}`);
+  } finally {
+    delete node._workflowRestoring;
+  }
+}
+
 async function extractGenerationKeywords(node, detectedPrompt = "") {
   if (!node) return;
   const prompt = String(detectedPrompt || await readEmbeddedGenerationPrompt(node)).trim();
@@ -14264,7 +14519,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
       const top = Math.min(...extensionSources.map(source => source.y));
       addBuiltinToolNode(meta, right + 40, top, extensionSources.map(source => source.id));
     };
-    const selectedGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
     const hasSelectedConnections = state.edges.some(edge => state.selected.has(edge.from.node) || state.selected.has(edge.to.node));
     const items = [
       ["AI绘图", aiDrawAction],
@@ -14278,21 +14532,22 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ]]] : []),
       ...(state.selected.size > 1 ? [["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()]] : []),
       ...(state.selected.size > 1 ? [["创建编组", () => groupCanvasSelection()], ["多任务", () => groupSelection()]] : []),
-      ...(selectedGroupIds.length === 1 ? [[canvasGroupIsCollapsed(selectedGroupIds[0]) ? "展开编组" : "收纳编组", () => toggleCanvasGroupCollapse(selectedGroupIds[0], !canvasGroupIsCollapsed(selectedGroupIds[0]))]] : []),
-      ...(selectedGroupIds.length === 1 ? [["重命名编组", () => beginCanvasGroupRename(selectedGroupIds[0])]] : []),
+      // 编组中的节点右键只保留取消编组(2026-11-20 用户要求):收纳/重命名走编组外框头部按钮与外框右键
       ...(state.nodes.some(node => state.selected.has(node.id) && node.canvasGroupId) ? [["取消编组", () => ungroupCanvasSelection()]] : []),
       ...(hasSelectedConnections ? [["切换启用/停用", () => toggleDisabled(state.selected)]] : []),
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId || selectedNode?.aiSourceNodeId || selectedNode?.angleSourceNodeId) ? [["复制图片", () => copyGeneratedImage(selectedNode)]] : []),
       ...((selectedNode?.outputPath || selectedNode?.generatedImage || selectedNode?.generatedAssetId || selectedNode?.image || selectedNode?.imageAssetId) ? [["另存为", () => saveGeneratedImageAs(selectedNode)]] : []),
-      ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(selectedNode?.videoFile && selectedNode?.outputPath ? [["打开视频所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(selectedNode?.type === "tool-node" && (selectedNode?.toolOutputFiles || []).length ? [["打开文件所在文件夹", () => openToolNodeFileLocation(selectedNode)]] : []),
       ...(state.selected.size === 1 && selectedNode?.type === "image" && selectedNode?.imageAssetId && window.canvasflowDesktop?.openAssetLocation ? [["打开所在文件夹", () => openImageNodeLocation(selectedNode)]] : []),
       ...(window.canvasflowDesktop?.launchInPs && selectedNode?.type === "image" && (selectedNode?.imageAssetId || selectedNode?.outputPath || selectedNode?.fileName) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
       ...(window.canvasflowDesktop?.launchInPs && (selectedNode?.type === "ai-image" || selectedNode?.type === "angle-image") && (selectedNode?.generatedAssetId || selectedNode?.outputPath) ? [["在 PS 中编辑", () => editNodeInPs(selectedNode)]] : []),
+      // 「打开生成图片所在文件夹」在「在 PS 中编辑」之后一位(2026-11-20 用户要求向下挪一位)
+      ...(selectedNode?.outputPath ? [["打开生成图片所在文件夹", () => openGeneratedFileLocation(selectedNode)]] : []),
       ...(state.selected.size === 1 && selectedNode?.type === "text" && String(selectedNode.text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).length > 1 ? [["按换行拆分为文字节点", () => splitTextNodeByLines(selectedNode)]] : []),
       ...(state.selected.size === 1 && selectedNode?.type === "image" && (selectedNode?.image || selectedNode?.imageAssetId) ? [["编辑图片批注", () => startImageAnnotationEditor(selectedNode)]] : []),
       ...generationKeywordMenuItems(selectedNode),
+      ...generationWorkflowMenuItems(selectedNode),
       ...(state.selected.size === 1 && (selectedNode?.type === "text" || selectedNode?.type === "image" || (selectedNode?.type === "ai-image" && (selectedNode.generatedImage || selectedNode.generatedAssetId))) ? [[selectedNode.type === "text" ? "保存为自定义文字" : "保存为自定义图片", () => saveNodeAsTemplate(selectedNode)]] : []),
       ...(state.selected.size > 1 ? [["依次连接", () => connectSelectionInSequence()]] : []),
       ...(state.selected.size > 1 ? [["对齐所选节点", () => tidyNodes()]] : []),
@@ -14522,7 +14777,7 @@ window.addEventListener("keydown", ev => {
   }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "g") {
     ev.preventDefault();
-    groupSelection();
+    groupCanvasSelection();
   }
 });
 
@@ -14733,6 +14988,32 @@ els.viewport.addEventListener("drop", async ev => {
   try {
     const sources = await droppedImageSources(ev.dataTransfer);
     if (!sources.length) return toast("未发现支持的图片；请拖入 PNG、JPG、WebP 或 GIF 文件");
+    // 拖图片文件到 AI 绘图节点 = 放进节点内部预览框(演示截图用);多余图片照旧落成图片节点
+    const targetAiEl = ev.target.closest(".node.ai-image");
+    if (targetAiEl) {
+      const aiNode = findNode(targetAiEl.dataset.id);
+      if (aiNode && !aiNode.generating) {
+        await injectImageIntoAiPreview(aiNode, sources[0]);
+        const rest = sources.slice(1);
+        const p = screenToWorld(ev.clientX, ev.clientY);
+        const cols = Math.min(rest.length, 4);
+        const createdIds = [];
+        for (let i = 0; i < rest.length; i++) {
+          const source = rest[i];
+          const node = addNode("image", p.x + (i % cols) * 280, p.y + Math.floor(i / cols) * IMAGE_NODE_VERTICAL_STEP, false);
+          node.image = source.image;
+          node.fileName = source.fileName;
+          node.mime = source.mime;
+          await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+          createdIds.push(node.id);
+        }
+        state.selected = new Set([aiNode.id, ...createdIds]);
+        pushHistory();
+        render();
+        toast(rest.length ? "第一张已放进 AI 节点内部预览，其余已创建图片节点" : "已放进 AI 节点内部预览");
+        return;
+      }
+    }
     if (targetNodeEl && sources.length === 1) {
       const node = findNode(targetNodeEl.dataset.id);
       if (!node) return;
@@ -15236,16 +15517,20 @@ const SIDEBAR_PAIR_MIN_WIDTH = 1800;
 function syncSidebarLayoutClasses() {
   const settingsOpen = !els.settings.classList.contains("hidden");
   const queueOpen = !els.taskQueuePanel.classList.contains("hidden");
+  const examplesOpen = !els.examplesPanel.classList.contains("hidden");
   document.body.classList.toggle("settings-sidebar-open", settingsOpen);
   document.body.classList.toggle("queue-sidebar-open", queueOpen);
+  document.body.classList.toggle("examples-sidebar-open", examplesOpen);
   $("settingsBtn").classList.toggle("active", settingsOpen);
   els.taskQueueBtn.classList.toggle("active", queueOpen);
+  els.examplesBtn.classList.toggle("active", examplesOpen);
 }
 
 function setSettingsSidebarOpen(open) {
   if (open && window.innerWidth < SIDEBAR_PAIR_MIN_WIDTH && !els.taskQueuePanel.classList.contains("hidden")) {
     setTaskQueueOpen(false);
   }
+  if (open) setExamplesPanelOpen(false);
   els.settings.classList.toggle("hidden", !open);
   if (open) { syncSettingsPanel(); fetchBalance(); }
   syncSidebarLayoutClasses();
@@ -15255,12 +15540,149 @@ function setTaskQueueOpen(open) {
   if (open && window.innerWidth < SIDEBAR_PAIR_MIN_WIDTH && !els.settings.classList.contains("hidden")) {
     setSettingsSidebarOpen(false);
   }
+  if (open) setExamplesPanelOpen(false);
   els.taskQueuePanel.classList.toggle("hidden", !open);
   syncSidebarLayoutClasses();
 }
 
+// 案例面板：与设置/任务队列独占（打开时关闭对方），不参与两者宽屏并存的组合
+function setExamplesPanelOpen(open) {
+  if (open) {
+    if (!els.settings.classList.contains("hidden")) setSettingsSidebarOpen(false);
+    if (!els.taskQueuePanel.classList.contains("hidden")) setTaskQueueOpen(false);
+    renderExamplesPanel();
+  }
+  els.examplesPanel.classList.toggle("hidden", !open);
+  syncSidebarLayoutClasses();
+}
+
+function exampleViewportAnchor() {
+  const rect = els.viewport.getBoundingClientRect();
+  if (!rect.width || !rect.height) return currentPasteAnchor();
+  const clientX = Math.max(rect.left + 20, Math.min(rect.right - 40, rect.left + rect.width / 2));
+  const clientY = Math.max(rect.top + 20, Math.min(rect.bottom - 40, rect.top + rect.height / 2));
+  return screenToWorld(clientX, clientY);
+}
+
+function addCanvasExample(example) {
+  if (!example?.nodes?.length) { toast("该案例没有节点，无法插入"); return; }
+  const data = {
+    nodes: JSON.parse(JSON.stringify(example.nodes)),
+    edges: JSON.parse(JSON.stringify(example.edges || [])),
+    canvasGroupFrames: JSON.parse(JSON.stringify(example.groupFrames || {})),
+    canvasGroupNames: JSON.parse(JSON.stringify(example.groupNames || {})),
+  };
+  pasteNodes(data, exampleViewportAnchor());
+  toast(`已添加案例「${example.title || ""}」`);
+}
+
+// 卡片无截图封面时的几何示意图：按画布数据重绘节点块与连线（同 renderMinimap 的几何画法）
+function drawExamplePreview(canvas, example) {
+  const context = canvas.getContext("2d");
+  const width = Number(canvas.dataset.previewWidth) || canvas.width;
+  const height = Number(canvas.dataset.previewHeight) || canvas.height;
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  context.setTransform(2, 0, 0, 2, 0, 0);
+  const styles = getComputedStyle(document.body);
+  const panelColor = styles.getPropertyValue("--panel-2").trim() || "transparent";
+  const lineColor = styles.getPropertyValue("--line").trim() || "transparent";
+  const textColor = styles.getPropertyValue("--muted").trim() || "transparent";
+  context.clearRect(0, 0, width, height);
+  const nodes = example.nodes || [];
+  if (!nodes.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const node of nodes) {
+    const w = Number(node.w) || NODE_WIDTH;
+    const h = Number(node.h) || nodeHeightForType(node.type);
+    minX = Math.min(minX, node.x); minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + w); maxY = Math.max(maxY, node.y + h);
+  }
+  const pad = 8;
+  const scale = Math.min((width - pad * 2) / (maxX - minX), (height - pad * 2) / (maxY - minY));
+  const mapPoint = node => {
+    const w = Number(node.w) || NODE_WIDTH;
+    const h = Number(node.h) || nodeHeightForType(node.type);
+    return {
+      x: pad + (node.x - minX) * scale, y: pad + (node.y - minY) * scale,
+      w: Math.max(6, w * scale), h: Math.max(6, h * scale),
+    };
+  };
+  context.strokeStyle = lineColor;
+  context.lineWidth = 1;
+  for (const edge of example.edges || []) {
+    const from = nodes.find(node => node.id === edge.from?.node);
+    const to = nodes.find(node => node.id === edge.to?.node);
+    if (!from || !to) continue;
+    const a = mapPoint(from), b = mapPoint(to);
+    context.beginPath();
+    context.moveTo(a.x + a.w, a.y + a.h / 2);
+    context.bezierCurveTo(a.x + a.w + 24 * scale, a.y + a.h / 2, b.x - 24 * scale, b.y + b.h / 2, b.x, b.y + b.h / 2);
+    context.stroke();
+  }
+  context.fillStyle = panelColor;
+  context.strokeStyle = lineColor;
+  for (const node of nodes) {
+    const rect = mapPoint(node);
+    context.beginPath();
+    context.roundRect(rect.x, rect.y, rect.w, rect.h, 4);
+    context.fill();
+    context.stroke();
+    if (node.image || node.generatedImage) {
+      context.fillStyle = textColor;
+      context.globalAlpha = .3;
+      context.beginPath();
+      context.roundRect(rect.x + rect.w * .2, rect.y + rect.h * .2, rect.w * .6, rect.h * .4, 2);
+      context.fill();
+      context.globalAlpha = 1;
+      context.fillStyle = panelColor;
+    }
+  }
+  context.fillStyle = textColor;
+  context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
+  context.fillText(`${nodes.length}`, width - pad - 16, height - pad - 2);
+}
+
+function renderExamplesPanel() {
+  const examples = Array.isArray(window.CANVASFLOW_EXAMPLES) ? window.CANVASFLOW_EXAMPLES : [];
+  if (!examples.length) {
+    els.examplesGrid.innerHTML = `<div class="examples-empty">${uiLanguage === "en" ? "No built-in examples yet" : "暂无内置案例"}</div>`;
+    return;
+  }
+  els.examplesGrid.innerHTML = examples.map((example, index) => {
+    const title = escapeHtml(example.title || "");
+    const meta = uiLanguage === "en"
+      ? `${example.nodes.length} nodes · ${example.edges.length} connections`
+      : `${example.nodes.length} 个节点 · ${example.edges.length} 条连线`;
+    const cover = example.cover
+      ? `<img class="example-cover" src="${escapeHtml(example.cover)}" alt="${title}" loading="lazy">`
+      : `<canvas class="example-cover" data-example-index="${index}" data-preview-width="248" data-preview-height="140"></canvas>`;
+    return `<button type="button" class="example-card" data-example-index="${index}" title="${uiLanguage === "en" ? "Add to canvas" : "添加到画布"}">
+      ${cover}
+      <span class="example-card-body"><strong>${title}</strong><small>${meta}</small></span>
+    </button>`;
+  }).join("");
+  for (const canvas of els.examplesGrid.querySelectorAll("canvas.example-cover")) {
+    drawExamplePreview(canvas, examples[Number(canvas.dataset.exampleIndex)]);
+  }
+}
+
 $("settingsBtn").onclick = () => setSettingsSidebarOpen(els.settings.classList.contains("hidden"));
 $("closeSettingsBtn").onclick = () => setSettingsSidebarOpen(false);
+els.examplesBtn.onclick = () => setExamplesPanelOpen(els.examplesPanel.classList.contains("hidden"));
+els.examplesCloseBtn.onclick = () => setExamplesPanelOpen(false);
+els.examplesOpenBtn.onclick = () => setExamplesPanelOpen(true);
+els.examplesGrid.addEventListener("click", event => {
+  const card = event.target.closest("[data-example-index]");
+  if (!card) return;
+  const examples = Array.isArray(window.CANVASFLOW_EXAMPLES) ? window.CANVASFLOW_EXAMPLES : [];
+  const example = examples[Number(card.dataset.exampleIndex)];
+  if (example) addCanvasExample(example);
+});
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  if (!els.examplesPanel.classList.contains("hidden")) setExamplesPanelOpen(false);
+});
 window.addEventListener("resize", () => {
   if (window.innerWidth < SIDEBAR_PAIR_MIN_WIDTH && !els.settings.classList.contains("hidden") && !els.taskQueuePanel.classList.contains("hidden")) {
     setTaskQueueOpen(false);
@@ -15284,6 +15706,7 @@ function switchSettingsTab(name) {
   }
   if (name === "appearance") syncUiColorInputs();
   if (name === "aichat") renderChatSettingsTab();
+  if (name === "ai") renderImageModelManageList();
   if (name === "extensions") window.LocalSD?.syncSettings?.();
 }
 
@@ -15380,7 +15803,7 @@ async function runMcpAction(kind) {
   }
 }
 
-const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, layoutFrame: 0 };
+const onboardingState = { active: false, step: 0, manual: false, settingsWasOpen: false, settingsTab: "general", layoutFrame: 0 };
 
 function onboardingCopy(zh, en) {
   return uiLanguage === "en" ? en : zh;
@@ -15559,6 +15982,8 @@ function startOnboarding({ manual = false } = {}) {
   onboardingState.active = true;
   onboardingState.manual = manual;
   onboardingState.settingsWasOpen = !els.settings.classList.contains("hidden");
+  // 引导会中途切到 AI 页签，结束时按进入前的页签恢复（新手引导入口在「使用教程」页）
+  onboardingState.settingsTab = els.settings.querySelector(".settings-tab-btn.active")?.getAttribute("data-tab") || "general";
   setShortcutPopover(false);
   els.onboardingTour.classList.remove("hidden");
   showOnboardingStep(0);
@@ -15580,7 +16005,7 @@ function finishOnboarding(reason = "complete") {
     switchSettingsTab("ai");
   } else {
     setSettingsSidebarOpen(wasManual && onboardingState.settingsWasOpen);
-    if (wasManual && onboardingState.settingsWasOpen) switchSettingsTab("general");
+    if (wasManual && onboardingState.settingsWasOpen) switchSettingsTab(onboardingState.settingsTab || "general");
   }
   persistPages();
   console.info("[新手引导] 已结束", { reason, version: ONBOARDING_VERSION });
@@ -16096,12 +16521,6 @@ els.autoAlign.onchange = () => {
   pushHistory();
 };
 
-els.hideNodeTitles.onchange = () => {
-  state.settings.hideNodeTitles = els.hideNodeTitles.checked;
-  render();
-  pushHistory();
-};
-
 els.editOnOverlap.onchange = () => {
   state.settings.editOnOverlap = els.editOnOverlap.checked;
   pushHistory();
@@ -16271,7 +16690,8 @@ function populateDefaultModelOptions() {
   const catalog = activeCatalog();
   if (!catalogModels().some(model => model.id === state.settings.defaultImageModel)) {
     console.warn("[默认绘图模型] 当前 API 类型下无效，已恢复默认", { value: state.settings.defaultImageModel, apiType: activeApiType() });
-    state.settings.defaultImageModel = catalog.defaultModel;
+    // 默认模型本身可能已被「模型管理」取消勾选，回退到勾选视图的第一个可用模型
+    state.settings.defaultImageModel = catalogModels()[0]?.id || catalog.defaultModel;
   }
   els.defaultImageModelSelect.innerHTML = imageModelOptions(state.settings.defaultImageModel);
   els.defaultImageModelSelect.value = state.settings.defaultImageModel;
@@ -16306,6 +16726,7 @@ function applyApiTypeSettingsUi() {
   if (els.customApiHeadersInput) els.customApiHeadersInput.value = state.settings.customApiHeaders || "";
   if (els.apiKeyInput) els.apiKeyInput.value = activeApiKey();
   populateDefaultModelOptions();
+  renderImageModelManageList();
   const card = els.apiSettingsCard;
   if (card) card.dataset.apiType = apiType;
   console.info("[API类型] 当前类型：", apiType);
@@ -16348,6 +16769,8 @@ els.customApiHeadersInput.onchange = () => {
 // 站点卡输入走 input/change 委托就地写回（input 只写 state 不压历史、change 冲刷），
 // 不得在输入过程中重渲染站点卡，会打断输入与 IME。
 let chatSettingsSite = "agtoken";
+// 「模型管理」卡默认折叠（会话态）：头按钮点击展开/收起，收起时不影响列表照常渲染
+let chatModelCardOpen = false;
 // 「添加模型」候选面板的展开状态（会话态）：内置站一个开关，自定义站按站点 id 记在 Set
 let chatBuiltinPickerOpen = false;
 const chatCustomPickerOpen = new Set();
@@ -16379,7 +16802,8 @@ function chatModelDefaultControlHtml(modelId, usable) {
 }
 
 function chatToggleRowHtml(modelId, label, checked, enabled, note = "") {
-  const noteHtml = note ? ` <span class="chat-model-note">${escapeHtml(note)}</span>` : "";
+  // note 显示在模型名下方独立一行（.chat-model-note 块级），长价格文案不挤压名称列
+  const noteHtml = note ? `<span class="chat-model-note">${escapeHtml(note)}</span>` : "";
   return `<div class="chat-model-row">`
     + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(modelId)}" ${checked ? "checked" : ""} ${enabled ? "" : "disabled"}><span>${escapeHtml(label)}${noteHtml}</span></label>`
     + chatModelDefaultControlHtml(modelId, checked && enabled)
@@ -16431,7 +16855,7 @@ function renderChatModelToggleList() {
     const entry = chatBuiltinModelEntry(chatSettingsSite, id);
     const label = entry.label || id;
     return `<div class="chat-model-row">`
-      + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(id)}" ${disabled.includes(id) ? "" : "checked"} ${ready ? "" : "disabled"}><span>${escapeHtml(label)}${entry.note ? ` <span class="chat-model-note">${escapeHtml(entry.note)}</span>` : ""}</span></label>`
+      + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-chat-model="${escapeHtml(id)}" ${disabled.includes(id) ? "" : "checked"} ${ready ? "" : "disabled"}><span>${escapeHtml(label)}${entry.note ? `<span class="chat-model-note">${escapeHtml(entry.note)}</span>` : ""}</span></label>`
       + chatModelDefaultControlHtml(id, ready && !disabled.includes(id))
       + `<button type="button" class="chat-model-remove" data-chat-model-delete="${escapeHtml(id)}" title="从列表移除此模型" aria-label="移除模型 ${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`
       + `</div>`;
@@ -16529,6 +16953,75 @@ function chatAddPickedCustom(site, panel) {
   renderNodes();
   toast(`已添加 ${fresh.length} 个模型`);
 }
+
+// ---- AI绘图设置「模型管理」卡（#imageModelManageList）：镜像 AI对话页签同款设计 ----
+// 勾选覆盖存 settings.imageModelToggles[apiType][id]；hidden 条目（官渠系/2.6 系/gpt-image-2.5）
+// 默认不勾选、不进下拉，勾选后经 catalogModels() 进下拉。不做拉取/手输添加（用户要求移除）。
+let imageModelCardOpen = false;
+
+function imageModelToggleStore(apiType) {
+  const store = state.settings.imageModelToggles && typeof state.settings.imageModelToggles === "object" && !Array.isArray(state.settings.imageModelToggles)
+    ? state.settings.imageModelToggles
+    : (state.settings.imageModelToggles = {});
+  if (!store[apiType] || typeof store[apiType] !== "object") store[apiType] = {};
+  return store[apiType];
+}
+
+function imageModelManageRowHtml(entry, checked) {
+  // note 显示在模型名下方独立一行（同对话模型列表，.chat-model-note 块级）
+  const noteHtml = entry.note ? `<span class="chat-model-note">${escapeHtml(entry.note)}</span>` : "";
+  return `<div class="chat-model-row">`
+    + `<label class="check-row compact chat-model-toggle"><input type="checkbox" data-image-model="${escapeHtml(entry.id)}" ${checked ? "checked" : ""}><span>${escapeHtml(entry.label)}${noteHtml}</span></label>`
+    + `</div>`;
+}
+
+function renderImageModelManageList() {
+  if (!els.imageModelManageList) return;
+  const apiType = activeApiType();
+  const entries = activeCatalog(apiType).models;
+  const rows = entries.map(entry => imageModelManageRowHtml(entry, imageModelEnabled(apiType, entry))).join("");
+  const toolbar = `<div class="chat-model-toolbar">`
+    + '<button type="button" class="apikey-btn" data-image-model-disable-all title="全部取消勾选，再勾选需要的模型">全不选</button>'
+    + '<button type="button" class="apikey-btn" data-image-model-reset>恢复默认</button>'
+    + `</div>`;
+  els.imageModelManageList.innerHTML = toolbar + (rows || '<div class="chat-toggle-hint">当前站点目录为空。</div>');
+}
+
+function setImageModelToggle(apiType, id, checked) {
+  imageModelToggleStore(apiType)[id] = checked === true;
+  pushHistory();
+  renderNodes();
+}
+
+els.imageModelManageList.addEventListener("change", event => {
+  const box = event.target.closest("input[data-image-model]");
+  if (!box) return;
+  setImageModelToggle(activeApiType(), box.getAttribute("data-image-model"), box.checked);
+});
+els.imageModelManageList.addEventListener("click", event => {
+  const target = event.target.closest("[data-image-model-disable-all], [data-image-model-reset]");
+  if (!target) return;
+  const apiType = activeApiType();
+  if (target.hasAttribute("data-image-model-disable-all")) {
+    const store = imageModelToggleStore(apiType);
+    activeCatalog(apiType).models.forEach(model => { store[model.id] = false; });
+    pushHistory();
+    renderImageModelManageList();
+    renderNodes();
+    return;
+  }
+  // 恢复默认：清空该站点的勾选覆盖，回到目录缺省（非 hidden 全开、hidden 关）
+  if (state.settings.imageModelToggles && typeof state.settings.imageModelToggles === "object") delete state.settings.imageModelToggles[apiType];
+  pushHistory();
+  renderImageModelManageList();
+  renderNodes();
+});
+els.imageModelCardToggle.addEventListener("click", () => {
+  imageModelCardOpen = !imageModelCardOpen;
+  els.imageModelCardToggle.setAttribute("aria-expanded", imageModelCardOpen ? "true" : "false");
+  els.imageModelCardBody.classList.toggle("hidden", !imageModelCardOpen);
+  if (imageModelCardOpen) renderImageModelManageList();
+});
 
 function renderChatCustomSiteList() {
   if (!els.chatCustomSiteList) return;
@@ -16646,6 +17139,11 @@ if (els.chatSiteSelect) {
   els.chatSiteKeyClearBtn.addEventListener("click", () => {
     els.chatSiteKeyInput.value = "";
     saveChatSiteKey();
+  });
+  els.chatModelCardToggle.addEventListener("click", () => {
+    chatModelCardOpen = !chatModelCardOpen;
+    els.chatModelCardToggle.setAttribute("aria-expanded", chatModelCardOpen ? "true" : "false");
+    els.chatModelCardBody.classList.toggle("hidden", !chatModelCardOpen);
   });
   els.chatModelToggleList.addEventListener("change", event => {
     const input = event.target.closest("input[data-chat-model]");

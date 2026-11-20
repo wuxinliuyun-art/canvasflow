@@ -9,18 +9,20 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 test("Windows publish ships every Local SD browser module loaded by index.html", () => {
   const index = read("index.html");
   const project = read("desktop-dotnet/CanvasFlow.Desktop.csproj");
-  for (const file of ["local-sd.js", "image-annotations.js"]) {
+  for (const file of ["local-sd.js", "image-annotations.js", "canvas-examples.js"]) {
     assert.match(index, new RegExp(`modules/${file.replace(".", "\\.")}`));
     assert.match(project, new RegExp(`modules\\\\${file.replace(".", "\\.")}`));
   }
   // 内置工作流模板已整体下线（2026-11-14），不得再进发布清单
   assert.ok(!index.includes("sd-workflow-templates"));
   assert.ok(!project.includes("sd-workflow-templates"));
+  // 案例封面目录（assets/examples）随 csproj 通配收录；封面文件暂未提供，目录可不存在
+  assert.match(project, /assets\\examples\\\*\.\*/);
 });
 
 test("mac package ships Local SD browser modules and server dependencies", () => {
   const build = read("build-mac.ps1");
-  for (const file of ["local-sd.js", "image-annotations.js", "browser-transfer-server.js", "comfyui-server.js"]) {
+  for (const file of ["local-sd.js", "image-annotations.js", "canvas-examples.js", "browser-transfer-server.js", "comfyui-server.js"]) {
     assert.match(build, new RegExp(`modules\\\\${file.replace(".", "\\.")}`));
   }
   assert.ok(!build.includes("sd-workflow-templates"));
@@ -30,6 +32,7 @@ test("web update inventory follows the current entry page", () => {
   const build = read("build-web-update.ps1");
   assert.match(build, /modules\/local-sd\.js/);
   assert.match(build, /modules\/image-annotations\.js/);
+  assert.match(build, /modules\/canvas-examples\.js/);
   assert.ok(!build.includes("sd-workflow-templates"));
   assert.doesNotMatch(build, /modules\/mindmap-module\.js/);
 });
@@ -42,6 +45,21 @@ test("all release formats ship browser extension help images", () => {
     assert.match(csproj, /assets\\browser-extension-help\\\*\.png/);
     assert.ok(mac.includes(`assets\\browser-extension-help\\${file}`));
     assert.ok(web.includes(`assets/browser-extension-help/${file}`));
+  }
+});
+
+test("all release formats ship the built-in example covers (actual screenshots)", () => {
+  const csproj = read("desktop-dotnet/CanvasFlow.Desktop.csproj");
+  const mac = read("build-mac.ps1");
+  const web = read("build-web-update.ps1");
+  const fs = require("node:fs");
+  // 随包封面必须与 assets/examples 实际文件一致：清单逐文件断言 + 目录实际存在
+  assert.match(csproj, /assets\\examples\\\*\.\*/);
+  const shipped = fs.readdirSync(path.join(root, "assets/examples")).filter(name => /\.(png|jpe?g|webp)$/i.test(name));
+  assert.ok(shipped.length >= 1, "assets/examples 目录必须有封面文件");
+  for (const file of shipped) {
+    assert.ok(mac.includes(`assets\\examples\\${file}`), `build-mac.ps1 缺封面 ${file}`);
+    assert.ok(web.includes(`assets/examples/${file}`), `build-web-update.ps1 缺封面 ${file}`);
   }
 });
 
