@@ -40,7 +40,10 @@ test("all release paths include the vectorize WASM assets and exclude the old pr
   const macBuild = fs.readFileSync(path.join(root, "build-mac.ps1"), "utf8");
   const webBuild = fs.readFileSync(path.join(root, "build-web-update.ps1"), "utf8");
   assert.match(csproj, /assets\\vendor\\vtracer/);
-  assert.match(windowsBuild, /image-vectorize/);
+  // 2026-11-21：拓展目录不再复制进 publish（安装器本就 Excludes extensions-presets，拓展独立分发；
+  // 且杀软拦截运行时 DLL 写入 publish 会静默终止构建进程）——构建脚本只搬「拓展脚本规范.md」
+  assert.doesNotMatch(windowsBuild, /image-vectorize/);
+  assert.doesNotMatch(windowsBuild, /for \/d %%E in/);
   assert.doesNotMatch(installer, /extensions-presets\\图片矢量化/);
   assert.match(macBuild, /vtracer_wasm_bg\.wasm/);
   assert.match(webBuild, /vtracer_wasm_bg\.wasm/);
@@ -60,7 +63,7 @@ test("PPT and auto-matting are built-in and their old presets are excluded", () 
   assert.doesNotMatch(installer, /extensions-presets\\图片置入ppt/);
   assert.doesNotMatch(installer, /extensions-presets\\自动抠图-U2Net/);
   // 自动抠图-通用（BiRefNet，权重 928MB）只进仓库 extensions-presets 供源码桌面模式扫描，
-  // 靠 build-dotnet.cmd 的 rembg-LICENSE.txt 门槛排除出 publish，安装包独立分发
+  // 安装包独立分发（2026-11-21 起构建脚本不再复制任何拓展目录进 publish）
   assert.doesNotMatch(installer, /extensions-presets\\自动抠图-通用/);
 });
 

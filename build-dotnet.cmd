@@ -23,20 +23,15 @@ if errorlevel 1 exit /b 1
 
 for %%L in (cs de es fr it ja ko pl pt-BR ru tr zh-Hant) do if exist "%PUBLISH_DIR%\%%L" rmdir /s /q "%PUBLISH_DIR%\%%L"
 
-rem -- Copy the Windows installer presets from the repository.
-rem -- Keep this script pure ASCII: the Chinese display folder name and file names inside the preset are preserved by the filesystem, and the DestDir mapping lives in CanvasFlow.iss.
+rem -- Extension preset folders are intentionally NOT copied into publish anymore (2026-11-21):
+rem -- CanvasFlow.iss excludes extensions-presets from the installer (extensions ship independently),
+rem -- and AV software silently kills the whole console process when runtime DLLs (concrt140/msvcp140/
+rem -- vcruntime140 family) are written into the publish tree, aborting the build with exit 0.
+rem -- Only the authoring spec (root-level .md) is staged for the installer to pack.
 set "EXT_SOURCE=%PROJECT_ROOT%extensions-presets"
 set "EXT_PRESETS=%PUBLISH_DIR%\extensions-presets"
 if exist "%EXT_PRESETS%" rmdir /s /q "%EXT_PRESETS%"
-for /d %%E in ("%EXT_SOURCE%\*") do (
-  if exist "%%~fE\*.json" if not exist "%%~fE\rembg-LICENSE.txt" (
-    xcopy "%%~fE" "%EXT_PRESETS%\%%~nxE\" /e /i /y >nul
-    if errorlevel 1 exit /b 1
-    if exist "%EXT_PRESETS%\%%~nxE\.runtime-deps" rmdir /s /q "%EXT_PRESETS%\%%~nxE\.runtime-deps"
-    findstr /s /m /c:"image-vectorize" /c:"image-to-pptx" /c:"auto-matting-u2net" "%EXT_PRESETS%\%%~nxE\*.json" >nul 2>&1
-    if not errorlevel 1 rmdir /s /q "%EXT_PRESETS%\%%~nxE"
-  )
-)
+if not exist "%EXT_PRESETS%" mkdir "%EXT_PRESETS%"
 rem -- Ship the extension authoring spec (root-level .md files) with the presets.
 if exist "%EXT_SOURCE%\*.md" copy /y "%EXT_SOURCE%\*.md" "%EXT_PRESETS%\" >nul
 if errorlevel 1 exit /b 1
