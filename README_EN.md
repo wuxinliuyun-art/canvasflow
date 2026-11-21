@@ -60,6 +60,10 @@ Text Node → Image Node (reference) → AI Image Node → Generated Result
 
 For text-to-image generation, connect Text Node → AI Image Node directly. With a reference image, use the series connection above to create one task containing both text and image. Connecting the text and image separately to the AI Image node splits the incoming connections into multiple tasks. Results can appear in the AI node preview or as separate Image nodes, according to your settings.
 
+### 5. Learn from Built-in Examples
+
+The **Examples** button in the upper-right corner ships several complete workflows collected from real usage: iterative editing, material changes, text-to-image with background removal, line-art coloring, hi-res repair, and more. Click a card to insert the whole node group — prompts, reference images, and connections included — then swap in your own assets and run through it once.
+
 ---
 
 ## Core Features
@@ -69,7 +73,18 @@ For text-to-image generation, connect Text Node → AI Image Node directly. With
 - Organize image workflows with nodes and connections
 - Move, select, copy, paste, delete, undo, and redo
 - Grid snapping, canvas zoom, minimap, and grouping
+- Group nodes with Ctrl+G: name groups and collapse them into a slim bar
+- Open the Examples panel (upper right) to insert a built-in example group in one click
 - Click the keyboard icon in the lower-left corner to view shortcuts
+
+### Built-in Examples
+
+The Examples panel collects complete workflows from the author's day-to-day canvas. Each card is a named group of nodes; clicking a card inserts the whole group into the current canvas, so you can edit the text and images directly and take the connections apart once it runs.
+
+- **Iterative Editing**: start from a one-line portrait prompt, then keep adding references and pointed edits (replace icons, change text, adjust elements) — the "generate → not happy → point at what to change" loop
+- **Material Change**: combine a product image with a material reference and swap the target part via prompt
+- **Text to Image with Background Removal**: generate a product shot from a text node, then auto-cut out the subject
+- More examples cover line-art coloring, hi-res repair, style-driven redesign, and portfolio drawing
 
 ### AI Image Generation
 
