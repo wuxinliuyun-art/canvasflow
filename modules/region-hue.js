@@ -334,7 +334,6 @@
     }
     function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
     function identifySelection() {
-      const penSelection = lightboxSelection;
       const painted = snapshot().data;
       if (!manualBase && pointer === null) {
         baseColor = dominantBaseColor(source.data, painted);
@@ -342,9 +341,9 @@
       }
       const coverage = new Uint8ClampedArray(preview.width * preview.height);
       for (let index = 0; index < coverage.length; index++) {
-        const x = Math.min(original.width - 1, Math.floor((index % preview.width) * original.width / preview.width));
-        const y = Math.min(original.height - 1, Math.floor(Math.floor(index / preview.width) * original.height / preview.height));
-        coverage[index] = !penSelection || penSelection.mask[y * original.width + x] ? painted[index * 4 + 3] : 0;
+        // coverage = 全部已画像素：钢笔选区只在落笔时限制新笔画（paint() 里 clip），
+        // 闭合/修改选区不得回溯收编之前画的内容（2026-11-23 用户契约：闭合选区对已画内容零影响）
+        coverage[index] = painted[index * 4 + 3];
       }
       selection = materialSelection(source.data, coverage, field("range-mode").value, Number(field("tolerance").value), baseColor);
       materialBlur = null;
@@ -465,7 +464,7 @@
     action("pick").onclick = () => { setLightboxPaintMode("idle"); picking = !picking; schedule(); };
     const resumeBrush = () => { setLightboxPaintMode("idle"); brushTool = "paint"; picking = false; schedule(); };
     action("brush").onclick = resumeBrush;
-    eventCanvas.addEventListener("canvasflow-selection-change", identifySelection, { signal: sessionEvents.signal });
+    // 钢笔选区变化不重算 coverage：选区只在落笔时限制新笔画（paint()），已画内容保持原样
     eventCanvas.addEventListener("canvasflow-image-tool-change", () => { syncBrushRing(); schedule(); }, { signal: sessionEvents.signal });
     action("erase").onclick = () => { setLightboxPaintMode("idle"); brushTool = "erase"; picking = false; schedule(); };
     action("reset").onclick = () => { toolHistory.remember(); for (const name of adjustmentNames) field(name).value = 0; if (field("edit-mode").value === "paint") brushContext.clearRect(0, 0, brush.width, brush.height); identifySelection(); };
@@ -489,19 +488,19 @@
       dialog.querySelector('[role="status"]').textContent = "正在按原图尺寸生成…";
       await new Promise(resolve => setTimeout(resolve, 0));
       try {
-        const penSelection = lightboxSelection;
         const fullContext = original.getContext("2d", { willReadFrequently: true });
         const full = fullContext.getImageData(0, 0, original.width, original.height);
         const painted = snapshot().data;
         const fullMask = new Uint8ClampedArray(original.width * original.height);
-        // 笔刷画布按原尺寸最近邻放大，颜色随 alpha 一起带过去（每笔落下时的颜色）
+        // 笔刷画布按原尺寸最近邻放大，颜色随 alpha 一起带过去（每笔落下时的颜色）；
+        // 落盘范围 = 全部已画像素——选区约束发生在落笔时，保存不得回溯裁剪
         const fullBrush = new Uint8ClampedArray(original.width * original.height * 4);
         for (let vertical = 0; vertical < original.height; vertical++) {
           const row = Math.min(preview.height - 1, Math.floor(vertical * preview.height / original.height));
           for (let horizontal = 0; horizontal < original.width; horizontal++) {
             const offset = (row * preview.width + Math.min(preview.width - 1, Math.floor(horizontal * preview.width / original.width))) * 4;
             const target = (vertical * original.width + horizontal) * 4;
-            fullMask[target / 4] = !penSelection || penSelection.mask[target / 4] ? painted[offset + 3] : 0;
+            fullMask[target / 4] = painted[offset + 3];
             fullBrush[target] = painted[offset];
             fullBrush[target + 1] = painted[offset + 1];
             fullBrush[target + 2] = painted[offset + 2];

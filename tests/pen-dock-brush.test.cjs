@@ -40,7 +40,7 @@ test('the color session yields pointer events to the pen and resumes exclusive b
   assert.equal(handled, 1); assert.equal(stopped, 1);
 });
 
-test('changing the pen selection during a brush session updates its allowed coverage without adding painted pixels', () => {
+test('changing the pen selection never rescopes painted coverage: strokes stay as painted (2026-11-23 用户契约)', () => {
   const coverage = [];
   const context = {
     lightboxSelection: { mask: Uint8Array.from([1, 0, 1, 0]) },
@@ -53,10 +53,15 @@ test('changing the pen selection during a brush session updates its allowed cove
   const end = region.indexOf('    function showBaseColor()', start);
   vm.runInNewContext(region.slice(start, end), context);
   context.identifySelection();
-  assert.deepEqual(coverage[0], [0, 0, 255, 0]);
+  assert.deepEqual(coverage[0], [0, 255, 255, 0], 'coverage = 全部已画像素（pixel1 在旧选区外也保留）');
+  // 闭合/修改选区不得回溯收编之前画的内容：coverage 与选区无关（选区只在落笔时限制新笔画）
   context.lightboxSelection = { mask: Uint8Array.from([1, 1, 0, 0]) };
   context.identifySelection();
-  assert.deepEqual(coverage[1], [0, 255, 0, 0]);
+  assert.deepEqual(coverage[1], [0, 255, 255, 0], '选区变化后已画像素保持原样');
+  context.lightboxSelection = null;
+  context.identifySelection();
+  assert.deepEqual(coverage[2], [0, 255, 255, 0], '清除选区同样不改变已画范围');
+  assert.ok(!region.slice(start, end).includes('canvasflow-selection-change'), '选区变化不再触发重算');
 });
 
 test('pen controls share the original toolbar and stay visible in color sessions, with the right panel centered', () => {
