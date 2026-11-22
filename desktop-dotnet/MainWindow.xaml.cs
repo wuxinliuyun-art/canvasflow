@@ -134,6 +134,47 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         ApplyTitleBarColors(true);
+        ClampWindowToWorkArea();
+    }
+
+    // 固定默认尺寸 1440×900 在 1080p+125% 这类缩放屏上高于工作区（约 820 DIP），
+    // WindowStartupLocation=CenterScreen 会算出负 Top，把标题栏连同关闭按钮顶出屏幕外
+    // （2026-11-23 用户实测 2.8.1/Win11 24H2/125%：只能 Alt+F4）。启动时按工作区钳制尺寸，
+    // 让 CenterScreen 用钳制后的尺寸计算；Loaded 后再兜底钳制一次位置。
+    private void ClampWindowToWorkArea()
+    {
+        try
+        {
+            var work = SystemParameters.WorkArea; // DIPs，主显示器工作区
+            if (work.Height <= 0 || work.Width <= 0) return;
+            if (MinHeight > work.Height) MinHeight = work.Height;
+            if (MinWidth > work.Width) MinWidth = work.Width;
+            if (Height > work.Height) Height = work.Height;
+            if (Width > work.Width) Width = work.Width;
+        }
+        catch
+        {
+            // 工作区读取失败按默认尺寸启动
+        }
+    }
+
+    private void EnsureWindowOnScreen()
+    {
+        try
+        {
+            var work = SystemParameters.WorkArea;
+            if (work.Height <= 0 || work.Width <= 0) return;
+            if (ActualHeight > work.Height) { MinHeight = Math.Min(MinHeight, work.Height); Height = work.Height; }
+            if (ActualWidth > work.Width) { MinWidth = Math.Min(MinWidth, work.Width); Width = work.Width; }
+            if (Top < work.Top) Top = work.Top;
+            if (Top + ActualHeight > work.Bottom) Top = Math.Max(work.Top, work.Bottom - ActualHeight);
+            if (Left < work.Left) Left = work.Left;
+            if (Left + ActualWidth > work.Right) Left = Math.Max(work.Left, work.Right - ActualWidth);
+        }
+        catch
+        {
+            // 位置钳制失败不影响启动
+        }
     }
 
     private void ApplyTitleBarColors(bool dark)
@@ -220,6 +261,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        EnsureWindowOnScreen();
         var startupTimer = Stopwatch.StartNew();
         try
         {

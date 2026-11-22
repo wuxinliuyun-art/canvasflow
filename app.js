@@ -155,7 +155,7 @@ const UI_EN = {
   "界面更新可直接下载、校验并切换；宿主程序变化时使用完整安装包。": "Interface updates can be downloaded, verified, and switched directly. Use the full installer for host changes.",
   "立即热更新": "Update Now", "下载完整安装包": "Download Full Installer",
   "当前版本：正在读取…": "Current version: loading…", "下载 Windows 新版本": "Download New Windows Version",
-  "v2.8.1 更新说明": "v2.8.1 Release Notes",
+  "v2.8.2 更新说明": "v2.8.2 Release Notes",
   "AI 视频模型库扩充到 12 个（接入 APIMart），下拉显示价格与模型能力说明": "AI video model catalog grows to 12 models (APIMart added) — prices and per-model capabilities are shown inline",
   "本地 SD（ComfyUI）全面重构：先选工作流、参数直接在画布编辑、导入零限制、支持 PS 桥接；内置模板下线并自动清理": "Local SD (ComfyUI) rework: pick a workflow first, edit parameters directly on canvas, zero import limits, PS bridge support; bundled templates are retired and auto-cleaned",
   "提取线稿改用 AI 模型，线稿更接近真实插画，支持任意尺寸与透明背景": "Line art extraction now uses an AI model — results closer to hand-drawn sketches, any size, transparent PNGs supported",
@@ -254,7 +254,7 @@ const UI_EN = {
   "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
-  "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "取消编组": "Ungroup",
+  "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "编组截图": "Screenshot Group", "取消编组": "Ungroup",
   "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组": "Create a group from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
@@ -4174,7 +4174,8 @@ async function runToolNode(nodeId) {
         seq++;
       }
     }
-    if (isLinkedUpscaleNode(node)) node.toolOutputNodeIds = outputNodeIds;
+    // 放大/自动抠图等链式工具节点回写结果节点清单：输出端口与下游收集都按它取结果
+    if (isLinkedUpscaleNode(node) || isAutoMattingTool(node)) node.toolOutputNodeIds = outputNodeIds;
     node.toolOutputFiles = savedPaths;
     node.toolStatus = {
       state: "done",
@@ -5479,7 +5480,13 @@ async function uploadVideoRef(node) {
     body.fileName = node.fileName || "reference.mp4";
     const resp = await apiFetch("/api/apimart/video-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !data.url) throw new Error(data.error || `上传失败（HTTP ${resp.status}）`);
+    if (!resp.ok || !data.url) {
+      const reason = data.error || `上传失败（HTTP ${resp.status}）`;
+      if (resp.status === 401 || resp.status === 402) {
+        throw new Error(`${reason}。参考视频需经 APIMart 上传通道换取公网链接（需 APIMart API Key 且账户余额 >0），AGToken Seedance 模型的参考视频也走此通道`);
+      }
+      throw new Error(reason);
+    }
     node.videoUrl = data.url;
     node.videoUrlExpiresAt = Number(data.expiresAt) || 0;
     node.videoBytes = Number(data.bytes) || node.videoBytes;
@@ -5546,7 +5553,7 @@ function videoRefNodeBody(node) {
       <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频文件</button>
       ${node.videoPath || node.videoUrl ? `<button type="button" data-role="video-ref-upload" title="立即上传到 APIMart 换取公网链接（3 天有效，免费额度内免费）">立即上传</button>` : ""}
     </div>
-    <div class="video-ref-hint">连线到 AI 视频节点作为参考视频（仅 Seedance 2.0 系支持；文件不会被复制，只在生成时上传）</div>
+    <div class="video-ref-hint">连线到 AI 视频节点作为参考视频（APIMart Seedance 2.0 系、AGToken Seedance 系支持；文件不会被复制，只在生成时经 APIMart 通道上传换公网链接）</div>
   </div>`;
 }
 
@@ -5780,7 +5787,9 @@ function isLinkedUpscaleNode(node) {
   return node?.type === "tool-node" && ["upscale-white-point", "realesrgan-upscale"].includes(node.toolMeta?.id);
 }
 
-function linkedUpscaleOutputs(node) {
+// 链式工具节点（放大/自动抠图）的结果图片节点：运行时创建并回写 toolOutputNodeIds，
+// 下游经 collectUpstreamForAI / directScreenshotNodeInputs 读取这些节点的图。
+function linkedToolOutputs(node) {
   return (node.toolOutputNodeIds || []).map(findNode).filter(output =>
     output?.type === "image" && !output.disabled && output.toolSourceNodeId === node.id
       && (output.image || output.imageAssetId));
@@ -5810,8 +5819,9 @@ function collectUpstreamForAI(nodeId, incoming) {
     nextVisited.add(id);
     const n = findNode(id);
     if (!n || n.disabled) return [];
-    if (isLinkedUpscaleNode(n)) {
-      const images = linkedUpscaleOutputs(n).map(output => imageRef(output, output.image, output.imageAssetId));
+    if (isLinkedUpscaleNode(n) || isAutoMattingTool(n)) {
+      // 放大/自动抠图等链式工具节点:取其运行产出的结果图片节点作为参考,不再向上追溯
+      const images = linkedToolOutputs(n).map(output => imageRef(output, output.image, output.imageAssetId));
       return images.length ? [{ texts: [], images }] : [];
     }
     if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image" || n.type === "local-sd") {
@@ -5938,7 +5948,7 @@ function collectVideoRefInputs(nodeId) {
       return;
     }
     if (n.type === "ai-image" || n.type === "angle-image" || n.type === "browser-image" || n.type === "local-sd" || n.type === "chat" || n.type === "ai-video") return;
-    if (isLinkedUpscaleNode(n)) return;
+    if (isLinkedUpscaleNode(n) || isAutoMattingTool(n)) return;
     for (const edge of incoming.get(id) || []) visit(edge.from.node);
   }
   for (const edge of incoming.get(nodeId) || []) visit(edge.from.node);
@@ -5964,8 +5974,8 @@ function directScreenshotNodeInputs(nodeId) {
     visited.add(id);
     const node = findNode(id);
     if (!node || node.disabled) return;
-    if (isLinkedUpscaleNode(node)) {
-      for (const output of linkedUpscaleOutputs(node)) visit(output.id);
+    if (isLinkedUpscaleNode(node) || isAutoMattingTool(node)) {
+      for (const output of linkedToolOutputs(node)) visit(output.id);
       return;
     }
     const order = { x: Number(node.x) || 0, created: Number(node.created) || 0 };
@@ -8243,9 +8253,9 @@ function enqueueVideoNode(nodeId) {
   const entry = videoCatalogEntry(node._model);
   const allVideoRefs = collectVideoRefInputs(nodeId);
   const maxVideos = entry?.maxVideos || 0;
-  // 目录未声明 maxVideos 的模型（agtoken 全系等）没有参考视频通道——先拒绝再截取，避免 slice(0,0) 短路成"全空"
+  // 目录未声明 maxVideos 的模型（agtoken Wan 系等）没有参考视频通道——先拒绝再截取，避免 slice(0,0) 短路成"全空"
   if (allVideoRefs.length && !maxVideos) {
-    toast(`当前模型（${entry?.label || node._model}）不支持参考视频，请改用 Seedance 2.0 系（APIMart）`);
+    toast(`当前模型（${entry?.label || node._model}）不支持参考视频，请改用 Seedance 系模型（APIMart / AGToken 均可）`);
     return 0;
   }
   const videoRefs = allVideoRefs.slice(0, maxVideos);
@@ -8316,6 +8326,9 @@ async function generateAiVideo(nodeId) {
 //   prompt = 文字；images[] = 参考图（dataURL 或公网 URL，插件转成 Ark 的 image_url content 部分）；
 //   duration/seconds = 时长（-1 智能时长）；metadata.{ratio,resolution,generate_audio,watermark} 合并入 Ark 请求体。
 //   duration 与 seconds 同时携带：不同网关版本读取的字段名不同，两个名字指向同一时长不冲突。
+// agtoken Seedance 兼容接口（/api/v3/contents/generations/tasks，带参考视频时才用）：
+//   多模态素材走 content[]（text / image_url+reference_image / video_url+reference_video），分辨率比例时长等顶层平铺；
+//   模型名用 compatModel 全名（seedance2.5 目录 id 是别名）；提交与轮询走同前缀路径，task.videoChannel 标记通道供轮询分流。
 // apimart（/v1/videos/generations，参数顶层平铺）：
 //   duration = 时长整数；resolution/aspect_ratio 字面值按目录透传（各家大小写不同，勿统一转换）；
 //   图片按 imageMode 分流：reference = image_urls[] 多模态参考；first_frame = first_frame_image 首帧图（必须有图）。
@@ -8332,7 +8345,7 @@ async function submitVideoGeneration(task) {
   const prompt = String(task.prompt || "").trim();
   const maxVideos = entry?.maxVideos || 0;
   const rawVideoRefs = task.referenceVideos || [];
-  if (rawVideoRefs.length && !maxVideos) throw new Error("当前模型不支持参考视频，请改用 Seedance 2.0 系（APIMart）");
+  if (rawVideoRefs.length && !maxVideos) throw new Error("当前模型不支持参考视频，请改用 Seedance 系模型（APIMart / AGToken 均可）");
   // 参考视频：发送前确保每条引用都有未过期的公网 URL（过期且有路径时按路径重新上传）
   const videoUrls = [];
   for (const ref of rawVideoRefs.slice(0, maxVideos)) {
@@ -8360,6 +8373,24 @@ async function submitVideoGeneration(task) {
     if (entry.ratios?.length && entry.imageMode !== "first_frame") payload.aspect_ratio = settings._videoRatio;
     // 仅 seedance 系有声音开关（generate_audio）；H3 系/wan3.0 自带音轨，不发字段用上游默认
     if (entry.audio) payload.generate_audio = settings._videoAudio !== false;
+  } else if (videoUrls.length) {
+    // agtoken Seedance 兼容接口（文档明确的参考视频通道）：多模态素材走 content[]，顶层平铺；
+    // 图片按 reference_image、参考视频按 reference_video 入 content（URL 来自 apimart 上传通道，公网可抓）；
+    // 模型名用 compatModel 全名（seedance2.5 目录 id 是别名，兼容接口只认官方全名）
+    task.videoChannel = "agtoken-seedance";
+    const content = [];
+    if (prompt) content.push({ type: "text", text: prompt });
+    for (const url of images) content.push({ type: "image_url", image_url: { url }, role: "reference_image" });
+    for (const url of videoUrls) content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
+    payload = {
+      model: entry.compatModel || settings._model,
+      content,
+      resolution: settings._videoResolution,
+      ratio: settings._videoRatio || "16:9",
+      duration,
+      generate_audio: settings._videoAudio !== false,
+      watermark: false,
+    };
   } else {
     payload = {
       model: settings._model,
@@ -8375,7 +8406,9 @@ async function submitVideoGeneration(task) {
       },
     };
   }
-  const route = apiType === "apimart" ? "/api/apimart/video-generate" : "/api/agtoken/video-generate";
+  const route = apiType === "apimart" ? "/api/apimart/video-generate"
+    : task.videoChannel === "agtoken-seedance" ? "/api/agtoken/seedance-task"
+    : "/api/agtoken/video-generate";
   const resp = await apiFetch(route, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-CanvasFlow-Api-Key": activeApiKey(apiType) || "" },
@@ -8417,16 +8450,20 @@ function extractVideoTaskInfo(data) {
   return { status, url, progress, error: failReason };
 }
 
-async function pollVideoTask(taskId, onProgress = null, apiType = "agtoken") {
+async function pollVideoTask(taskId, onProgress = null, channel = "agtoken") {
   const startedAt = Date.now();
   let lastError = null;
-  const route = apiType === "apimart" ? "/api/apimart/video-task/" : "/api/agtoken/video-task/";
+  // 通道决定查询路径与 key 槽：apimart / agtoken 统一接口 / agtoken Seedance 兼容接口（提交与查询同前缀）
+  const route = channel === "apimart" ? "/api/apimart/video-task/"
+    : channel === "agtoken-seedance" ? "/api/agtoken/seedance-task/"
+    : "/api/agtoken/video-task/";
+  const keySlot = channel === "apimart" ? "apimart" : "agtoken";
   for (let attempt = 0; attempt < VIDEO_TASK_MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) await new Promise(resolve => setTimeout(resolve, VIDEO_TASK_POLL_MS));
     let data;
     try {
       const resp = await apiFetch(`${route}${encodeURIComponent(taskId)}`, {
-        headers: { "X-CanvasFlow-Api-Key": activeApiKey(apiType) || "" },
+        headers: { "X-CanvasFlow-Api-Key": activeApiKey(keySlot) || "" },
       });
       if (resp.status === 429 || [500, 502, 503, 504].includes(resp.status)) {
         lastError = new Error(`查询服务暂时不可用（${resp.status}）`);
@@ -8534,7 +8571,7 @@ async function runQueuedVideoTask(task) {
       task.progress = progress;
       refreshQueuedNodeProgress(task.nodeId);
       renderTaskQueue();
-    }, videoApiType);
+    }, task.videoChannel || videoApiType);
   } finally {
     releaseSlot();
   }
@@ -10796,7 +10833,8 @@ function updateCompositeHover(dragState) {
 }
 
 function edgeInsertableNode(node) {
-  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "palette" && (node.type !== "tool-node" || isLinkedUpscaleNode(node));
+  // 放大/自动抠图等链式工具节点带输出端口，可把结果继续连给下游环节
+  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "palette" && (node.type !== "tool-node" || isLinkedUpscaleNode(node) || isAutoMattingTool(node));
 }
 
 // 文字节点重合合并:两段文案按画布位置从左到右(同列按从上到下)拼接,并入被叠节点,删除拖动节点;
@@ -12131,8 +12169,29 @@ function waitForGroupQueueTasks(node, run, tasks) {
   });
 }
 
+// 编组链路的每步之间可能隔着任务级等待（AI 队列单任务可达数分钟），期间用户切走再切回
+// 项目页会把全部节点对象换成新身份（saveCurrentPage/restoreData 深克隆），编组所在页也可能
+// 不再是当前画布——所以每步执行前必须按 id 重新解析活节点。节点暂时不在当前画布（用户在
+// 浏览其他项目）就等它回来再执行，与任务队列"结果自动落回所属项目"的语义一致；节点在任何
+// 页都不存在（被删除）才中止该步。不这样做的话 runToolNode 等运行器的 findNode 守卫会静默
+// 跳过本步，而成功判定读到的是编组计划时捕获的旧对象（可能还留着上次执行的状态），编组
+// 会"正常完成"却什么都没做（2026-11-21 实踩：AI 图生成完成时用户已切到其他页，抠图被静默跳过）。
+function resolveGroupNodeForStep(node, run) {
+  return new Promise(resolve => {
+    const timer = window.setInterval(() => {
+      if (run.stopped) { clearInterval(timer); resolve(null); return; }
+      const live = findNode(node.id);
+      if (live) { clearInterval(timer); resolve(live); return; }
+      // 不在当前画布：只要节点还存在于某个项目页数据里就继续等（用户切回即恢复执行）
+      const kept = state.pages.some(page => (page.data?.nodes || []).some(item => item.id === node.id));
+      if (!kept) { clearInterval(timer); resolve(null); }
+    }, 250);
+  });
+}
+
 async function runCanvasGroupNode(node, run) {
-  if (run.stopped) return false;
+  node = await resolveGroupNodeForStep(node, run);
+  if (!node || run.stopped) return false;
   run.activeNodeId = node.id;
   renderNodes();
   if (node.type === "ai-image") {
@@ -12220,14 +12279,18 @@ let lightboxPenSelected = -1;
 let lightboxSelection = null;
 let lightboxPenOperation = "replace";
 let lightboxPenClosed = false;
-let lightboxPenBaseSelection = null;
+// 多条已闭合钢笔路径并存（各带自己的加减选关系与显示颜色），选区 = 按顺序折叠全部路径
+let lightboxPenPaths = [];
+let lightboxPenColor = ""; // 当前路径的显示颜色，画下第一个点时从色板轮换分配
+let lightboxPenPathColorIndex = 0;
+const LIGHTBOX_PEN_COLORS = ["#ff4fa3", "#31c8ff", "#ffb02e", "#7ede4f", "#b58cff", "#ff6b57"];
 const lightboxSelectionOverlay = document.createElement("canvas");
 lightboxSelectionOverlay.className = "lightbox-selection-overlay hidden";
 lightboxSelectionOverlay.setAttribute("aria-hidden", "true");
 els.lightbox.appendChild(lightboxSelectionOverlay);
 
 function captureLightboxSelection() {
-  return { selection: lightboxSelection, points: structuredClone(lightboxPenPoints), selected: lightboxPenSelected, operation: lightboxPenOperation, closed: lightboxPenClosed, base: lightboxPenBaseSelection };
+  return { selection: lightboxSelection, points: structuredClone(lightboxPenPoints), selected: lightboxPenSelected, operation: lightboxPenOperation, closed: lightboxPenClosed, paths: structuredClone(lightboxPenPaths) };
 }
 
 function restoreLightboxSelection(value) {
@@ -12236,7 +12299,7 @@ function restoreLightboxSelection(value) {
   lightboxPenSelected = value?.selected ?? -1;
   lightboxPenOperation = value?.operation || "replace";
   lightboxPenClosed = value?.closed || false;
-  lightboxPenBaseSelection = value?.base || null;
+  lightboxPenPaths = structuredClone(value?.paths || []);
   lightboxPenDrag = null;
   syncLightboxSelectionOverlay();
 }
@@ -12253,10 +12316,10 @@ function syncLightboxSelectionOverlay() {
     overlay.selection = lightboxSelection;
     canvas.dispatchEvent(new Event("canvasflow-selection-change"));
   }
-  const visible = lightboxPainting && (lightboxSelection || lightboxPenPoints.length);
+  const visible = lightboxPainting && (lightboxSelection || lightboxPenPoints.length || lightboxPenPaths.length);
   overlay.classList.toggle("hidden", !visible);
   $("lightboxPenClose").disabled = lightboxPenClosed || lightboxPenPoints.length < 3;
-  $("lightboxSelectionClear").disabled = !lightboxSelection && !lightboxPenPoints.length;
+  $("lightboxSelectionClear").disabled = !lightboxSelection && !lightboxPenPoints.length && !lightboxPenPaths.length;
   $("lightboxSelectionFill").disabled = !lightboxSelection?.hasPixels || !!document.querySelector?.(".region-hue-dialog");
   if (!visible) return;
   const rect = canvas.getBoundingClientRect();
@@ -12272,9 +12335,15 @@ function syncLightboxSelectionOverlay() {
   const unit = canvas.width / rect.width;
   const tokens = getComputedStyle(canvas);
   // 只显示矢量钢笔路径，不叠加像素掩膜边界；笔刷模式也保留这条路径。
-  ctx.strokeStyle = tokens.getPropertyValue("--primary").trim();
+  // 归档路径各按自己的颜色显示（细线无锚点），当前路径用它的分配色并保留锚点手柄。
   ctx.fillStyle = tokens.getPropertyValue("--panel-solid").trim();
   ctx.lineWidth = 1.5 * unit;
+  for (const path of lightboxPenPaths) {
+    if (!path.points.length) continue;
+    ctx.strokeStyle = path.color;
+    ctx.stroke(new Path2D(penSelectionPathData(path.points, true)));
+  }
+  ctx.strokeStyle = lightboxPenColor || tokens.getPropertyValue("--primary").trim();
   ctx.stroke(new Path2D(penSelectionPathData(lightboxPenPoints, lightboxPenClosed)));
   if (lightboxPaintMode !== "pen") return;
   for (let i = 0; i < lightboxPenPoints.length; i++) {
@@ -12314,17 +12383,29 @@ function closeLightboxPenPath() {
   syncLightboxSelectionOverlay();
 }
 
-function updateLightboxPenMask() {
-  const canvas = els.lightboxPaintCanvas;
+function rasterizeLightboxPenMask(points, width, height) {
   const raster = document.createElement("canvas");
-  raster.width = canvas.width; raster.height = canvas.height;
+  raster.width = width; raster.height = height;
   const ctx = raster.getContext("2d");
-  ctx.fill(new Path2D(penSelectionPathData(lightboxPenPoints, true)));
-  const pixels = ctx.getImageData(0, 0, raster.width, raster.height).data;
-  const incoming = new Uint8Array(raster.width * raster.height);
+  ctx.fill(new Path2D(penSelectionPathData(points, true)));
+  const pixels = ctx.getImageData(0, 0, width, height).data;
+  const incoming = new Uint8Array(width * height);
   for (let i = 0; i < incoming.length; i++) incoming[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0;
-  const mask = combinePenSelectionMasks(lightboxPenBaseSelection?.mask, incoming, lightboxPenOperation);
-  lightboxSelection = makeLightboxSelection(mask, raster.width, raster.height);
+  return incoming;
+}
+
+function updateLightboxPenMask() {
+  // 多路径折叠：每条归档路径按自己记录的加减选关系依次合成，当前闭合路径最后入列。
+  // 闭合只更新“之后落笔的约束范围”，不改动任何已画像素（笔画各自带着落笔时的选区快照）。
+  const canvas = els.lightboxPaintCanvas;
+  const entries = lightboxPenPaths.map(path => ({ points: path.points, operation: path.operation }));
+  if (lightboxPenClosed && lightboxPenPoints.length) entries.push({ points: lightboxPenPoints, operation: lightboxPenOperation });
+  if (!entries.length) { lightboxSelection = null; return; }
+  let mask = null;
+  for (const entry of entries) {
+    mask = combinePenSelectionMasks(mask, rasterizeLightboxPenMask(entry.points, canvas.width, canvas.height), entry.operation);
+  }
+  lightboxSelection = makeLightboxSelection(mask, canvas.width, canvas.height);
 }
 
 function beginLightboxPen(event, point) {
@@ -12346,9 +12427,14 @@ function beginLightboxPen(event, point) {
     }
   }
   if (index < 0) {
-    if (lightboxPenClosed) { lightboxPenPoints = []; lightboxPenClosed = false; }
+    if (lightboxPenClosed) {
+      // 上一条闭合路径归档为多路径之一（保留各自的加减选关系与显示颜色），当前路径让位给新路径
+      lightboxPenPaths.push({ points: structuredClone(lightboxPenPoints), operation: lightboxPenOperation, color: lightboxPenColor });
+      lightboxPenPoints = []; lightboxPenClosed = false;
+      updateLightboxPenMask();
+    }
     if (!lightboxPenPoints.length) {
-      lightboxPenBaseSelection = lightboxSelection;
+      lightboxPenColor = LIGHTBOX_PEN_COLORS[lightboxPenPathColorIndex++ % LIGHTBOX_PEN_COLORS.length];
       lightboxPenOperation = event.altKey ? "subtract" : event.shiftKey ? "add" : $("lightboxSelectionOperation").value;
     }
     index = lightboxPenPoints.length; fresh = true; part = "out";
@@ -12424,7 +12510,8 @@ document.addEventListener("keydown", event => {
   else return;
   lightboxPenSelected = lightboxPenPoints.length - 1;
   if (lightboxPenClosed) {
-    if (lightboxPenPoints.length < 3) { lightboxPenClosed = false; lightboxSelection = lightboxPenBaseSelection; }
+    // 锚点删到不足 3 个时放弃当前路径：从折叠里剔除它（只剩归档路径时选区=归档折叠，否则无选区）
+    if (lightboxPenPoints.length < 3) { lightboxPenClosed = false; updateLightboxPenMask(); }
     else updateLightboxPenMask();
   }
   rememberLightboxSelection(previous); syncLightboxSelectionOverlay();
@@ -14482,6 +14569,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       showMenu(ev.clientX, ev.clientY, [
         [canvasGroupIsCollapsed(groupId) ? "展开编组" : "收纳编组", () => toggleCanvasGroupCollapse(groupId, !canvasGroupIsCollapsed(groupId))],
         ["重命名编组", () => beginCanvasGroupRename(groupId)],
+        ["编组截图", () => screenshotCanvasGroup(groupId)],
         ["取消编组", () => ungroupCanvasSelection()],
       ]);
       renderNodes();
@@ -14562,7 +14650,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     const canvasMenuGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
-    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => beginCanvasGroupRename(canvasMenuGroupIds[0])], ["取消编组", () => ungroupCanvasSelection()]);
+    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => beginCanvasGroupRename(canvasMenuGroupIds[0])], ["编组截图", () => screenshotCanvasGroup(canvasMenuGroupIds[0])], ["取消编组", () => ungroupCanvasSelection()]);
     const hasSelectionConnections = state.edges.some(edge => state.selected.has(edge.from.node) || state.selected.has(edge.to.node));
     items.push(
       ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
@@ -15641,6 +15729,228 @@ function drawExamplePreview(canvas, example) {
   context.fillStyle = textColor;
   context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
   context.fillText(`${nodes.length}`, width - pad - 16, height - pad - 2);
+}
+
+// ===== 编组截图（2026-11-21）：把画布编组渲染成 PNG 存盘 =====
+// 文件名 = 编组名.png，与案例构建脚本的封面约定（--covers 目录里「文件名=编组标题」）直接对上，
+// 也可作为附件直接发给别人或 AI。纯几何手绘渲染（不用 DOM 序列化），颜色取自 #app 的语义令牌，跟随明暗主题。
+
+function groupScreenshotNodeTitle(node) {
+  if (!node) return "节点";
+  switch (node.type) {
+    case "palette": return "调色盘";
+    case "text": return "文字节点";
+    case "variable": return "变量节点";
+    case "chat": return "AI对话";
+    case "browser-image": return "浏览器生图";
+    case "local-sd": return "本地 SD";
+    case "image": return "图片节点";
+    case "folder": return node.folderName || "图片文件夹";
+    case "ai-image": return node.seq ? `AI绘图 #${node.seq}` : "AI绘图";
+    case "ai-video": return node.seq ? `AI视频 #${node.seq}` : "AI视频";
+    case "video-ref": return "视频引用";
+    case "angle-image": return "角度变化";
+    case "screenshot-input": return `截图功能节点 #${node.screenshotSeq || 1}`;
+    case "tool-node": return node.toolName || "拓展节点";
+    case "group": return "多任务节点";
+    default: return "节点";
+  }
+}
+
+// 纯函数（测试入口）：编组截图计划——成员、组内连线、标题、几何与落盘文件名。
+// 成员与组内连线口径与 tools/build-canvas-examples.mjs 的 extractExamplesFromProject 保持一致；
+// canvasGroupBounds 会顺带把外框几何刷新到最新（与拖拽后的画布外框一致）。
+function groupScreenshotPlan(groupId) {
+  const members = canvasGroupMembers(groupId);
+  if (members.length < 2) return null;
+  const memberIds = new Set(members.map(node => node.id));
+  const internalEdges = state.edges.filter(edge => memberIds.has(edge?.from?.node) && memberIds.has(edge?.to?.node));
+  const title = String(state.canvasGroupNames?.[groupId] || "").trim() || "编组";
+  const bounds = canvasGroupBounds(members);
+  return { groupId, title, members, internalEdges, bounds, fileName: `${safeName(title).slice(0, 40) || "编组"}.png` };
+}
+
+function loadGroupScreenshotImage(src) {
+  return new Promise(resolve => {
+    if (!src) return resolve(null);
+    const image = new Image();
+    const timer = setTimeout(() => resolve(null), 4000);
+    image.onload = () => { clearTimeout(timer); resolve(image); };
+    image.onerror = () => { clearTimeout(timer); resolve(null); };
+    image.src = src;
+  });
+}
+
+function groupScreenshotWrapText(context, text, maxWidth, maxLines) {
+  const paragraphs = String(text || "").trim().split(/\r?\n/);
+  const lines = [];
+  let truncated = false;
+  for (let p = 0; p < paragraphs.length && lines.length < maxLines; p += 1) {
+    let rest = paragraphs[p];
+    while (rest && lines.length < maxLines) {
+      if (context.measureText(rest).width <= maxWidth) { lines.push(rest); rest = ""; }
+      else {
+        let cut = rest.length;
+        while (cut > 1 && context.measureText(rest.slice(0, cut)).width > maxWidth) cut -= 1;
+        lines.push(rest.slice(0, Math.max(1, cut)));
+        rest = rest.slice(Math.max(1, cut));
+      }
+    }
+    if (rest) truncated = true;
+  }
+  if (truncated && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last.length > 1 && context.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+    lines[lines.length - 1] = `${last}…`;
+  }
+  return lines;
+}
+
+const _groupScreenshotBusy = new Set();
+
+async function screenshotCanvasGroup(groupId) {
+  if (_groupScreenshotBusy.has(groupId)) return;
+  const plan = groupScreenshotPlan(groupId);
+  if (!plan) { toast("编组至少要有 2 个节点才能截图"); return; }
+  _groupScreenshotBusy.add(groupId);
+  try {
+    const { bounds, members, internalEdges, title } = plan;
+    // 长边上限：封面卡片与对话附件都不需要原始分辨率，超大编组整体等比缩
+    const MAX_SIDE = 2400;
+    const scale = Math.min(2, MAX_SIDE / Math.max(bounds.w, bounds.h, 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bounds.w * scale));
+    canvas.height = Math.max(1, Math.round(bounds.h * scale));
+    const context = canvas.getContext("2d");
+    const appStyles = getComputedStyle(els.app || document.body);
+    const token = name => appStyles.getPropertyValue(name).trim();
+    const colors = {
+      panel: token("--panel") || "#ffffff",
+      panel2: token("--panel-2") || "#e0e2e5",
+      line: token("--line") || "#a7abb2",
+      text: token("--text") || "#202226",
+      muted: token("--muted") || "#6b7280",
+      selected: token("--selected") || "#858a92",
+      control: token("--node-control") || "",
+    };
+    context.scale(scale, scale);
+
+    // 背景 + 编组外框（同 .node-group-frame：面板底 + selected 50% 混合 + 虚线描边）
+    context.fillStyle = colors.panel;
+    context.fillRect(0, 0, bounds.w, bounds.h);
+    context.save();
+    context.globalAlpha = .5;
+    context.fillStyle = colors.selected;
+    context.fillRect(0, 0, bounds.w, bounds.h);
+    context.restore();
+    context.strokeStyle = colors.selected;
+    context.lineWidth = 1;
+    context.setLineDash([6, 4]);
+    context.strokeRect(.5, .5, bounds.w - 1, bounds.h - 1);
+    context.setLineDash([]);
+    // 编组标题（同 .node-group-title：顶部 46px 区，左 13px，muted 14px）
+    context.fillStyle = colors.muted;
+    context.font = "14px Inter, 'HarmonyOS Sans SC', sans-serif";
+    context.textBaseline = "middle";
+    context.fillText(title, 13, 24);
+
+    // 组内连线与节点按画布世界坐标绘制（整体平移到 bounds 局部系）
+    context.save();
+    context.translate(-bounds.x, -bounds.y);
+    context.strokeStyle = colors.line;
+    context.lineWidth = 2.2;
+    for (const edge of internalEdges) {
+      const from = members.find(node => node.id === edge.from?.node);
+      const to = members.find(node => node.id === edge.to?.node);
+      if (!from || !to) continue;
+      const a = canvasGroupNodeRect(from), b = canvasGroupNodeRect(to);
+      const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+      context.beginPath();
+      context.moveTo(x1, y1);
+      context.bezierCurveTo(x1 + 60, y1, x2 - 60, y2, x2, y2);
+      context.stroke();
+      // 入口小箭头
+      context.beginPath();
+      context.moveTo(x2, y2);
+      context.lineTo(x2 - 7, y2 - 4);
+      context.lineTo(x2 - 7, y2 + 4);
+      context.closePath();
+      context.fillStyle = colors.line;
+      context.fill();
+    }
+    // 节点卡片（按 state.nodes 顺序 = 画布叠放次序）
+    for (const node of members) {
+      const rect = canvasGroupNodeRect(node);
+      context.save();
+      if (node.disabled) context.globalAlpha = .45;
+      context.beginPath();
+      context.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+      context.fillStyle = colors.panel;
+      context.fill();
+      context.strokeStyle = colors.line;
+      context.lineWidth = 1;
+      context.stroke();
+      // 标题栏（同 .node-head 生效块：46px、13px 字、左 13px）
+      context.fillStyle = colors.text;
+      context.font = "13px Inter, 'HarmonyOS Sans SC', sans-serif";
+      context.textBaseline = "middle";
+      const headText = groupScreenshotNodeTitle(node);
+      context.fillText(headText, rect.x + 13, rect.y + 23, rect.w - 26);
+      // 正文
+      const bodyY = rect.y + 46, bodyH = rect.y + rect.h - bodyY - 8, bodyW = rect.w - 20, bodyX = rect.x + 10;
+      const imageSrc = node.image || node.generatedImage || "";
+      if (imageSrc) {
+        const image = await loadGroupScreenshotImage(imageSrc);
+        context.save();
+        context.beginPath();
+        context.roundRect(bodyX, bodyY, bodyW, Math.max(10, bodyH), 8);
+        context.clip();
+        context.fillStyle = colors.control || colors.panel2;
+        context.fillRect(bodyX, bodyY, bodyW, Math.max(10, bodyH));
+        if (image) {
+          const fit = Math.min(bodyW / image.naturalWidth, Math.max(10, bodyH) / image.naturalHeight);
+          const drawW = image.naturalWidth * fit, drawH = image.naturalHeight * fit;
+          context.drawImage(image, bodyX + (bodyW - drawW) / 2, bodyY + (Math.max(10, bodyH) - drawH) / 2, drawW, drawH);
+        } else {
+          context.fillStyle = colors.muted;
+          context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
+          context.textAlign = "center";
+          context.fillText("图片", bodyX + bodyW / 2, bodyY + Math.max(10, bodyH) / 2);
+          context.textAlign = "left";
+        }
+        context.restore();
+      } else if (String(node.text || "").trim()) {
+        context.fillStyle = colors.text;
+        context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
+        context.textBaseline = "top";
+        const lines = groupScreenshotWrapText(context, node.text, bodyW, Math.max(1, Math.floor(bodyH / 18)));
+        lines.forEach((line, index) => context.fillText(line, bodyX, bodyY + 6 + index * 18));
+      } else {
+        context.fillStyle = colors.muted;
+        context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
+        context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.fillText(headText, rect.x + rect.w / 2, bodyY + Math.max(10, bodyH) / 2);
+        context.textAlign = "left";
+      }
+      context.restore();
+    }
+    context.restore();
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const response = await apiFetch("/api/save-export-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderName: "编组截图", baseFolder: "export", files: [{ name: plan.fileName, data: dataUrl }] }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
+    toast(`编组截图已保存：${result.files?.[0] || plan.fileName}`);
+  } catch (error) {
+    toast(`编组截图失败：${error?.message || error}`);
+  } finally {
+    _groupScreenshotBusy.delete(groupId);
+  }
 }
 
 function renderExamplesPanel() {

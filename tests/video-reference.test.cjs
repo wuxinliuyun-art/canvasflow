@@ -1,11 +1,14 @@
 // 视频引用节点（video-ref）：vm 切片真实源码 + 静态接线断言。
-// ① 目录事实：仅 apimart seedance-2.0 系声明 maxVideos:3，其余模型（agtoken 全系/H3/Hailuo/wan）不声明；
+// ① 目录事实：apimart seedance-2.0 三兄弟（≤3）+ agtoken Seedance 两模型（2.0 ≤3 / 2.5 ≤10）声明 maxVideos；
+//    H3/Hailuo/agtoken Wan 系不声明（Wan 参考视频按输入+输出时长合计计秒，不开）；
 // ② 引用工具函数：normalize 补缺省 / 过期判定（10 分钟余量）/ 50MB 上限 / 扩展名白名单；
 // ③ uploadVideoRef：有 path 走 filePath、无 path 走 base64，响应 {url,expiresAt,bytes} 写回节点，_videoRefUploading 复位；
 // ④ ensureVideoRefUrl：未过期直接复用（不调上传），过期且有 path 重传，既无 url 又无 path 报错；
 // ⑤ enqueueVideoNode：maxVideos 截取 + 超限提示 / 不支持的模型拒绝 / 全空拒绝；
 // ⑥ submitVideoGeneration：apimart 顶层 video_urls 与 image_urls 并存；first_frame 模型互斥拒绝；
-//    agtoken（maxVideos 缺省）带参考视频尽早拒绝；多顶层声明切片不能括号包裹（vm 铁坑）。
+//    agtoken Seedance 带参考视频走兼容接口 /api/agtoken/seedance-task（content[] 多模态素材 + compatModel 全名映射 +
+//    task.videoChannel 通道标记）；Wan 系（maxVideos 缺省）带参考视频尽早拒绝；无视频回归统一接口；
+//    pollVideoTask 按通道分流查询路径。多顶层声明切片不能括号包裹（vm 铁坑）。
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -76,24 +79,39 @@ const videoRefNode = extra => ({ id: 'n_ref1', type: 'video-ref', fileName: 'ref
 
 // ---------- 目录事实 ----------
 
-test('目录：仅 apimart seedance-2.0 系声明 maxVideos:3，其余模型不声明', () => {
+test('目录：apimart seedance-2.0 三兄弟（≤3）+ agtoken Seedance 两模型声明 maxVideos，Wan/H3/Hailuo 不声明', () => {
   const ctx = buildCatalogHarness();
   const models = ctx.window.CANVASFLOW_VIDEO_CATALOG.models;
   const withVideos = models.filter(model => model.maxVideos);
   // vm 跨 realm 数组原型与主 realm 不同，deepEqual/deepStrictEqual 会误判，用 JSON.stringify 比较
   assert.equal(
     JSON.stringify(withVideos.map(model => model.id).sort()),
-    JSON.stringify(['seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini']),
-    '只有 seedance-2.0 三兄弟带 maxVideos'
+    JSON.stringify(['doubao-seedance-2-0-260128（国内）', 'seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini', 'seedance2.5']),
+    'apimart 三兄弟 + agtoken Seedance 两模型带 maxVideos'
   );
-  for (const model of withVideos) {
-    assert.equal(model.maxVideos, 3, '上限 3 个（上游文档）');
+  const entryById = id => models.find(model => model.id === id);
+  // apimart 三兄弟：顶层 video_urls[]，上限 3
+  for (const id of ['seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini']) {
+    const model = entryById(id);
+    assert.equal(model.maxVideos, 3, 'apimart 上限 3 个（上游文档）');
     assert.equal(model.apiType, 'apimart');
     assert.ok(/参考视频/.test(model.tips), 'tips 必须说明参考视频能力');
   }
-  // agtoken 全系 + H3/Hailuo/wan 均无 maxVideos（无上传通道/未确认支持面）
-  assert.ok(models.some(model => model.apiType === 'agtoken'));
-  assert.equal(models.filter(model => model.apiType === 'agtoken' && model.maxVideos).length, 0);
+  // agtoken Seedance 系：Seedance 兼容接口 content[] reference_video；2.5 需要 compatModel 全名映射
+  const agtokenPro = entryById('doubao-seedance-2-0-260128（国内）');
+  assert.equal(agtokenPro.maxVideos, 3, 'agtoken 2.0 上限 3 个（兼容接口模型限制表）');
+  assert.equal(agtokenPro.apiType, 'agtoken');
+  assert.equal(agtokenPro.compatModel, undefined, '2.0 目录 id 就是兼容接口全名，无需映射');
+  const agtoken25 = entryById('seedance2.5');
+  assert.equal(agtoken25.maxVideos, 10, 'agtoken 2.5 上限 10 个（兼容接口模型限制表）');
+  assert.equal(agtoken25.compatModel, 'doubao-seedance-2-5-260628（国内）', '2.5 目录 id 是别名，兼容接口只认全名');
+  for (const model of [agtokenPro, agtoken25]) {
+    assert.ok(/参考视频/.test(model.tips), 'tips 必须说明参考视频能力');
+  }
+  // agtoken Wan 系 + H3/Hailuo 均无 maxVideos（Wan 参考视频按输入+输出时长合计计秒，不开）
+  for (const id of ['wan3.0-video（国内）', 'wan3.0-video-prime（国内）', 'MiniMax-H3', 'MiniMax-Hailuo-2.3-Fast']) {
+    assert.equal(entryById(id)?.maxVideos || 0, 0, `${id} 不声明 maxVideos`);
+  }
 });
 
 // ---------- 工具函数 ----------
@@ -236,6 +254,10 @@ test('enqueueVideoNode：不支持的模型带参考视频 → 拒绝入队', ()
   assert.equal(harness.context.enqueueVideoNode('n_video'), 0);
   assert.equal(harness.context.aiTaskQueue.items.length, 0);
   assert.ok(harness.toasts.some(message => message.includes('不支持参考视频')), '提示不支持并指路 seedance');
+  // agtoken Wan 系同样拒绝（maxVideos 缺省），文案指向 Seedance 系（两家均可）
+  const wan = buildEnqueueHarness({ refs: [ref('r1', 0)], model: 'wan3.0-video（国内）' });
+  assert.equal(wan.context.enqueueVideoNode('n_video'), 0);
+  assert.ok(wan.toasts.some(message => message.includes('Seedance 系模型')), 'wan 拒绝文案指向 Seedance 系');
 });
 
 test('enqueueVideoNode：文字/参考图/参考视频全空 → 拒绝入队', () => {
@@ -268,6 +290,8 @@ function buildSubmitHarness({ refs = [], model = 'seedance-2.0', images = [], en
     desktop: null,
     state: { settings: { apiKey: 'sk-a', agtokenApiKey: 'sk-g' } },
     VIDEO_TASK_MAX_IMAGES: 9,
+    VIDEO_TASK_MAX_ATTEMPTS: 360,
+    VIDEO_TASK_POLL_MS: 1,
     videoCatalogEntry: modelId => context.window.CANVASFLOW_VIDEO_CATALOG.models.find(entry => entry.id === modelId) || null,
     activeApiKey: apiType => (apiType === 'agtoken' ? 'sk-g' : 'sk-a'),
     materializeReferenceImage: async value => `data:image/png;base64,${value}`,
@@ -308,13 +332,87 @@ test('submitVideoGeneration：first_frame 模型带参考视频 → 互斥拒绝
   await assert.rejects(() => harness.context.submitVideoGeneration(harness.task), /互斥|不支持参考视频/);
 });
 
-test('submitVideoGeneration：agtoken 模型（maxVideos 缺省）带参考视频 → 尽早拒绝', async () => {
+test('submitVideoGeneration：agtoken Wan（maxVideos 缺省）带参考视频 → 尽早拒绝', async () => {
   const harness = buildSubmitHarness({
     refs: [{ nodeId: 'r1', videoUrl: 'https://cdn.example/r1.mp4' }],
-    model: 'doubao-seedance-2-0-260128（国内）',
+    model: 'wan3.0-video（国内）',
   });
-  await assert.rejects(() => harness.context.submitVideoGeneration(harness.task), /Seedance 2\.0 系/);
+  await assert.rejects(() => harness.context.submitVideoGeneration(harness.task), /Seedance 系/);
   assert.equal(harness.calls.length, 0, '拒绝发生在发请求之前');
+});
+
+test('submitVideoGeneration：agtoken Seedance + 参考视频 → 兼容接口 content[] 形状 + 通道标记', async () => {
+  const harness = buildSubmitHarness({
+    refs: [
+      { nodeId: 'r1', videoUrl: 'https://cdn.example/r1.mp4', videoUrlExpiresAt: Date.now() + 86400000 },
+      { nodeId: 'r2', videoUrl: 'https://cdn.example/r2.mp4', videoUrlExpiresAt: Date.now() + 86400000 },
+    ],
+    model: 'doubao-seedance-2-0-260128（国内）',
+    images: ['imgA', 'imgB'],
+  });
+  const taskId = await harness.context.submitVideoGeneration(harness.task);
+  assert.equal(taskId, 'task_01ABC', '兼容接口提交响应能取到任务号');
+  assert.equal(harness.calls.length, 1);
+  assert.equal(harness.calls[0].route, '/api/agtoken/seedance-task', '带参考视频改走 Seedance 兼容接口路由');
+  const body = harness.calls[0].body;
+  assert.equal(body.model, 'doubao-seedance-2-0-260128（国内）', '2.0 目录 id 即全名');
+  assert.equal(body._apiKey, 'sk-g', 'agtoken key 随请求体');
+  // content[] 多模态素材：text 在前，图片按 reference_image、视频按 reference_video 依序入列
+  assert.equal(body.content.length, 5);
+  assert.deepEqual(body.content[0], { type: 'text', text: '风格迁移' });
+  assert.deepEqual(body.content[1], { type: 'image_url', image_url: { url: 'data:image/png;base64,imgA' }, role: 'reference_image' });
+  assert.deepEqual(body.content[2], { type: 'image_url', image_url: { url: 'data:image/png;base64,imgB' }, role: 'reference_image' });
+  assert.deepEqual(body.content[3], { type: 'video_url', video_url: { url: 'https://cdn.example/r1.mp4' }, role: 'reference_video' });
+  assert.deepEqual(body.content[4], { type: 'video_url', video_url: { url: 'https://cdn.example/r2.mp4' }, role: 'reference_video' });
+  // 兼容接口顶层平铺：不带 metadata/seconds（那是统一接口的形状）
+  assert.equal(body.metadata, undefined);
+  assert.equal(body.seconds, undefined);
+  assert.equal(body.duration, 5);
+  assert.equal(body.resolution, '720p');
+  assert.equal(body.ratio, '16:9');
+  assert.equal(body.generate_audio, true);
+  assert.equal(body.watermark, false);
+  assert.equal(harness.task.videoChannel, 'agtoken-seedance', '通道标记供轮询分流');
+});
+
+test('submitVideoGeneration：seedance2.5 带参考视频 → compatModel 全名映射', async () => {
+  const harness = buildSubmitHarness({
+    refs: [{ nodeId: 'r1', videoUrl: 'https://cdn.example/r1.mp4', videoUrlExpiresAt: Date.now() + 86400000 }],
+    model: 'seedance2.5',
+  });
+  await harness.context.submitVideoGeneration(harness.task);
+  assert.equal(harness.calls[0].route, '/api/agtoken/seedance-task');
+  assert.equal(harness.calls[0].body.model, 'doubao-seedance-2-5-260628（国内）', '目录 id 是别名，提交用兼容接口全名');
+  assert.equal(harness.task.videoChannel, 'agtoken-seedance');
+});
+
+test('submitVideoGeneration：agtoken 无参考视频 → 仍走统一接口（回归）', async () => {
+  const harness = buildSubmitHarness({
+    model: 'doubao-seedance-2-0-260128（国内）',
+    images: ['imgA'],
+  });
+  await harness.context.submitVideoGeneration(harness.task);
+  assert.equal(harness.calls[0].route, '/api/agtoken/video-generate', '无视频维持统一接口');
+  assert.equal(harness.calls[0].body.metadata?.ratio, '16:9');
+  assert.equal(harness.calls[0].body.duration, 5);
+  assert.equal(harness.calls[0].body.seconds, 5, '统一接口 duration 与 seconds 同时携带');
+  assert.equal(harness.calls[0].body.content, undefined, '不带兼容接口 content[]');
+  assert.equal(harness.task.videoChannel, undefined, '不标记兼容通道');
+});
+
+test('pollVideoTask：按通道分流查询路径', async () => {
+  const harness = buildSubmitHarness({});
+  const stubSucceeded = async (route, options) => {
+    harness.calls.push({ route, method: options.method || 'GET' });
+    return { ok: true, status: 200, json: async () => ({ id: 'task_x', status: 'succeeded', content: { video_url: 'https://up.example/out.mp4' } }) };
+  };
+  harness.context.apiFetch = stubSucceeded;
+  assert.equal(await harness.context.pollVideoTask('task_01AbC', null, 'agtoken-seedance'), 'https://up.example/out.mp4');
+  assert.equal(harness.calls[0].route, '/api/agtoken/seedance-task/task_01AbC', '兼容通道走 seedance-task 查询（含 _ 任务号原样）');
+  assert.equal(await harness.context.pollVideoTask('vid9', null, 'apimart'), 'https://up.example/out.mp4');
+  assert.equal(harness.calls[1].route, '/api/apimart/video-task/vid9', 'apimart 通道不变');
+  assert.equal(await harness.context.pollVideoTask('vid8', null, 'agtoken'), 'https://up.example/out.mp4');
+  assert.equal(harness.calls[2].route, '/api/agtoken/video-task/vid8', '默认通道走统一接口查询');
 });
 
 test('submitVideoGeneration：无参考视频时 payload 不带 video_urls（回归）', async () => {
@@ -346,6 +444,10 @@ test('app.js 静态接线：节点注册/拖拽/菜单/收集器齐全', () => {
     'if (node.type !== "video-ref") return;',
     'referenceVideos: videoRefs.map',
     'payload.video_urls = videoUrls;',
+    // agtoken Seedance 兼容接口分流：content[] 构造 + 通道标记 + 轮询按通道选路
+    'task.videoChannel = "agtoken-seedance"',
+    'role: "reference_video"',
+    'task.videoChannel || videoApiType',
     'type === "video-ref" ? VIDEO_REF_NODE_HEIGHT',
     'videoPath: type === "video-ref" ? "" : undefined',
   ]) {
@@ -370,6 +472,22 @@ test('上传路由三处注册 + 桌面桥齐全（JS/C#/mac 双实现）', () =
   assert.ok(macMainSource.includes('desktop:choose-video-file'), 'mac ipc 注册');
   assert.ok(macMainSource.includes('async function chooseVideoFile('), 'mac handler');
   assert.ok(macPreloadSource.includes('chooseVideoFile:'), 'mac preload 注入');
+});
+
+test('agtoken Seedance 兼容接口路由四处注册（server/runtime/C# 精确+前缀）', () => {
+  // server.js：提交 + 查询，上游路径 /api/v3/contents/generations/tasks（与 agtoken 统一接口并存）
+  assert.ok(serverSource.includes('"/api/agtoken/seedance-task"'), 'server.js 提交路由');
+  assert.ok(serverSource.includes('startsWith("/api/agtoken/seedance-task/")'), 'server.js 查询前缀');
+  assert.ok(serverSource.includes('"/api/v3/contents/generations/tasks"'), 'server.js 上游路径');
+  assert.ok(serverSource.includes('"/api/v3/contents/generations/tasks/"'), 'server.js 查询上游路径');
+  // 兼容接口任务号形如 task_xxx（含下划线），正则必须多放行 _
+  assert.ok(serverSource.includes('[A-Za-z0-9._:\\-_]'), 'server.js 任务号正则含 _');
+  assert.ok(runtimeSource.includes('"/api/agtoken/seedance-task"'), 'canvas-runtime 精确条目');
+  assert.ok(runtimeSource.includes('startsWith("/api/agtoken/seedance-task/")'), 'canvas-runtime 前缀');
+  assert.ok(desktopApiSource.includes('"/api/agtoken/seedance-task"'), 'DesktopApi IsNetworkRoute 精确');
+  assert.ok(desktopApiSource.includes('StartsWith("/api/agtoken/seedance-task/", StringComparison.Ordinal)'), 'DesktopApi IsNetworkRoute 前缀');
+  assert.ok(desktopApiSource.includes('"/api/v3/contents/generations/tasks"'), 'DesktopApi 上游路径');
+  assert.ok(desktopApiSource.includes('seedanceTaskId, @"^[A-Za-z0-9._:\\-_]{1,200}$"'), 'DesktopApi 任务号正则含 _');
 });
 
 test('界面样式与 ?v= 基线', () => {

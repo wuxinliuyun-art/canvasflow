@@ -97,12 +97,13 @@ internal sealed class DesktopApi
 
     private static bool IsNetworkRoute(string path) => path is "/api/generate" or "/api/midjourney/generate" or "/api/models" or "/api/balance" or "/api/download-image" or "/api/update/check"
         or "/api/agtoken/generate" or "/api/agtoken/edits" or "/api/agtoken/models"
-        or "/api/agtoken/video-generate" or "/api/apimart/video-generate" or "/api/apimart/video-upload" or "/api/download-video"
+        or "/api/agtoken/video-generate" or "/api/agtoken/seedance-task" or "/api/apimart/video-generate" or "/api/apimart/video-upload" or "/api/download-video"
         or "/api/chat/completions" or "/api/chat-custom/models"
         or "/api/comfyui/config" or "/api/comfyui/test" or "/api/comfyui/workflows/import" or "/api/comfyui/workflows/update" or "/api/comfyui/workflows/delete" or "/api/comfyui/workflows/reorder" or "/api/comfyui/workflows/user-list" or "/api/comfyui/object-info" or "/api/comfyui/run" or "/api/comfyui/cancel"
         or "/api/browser-transfer" or "/api/browser-task/cancel" or "/api/browser-task/pending" or "/api/browser-task" or "/api/browser-task/next" or "/api/browser-task/result"
         || path.StartsWith("/api/task/", StringComparison.Ordinal)
         || path.StartsWith("/api/agtoken/video-task/", StringComparison.Ordinal)
+        || path.StartsWith("/api/agtoken/seedance-task/", StringComparison.Ordinal)
         || path.StartsWith("/api/apimart/video-task/", StringComparison.Ordinal)
         || path.StartsWith("/api/browser-task/status/", StringComparison.Ordinal)
         || path.StartsWith("/api/comfyui/status/", StringComparison.Ordinal);
@@ -212,6 +213,25 @@ internal sealed class DesktopApi
                 if (!Regex.IsMatch(videoTaskId, @"^[A-Za-z0-9._:-]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
                 var taskKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
                 return await ProxyAgtokenAsync(HttpMethod.Get, "/v1/video/generations/" + Uri.EscapeDataString(videoTaskId), null, taskKey, cancellationToken);
+            }
+            if (method == "POST" && path == "/api/agtoken/seedance-task")
+            {
+                // AI 视频节点（agtoken Seedance 兼容接口，带参考视频的任务专用）：火山方舟同构，透传不做字段转换；
+                // content[] 多模态素材由前端构造，模型名用 compatModel 全名
+                var seedancePayload = JsonNode.Parse(body)?.AsObject() ?? throw new InvalidDataException("视频生成参数为空");
+                var seedancePayloadKey = seedancePayload.TryGetPropertyValue("_apiKey", out var seedanceKeyNode) ? seedanceKeyNode?.GetValue<string>() ?? "" : "";
+                seedancePayload.Remove("_apiKey");
+                var seedanceUpstreamKey = string.IsNullOrWhiteSpace(seedancePayloadKey) ? apiKey : seedancePayloadKey;
+                if (string.IsNullOrWhiteSpace(seedanceUpstreamKey)) seedanceUpstreamKey = _getAgtokenKey();
+                return await ProxyAgtokenAsync(HttpMethod.Post, "/api/v3/contents/generations/tasks", seedancePayload.ToJsonString(), seedanceUpstreamKey, cancellationToken);
+            }
+            if (method == "GET" && path.StartsWith("/api/agtoken/seedance-task/", StringComparison.Ordinal))
+            {
+                // 兼容接口任务号形如 task_xxx（含下划线），校验正则比统一接口的多放行 _
+                var seedanceTaskId = Uri.UnescapeDataString(path["/api/agtoken/seedance-task/".Length..]);
+                if (!Regex.IsMatch(seedanceTaskId, @"^[A-Za-z0-9._:\-_]{1,200}$")) throw new InvalidDataException("任务编号格式不正确");
+                var seedanceTaskKey = string.IsNullOrWhiteSpace(apiKey) ? _getAgtokenKey() : apiKey;
+                return await ProxyAgtokenAsync(HttpMethod.Get, "/api/v3/contents/generations/tasks/" + Uri.EscapeDataString(seedanceTaskId), null, seedanceTaskKey, cancellationToken);
             }
             if (method == "POST" && path == "/api/apimart/video-generate")
             {

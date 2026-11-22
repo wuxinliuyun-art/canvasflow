@@ -126,6 +126,39 @@ test("ai-video routes: apimart submits to /v1/videos/generations and polls /v1/t
   assert.equal(captured[3].authorization, "Bearer sk-agtoken-fallback");
 });
 
+test("agtoken seedance-task routes: Ark-compat passthrough to /api/v3/contents/generations/tasks with agtoken slot", async t => {
+  const { instance, restore } = await startFixture();
+  t.after(async () => { await instance.close(); restore(); });
+  const base = instance.url;
+
+  captured.length = 0;
+  // 提交：body._apiKey 优先，剥离后不透传；上游为 Seedance 兼容接口（火山方舟同构，透传不转换）
+  await post(base + "api/agtoken/seedance-task", {
+    model: "doubao-seedance-2-5-260628（国内）",
+    content: [{ type: "text", text: "cat" }, { type: "video_url", video_url: { url: "https://cdn.example/r.mp4" }, role: "reference_video" }],
+    duration: 5,
+    _apiKey: "sk-seedance-body",
+  });
+  assert.equal(captured[0].host, "agtoken.vip");
+  assert.equal(captured[0].path, "/api/v3/contents/generations/tasks");
+  assert.equal(captured[0].authorization, "Bearer sk-seedance-body");
+
+  // 无 body key 回落 agtoken 槽（mac getApiKey / Windows secrets 语义）
+  await post(base + "api/agtoken/seedance-task", { model: "doubao-seedance-2-0-260128（国内）", content: [] });
+  assert.equal(captured[1].authorization, "Bearer sk-agtoken-fallback");
+
+  // 查询与提交同前缀；任务号 task_xxx（含下划线）原样透传
+  const poll = await fetch(base + "api/agtoken/seedance-task/task_01J9HA7JPQ9A0Z6JZ3V8M9W6PZ");
+  assert.equal(poll.status, 200);
+  assert.equal(captured[2].path, "/api/v3/contents/generations/tasks/task_01J9HA7JPQ9A0Z6JZ3V8M9W6PZ");
+  assert.equal(captured[2].authorization, "Bearer sk-agtoken-fallback");
+
+  // 非法任务号拒绝且不发上游
+  const bad = await fetch(base + "api/agtoken/seedance-task/" + encodeURIComponent("bad/id"));
+  assert.equal(bad.status, 400);
+  assert.equal(captured.length, 3, "非法任务号不发上游");
+});
+
 test("video-reference upload route: filePath/base64 multipart to /v1/uploads/videos with slotted key", async t => {
   const { instance, restore } = await startFixture();
   t.after(async () => { await instance.close(); restore(); });

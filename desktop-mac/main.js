@@ -504,13 +504,27 @@ function requestSaveThenClose(win) {
 
 function createWindow() {
   const saved = loadWindowState();
+  // 固定默认 1440×900 在 MacBook 内建屏（工作区高常 < 900）会顶出屏幕；保存的 x/y 在
+  // 外接屏拔掉后可能落在屏幕外——两者都会让标题栏不可见（2026-11-23 用户实测同款症状）。
+  // 宽高钳到主屏工作区；恢复坐标必须落在任一显示器工作区内，否则丢弃交给系统居中。
+  const { screen } = require("electron");
+  const primaryWork = screen.getPrimaryDisplay().workArea;
+  const minWidth = Math.min(960, primaryWork.width);
+  const minHeight = Math.min(600, primaryWork.height);
+  const width = Math.max(minWidth, Math.min(Number.isFinite(saved.width) ? saved.width : 1440, primaryWork.width));
+  const height = Math.max(minHeight, Math.min(Number.isFinite(saved.height) ? saved.height : 900, primaryWork.height));
+  const boundsOnScreen = Number.isFinite(saved.x) && Number.isFinite(saved.y)
+    && screen.getAllDisplays().some(display => {
+      const area = display.workArea;
+      return saved.x >= area.x - 20 && saved.y >= area.y - 20
+        && saved.x < area.x + area.width && saved.y < area.y + area.height;
+    });
   const win = new BrowserWindow({
-    width: saved.width || 1440,
-    height: saved.height || 900,
-    x: Number.isFinite(saved.x) ? saved.x : undefined,
-    y: Number.isFinite(saved.y) ? saved.y : undefined,
-    minWidth: 960,
-    minHeight: 600,
+    width,
+    height,
+    ...(boundsOnScreen ? { x: saved.x, y: saved.y } : {}),
+    minWidth,
+    minHeight,
     show: false,
     title: "CanvasFlow",
     backgroundColor: "#f4f4f5",

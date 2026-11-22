@@ -461,10 +461,12 @@ test('10B 扇入四支线：3 图 1 文字拆 4 任务，图一/图三批注各�
     expandTextNodeVariables: n => String(n.text || ''),
     variableNodeOutput: () => '',
     isLinkedUpscaleNode: () => false,
-    linkedUpscaleOutputs: () => [],
+    isAutoMattingTool: () => false,
+    linkedToolOutputs: () => [],
     window: { CanvasFlowImageAnnotations: annotations },
   };
-  const collect = vm.runInNewContext(`(${slice})`, context);
+  const collect = vm.runInNewContext(`(${slice}
+)`, context);
   const result = collect('n5');
   // vm 跨 realm 数组先展开到宿主 realm 再断言（deepStrictEqual 对跨 realm 对象会误报）
   const branches = JSON.parse(JSON.stringify(result.branches));
@@ -557,10 +559,12 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
     expandTextNodeVariables: n => String(n.text || ''),
     variableNodeOutput: () => '',
     isLinkedUpscaleNode: () => false,
-    linkedUpscaleOutputs: () => [],
+    isAutoMattingTool: () => false,
+    linkedToolOutputs: () => [],
     window: { CanvasFlowImageAnnotations: annotations },
   };
-  const collect = vm.runInNewContext(`(${collectSlice})`, context);
+  const collect = vm.runInNewContext(`(${collectSlice}
+)`, context);
   const upstream = collect('ai');
   const branchData = JSON.parse(JSON.stringify(upstream.branches));
 
@@ -580,7 +584,8 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
     aiTaskQueue: { nextId: 100 },
     Math, Number, Date,
   };
-  const build = vm.runInNewContext(`(${buildSlice})`, buildContext);
+  const build = vm.runInNewContext(`(${buildSlice}
+)`, buildContext);
   const branch = upstream.branches[0];
   const merged = {
     ...upstream,
@@ -605,7 +610,8 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
     for (const e of edgesWithoutUpstream) { (map.get(e.to.node) || map.set(e.to.node, []).get(e.to.node)).push(e); }
     return map;
   } };
-  const collect2 = vm.runInNewContext(`(${collectSlice})`, context2);
+  const collect2 = vm.runInNewContext(`(${collectSlice}
+)`, context2);
   const upstream2 = collect2('ai');
   assert.equal(upstream2.branches.length, 0, '无入线时 branches 为空');
   assert.equal(upstream2.groupImages.length, 2, '组图收集不受影响');
@@ -649,10 +655,12 @@ test('12 纯文字组按文字节点拆任务：参考图进每个任务,混合�
     expandTextNodeVariables: n => String(n.text || ''),
     variableNodeOutput: () => '',
     isLinkedUpscaleNode: () => false,
-    linkedUpscaleOutputs: () => [],
+    isAutoMattingTool: () => false,
+    linkedToolOutputs: () => [],
     window: { CanvasFlowImageAnnotations: annotations },
   };
-  const collect = vm.runInNewContext(`(${collectSlice})`, context);
+  const collect = vm.runInNewContext(`(${collectSlice}
+)`, context);
   const upstream = collect('ai');
   assert.equal(upstream.branches.length, 1, '参考图入线为 1 条分支(汇聚节点语义)');
   assert.deepEqual(JSON.parse(JSON.stringify(upstream.groupTexts)), ['赛博朋克风格', '水彩风格'], '组内文字归 groupTexts');
@@ -666,7 +674,8 @@ test('12 纯文字组按文字节点拆任务：参考图进每个任务,混合�
     aiTaskQueue: { nextId: 200 },
     Math, Number, Date,
   };
-  const build = vm.runInNewContext(`(${buildSlice})`, buildContext);
+  const build = vm.runInNewContext(`(${buildSlice}
+)`, buildContext);
   const branch = upstream.branches[0];
   const compose = extra => ({
     ...upstream,

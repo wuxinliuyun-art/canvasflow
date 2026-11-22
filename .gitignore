@@ -35,3 +35,6 @@ extensions-presets/**/input/
 extensions-presets/**/output/
 extensions-presets/**/__pycache__/
 extensions-presets/**/params.json
+
+# 手工测试页等本地杂项不入库
+/批量上色测试.html

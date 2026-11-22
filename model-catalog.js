@@ -93,10 +93,13 @@
   //   durationLimitsByResolution 可选：某分辨率档下的时长白名单（如 Hailuo 1080p 仅支持 6 秒）
   //   audio       是否显示"声音"开关（generate_audio）；H3 系/wan3.0 自带音轨无开关，保持 false
   //   maxImages   参考图上限（agtoken images[] / apimart image_urls 的取图上限）
-  //   maxVideos   参考视频上限（apimart 顶层 video_urls[]；缺省 0 = 不支持参考视频）。
-  //               仅 apimart seedance-2.0 系声明：≤3 个、公网 URL（本地文件经 /api/apimart/video-upload
-  //               上传换 URL）、单文件 ≤50MB、素材 480-720P、1.8s<总时长<15.2s、与首尾帧互斥；
-  //               agtoken 视频参考需要自有公网直链（无上传通道），不声明此字段
+  //   maxVideos   参考视频上限（缺省 0 = 不支持参考视频）。apimart seedance-2.0 系 = 顶层
+  //               video_urls[]（≤3 个、公网 URL（本地文件经 /api/apimart/video-upload 上传换 URL）、
+  //               单文件 ≤50MB、素材 480-720P、1.8s<总时长<15.2s、与首尾帧互斥）；
+  //               agtoken Seedance 系 = Seedance 兼容接口 content[] reference_video（2.0 ≤3 / 2.5 ≤10，
+  //               URL 同样由 apimart 上传通道提供）；Wan 系不声明（参考视频按输入+输出时长合计计秒）
+  //   compatModel 可选：带参考视频走 agtoken Seedance 兼容接口时的完整模型名（seedance2.5 目录 id
+  //               是别名，兼容接口只认 doubao-seedance-2-5-260628（国内）全名；缺省 = 直接用 id）
   //   imageMode   apimart 图片传法："reference" = image_urls 参考图（H3 系/seedance 系/wan3.0），
   //               "first_frame" = first_frame_image 首帧图（Hailuo-2.3 系图生视频，必须有图）；
   //               agtoken 恒走 images[]，不需要此字段
@@ -116,9 +119,10 @@
         durations: [-1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         audio: true,
         maxImages: 9,
+        maxVideos: 3,
         priceTag: "¥0.49-0.56/秒",
         note: "Seedance 2.0 Pro，官方参考区间 ¥0.49-0.56/秒（实际按生成时长结算）",
-        tips: "文生/图生视频；参考图 ≤9 张按画布顺序发送；可开声音",
+        tips: "文生/图生/参考视频生视频；参考图 ≤9 张 + 参考视频 ≤3 个；可开声音；参考视频按 Token 结算（¥26.60/百万，约为标准价 6 折）",
         pricingUrl: "https://agtoken.vip/pricing",
       },
       {
@@ -130,9 +134,11 @@
         durations: [-1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         audio: true,
         maxImages: 9,
+        maxVideos: 10,
+        compatModel: "doubao-seedance-2-5-260628（国内）",
         priceTag: "¥0.72-2.82/秒",
         note: "官方参考区间 ¥0.72-2.82/秒（实际按生成时长结算）",
-        tips: "文生/图生视频；参考图 ≤9 张；可开声音",
+        tips: "文生/图生/参考视频生视频；参考图 ≤9 张 + 参考视频 ≤10 个；可开声音；参考视频按 Token 结算（¥39.90/百万）",
         pricingUrl: "https://agtoken.vip/pricing",
       },
       {

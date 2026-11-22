@@ -883,6 +883,54 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // agtoken Seedance 兼容接口透传（火山方舟同构，带参考视频的任务专用，前端按 task.videoChannel 分流）：
+  // 提交 POST /api/v3/contents/generations/tasks + 查询 GET 同前缀/{task_id}（提交与查询必须同一接口族）。
+  // 请求格式不做任何字段转换，content[] 多模态素材由前端构造。
+  if (pathname === "/api/agtoken/seedance-task" && req.method === "POST") {
+    try {
+      const body = await readBody(req, 128 * 1024 * 1024);
+      const payload = JSON.parse(body.toString());
+      const apiKey = payload._apiKey || requestApiKey("agtoken") || "";
+      delete payload._apiKey;
+      const { status, body: resBody } = await proxyRequest(
+        "POST",
+        AGTOKEN_BASE_URL + "/api/v3/contents/generations/tasks",
+        { Authorization: `Bearer ${apiKey}` },
+        JSON.stringify(payload),
+        300000
+      );
+      console.log(`[AGToken] /api/v3/contents/generations/tasks -> ${status}`);
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 502, message: "Seedance 兼容接口任务提交失败: " + err.message } }));
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/agtoken/seedance-task/") && req.method === "GET") {
+    try {
+      const taskId = decodeURIComponent(pathname.slice("/api/agtoken/seedance-task/".length));
+      // 兼容接口任务号形如 task_xxx（含下划线），正则比统一接口的多放行 _
+      if (!/^[A-Za-z0-9._:\-_]{1,200}$/.test(taskId)) throw new Error("任务编号格式不正确");
+      const apiKey = requestApiKey("agtoken") || "";
+      const { status, body: resBody } = await proxyRequest(
+        "GET",
+        AGTOKEN_BASE_URL + "/api/v3/contents/generations/tasks/" + encodeURIComponent(taskId),
+        { Authorization: `Bearer ${apiKey}` },
+        null,
+        60000
+      );
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(resBody);
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: 400, message: "视频任务查询失败: " + err.message } }));
+    }
+    return;
+  }
+
   // apimart 统一视频接口透传（MiniMax H3/H3-Max/Hailuo-2.3 等异步视频模型）：
   // 提交 POST /v1/videos/generations（带镜像 failover，与绘图提交同款）+ 查询 GET /v1/tasks/{task_id}
   // （与绘图任务同一查询端点）。请求体不做字段转换，模型间参数差异由前端按视频目录构造。

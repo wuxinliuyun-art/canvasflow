@@ -126,6 +126,6 @@ test("接线：ext 提交透传 quality、价格行挂估算、mc/cr 版本成�
   assert.ok(app.includes("aiNodePriceEstimateText(entry, node, apiType)"), "价格行应挂估算文本");
   assert.ok(app.includes("function aiNodePriceEstimateText"), "估算函数应存在");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  assert.match(html, /model-catalog\.js\?v=20261120-aiprice2/);
-  assert.match(html, /canvas-runtime\.js\?v=20261120-aiprice2/);
+  assert.match(html, /model-catalog\.js\?v=20261120-agtvideoref2/);
+  assert.match(html, /canvas-runtime\.js\?v=20261120-agtvideoref2/);
 });

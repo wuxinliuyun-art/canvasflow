@@ -67,7 +67,8 @@ test("叠放编辑语义保持：有结果的 AI 节点仍走合成编辑器", (
   assert.match(app, /if \(textMergeMode \? \(target\.type !== "text"\) : \(!nodeImageReference\(target\) && !aiPreviewInjectTarget\(target\)\)\) continue;/);
 });
 
-test("?v= 基线：app.js 与 styles.css 为当日已递增版本（并行会话共享版本线）", () => {
-  assert.match(html, /app\.js\?v=20261120-[a-z0-9]+/);
-  assert.match(html, /styles\.css\?v=20261120-[a-z0-9]+/);
+test("?v= 基线：app.js 与 styles.css 为日期标签格式（并行会话共享版本线）", () => {
+  // 领域惯例是"改谁才递增谁"：日期钉死会在跨天/单侧递增时误报，只校验标签格式
+  assert.match(html, /app\.js\?v=\d{8}-[a-z0-9]+/);
+  assert.match(html, /styles\.css\?v=\d{8}-[a-z0-9]+/);
 });

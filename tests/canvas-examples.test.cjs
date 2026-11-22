@@ -118,3 +118,50 @@ test("提取脚本：找不到目标项目时报出项目名清单", async () =>
     "错误信息应包含现有项目名便于排查"
   );
 });
+
+test("合并：新案例并入现有案例，撞号加 -2 后缀，同标题沿用既有 id", async () => {
+  const script = await import(pathToFileURL(path.join(root, "tools", "build-canvas-examples.mjs")).href);
+  const existing = [
+    { id: "ex_g1", title: "旧案例", nodes: [], edges: [] },
+    { id: "ex_g2", title: "占位案例", nodes: [], edges: [] },
+  ];
+  const fresh = [
+    { id: "ex_g2", title: "新编组（与占位案例撞号）", nodes: [], edges: [] },
+    { id: "ex_g9", title: "全新案例", nodes: [], edges: [] },
+    { id: "ex_g1", title: "旧案例", nodes: [], edges: [] },
+  ];
+  const merged = script.mergeExamples(JSON.parse(JSON.stringify(fresh)), JSON.parse(JSON.stringify(existing)));
+  assert.strictEqual(merged.length, 4, "2 保留 + 撞号追加 + 全新追加；同标题更新不重复");
+  assert.strictEqual(merged[0].id, "ex_g1", "同标题案例沿用既有 id（封面映射稳定）");
+  assert.strictEqual(merged[0].title, "旧案例");
+  assert.strictEqual(merged[1].id, "ex_g2", "占位案例保留");
+  assert.strictEqual(merged[2].id, "ex_g2-2", "撞号后来者加 -2 后缀");
+  assert.strictEqual(merged[2].title, "新编组（与占位案例撞号）");
+  assert.strictEqual(merged[3].id, "ex_g9");
+  // 幂等：把同一批再合一次不会复制出重复项
+  const rerun = script.mergeExamples(JSON.parse(JSON.stringify(fresh)), JSON.parse(JSON.stringify(merged)));
+  assert.strictEqual(rerun.length, 4, "重跑合并保持幂等");
+  assert.ok(rerun.every(example => !example.id.endsWith("-3")), "重跑不产生新后缀");
+});
+
+test("合并：现有产物模块解析（含真实模块），坏产物按空处理", async () => {
+  const script = await import(pathToFileURL(path.join(root, "tools", "build-canvas-examples.mjs")).href);
+  const real = script.loadExistingExamples(read("modules/canvas-examples.js"));
+  assert.ok(Array.isArray(real) && real.length >= 5, "真实产物模块应解析出案例清单");
+  assert.ok(script.loadExistingExamples("window.CANVASFLOW_EXAMPLES = [不是JSON") .length === 0, "坏产物按空数组处理");
+  assert.ok(script.loadExistingExamples("").length === 0, "空源按空数组处理");
+});
+
+test("生成模块：新手引导编组已并入（连续修改撞号 -2，老案例 id 不变）", () => {
+  const examples = loadExamplesModule();
+  const titles = examples.map(example => example.title);
+  for (const title of ["连续修改", "材质修改", "文字生成图片并抠图"]) {
+    assert.ok(titles.includes(title), `新手引导编组「${title}」应已并入案例库`);
+  }
+  assert.strictEqual(examples.find(example => example.title === "连续修改").id, "ex_canvas-group20-2",
+    "与「作品集手绘」撞 canvas-group20 号，后来者加 -2");
+  assert.strictEqual(examples.find(example => example.title === "作品集手绘").id, "ex_canvas-group20",
+    "先收录的老案例 id 保持稳定（封面映射不破）");
+  assert.strictEqual(examples.find(example => example.title === "材质修改").id, "ex_canvas-group31");
+  assert.strictEqual(examples.find(example => example.title === "文字生成图片并抠图").id, "ex_canvas-group6");
+});

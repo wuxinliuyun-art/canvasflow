@@ -5,7 +5,10 @@
 // 行为：按项目名定位项目页 → 把成员 ≥2 且有名字的画布编组各提取为一个案例 →
 //       构建期净化运行态字段（运行时插入直接走 pasteNodes）→ 生成 modules/canvas-examples.js；
 //       --covers 目录里「文件名=编组标题」的截图会复制进 assets/examples/ 并写入 cover 字段。
-// 封面升级：用户补截图后重跑本脚本即可，case id 由编组 id 派生、重跑保持稳定。
+// 合并（2026-11-21）：重跑时读取现有 modules/canvas-examples.js 按 id 并入——现有案例保留
+//（封面沿用）、新案例追加；id 与现有案例冲突时后来者加 -2/-3 后缀；标题相同的案例视为
+// 同一案例的更新（沿用既有 id，封面映射保持稳定）。源项目被删/改名不会丢已收录案例。
+// 封面升级：用画布上的「编组截图」（右键编组）生成 编组名.png 后重跑 --covers 即可。
 
 import fs from "node:fs";
 import path from "node:path";
@@ -111,6 +114,40 @@ export function extractExamplesFromProject(projectJson, { projectHint = DEFAULT_
   return cases;
 }
 
+// 纯函数（测试入口）：读取现有产物模块里已收录的案例（源项目被删也不丢）
+export function loadExistingExamples(moduleSource) {
+  const match = String(moduleSource || "").match(/window\.CANVASFLOW_EXAMPLES\s*=\s*(\[[\s\S]*\])\s*;?\s*$/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[1]);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// 纯函数（测试入口）：新提取案例并入现有案例——同标题视为更新（沿用既有 id），
+// 其余追加；id 与现有案例冲突时后来者加 -2/-3 后缀（如 ex_canvas-group20-2）。
+export function mergeExamples(cases, existing) {
+  const merged = [...existing];
+  const titleIndex = new Map(existing.map((example, index) => [example.title, index]));
+  const usedIds = new Set(existing.map(example => example.id));
+  for (const example of cases) {
+    const same = titleIndex.get(example.title);
+    if (same !== undefined) {
+      example.id = existing[same].id;
+      merged[same] = example;
+      continue;
+    }
+    let id = example.id;
+    for (let n = 2; usedIds.has(id); n += 1) id = `${example.id}-${n}`;
+    example.id = id;
+    usedIds.add(id);
+    merged.push(example);
+  }
+  return merged;
+}
+
 function attachCovers(cases, coverDir) {
   // 已随包的封面（assets/examples/<id>.<ext>）在重跑时自动保留，无需每次都带 --covers
   if (fs.existsSync(COVER_OUT_DIR)) {
@@ -159,18 +196,22 @@ function main() {
 
   const cases = extractExamplesFromProject(loadProjectJson(inputPath), { projectHint });
   if (!cases.length) throw new Error("没有提取到任何案例（需要成员 ≥2 且已命名的编组）");
-  attachCovers(cases, coverDir);
+  const existing = fs.existsSync(OUT_MODULE) ? loadExistingExamples(fs.readFileSync(OUT_MODULE, "utf8")) : [];
+  const merged = mergeExamples(cases, existing);
+  console.log(`[案例提取] 现有案例 ${existing.length} 条，本次提取 ${cases.length} 条，合并后 ${merged.length} 条`);
+  attachCovers(merged, coverDir);
 
-  const payloadBytes = cases.reduce((sum, example) => sum + JSON.stringify(example).length, 0);
+  const payloadBytes = merged.reduce((sum, example) => sum + JSON.stringify(example).length, 0);
   fs.mkdirSync(path.dirname(OUT_MODULE), { recursive: true });
   const header =
     `// 本文件由 tools/build-canvas-examples.mjs 生成，勿手改；重新生成：\n` +
     `//   node tools/build-canvas-examples.mjs data/app-state.json --covers 封面目录\n` +
-    `// 每个案例 = 「${projectHint}」项目里的一个画布编组（title=编组名），插入画布走 pasteNodes 三表。\n`;
-  fs.writeFileSync(OUT_MODULE, header + `window.CANVASFLOW_EXAMPLES = ${JSON.stringify(cases)};\n`);
+    `// 每个案例 = 画布上已命名的编组（title=编组名），插入画布走 pasteNodes 三表；\n` +
+    `// 重跑按 id 并入现有案例（源项目删了也不丢），id 冲突时后来者加 -2/-3 后缀。\n`;
+  fs.writeFileSync(OUT_MODULE, header + `window.CANVASFLOW_EXAMPLES = ${JSON.stringify(merged)};\n`);
 
   console.log(`[案例提取] 已生成 ${OUT_MODULE}`);
-  for (const example of cases) {
+  for (const example of merged) {
     const biggest = example.nodes.reduce((max, node) => Math.max(max, (node.image || "").length, (node.generatedImage || "").length), 0);
     if (biggest > 200 * 1024) console.warn(`[案例提取] 「${example.title}」存在 >200KB 的内嵌图，考虑压缩后重提取`);
     console.log(`  • ${example.title}（${example.nodes.length} 节点 / ${example.edges.length} 连线${example.cover ? "，含封面" : ""}）`);

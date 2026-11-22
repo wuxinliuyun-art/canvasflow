@@ -77,19 +77,24 @@ test('click creates a corner, drag creates mirrored Bezier handles, and an open 
   e.undo.at(-1)(); assert.equal(e.state().points[1].y, 10);
 });
 
-test('closure preserves editable anchors; a new path captures the current selection for add/subtract', () => {
+test('closure preserves editable anchors; starting a new path archives the closed one with its operation', () => {
   const e = editor();
   for (const [x, y] of [[10, 10], [50, 10], [50, 50]]) { e.down(x, y); e.up(x, y); }
   e.down(10, 10); assert.equal(e.state().closed, true);
   e.down(50, 50); e.up(40, 50);
   assert.equal(e.state().points[2].x, 40);
   assert.equal(e.state().closed, true);
-  const base = e.state().selection;
+  assert.equal(e.state().paths.length, 0, '未开新路径前闭合路径保持可编辑，不提前归档');
   e.buttons.lightboxSelectionOperation.value = 'subtract';
   e.down(70, 70); e.up(70, 70);
   assert.equal(e.state().points.length, 1);
-  assert.equal(e.state().operation, 'subtract'); assert.equal(e.state().base, base);
+  assert.equal(e.state().operation, 'subtract');
+  assert.equal(e.state().paths.length, 1, '开新路径时上一条闭合路径归档');
+  assert.deepEqual(JSON.parse(JSON.stringify(e.state().paths[0].points.map(p => [p.x, p.y]))), [[10, 10], [50, 10], [40, 50]], '归档的是编辑后的路径');
+  assert.equal(e.state().paths[0].operation, 'replace', '归档路径带自己当时的加减选关系');
+  assert.ok(e.state().paths[0].color, '归档路径带显示颜色');
   e.undo.at(-1)(); assert.equal(e.state().points.length, 3); assert.equal(e.state().closed, true);
+  assert.equal(e.state().paths.length, 0, '撤销回到归档前');
 });
 
 test('pointer cancellation restores the draft, and Ctrl-drag moves the first anchor without closing', () => {
@@ -139,4 +144,30 @@ test('each stroke clips to its own selection snapshot, keeping later selection e
   context.drawLightboxPaintSegment(ctx, { mode: 'brush', color: 'token', size: 4, selection: { clip } }, { x: 0, y: 0 }, { x: 4, y: 4 });
   assert.equal(calls[1][0], 'clip'); assert.equal(calls[1][1], clip);
   assert.equal(calls.at(-1)[0], 'restore');
+});
+
+test('fold order: replace -> add -> subtract composes paths into A∪B−C', () => {
+  const width = 4, height = 1;
+  const region = cells => { const m = new Uint8Array(width * height); for (const c of cells) m[c] = 1; return m; };
+  const pathA = region([0, 1]);        // 新建：左半
+  const pathB = region([2, 3]);        // 加选：右半
+  const pathC = region([1, 2]);        // 减选：中间两格
+  let acc = geometry.combinePenSelectionMasks(null, pathA, 'replace');
+  acc = geometry.combinePenSelectionMasks(acc, pathB, 'add');
+  acc = geometry.combinePenSelectionMasks(acc, pathC, 'subtract');
+  assert.deepEqual([...acc], [1, 0, 0, 1], 'A∪B 再减 C：两端保留、中间去掉');
+  // 减选只作用于已有选区：无选区时减选不得凭空造出内容
+  assert.deepEqual([...geometry.combinePenSelectionMasks(null, pathC, 'subtract')], [0, 0, 0, 0]);
+});
+
+test('closure contract: closing the pen path only updates the constraint mask, never touches painted strokes', () => {
+  // 落笔瞬间快照（画笔与形状两处都以 selection: lightboxSelection 记录），
+  // 渲染逐笔按各自快照裁剪（既有单元用例已验证）——闭合选区因此对已画像素零影响。
+  const pointerDownCount = source.split('lightboxPaintCurrentAction = { selection: lightboxSelection,').length - 1;
+  assert.equal(pointerDownCount, 2, '画笔与箭头/矩形两处落笔都必须快照当时选区');
+  const maskStart = source.indexOf('function updateLightboxPenMask(');
+  const maskEnd = source.indexOf('\nfunction', maskStart);
+  const maskBody = source.slice(maskStart, maskEnd);
+  assert.ok(!maskBody.includes('lightboxPaintActions'), '闭合合成不得触碰已画笔画');
+  assert.ok(maskBody.includes('lightboxPenPaths.map'), '合成按归档路径折叠');
 });

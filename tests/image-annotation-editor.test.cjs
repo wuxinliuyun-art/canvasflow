@@ -254,7 +254,7 @@ test('接线：右键菜单/灯箱模式开关/面板事件/关闭冲刷全部�
 });
 
 test('界面资产：灯箱批注 DOM 就位，?v= 递增，CSS 无裸色值、z-index 在节点内部档（1–9）', () => {
-  assert.ok(html.includes('app.js?v=20261120-aiprice2') && html.includes('styles.css?v=20261120-excover1'));
+  assert.ok(html.includes('app.js?v=20261122-penmulti1') && html.includes('styles.css?v=20261120-excover1'));
   for (const id of ['lightboxAnnotationSurface', 'lightboxAnnotationPanel', 'lightboxAnnotationList', 'lightboxAnnotationDone']) {
     assert.ok(html.includes(`id="${id}"`), `index.html 缺少 #${id}`);
   }
