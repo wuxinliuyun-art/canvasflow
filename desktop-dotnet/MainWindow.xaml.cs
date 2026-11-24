@@ -332,8 +332,20 @@ public partial class MainWindow : Window
             CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow.local", _contentRoot!, CoreWebView2HostResourceAccessKind.DenyCors);
             // index.html 永远不缓存：虚拟主机映射不带 Cache-Control，会被 WebView2 启发式缓存吞掉更新
             CanvasView.CoreWebView2.AddWebResourceRequestedFilter("https://canvasflow.local/index.html*", CoreWebView2WebResourceContext.Document);
+            // 参考视频本地预览：按查询参数里的完整路径流式读文件（带 Range，支持拖动进度），重启后依然可用
+            CanvasView.CoreWebView2.AddWebResourceRequestedFilter("https://canvasflow-refvideos.local/*", CoreWebView2WebResourceContext.Media);
             CanvasView.CoreWebView2.WebResourceRequested += (_, args) =>
             {
+                if (args.Request.Uri.StartsWith("https://canvasflow-refvideos.local/", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { args.Response = ServeRefVideo(args); }
+                    catch (Exception refVideoError)
+                    {
+                        Log($"[视频引用] 本地预览读取失败：{refVideoError.Message}", false);
+                        args.Response = _webViewEnvironment?.CreateWebResourceResponse(new MemoryStream(), 404, "Not Found", "Content-Type: text/plain");
+                    }
+                    return;
+                }
                 if (!args.Request.Uri.StartsWith(CanvasUrl, StringComparison.OrdinalIgnoreCase)) return;
                 var indexPath = Path.Combine(_contentRoot ?? AppContext.BaseDirectory, "index.html");
                 if (!File.Exists(indexPath)) return;
@@ -1316,12 +1328,94 @@ public partial class MainWindow : Window
         return new { path = picker.FileName };
     }
 
-    private string? _refVideoFolder;
+    // 参考视频本地预览：https://canvasflow-refvideos.local/video?p=<URL 编码的完整路径>
+    // 按路径直接流式读文件（不复制、不上传），带 Range 支持让 <video> 可拖动进度；重启后依然可用。
+    private CoreWebView2WebResourceResponse? ServeRefVideo(CoreWebView2WebResourceRequestedEventArgs args)
+    {
+        var uri = new Uri(args.Request.Uri);
+        var path = System.Net.WebUtility.UrlDecode(uri.Query.StartsWith("?p=") ? uri.Query[3..] : "");
+        if (string.IsNullOrWhiteSpace(path)) throw new InvalidOperationException("缺少视频路径参数");
+        if (!File.Exists(path)) throw new FileNotFoundException("视频文件不存在", path);
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        var mime = extension switch
+        {
+            ".mp4" => "video/mp4",
+            ".mov" => "video/quicktime",
+            ".webm" => "video/webm",
+            _ => throw new InvalidOperationException($"不支持的预览格式：{extension}"),
+        };
+        var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var total = stream.Length;
+        // CoreWebView2HttpRequestHeaders 只提供遍历接口，Range 大小写不敏感地找
+        var range = "";
+        foreach (var header in args.Request.Headers)
+        {
+            if (!string.Equals(header.Key, "Range", StringComparison.OrdinalIgnoreCase)) continue;
+            range = header.Value;
+            break;
+        }
+        long start = 0, end = total - 1;
+        var status = 200; var reason = "OK";
+        var headers = $"Content-Type: {mime}\nAccept-Ranges: bytes\nAccess-Control-Allow-Origin: *";
+        var match = Regex.Match(range ?? "", @"bytes=(\d*)-(\d*)");
+        if (match.Success)
+        {
+            if (long.TryParse(match.Groups[1].Value, out var parsedStart)) start = parsedStart;
+            if (long.TryParse(match.Groups[2].Value, out var parsedEnd) && match.Groups[2].Value.Any()) end = Math.Min(parsedEnd, total - 1);
+            if (start > 0 || end < total - 1)
+            {
+                if (start >= total) throw new InvalidOperationException("Range 起点越界");
+                status = 206; reason = "Partial Content";
+                end = end < start ? total - 1 : end;
+                headers += $"\nContent-Range: bytes {start}-{end}/{total}";
+            }
+        }
+        var length = end - start + 1;
+        if (start > 0) stream.Seek(start, SeekOrigin.Begin);
+        headers += $"\nContent-Length: {length}";
+        var limited = new StreamRangeView(stream, start, length);
+        return _webViewEnvironment?.CreateWebResourceResponse(limited, status, reason, headers);
+    }
+
+    // 只把 [start, start+length) 交给 WebView2，流关闭时顺带释放底层文件句柄
+    private sealed class StreamRangeView(Stream inner, long start, long length) : Stream
+    {
+        private long _remaining = length;
+        private bool _disposed;
+
+        public override bool CanRead => !_disposed && _remaining > 0;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _remaining;
+        public override long Position { get => length - _remaining; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_disposed || _remaining <= 0) return 0;
+            if (count > _remaining) count = (int)_remaining;
+            var read = inner.Read(buffer, offset, count);
+            if (read > 0) _remaining -= read;
+            return read;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (disposing) inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
 
     private object ChooseVideoFile()
     {
         // 视频引用节点专用：返回绝对路径，文件字节不经过此桥（上传由 /api/apimart/video-upload 按路径读盘）。
-        // 同时把文件所在目录映射成虚拟主机，前端 <video> 直接本地预览（仅预览，不参与上传）。
+        // 本地预览由 ServeRefVideo 按路径流式提供，前端直接拼 canvasflow-refvideos.local 预览地址。
         var picker = new Microsoft.Win32.OpenFileDialog
         {
             Title = "选择参考视频（MP4 / MOV / WebM）",
@@ -1331,26 +1425,7 @@ public partial class MainWindow : Window
         if (picker.ShowDialog(this) != true) return new { cancelled = true, path = "" };
         var info = new FileInfo(picker.FileName);
         Log($"[视频引用] 已选择视频：{picker.FileName}", false);
-        var previewUrl = "";
-        try
-        {
-            var folder = info.Directory?.FullName;
-            if (string.IsNullOrEmpty(folder)) throw new InvalidOperationException("无法取得视频所在目录");
-            if (CanvasView.CoreWebView2 is null) throw new InvalidOperationException("WebView2 尚未初始化");
-            if (!string.Equals(_refVideoFolder, folder, StringComparison.OrdinalIgnoreCase))
-            {
-                // 虚拟主机名固定、目录随选择重映射；换目录后旧预览地址失效，前端按 folder 变化自行失效旧预览。
-                // Allow：前端裁剪用 captureStream 录制该地址，需要干净的跨源权限（页面是本地 UI，无第三方内容）
-                CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-refvideos.local", folder, CoreWebView2HostResourceAccessKind.Allow);
-                _refVideoFolder = folder;
-            }
-            previewUrl = $"https://canvasflow-refvideos.local/{Uri.EscapeDataString(info.Name)}";
-        }
-        catch (Exception mappingError)
-        {
-            Log($"[视频引用] 本地预览映射失败（不影响选择与上传）：{mappingError.Message}", false);
-        }
-        return new { cancelled = false, path = picker.FileName, name = info.Name, bytes = info.Exists ? info.Length : 0L, previewUrl };
+        return new { cancelled = false, path = picker.FileName, name = info.Name, bytes = info.Exists ? info.Length : 0L };
     }
 
     private object ChooseComfyFolder(JsonElement request)

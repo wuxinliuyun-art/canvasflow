@@ -5579,17 +5579,16 @@ function videoRefStatusBadge(node) {
   return `<span class="video-ref-badge is-empty">未选择视频</span>`;
 }
 
-// 本地预览：桌面版选择文件后壳把所在目录映射成 canvasflow-refvideos.local，回传可播放的 previewUrl。
-// 仅存内存（重启后映射失效，占位文案兜底）；换目录时壳端重映射，前端按 folder 变化失效旧预览。
-const videoRefsPreviewUrls = new Map();
-let videoRefsPreviewFolder = "";
+// 本地预览：桌面壳按查询参数里的完整路径流式读文件（带 Range 支持拖进度），重启后依然可用。
+// 仅 Windows 桌面 WebView2 提供该服务；浏览器/服务器/mac 桌面返回空串走占位文案（拖入即上传的链路不受影响）。
+function refVideoPreviewSrc(node) {
+  if (!node?.videoPath) return "";
+  if (!desktop?.apiRequest || !/Windows NT/.test(navigator.userAgent)) return "";
+  return `https://canvasflow-refvideos.local/video?p=${encodeURIComponent(node.videoPath)}`;
+}
+
 const VIDEO_REF_DURATION_MIN = 1.8; // 上游 Seedance 参考视频时长边界（apimart 文档：1.8s < 时长 < 15.2s）
 const VIDEO_REF_DURATION_MAX = 15.2;
-
-function setVideoRefPreview(nodeId, url, folder) {
-  if (folder && folder !== videoRefsPreviewFolder) { videoRefsPreviewUrls.clear(); videoRefsPreviewFolder = folder; }
-  if (url) videoRefsPreviewUrls.set(nodeId, url); else videoRefsPreviewUrls.delete(nodeId);
-}
 
 function readVideoMetadata(src) {
   return new Promise(resolve => {
@@ -5679,7 +5678,7 @@ async function trimVideoRefToClip(src, startSec, durationSec, { onProgress, sign
 async function openVideoRefTrimDialog(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "video-ref" || node._videoRefTrimming) return false;
-  const previewSrc = (node.videoUrl && !videoRefExpired(node)) ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || "");
+  const previewSrc = (node.videoUrl && !videoRefExpired(node)) ? node.videoUrl : refVideoPreviewSrc(node);
   if (!previewSrc) { toast("没有可裁剪的视频：先选择本地文件或上传"); return false; }
   const originalDuration = Number(node.videoDuration) || 0;
   const abort = { aborted: false };
@@ -5804,7 +5803,7 @@ function videoRefNodeBody(node) {
   normalizeVideoRefNode(node);
   const name = node.fileName || "尚未选择视频";
   const playable = node.videoUrl && !videoRefExpired(node);
-  const previewSrc = playable ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || "");
+  const previewSrc = playable ? node.videoUrl : refVideoPreviewSrc(node);
   const badge = videoRefStatusBadge(node);
   const metaParts = [
     node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "",
@@ -5857,11 +5856,8 @@ async function chooseVideoRefFile(nodeId) {
     node.videoUrlExpiresAt = 0;
     delete node._pendingVideoBase64;
     if (node.videoBytes > VIDEO_REF_MAX_BYTES) toast(`注意：文件 ${formatVideoRefBytes(node.videoBytes)} 超过上传上限 50MB，生成前需先压缩`);
-    // 桌面本地预览：壳把所在目录映射成虚拟主机，回传可播放地址；换目录时旧预览全部失效
-    const folder = result.path.replace(/[\\/][^\\/]+$/, "") || "";
-    setVideoRefPreview(node.id, typeof result.previewUrl === "string" ? result.previewUrl : "", folder);
-    // 读时长元数据做前置校验（读不到则交由上游校验）
-    readVideoMetadata(videoRefsPreviewUrls.get(node.id) || "").then(meta => {
+    // 读时长元数据做前置校验（读不到则交由上游校验）；本地预览由 refVideoPreviewSrc 按路径直接派生
+    readVideoMetadata(refVideoPreviewSrc(node)).then(meta => {
       if (!meta || !findNode(node.id)) return;
       node.videoDuration = Number(meta.duration) || 0;
       node.videoWidth = Number(meta.width) || 0;
