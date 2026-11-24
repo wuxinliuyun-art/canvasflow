@@ -5568,6 +5568,7 @@ async function adoptVideoRefFile(node, file) {
 function videoRefStatusBadge(node) {
   normalizeVideoRefNode(node);
   if (node._videoRefUploading) return `<span class="video-ref-badge is-uploading">上传中…</span>`;
+  if (node._videoRefTrimming) return `<span class="video-ref-badge is-uploading">裁剪中…</span>`;
   const durationIssue = videoRefDurationIssue(node);
   if (durationIssue) return `<span class="video-ref-badge is-error">${durationIssue}</span>`;
   if (node.videoUrl && !videoRefExpired(node)) {
@@ -5617,6 +5618,164 @@ function videoRefDurationBlockError(node) {
   return issue ? `参考视频「${node?.fileName || "未命名"}」${issue}，请先剪辑后再使用` : "";
 }
 
+function formatVideoRefSeconds(seconds) {
+  const value = Number(seconds) || 0;
+  return `${value.toFixed(1).replace(/\.0$/, "")} 秒`;
+}
+
+// 本地裁剪：hidden video 从起点播放指定时长，captureStream + MediaRecorder 实时录制为 webm 片段。
+// 原文件不动；片段临时进内存 → base64 上传换公网链接（静音录制，参考视频以画面为准）。
+async function trimVideoRefToClip(src, startSec, durationSec, { onProgress, signal } = {}) {
+  if (!src) throw new Error("没有可裁剪的视频源");
+  if (typeof MediaRecorder === "undefined" || !HTMLMediaElement.prototype.captureStream) {
+    throw new Error("当前环境不支持视频裁剪（缺少 MediaRecorder）");
+  }
+  const video = document.createElement("video");
+  video.src = src;
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  await new Promise((resolve, reject) => {
+    video.onloadedmetadata = () => resolve();
+    video.onerror = () => reject(new Error("无法读取视频（格式或路径不可用）"));
+  });
+  if (signal?.aborted) throw new Error("aborted");
+  const total = Number(video.duration) || 0;
+  const start = Math.max(0, Math.min(startSec, Math.max(0, total - 0.2)));
+  await new Promise(resolve => { video.onseeked = resolve; video.currentTime = start; });
+  const stream = video.captureStream();
+  const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9"
+    : MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm";
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6_000_000 });
+  const chunks = [];
+  recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
+  const stopped = new Promise(resolve => { recorder.onstop = resolve; });
+  recorder.start(250);
+  try {
+    await video.play();
+  } catch { /* 播放被拦截时录制继续（画面可能静止），不因此中断 */ }
+  const startedAt = performance.now();
+  try {
+    while (true) {
+      if (signal?.aborted) throw new Error("aborted");
+      const elapsed = (performance.now() - startedAt) / 1000;
+      onProgress?.(Math.min(99, Math.round(elapsed / durationSec * 100)));
+      if (elapsed >= durationSec || video.ended) break;
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+  } finally {
+    video.pause();
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach(track => track.stop());
+  }
+  const blob = new Blob(chunks, { type: "video/webm" });
+  if (!blob.size) throw new Error("裁剪结果为空，请重试");
+  return { blob, mimeType };
+}
+
+// 裁剪对话框：播放器上选起点、输入时长（2–15 秒），确认后本地录制并上传换链接。
+// 返回 true 表示节点已更新为裁剪片段。
+async function openVideoRefTrimDialog(nodeId) {
+  const node = findNode(nodeId);
+  if (!node || node.type !== "video-ref" || node._videoRefTrimming) return false;
+  const previewSrc = (node.videoUrl && !videoRefExpired(node)) ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || "");
+  if (!previewSrc) { toast("没有可裁剪的视频：先选择本地文件或上传"); return false; }
+  const originalDuration = Number(node.videoDuration) || 0;
+  const abort = { aborted: false };
+  const dialog = document.createElement("dialog");
+  dialog.className = "video-trim-dialog";
+  dialog.setAttribute("aria-label", "裁剪参考视频片段");
+  dialog.innerHTML = `
+    <h2>裁剪参考视频片段</h2>
+    <p class="video-trim-sub">在播放器里拖到想要的位置，点「设为起点」，再指定片段时长（2–15 秒）。裁剪在本机完成，原文件不会被改动。</p>
+    <div class="video-trim-player"><video src="${escapeHtml(previewSrc)}" controls preload="metadata" playsinline></video></div>
+    <div class="video-trim-row">
+      <span>起点 <strong data-trim-start>0.0 秒</strong></span>
+      <button type="button" data-trim-set>设为起点</button>
+      <label>片段时长 <input data-trim-duration type="number" min="2" max="15" step="0.5" value="5"> 秒</label>
+      <span data-trim-hint class="video-trim-hint"></span>
+    </div>
+    <div class="video-trim-progress"><div class="video-trim-progress-fill" data-trim-fill></div></div>
+    <div class="video-trim-actions">
+      <button type="button" data-trim-cancel>取消</button>
+      <button type="button" class="video-card-primary" data-trim-confirm>开始裁剪</button>
+    </div>`;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  const video = dialog.querySelector("video");
+  const startLabel = dialog.querySelector("[data-trim-start]");
+  const durationInput = dialog.querySelector("[data-trim-duration]");
+  const hint = dialog.querySelector("[data-trim-hint]");
+  const fill = dialog.querySelector("[data-trim-fill]");
+  let startSec = 0;
+  const syncHint = () => {
+    const duration = Number(durationInput.value) || 0;
+    if (duration < 2 || duration > 15) { hint.textContent = "时长需在 2–15 秒"; return; }
+    hint.textContent = `将裁出 ${startSec.toFixed(1)}s – ${(startSec + duration).toFixed(1)}s`;
+  };
+  video.addEventListener("timeupdate", () => { if (!video.paused) { startLabel.textContent = `${video.currentTime.toFixed(1)} 秒`; } });
+  dialog.querySelector("[data-trim-set]").onclick = () => {
+    startSec = Math.max(0, video.currentTime);
+    startLabel.textContent = `${startSec.toFixed(1)} 秒`;
+    syncHint();
+  };
+  durationInput.oninput = syncHint;
+  syncHint();
+  const close = () => { dialog.close(); dialog.remove(); };
+  dialog.querySelector("[data-trim-cancel]").onclick = () => { abort.aborted = true; close(); };
+  dialog.oncancel = () => { abort.aborted = true; };
+  const confirmButton = dialog.querySelector("[data-trim-confirm]");
+  confirmButton.onclick = async () => {
+    const duration = Number(durationInput.value) || 0;
+    if (duration < 2 || duration > 15) { toast("片段时长需在 2–15 秒"); return; }
+    if (originalDuration && startSec + duration > originalDuration + 0.3) { toast("起点加时长超出了视频总长，请调整起点或时长"); return; }
+    confirmButton.disabled = true;
+    durationInput.disabled = true;
+    node._videoRefTrimming = true;
+    renderNodes();
+    try {
+      fill.style.width = "4%";
+      const { blob } = await trimVideoRefToClip(previewSrc, startSec, duration, {
+        signal: abort,
+        onProgress: percent => { fill.style.width = `${Math.max(4, percent)}%`; },
+      });
+      const baseName = String(node.fileName || "reference").replace(/\.[^.]+$/, "") || "reference";
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("片段读取失败"));
+        reader.readAsDataURL(blob);
+      });
+      node.fileName = `${baseName}_裁剪${Math.round(duration)}s.webm`;
+      node.videoBytes = blob.size;
+      node.videoPath = "";
+      node._videoRefTrimmedFrom = originalDuration || 0;
+      node.videoDuration = duration;
+      node._pendingVideoBase64 = String(dataUrl).replace(/^data:[^;,]*;base64,/, "");
+      try {
+        await uploadVideoRef(node);
+        toast(`已裁剪 ${formatVideoRefSeconds(duration)} 并上传为参考链接`);
+      } finally {
+        delete node._pendingVideoBase64;
+      }
+    } catch (error) {
+      if (error?.message !== "aborted") {
+        console.error("[视频引用] 裁剪失败", error);
+        toast(`裁剪失败：${error.message || "录制出错"}`);
+      }
+      return; // 失败/取消：节点保持原引用，对话框已由取消分支关闭；确认失败时手动关
+    } finally {
+      node._videoRefTrimming = false;
+      renderNodes();
+    }
+    close();
+    pushHistory();
+    render();
+  };
+  return true;
+}
+
 // 视频卡片公共片段（参考视频 / 生成视频同款视觉）：大预览区 + 图标信息行 + 按钮行
 const VIDEO_CARD_FILM_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 15h16M9 4v16M15 4v16" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
 const VIDEO_CARD_PLAY_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>`;
@@ -5645,16 +5804,20 @@ function videoRefNodeBody(node) {
   normalizeVideoRefNode(node);
   const name = node.fileName || "尚未选择视频";
   const playable = node.videoUrl && !videoRefExpired(node);
+  const previewSrc = playable ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || "");
   const badge = videoRefStatusBadge(node);
-  const metaParts = [node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "", playable ? "公网链接有效" : ""].filter(Boolean);
+  const metaParts = [
+    node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "",
+    node.videoDuration ? formatVideoRefSeconds(node.videoDuration) : "",
+  ].filter(Boolean);
   return `<div class="video-card-body">
-    ${videoCardPreviewMarkup({ videoSrc: playable ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || ""), emptyText: node.videoPath ? "本地文件已就绪，发送时自动上传" : "拖入视频文件或点下方按钮", posterBusy: node._videoRefUploading })}
+    ${videoCardPreviewMarkup({ videoSrc: previewSrc, emptyText: node.videoPath ? "本地文件已就绪，发送时自动上传" : "拖入视频文件，或点下方选择视频", posterBusy: node._videoRefUploading })}
     ${videoCardInfoMarkup({ name, title: node.videoPath || name, meta: metaParts.join(" · "), badge })}
     <div class="video-card-actions">
-      <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频</button>
-      ${node.videoPath || node.videoUrl ? `<button type="button" data-role="video-ref-upload" title="立即上传到 APIMart 换取公网链接（3 天有效，免费额度内免费）">立即上传</button>` : ""}
+      <button type="button" class="video-card-primary" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">${node.videoPath || node.videoUrl ? "更换视频" : "选择视频"}</button>
+      ${previewSrc ? `<button type="button" class="video-card-subtle" data-role="video-ref-trim" title="从这段视频里裁出 2–15 秒作为参考片段（本地完成，不改动原文件）">裁剪片段</button>` : ""}
     </div>
-    <div class="video-card-hint">连线到 AI 视频节点作参考视频；文件不会被复制，生成时经 APIMart 通道上传换公网链接</div>
+    <div class="video-card-hint">发送时经 APIMart 通道上传换取公网链接（3 天内有效），文件不会被复制</div>
   </div>`;
 }
 
@@ -5666,8 +5829,8 @@ function videoResultNodeBody(node) {
     ${videoCardPreviewMarkup({ videoSrc: src, emptyText: "视频文件缺失" })}
     ${videoCardInfoMarkup({ name, title: node.outputPath || name, meta: "AI 视频生成结果" })}
     <div class="video-card-actions">
-      ${node.outputPath ? `<button type="button" data-role="video-result-folder" title="打开视频所在文件夹">打开文件夹</button>` : ""}
-      <button type="button" data-role="video-result-clear" title="从画布移除该结果卡片（不影响已下载的视频文件）">移除</button>
+      <button type="button" class="video-card-subtle" data-role="video-result-folder" title="打开视频所在文件夹">打开文件夹</button>
+      <button type="button" class="video-card-subtle" data-role="video-result-clear" title="从画布移除该结果卡片（不影响已下载的视频文件）">移除</button>
     </div>
   </div>`;
 }
@@ -11963,6 +12126,7 @@ els.nodes.addEventListener("click", async ev => {
     toast("已移除结果卡片（视频文件仍保留在磁盘）");
   }
   if (actionRole === "video-ref-choose" && node.type === "video-ref") chooseVideoRefFile(node.id);
+  if (actionRole === "video-ref-trim" && node.type === "video-ref") openVideoRefTrimDialog(node.id);
   if (actionRole === "video-ref-upload" && node.type === "video-ref") manualUploadVideoRef(node.id);
   if (actionRole === "ai-redownload") redownloadAiResults(node.id);
   if (ev.target.dataset.role === "angle-edit") openAngleEditor(node.id);

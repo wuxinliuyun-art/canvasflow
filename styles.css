@@ -4305,22 +4305,22 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   cursor: pointer;
 }
 
-/* 视频卡片（video-ref 参考视频 / video-result 生成视频共用）：大预览 + 图标信息行 + 按钮行 */
+/* 视频卡片（video-ref 参考视频 / video-result 生成视频共用）：预览占主体 + 图标信息行 + 收敛按钮（参考 Foremark 媒体卡） */
 .video-card-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 10px;
 }
 
 .video-card-preview {
   position: relative;
-  height: 104px;
+  height: 160px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--node-control);
 }
 
@@ -4332,15 +4332,13 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 }
 
 .video-card-preview.is-empty {
-  border: 1px dashed var(--line);
-  background: color-mix(in srgb, var(--node-control) 55%, transparent);
-  gap: 6px;
-  padding: 8px;
-  grid-auto-flow: row;
+  border: 1px dashed var(--panel-2);
+  gap: 8px;
+  padding: 12px;
 }
 
 .video-card-icon, .video-card-chip { color: var(--muted); }
-.video-card-icon { width: 34px; height: 34px; }
+.video-card-icon { width: 36px; height: 36px; }
 .video-card-icon svg { width: 100%; height: 100%; display: block; }
 
 .video-card-empty-text {
@@ -4348,28 +4346,29 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   font-size: 12px;
   line-height: 1.5;
   text-align: center;
-  max-width: 90%;
+  max-width: 88%;
   overflow-wrap: anywhere;
 }
 
 .video-card-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .video-card-chip {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--node-control);
+  color: var(--text);
 }
 
-.video-card-chip svg { width: 16px; height: 16px; display: block; }
+.video-card-chip svg { width: 18px; height: 18px; display: block; }
 
 .video-card-text {
   display: flex;
@@ -4380,8 +4379,8 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 .video-card-name {
   color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4398,20 +4397,31 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   overflow: hidden;
 }
 
-.video-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.video-card-actions { display: flex; gap: 8px; }
 
 .video-card-actions button {
-  flex: 1;
   min-width: 0;
+  border-radius: 10px;
+  font-size: 12px;
+  min-height: 30px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.video-card-actions .video-card-primary {
+  flex: 1;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.video-card-actions .video-card-subtle {
+  flex: none;
   color: var(--text);
   background: var(--node-control);
   border: 1px solid var(--panel-2);
-  border-radius: 8px;
-  font-size: 12px;
-  padding: 4px 8px;
-  min-height: 28px;
-  cursor: pointer;
-  white-space: nowrap;
 }
 
 .video-card-hint {
@@ -4421,23 +4431,22 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   overflow-wrap: anywhere;
 }
 
-/* 参考视频状态徽章（嵌在卡片 meta 行内） */
+/* 参考视频状态：纯文字色（无边框胶囊，跟在 meta 文字后） */
 .video-ref-badge {
-  display: inline-flex;
-  align-items: center;
+  display: inline;
   flex: none;
-  min-height: 18px;
-  padding: 1px 7px;
-  border-radius: 999px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   font-size: 12px;
-  border: 1px solid var(--line);
   color: var(--muted);
+  text-decoration: none;
 }
 
-.video-ref-badge.is-ready { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, var(--line)); }
-.video-ref-badge.is-uploading { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
-.video-ref-badge.is-path { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
-.video-ref-badge.is-error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.video-ref-badge.is-ready { color: var(--success); }
+.video-ref-badge.is-uploading { color: var(--warning); }
+.video-ref-badge.is-path { color: var(--muted); }
+.video-ref-badge.is-error { color: var(--danger); }
 
 /* AI 视频节点紧凑状态行（结果外置后不再有内嵌大预览） */
 .video-node-status {
@@ -4455,11 +4464,71 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 .video-node-status .ai-spinner { width: 14px; height: 14px; flex: none; }
 .video-node-status.is-warning { color: var(--warning); }
-.video-node-status.is-muted.is-muted::after { content: ''; }
 
 .video-node-status .ai-redownload-btn { flex: none; }
 
 .video-preview-legacy { height: 150px; }
+
+/* 参考视频裁剪对话框 */
+.video-trim-dialog {
+  width: min(560px, calc(100vw - 48px));
+  padding: 18px;
+  border: 1px solid var(--panel-2);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.video-trim-dialog h2 { margin: 0; font-size: 16px; }
+.video-trim-dialog .video-trim-sub { margin: 6px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.video-trim-player { border-radius: 10px; overflow: hidden; background: var(--node-control); }
+.video-trim-player video { display: block; width: 100%; max-height: 300px; }
+.video-trim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 12px;
+}
+.video-trim-row strong { font-weight: 700; }
+.video-trim-row input[data-trim-duration] {
+  width: 64px;
+  padding: 4px 8px;
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
+  background: var(--node-control);
+  color: var(--text);
+}
+.video-trim-row .video-trim-hint { color: var(--muted); }
+.video-trim-row button {
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-2);
+  background: var(--node-control);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.video-trim-progress {
+  height: 6px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--node-control);
+  overflow: hidden;
+}
+.video-trim-progress-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--accent); transition: width .2s linear; }
+.video-trim-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.video-trim-actions button {
+  padding: 6px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-2);
+  background: var(--node-control);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
 
 /* Shared palette controls. Swatch colors are user data. */
 :root, .theme-dark { --palette-ink-dark: #454545; --palette-ink-light: #fff; }
