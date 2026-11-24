@@ -1340,8 +1340,8 @@ public partial class MainWindow : Window
             if (!string.Equals(_refVideoFolder, folder, StringComparison.OrdinalIgnoreCase))
             {
                 // 虚拟主机名固定、目录随选择重映射；换目录后旧预览地址失效，前端按 folder 变化自行失效旧预览。
-                // AllowCors：前端裁剪用 captureStream 录制该地址，需要干净的跨源权限（页面是本地 UI，无第三方内容）
-                CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-refvideos.local", folder, CoreWebView2HostResourceAccessKind.AllowCors);
+                // Allow：前端裁剪用 captureStream 录制该地址，需要干净的跨源权限（页面是本地 UI，无第三方内容）
+                CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-refvideos.local", folder, CoreWebView2HostResourceAccessKind.Allow);
                 _refVideoFolder = folder;
             }
             previewUrl = $"https://canvasflow-refvideos.local/{Uri.EscapeDataString(info.Name)}";
