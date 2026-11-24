@@ -4437,6 +4437,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .video-ref-badge.is-ready { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, var(--line)); }
 .video-ref-badge.is-uploading { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
 .video-ref-badge.is-path { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
+.video-ref-badge.is-error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 
 /* AI 视频节点紧凑状态行（结果外置后不再有内嵌大预览） */
 .video-node-status {

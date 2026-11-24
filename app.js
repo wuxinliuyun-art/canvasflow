@@ -5493,6 +5493,8 @@ async function uploadVideoRef(node) {
   normalizeVideoRefNode(node);
   if (!videoRefExtensionOk(node.fileName)) throw new Error("参考视频仅支持 MP4 / MOV / WebM 文件");
   if (node.videoBytes > VIDEO_REF_MAX_BYTES) throw new Error(`视频文件超过 apimart 上传上限（${formatVideoRefBytes(node.videoBytes)} > 50MB）`);
+  const durationError = videoRefDurationBlockError(node);
+  if (durationError) throw new Error(durationError); // 时长越界不烧上传额度，本地直接拒绝
   node._videoRefUploading = true;
   renderNodes();
   try {
@@ -5529,6 +5531,18 @@ async function adoptVideoRefFile(node, file) {
   node.videoBytes = Number(file.size) || 0;
   if (!videoRefExtensionOk(node.fileName)) throw new Error("参考视频仅支持 MP4 / MOV / WebM 文件");
   if (node.videoBytes > VIDEO_REF_MAX_BYTES) throw new Error(`视频文件超过上传上限 50MB（当前 ${formatVideoRefBytes(node.videoBytes)}），请先压缩`);
+  // 拖入的字节在内存里：先读时长元数据，越界直接拒绝（上游 Seedance 要求约 2–15 秒）
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const meta = await readVideoMetadata(objectUrl);
+    node.videoDuration = Number(meta?.duration) || 0;
+    node.videoWidth = Number(meta?.width) || 0;
+    node.videoHeight = Number(meta?.height) || 0;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+  const durationError = videoRefDurationBlockError(node);
+  if (durationError) throw new Error(durationError);
   node.videoUrl = "";
   node.videoUrlExpiresAt = 0;
   if (localPath) {
@@ -5554,12 +5568,53 @@ async function adoptVideoRefFile(node, file) {
 function videoRefStatusBadge(node) {
   normalizeVideoRefNode(node);
   if (node._videoRefUploading) return `<span class="video-ref-badge is-uploading">上传中…</span>`;
+  const durationIssue = videoRefDurationIssue(node);
+  if (durationIssue) return `<span class="video-ref-badge is-error">${durationIssue}</span>`;
   if (node.videoUrl && !videoRefExpired(node)) {
     const days = Math.max(1, Math.ceil((node.videoUrlExpiresAt - Date.now()) / 86400000));
     return `<span class="video-ref-badge is-ready">已上传 · 约 ${days} 天内有效</span>`;
   }
   if (node.videoPath) return `<span class="video-ref-badge is-path">引用原路径 · 发送时上传</span>`;
   return `<span class="video-ref-badge is-empty">未选择视频</span>`;
+}
+
+// 本地预览：桌面版选择文件后壳把所在目录映射成 canvasflow-refvideos.local，回传可播放的 previewUrl。
+// 仅存内存（重启后映射失效，占位文案兜底）；换目录时壳端重映射，前端按 folder 变化失效旧预览。
+const videoRefsPreviewUrls = new Map();
+let videoRefsPreviewFolder = "";
+const VIDEO_REF_DURATION_MIN = 1.8; // 上游 Seedance 参考视频时长边界（apimart 文档：1.8s < 时长 < 15.2s）
+const VIDEO_REF_DURATION_MAX = 15.2;
+
+function setVideoRefPreview(nodeId, url, folder) {
+  if (folder && folder !== videoRefsPreviewFolder) { videoRefsPreviewUrls.clear(); videoRefsPreviewFolder = folder; }
+  if (url) videoRefsPreviewUrls.set(nodeId, url); else videoRefsPreviewUrls.delete(nodeId);
+}
+
+function readVideoMetadata(src) {
+  return new Promise(resolve => {
+    if (!src) return resolve(null);
+    const video = document.createElement("video");
+    video.preload = "metadata"; video.muted = true;
+    const timer = setTimeout(() => resolve(null), 6000);
+    video.onloadedmetadata = () => { clearTimeout(timer); resolve({ duration: video.duration, width: video.videoWidth, height: video.videoHeight }); };
+    video.onerror = () => { clearTimeout(timer); resolve(null); };
+    video.src = src;
+  });
+}
+
+// 时长越界文案；时长未知（读不到元数据）返回空串，交给上游校验透传原话
+function videoRefDurationIssue(node) {
+  const duration = Number(node?.videoDuration) || 0;
+  if (!duration) return "";
+  if (duration < VIDEO_REF_DURATION_MIN || duration > VIDEO_REF_DURATION_MAX) {
+    return `时长 ${duration.toFixed(1)} 秒超出上游限制（约 2–15 秒）`;
+  }
+  return "";
+}
+
+function videoRefDurationBlockError(node) {
+  const issue = videoRefDurationIssue(node);
+  return issue ? `参考视频「${node?.fileName || "未命名"}」${issue}，请先剪辑后再使用` : "";
 }
 
 // 视频卡片公共片段（参考视频 / 生成视频同款视觉）：大预览区 + 图标信息行 + 按钮行
@@ -5593,7 +5648,7 @@ function videoRefNodeBody(node) {
   const badge = videoRefStatusBadge(node);
   const metaParts = [node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "", playable ? "公网链接有效" : ""].filter(Boolean);
   return `<div class="video-card-body">
-    ${videoCardPreviewMarkup({ videoSrc: playable ? node.videoUrl : "", emptyText: node.videoPath ? "本地文件已就绪，发送时自动上传" : "拖入视频文件或点下方按钮", posterBusy: node._videoRefUploading })}
+    ${videoCardPreviewMarkup({ videoSrc: playable ? node.videoUrl : (videoRefsPreviewUrls.get(node.id) || ""), emptyText: node.videoPath ? "本地文件已就绪，发送时自动上传" : "拖入视频文件或点下方按钮", posterBusy: node._videoRefUploading })}
     ${videoCardInfoMarkup({ name, title: node.videoPath || name, meta: metaParts.join(" · "), badge })}
     <div class="video-card-actions">
       <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频</button>
@@ -5639,6 +5694,19 @@ async function chooseVideoRefFile(nodeId) {
     node.videoUrlExpiresAt = 0;
     delete node._pendingVideoBase64;
     if (node.videoBytes > VIDEO_REF_MAX_BYTES) toast(`注意：文件 ${formatVideoRefBytes(node.videoBytes)} 超过上传上限 50MB，生成前需先压缩`);
+    // 桌面本地预览：壳把所在目录映射成虚拟主机，回传可播放地址；换目录时旧预览全部失效
+    const folder = result.path.replace(/[\\/][^\\/]+$/, "") || "";
+    setVideoRefPreview(node.id, typeof result.previewUrl === "string" ? result.previewUrl : "", folder);
+    // 读时长元数据做前置校验（读不到则交由上游校验）
+    readVideoMetadata(videoRefsPreviewUrls.get(node.id) || "").then(meta => {
+      if (!meta || !findNode(node.id)) return;
+      node.videoDuration = Number(meta.duration) || 0;
+      node.videoWidth = Number(meta.width) || 0;
+      node.videoHeight = Number(meta.height) || 0;
+      const issue = videoRefDurationIssue(node);
+      if (issue) toast(`注意：${issue}，生成时会被拒绝，请先剪辑`);
+      renderNodes();
+    });
     refreshDownstreamVideoPrompts(node.id);
     pushHistory();
     render();
@@ -5667,6 +5735,8 @@ async function chooseVideoRefFile(nodeId) {
 async function manualUploadVideoRef(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "video-ref" || node._videoRefUploading) return;
+  const durationError = videoRefDurationBlockError(node);
+  if (durationError) { toast(durationError); return; }
   try {
     await uploadVideoRef(node);
     pushHistory();

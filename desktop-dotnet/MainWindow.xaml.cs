@@ -1316,9 +1316,12 @@ public partial class MainWindow : Window
         return new { path = picker.FileName };
     }
 
+    private string? _refVideoFolder;
+
     private object ChooseVideoFile()
     {
-        // 视频引用节点专用：返回绝对路径，文件字节不经过此桥（上传由 /api/apimart/video-upload 按路径读盘）
+        // 视频引用节点专用：返回绝对路径，文件字节不经过此桥（上传由 /api/apimart/video-upload 按路径读盘）。
+        // 同时把文件所在目录映射成虚拟主机，前端 <video> 直接本地预览（仅预览，不参与上传）。
         var picker = new Microsoft.Win32.OpenFileDialog
         {
             Title = "选择参考视频（MP4 / MOV / WebM）",
@@ -1328,7 +1331,25 @@ public partial class MainWindow : Window
         if (picker.ShowDialog(this) != true) return new { cancelled = true, path = "" };
         var info = new FileInfo(picker.FileName);
         Log($"[视频引用] 已选择视频：{picker.FileName}", false);
-        return new { cancelled = false, path = picker.FileName, name = info.Name, bytes = info.Exists ? info.Length : 0L };
+        var previewUrl = "";
+        try
+        {
+            var folder = info.Directory?.FullName;
+            if (string.IsNullOrEmpty(folder)) throw new InvalidOperationException("无法取得视频所在目录");
+            if (CanvasView.CoreWebView2 is null) throw new InvalidOperationException("WebView2 尚未初始化");
+            if (!string.Equals(_refVideoFolder, folder, StringComparison.OrdinalIgnoreCase))
+            {
+                // 虚拟主机名固定、目录随选择重映射；换目录后旧预览地址失效，前端按 folder 变化自行失效旧预览
+                CanvasView.CoreWebView2.SetVirtualHostNameToFolderMapping("canvasflow-refvideos.local", folder, CoreWebView2HostResourceAccessKind.DenyCors);
+                _refVideoFolder = folder;
+            }
+            previewUrl = $"https://canvasflow-refvideos.local/{Uri.EscapeDataString(info.Name)}";
+        }
+        catch (Exception mappingError)
+        {
+            Log($"[视频引用] 本地预览映射失败（不影响选择与上传）：{mappingError.Message}", false);
+        }
+        return new { cancelled = false, path = picker.FileName, name = info.Name, bytes = info.Exists ? info.Length : 0L, previewUrl };
     }
 
     private object ChooseComfyFolder(JsonElement request)
