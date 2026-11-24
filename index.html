@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CanvasFlow — Visual AI Image Workflow</title>
-  <link rel="stylesheet" href="styles.css?v=20261120-excover1">
+  <link rel="stylesheet" href="styles.css?v=20261124-videocard1">
 </head>
 <body>
   <div id="app" class="app theme-dark">
@@ -168,8 +168,8 @@
             <ul>
               <li>新增案例面板：右上角「案例」按钮内置多组真实使用流程的完整案例，点击整组插入画布照着改</li>
               <li>AI 生成图右键「还原作图流程」：把生成这张图用到的所有节点和参考图摆回画布</li>
-              <li>钢笔选区支持多条路径并存加减选，各路径不同颜色显示；闭合选区不影响已画内容，只约束之后的落笔</li>
-              <li>视频引用节点：MP4/MOV/WebM 拖入画布作参考视频，APIMart 与 AGToken 的 Seedance 系模型可用</li>
+              <li>新增钢笔路径用于限定画布区域：多条路径加减选、不同颜色显示；闭合选区不影响已画内容，只约束之后的落笔</li>
+              <li>参考视频节点（原视频引用节点）：MP4/MOV/WebM 拖入画布作参考视频，APIMart 与 AGToken 的 Seedance 系模型可用；AI 视频生成结果改为独立视频卡片，节点本身更紧凑</li>
               <li>AI 绘图节点价格行显示预计花费（按站点牌价 × 分辨率/画质 × 张数估算）</li>
               <li>APIMart 的 flare/sunburst 支持五档画质；AI 绘图设置新增「模型管理」卡</li>
               <li>AI 对话模型标注官方牌价，节点与设置页常驻费用提醒</li>
@@ -678,7 +678,7 @@
   <script src="modules/fill-selection.js?v=20261118-penentry7"></script>
   <script src="modules/image-annotations.js?v=20261107-ann-data2"></script>
   <script src="dev-flag.js"></script>
-  <script src="app.js?v=20261122-penmulti1"></script>
+  <script src="app.js?v=20261124-videocard1"></script>
   <script src="modules/manual-matting.js?v=20261115-mmlocal1"></script>
   <script src="modules/canvas-examples.js?v=20261121-exmerge1"></script>
   <script src="modules/region-hue.js?v=20261123-regionsel1"></script>

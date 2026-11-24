@@ -32,6 +32,9 @@ const VIDEO_TASK_MAX_IMAGES = 9;
 // 发送时经 /api/apimart/video-upload 按路径/内容上传 apimart 换公网 URL 再进 video_urls[]
 const VIDEO_REF_NODE_WIDTH = 280;
 const VIDEO_REF_NODE_HEIGHT = 190;
+// 生成视频结果节点（video-result）：AI 视频生成完成后外置的独立视频卡片，与参考视频节点同款视觉
+const VIDEO_RESULT_NODE_WIDTH = 280;
+const VIDEO_RESULT_NODE_HEIGHT = 236;
 const VIDEO_REF_MAX_BYTES = 50 * 1024 * 1024; // apimart 上传接口默认单文件上限 50MB
 const VIDEO_REF_EXPIRY_MARGIN_MS = 10 * 60 * 1000; // URL 过期前余量，到点自动重传
 const BROWSER_SITES = [
@@ -254,7 +257,7 @@ const UI_EN = {
   "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
-  "图片文件夹": "Image Folder", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "编组截图": "Screenshot Group", "取消编组": "Ungroup",
+  "图片文件夹": "Image Folder", "参考视频": "Reference Video", "生成视频": "Generated Video", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "编组截图": "Screenshot Group", "取消编组": "Ungroup",
   "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组": "Create a group from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
@@ -266,7 +269,7 @@ const UI_EN = {
   "请至少选择 2 个文字、图片或 AI 绘图节点": "Select at least 2 text, image, or AI image nodes", "所选节点已经依次连接": "The selected nodes are already connected in sequence",
   "打开本地文件夹": "Open Local Folder", "断开连接": "Disconnect", "复制": "Copy", "复制节点": "Copy Nodes", "删除节点": "Delete Nodes", "粘贴节点": "Paste Nodes", "另存为": "Save As", "切换启用/停用": "Toggle Enabled/Disabled", "批量停用": "Disable Selected", "批量启用": "Enable Selected",
   "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
-  "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加矢量化节点": "Add Vectorize Node", "图片矢量化": "Vectorize Image", "图片置入ppt": "Images to PPT", "自动抠图": "Auto Cutout", "添加图片置入ppt节点": "Add Images-to-PPT Node", "添加自动抠图节点": "Add Auto Cutout Node", "添加AI视频节点": "Add AI Video Node", "添加视频引用节点": "Add Video Reference Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
+  "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加矢量化节点": "Add Vectorize Node", "图片矢量化": "Vectorize Image", "图片置入ppt": "Images to PPT", "自动抠图": "Auto Cutout", "添加图片置入ppt节点": "Add Images-to-PPT Node", "添加自动抠图节点": "Add Auto Cutout Node", "添加AI视频节点": "Add AI Video Node", "添加参考视频节点": "Add Reference Video Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
   "已新建标签页": "New project created", "至少保留一个项目": "At least one project must remain", "已删除项目（Ctrl+Z 可撤回）": "Project deleted (Ctrl+Z to restore)",
   "上传图片文件": "Upload Image Files", "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
   "文件夹上传": "Folder Upload", "确认导入图片": "Confirm Image Import", "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。": "Only thumbnails are stored on the canvas. AI tasks read the local originals, so keep the source folder in place while using the project.",
@@ -1378,6 +1381,19 @@ function restoreData(data) {
     if (node.type !== "video-ref") return;
     normalizeVideoRefNode(node);
   });
+  // 生成视频结果节点:补齐缺省字段（videoFile 是下载落盘文件名,按 id 引用不复制）
+  walkNodes(state.nodes, node => {
+    if (node.type !== "video-result") return;
+    node.videoFile = typeof node.videoFile === "string" ? node.videoFile : "";
+    node.outputPath = typeof node.outputPath === "string" ? node.outputPath : "";
+    node.fileName = typeof node.fileName === "string" && node.fileName ? node.fileName : (node.videoFile || "生成视频.mp4");
+    node.generating = false;
+  });
+  // 旧版 AI 视频节点的内嵌结果：标记后仍按旧形态显示内嵌播放条（新生成一律外置卡片）
+  walkNodes(state.nodes, node => {
+    if (node.type !== "ai-video") return;
+    if (node.videoFile) node._legacyVideo = true;
+  });
   walkNodes(state.nodes, node => {
     if (node.type !== "ai-image" && node.type !== "ai-video" && node.type !== "angle-image") return;
     const hasLiveQueueTask = aiTaskQueue.items.some(task => task.nodeId === node.id && task.runId === node._queueRunId && !queueTaskIsSettled(task));
@@ -2165,6 +2181,7 @@ function nodeHeightForType(type) {
   return type === "ai-image" ? AI_NODE_HEIGHT
     : type === "ai-video" ? VIDEO_NODE_HEIGHT
     : type === "video-ref" ? VIDEO_REF_NODE_HEIGHT
+    : type === "video-result" ? VIDEO_RESULT_NODE_HEIGHT
     : type === "angle-image" ? ANGLE_NODE_HEIGHT
       : type === "screenshot-input" ? SCREENSHOT_NODE_HEIGHT
     : type === "palette" ? 780
@@ -2353,7 +2370,8 @@ function buildNodeObject(type, position, width, height) {
     _sdResolution: type === "local-sd" ? "1K" : undefined,
     _sdRatio: type === "local-sd" ? "1:1" : undefined,
     _sdMaskData: type === "local-sd" ? "" : undefined,
-    videoFile: type === "ai-video" ? "" : undefined,
+    videoFile: (type === "ai-video" || type === "video-result") ? "" : undefined,
+    outputPath: type === "video-result" ? "" : undefined,
     _videoRatio: type === "ai-video" ? "16:9" : undefined,
     _videoResolution: type === "ai-video" ? "1080p" : undefined,
     _videoDuration: type === "ai-video" ? 5 : undefined,
@@ -3157,6 +3175,11 @@ function pasteNodes(data, anchor = null) {
       // 视频引用节点固定宽高档：默认 NODE_WIDTH/172 会把内容挤坏
       nn.w = VIDEO_REF_NODE_WIDTH;
       nn.h = Math.max(Number(n.h) || 0, VIDEO_REF_NODE_HEIGHT);
+    }
+    if (nn.type === "video-result") {
+      // 生成视频卡片同款宽高档
+      nn.w = VIDEO_RESULT_NODE_WIDTH;
+      nn.h = Math.max(Number(n.h) || 0, VIDEO_RESULT_NODE_HEIGHT);
     }
     if (n.canvasGroupId && data.nodes.filter(item => item.canvasGroupId === n.canvasGroupId).length > 1) {
       // 新组 ID，避免和原组混在一起；组内成员保留原始宽高以维持组内布局
@@ -5397,22 +5420,22 @@ function videoNodeControls(node) {
 
 function videoNodeBody(node) {
   normalizeVideoNode(node);
+  // 紧凑形态（2026-11-24 用户要求"不内置预览，生成结果直接放外面"）：结果生成为独立 video-result 卡片节点。
+  // 旧存档兼容：带 videoFile 的旧节点标 _legacyVideo（存档加载时置入），仍显示内嵌小播放条，行为不变。
   const summary = `<div class="video-node-summary">${escapeHtml(node._videoInputSummary || "0 条文字 · 0 张参考图")}</div>`;
   const progress = node._aiProgress ? aiNodeProgressMarkup(node) : "";
-  if (node.generating) {
-    return `${summary}<div class="ai-preview is-empty video-preview-empty"><div class="ai-generating"><div class="ai-spinner"></div>视频生成中（约 2-10 分钟）...</div></div>
-      <div class="node-hover-controls">${videoNodeControls(node)}</div>${progress}`;
-  }
-  if (node._pendingVideoUrl) {
-    return `${summary}<div class="ai-preview is-empty video-preview-empty"><span>视频已生成，下载失败</span><button type="button" class="ai-redownload-btn" data-role="video-redownload" title="点击重新下载成片（结果链接约24小时内有效）">重新下载视频</button></div>
-      <div class="node-hover-controls"><div class="ai-actions"><button data-role="ai-video-generate" class="ai-generate-btn">生成</button></div>${videoNodeControls(node)}</div>${progress}`;
-  }
-  if (node.videoFile) {
-    return `${summary}<div class="video-preview"><video controls preload="metadata" src="${escapeHtml(videoFileUrl(node.videoFile))}" draggable="false"></video></div>
+  if (node._legacyVideo && node.videoFile) {
+    return `${summary}<div class="video-preview video-preview-legacy"><video controls preload="metadata" src="${escapeHtml(videoFileUrl(node.videoFile))}" draggable="false"></video></div>
       <div class="node-hover-controls"><div class="ai-actions"><button data-role="ai-video-generate" class="ai-generate-btn">重新生成</button><button data-role="video-clear">清除</button></div>${videoNodeControls(node)}</div>${progress}`;
   }
-  return `${summary}<div class="ai-preview is-empty video-preview-empty">等待生成视频</div>
-    <div class="node-hover-controls"><div class="ai-actions"><button data-role="ai-video-generate" class="ai-generate-btn">生成</button></div>${videoNodeControls(node)}</div>${progress}`;
+  const status = node.generating
+    ? `<div class="video-node-status"><span class="ai-spinner" aria-hidden="true"></span>视频生成中（约 2-10 分钟）…</div>`
+    : node._pendingVideoUrl
+      ? `<div class="video-node-status is-warning">视频已生成，下载失败 <button type="button" class="ai-redownload-btn" data-role="video-redownload" title="点击重新下载成片（结果链接约24小时内有效）">重新下载</button></div>`
+      : `<div class="video-node-status is-muted">完成后生成独立视频卡片</div>`;
+  const actionLabel = node.videoFile || node._pendingVideoUrl ? "重新生成" : "生成";
+  return `${summary}${status}
+    <div class="node-hover-controls"><div class="ai-actions"><button data-role="ai-video-generate" class="ai-generate-btn" ${node.generating ? "disabled" : ""}>${actionLabel}</button></div>${videoNodeControls(node)}</div>${progress}`;
 }
 
 // ---------- 视频引用节点（video-ref）：本地视频文件引用，不复制文件进项目数据 ----------
@@ -5539,21 +5562,58 @@ function videoRefStatusBadge(node) {
   return `<span class="video-ref-badge is-empty">未选择视频</span>`;
 }
 
+// 视频卡片公共片段（参考视频 / 生成视频同款视觉）：大预览区 + 图标信息行 + 按钮行
+const VIDEO_CARD_FILM_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 15h16M9 4v16M15 4v16" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
+const VIDEO_CARD_PLAY_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>`;
+
+function videoCardPreviewMarkup({ videoSrc, emptyText, posterBusy }) {
+  if (videoSrc) {
+    return `<div class="video-card-preview"><video src="${escapeHtml(videoSrc)}" controls preload="metadata" playsinline draggable="false"></video></div>`;
+  }
+  if (posterBusy) {
+    return `<div class="video-card-preview is-empty"><span class="video-card-icon">${VIDEO_CARD_FILM_SVG}</span><span class="video-card-empty-text">上传中，获取公网链接…</span></div>`;
+  }
+  return `<div class="video-card-preview is-empty"><span class="video-card-icon">${VIDEO_CARD_FILM_SVG}</span><span class="video-card-empty-text">${escapeHtml(emptyText)}</span></div>`;
+}
+
+function videoCardInfoMarkup({ name, title, meta, badge }) {
+  return `<div class="video-card-info">
+    <span class="video-card-chip" aria-hidden="true">${VIDEO_CARD_PLAY_SVG}</span>
+    <span class="video-card-text">
+      <strong class="video-card-name" title="${escapeHtml(title || name)}">${escapeHtml(name)}</strong>
+      <span class="video-card-meta">${escapeHtml(meta || "")}${badge || ""}</span>
+    </span>
+  </div>`;
+}
+
 function videoRefNodeBody(node) {
   normalizeVideoRefNode(node);
-  const name = node.fileName || "尚未选择视频文件";
-  const meta = [node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "", node.videoPath ? node.videoPath : ""].filter(Boolean).join(" · ");
-  return `<div class="video-ref-body">
-    <div class="video-ref-file" title="${escapeHtml(node.videoPath || name)}">
-      <span class="video-ref-name">${escapeHtml(name)}</span>
-      ${meta ? `<span class="video-ref-meta">${escapeHtml(meta)}</span>` : ""}
-    </div>
-    <div class="video-ref-status">${videoRefStatusBadge(node)}</div>
-    <div class="video-ref-actions">
-      <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频文件</button>
+  const name = node.fileName || "尚未选择视频";
+  const playable = node.videoUrl && !videoRefExpired(node);
+  const badge = videoRefStatusBadge(node);
+  const metaParts = [node.videoBytes ? formatVideoRefBytes(node.videoBytes) : "", playable ? "公网链接有效" : ""].filter(Boolean);
+  return `<div class="video-card-body">
+    ${videoCardPreviewMarkup({ videoSrc: playable ? node.videoUrl : "", emptyText: node.videoPath ? "本地文件已就绪，发送时自动上传" : "拖入视频文件或点下方按钮", posterBusy: node._videoRefUploading })}
+    ${videoCardInfoMarkup({ name, title: node.videoPath || name, meta: metaParts.join(" · "), badge })}
+    <div class="video-card-actions">
+      <button type="button" data-role="video-ref-choose" title="选择本地视频文件（MP4/MOV/WebM，≤50MB）">选择视频</button>
       ${node.videoPath || node.videoUrl ? `<button type="button" data-role="video-ref-upload" title="立即上传到 APIMart 换取公网链接（3 天有效，免费额度内免费）">立即上传</button>` : ""}
     </div>
-    <div class="video-ref-hint">连线到 AI 视频节点作为参考视频（APIMart Seedance 2.0 系、AGToken Seedance 系支持；文件不会被复制，只在生成时经 APIMart 通道上传换公网链接）</div>
+    <div class="video-card-hint">连线到 AI 视频节点作参考视频；文件不会被复制，生成时经 APIMart 通道上传换公网链接</div>
+  </div>`;
+}
+
+function videoResultNodeBody(node) {
+  node.videoFile = typeof node.videoFile === "string" ? node.videoFile : "";
+  const name = node.fileName || node.videoFile || "生成视频";
+  const src = node.videoFile ? videoFileUrl(node.videoFile) : "";
+  return `<div class="video-card-body">
+    ${videoCardPreviewMarkup({ videoSrc: src, emptyText: "视频文件缺失" })}
+    ${videoCardInfoMarkup({ name, title: node.outputPath || name, meta: "AI 视频生成结果" })}
+    <div class="video-card-actions">
+      ${node.outputPath ? `<button type="button" data-role="video-result-folder" title="打开视频所在文件夹">打开文件夹</button>` : ""}
+      <button type="button" data-role="video-result-clear" title="从画布移除该结果卡片（不影响已下载的视频文件）">移除</button>
+    </div>
   </div>`;
 }
 
@@ -5597,7 +5657,7 @@ async function chooseVideoRefFile(nodeId) {
       toast(node.videoUrl ? "视频已上传为参考链接（约 3 天内有效）" : "已引用本地视频");
     } catch (error) {
       console.error("[视频引用] 文件读取/上传失败", error);
-      toast(`视频引用失败：${error.message || "文件无法读取"}`);
+      toast(`参考视频失败：${error.message || "文件无法读取"}`);
       render();
     }
   };
@@ -8261,7 +8321,7 @@ function enqueueVideoNode(nodeId) {
   const videoRefs = allVideoRefs.slice(0, maxVideos);
   const overflowVideos = allVideoRefs.length - videoRefs.length;
   if (!prompt.trim() && !images.length && !videoRefs.length) {
-    toast("视频节点需要连接文字、参考图或视频引用");
+    toast("视频节点需要连接文字、参考图或参考视频");
     return 0;
   }
   const page = currentPage();
@@ -8360,7 +8420,7 @@ async function submitVideoGeneration(task) {
     payload = { model: settings._model, prompt, duration };
     if (entry.imageMode === "first_frame") {
       if (!images.length) throw new Error("该模型为图生视频，需要至少一张参考图作为首帧");
-      if (videoUrls.length) throw new Error("该模型不支持参考视频（参考视频与首尾帧互斥），请去掉视频引用节点或换用 Seedance 2.0 系");
+      if (videoUrls.length) throw new Error("该模型不支持参考视频（参考视频与首尾帧互斥），请去掉参考视频节点或换用 Seedance 2.0 系");
       payload.first_frame_image = images[0];
     } else if (images.length) {
       payload.image_urls = images;
@@ -8534,6 +8594,7 @@ async function redownloadVideoResult(nodeId) {
     const saved = await downloadVideoFile(url, { id: node.id, projectName: currentPage()?.name || "项目" });
     delete node._pendingVideoUrl;
     node.videoFile = saved.fileName;
+    spawnVideoResultNode(saved, node, { nodeId: node.id, prompt: node.generationPrompt || "" });
     node._aiProgress = { status: "done", label: "下载完成", percent: 100, error: "" };
     clearAiNodeProgressSoon(node);
     pushHistory();
@@ -8546,6 +8607,32 @@ async function redownloadVideoResult(nodeId) {
   } finally {
     delete node._videoRedownloadBusy;
   }
+}
+
+// 生成完成 → 外置独立视频卡片节点（2026-11-24 用户要求"结果直接放外面"，与参考视频节点同款视觉）。
+// 离页任务把结果节点写回所属项目页数据（同队列落图语义）；节点本体只留 videoFile 存档字段。
+function spawnVideoResultNode(saved, sourceNode, task) {
+  const fileName = String(saved.fileName || "生成视频.mp4");
+  const landedPage = taskTargetPage(task);
+  const offPage = landedPage && landedPage.id !== state.activePageId;
+  const width = VIDEO_RESULT_NODE_WIDTH, height = VIDEO_RESULT_NODE_HEIGHT;
+  const base = findFreeNodePosition((sourceNode?.x || 0) + (Number(sourceNode?.w) || NODE_WIDTH) + 40, sourceNode?.y || 0, width, height, offPage ? {} : { pendingNodes: [] });
+  const resultNode = {
+    id: `vr${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+    type: "video-result",
+    x: base.x, y: base.y, w: width, h: height,
+    disabled: false, created: Date.now(),
+    fileName,
+    videoFile: fileName,
+    outputPath: typeof saved.path === "string" ? saved.path : "",
+    generationPrompt: task?.prompt || "",
+  };
+  if (offPage) {
+    landedPage.data.nodes.push(resultNode);
+  } else {
+    state.nodes.push(resultNode);
+  }
+  return resultNode;
 }
 
 async function runQueuedVideoTask(task) {
@@ -8597,6 +8684,7 @@ async function runQueuedVideoTask(task) {
   delete node._pendingVideoUrl;
   node.videoFile = saved.fileName;
   node.generationPrompt = task.prompt || "";
+  spawnVideoResultNode(saved, node, task);
   const landedPage = taskTargetPage(task);
   if (landedPage && landedPage.id !== state.activePageId) {
     markDirty();
@@ -10001,7 +10089,7 @@ function textPromptActionsHtml(node) {
 
 function nodeTemplate(node) {
   const num = node.type === "output" ? outputNumber(node.id) : 0;
-  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "video-ref" ? "视频引用" : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
+  const title = node.type === "palette" ? "调色盘" : node.type === "text" ? "文字节点" : node.type === "variable" ? "变量节点" : node.type === "chat" ? "AI对话" : node.type === "browser-image" ? "浏览器生图" : node.type === "local-sd" ? "本地 SD" : node.type === "image" ? "图片节点" : node.type === "folder" ? (node.folderName || "图片文件夹") : node.type === "ai-image" ? (node.seq ? `AI绘图 #${node.seq}` : "AI绘图") : node.type === "ai-video" ? (node.seq ? `AI视频 #${node.seq}` : "AI视频") : node.type === "video-ref" ? "参考视频" : node.type === "video-result" ? "生成视频" : node.type === "angle-image" ? "角度变化" : node.type === "screenshot-input" ? `截图功能节点 #${node.screenshotSeq || 1}` : node.type === "tool-node" ? (node.toolName || "拓展节点") : node.type === "group" ? "多任务节点" : `输出节点 ${num}`;
   const inPort = `<span class="port in" data-port="in" title="输入端口"></span>`;
   const outPort = !edgeInsertableNode(node) ? "" : `<span class="port out" data-port="out" title="输出端口"></span>`;
   let body = "";
@@ -10088,6 +10176,8 @@ function nodeTemplate(node) {
     body = videoNodeBody(node);
   } else if (node.type === "video-ref") {
     body = videoRefNodeBody(node);
+  } else if (node.type === "video-result") {
+    body = videoResultNodeBody(node);
   } else if (node.type === "palette") {
     body = paletteMarkup(node);
   } else if (node.type === "tool-node") {
@@ -10833,8 +10923,8 @@ function updateCompositeHover(dragState) {
 }
 
 function edgeInsertableNode(node) {
-  // 放大/自动抠图等链式工具节点带输出端口，可把结果继续连给下游环节
-  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "palette" && (node.type !== "tool-node" || isLinkedUpscaleNode(node) || isAutoMattingTool(node));
+  // 放大/自动抠图等链式工具节点带输出端口，可把结果继续连给下游环节；生成视频是终端卡片
+  return !!node && node.type !== "output" && node.type !== "screenshot-input" && node.type !== "video-result" && node.type !== "palette" && (node.type !== "tool-node" || isLinkedUpscaleNode(node) || isAutoMattingTool(node));
 }
 
 // 文字节点重合合并:两段文案按画布位置从左到右(同列按从上到下)拼接,并入被叠节点,删除拖动节点;
@@ -11797,6 +11887,11 @@ els.nodes.addEventListener("click", async ev => {
     pushHistory(); render();
   }
   if (actionRole === "video-redownload" && node.type === "ai-video") redownloadVideoResult(node.id);
+  if (actionRole === "video-result-folder" && node.type === "video-result") openGeneratedFileLocation(node);
+  if (actionRole === "video-result-clear" && node.type === "video-result") {
+    deleteNodes([node.id]);
+    toast("已移除结果卡片（视频文件仍保留在磁盘）");
+  }
   if (actionRole === "video-ref-choose" && node.type === "video-ref") chooseVideoRefFile(node.id);
   if (actionRole === "video-ref-upload" && node.type === "video-ref") manualUploadVideoRef(node.id);
   if (actionRole === "ai-redownload") redownloadAiResults(node.id);
@@ -14682,7 +14777,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
       ["添加图片节点", () => addNode("image", p.x, p.y)],
       ["添加AI绘图节点", () => addAiImageNode(p.x, p.y, [])],
     );
-    items.push(["添加AI视频节点", () => addAiVideoNode(p.x, p.y, [])], ["添加视频引用节点", () => addVideoRefNode(p.x, p.y)], ["添加对话节点", () => addNode("chat", p.x, p.y)]);
+    items.push(["添加AI视频节点", () => addAiVideoNode(p.x, p.y, [])], ["添加参考视频节点", () => addVideoRefNode(p.x, p.y)], ["添加对话节点", () => addNode("chat", p.x, p.y)]);
     if (state.settings.showBrowserNodeMenu !== false) items.push(["添加浏览器生图节点", () => addNode("browser-image", p.x, p.y)]);
     if (state.settings.showLocalSdNodeMenu !== false) items.push(["添加本地 SD 节点", () => addNode("local-sd", p.x, p.y, true, { width: 340, height: 430 })]);
     items.push(
@@ -14720,7 +14815,7 @@ function toolMenuItems(p) {
 // 其中三个「添加××节点」入口沿用常规页「右键菜单节点」卡的独立开关（CONTEXT_MENU_FLAG_ITEMS），其余存 settings.hiddenMenuItems。
 // 基础入口常驻（2026-11-14 用户要求）：不进管理清单、isMenuItemHidden 短路，任何设置（含历史 hiddenMenuItems 残留）都隐藏不了。
 const RESIDENT_CONTEXT_MENU_ITEMS = new Set([
-  "粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加视频引用节点", "添加对话节点", "拓展",
+  "粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加参考视频节点", "添加对话节点", "拓展",
 ]);
 const CONTEXT_MENU_MANAGER_GROUPS = [
   { title: "画布空白处", items: [
@@ -15052,7 +15147,7 @@ async function adoptDroppedVideoRef(targetNodeId, file, worldPos) {
     toast(node.videoPath ? `已引用本地视频「${node.fileName}」（生成时按路径上传）` : `视频已上传为参考链接（约 3 天内有效）：${node.fileName}`);
   } catch (error) {
     console.error("[视频引用] 拖入失败", error);
-    toast(`视频引用失败：${error.message || "文件无法读取"}`);
+    toast(`参考视频失败：${error.message || "文件无法读取"}`);
     render();
   }
 }
@@ -15748,7 +15843,8 @@ function groupScreenshotNodeTitle(node) {
     case "folder": return node.folderName || "图片文件夹";
     case "ai-image": return node.seq ? `AI绘图 #${node.seq}` : "AI绘图";
     case "ai-video": return node.seq ? `AI视频 #${node.seq}` : "AI视频";
-    case "video-ref": return "视频引用";
+    case "video-ref": return "参考视频";
+    case "video-result": return "生成视频";
     case "angle-image": return "角度变化";
     case "screenshot-input": return `截图功能节点 #${node.screenshotSeq || 1}`;
     case "tool-node": return node.toolName || "拓展节点";

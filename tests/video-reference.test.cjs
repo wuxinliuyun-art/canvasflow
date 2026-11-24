@@ -263,7 +263,7 @@ test('enqueueVideoNode：不支持的模型带参考视频 → 拒绝入队', ()
 test('enqueueVideoNode：文字/参考图/参考视频全空 → 拒绝入队', () => {
   const harness = buildEnqueueHarness({ refs: [], prompt: '', images: [] });
   assert.equal(harness.context.enqueueVideoNode('n_video'), 0);
-  assert.ok(harness.toasts.some(message => message.includes('文字、参考图或视频引用')));
+  assert.ok(harness.toasts.some(message => message.includes('文字、参考图或参考视频')));
   // 参考视频单独也能撑起任务（无文字无图）
   const videoOnly = buildEnqueueHarness({ refs: [ref('r1', 0)], prompt: '', images: [] });
   assert.equal(videoOnly.context.enqueueVideoNode('n_video'), 1);
@@ -435,10 +435,10 @@ test('app.js 静态接线：节点注册/拖拽/菜单/收集器齐全', () => {
     'function refreshDownstreamVideoPrompts(',
     'droppedVideoFile',
     'adoptDroppedVideoRef',
-    '"添加视频引用节点"',
+    '"添加参考视频节点"',
     'video-ref-choose',
     'video-ref-upload',
-    'node.type === "video-ref" ? "视频引用"',
+    'node.type === "video-ref" ? "参考视频"',
     'body = videoRefNodeBody(node)',
     // app.js 为 CRLF 行尾，多行标记不要内嵌 \n；walkNodes 归一化块用单行标记
     'if (node.type !== "video-ref") return;',
@@ -491,7 +491,7 @@ test('agtoken Seedance 兼容接口路由四处注册（server/runtime/C# 精确
 });
 
 test('界面样式与 ?v= 基线', () => {
-  for (const marker of ['.video-ref-body', '.video-ref-badge', '.video-ref-actions button']) {
+  for (const marker of ['.video-card-body', '.video-ref-badge', '.video-card-actions button']) {
     assert.ok(stylesSource.includes(marker), `styles.css 缺少 ${marker}`);
   }
   // 版本线归活跃会话所有（app/styles 的标签随时会被并行会话继续推进），这里只锁本轮改动引入的不变量：

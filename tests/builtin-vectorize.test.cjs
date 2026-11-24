@@ -132,18 +132,18 @@ test("basic context menu entries are resident and cannot be hidden", () => {
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   // 用户划线点名的常驻集合：任何设置（含历史 hiddenMenuItems 残留）都隐藏不了
-  assert.match(app, /const RESIDENT_CONTEXT_MENU_ITEMS = new Set\(\[\s*"粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加视频引用节点", "添加对话节点", "拓展",\s*\]\)/);
+  assert.match(app, /const RESIDENT_CONTEXT_MENU_ITEMS = new Set\(\[\s*"粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加参考视频节点", "添加对话节点", "拓展",\s*\]\)/);
   assert.match(app, /if \(RESIDENT_CONTEXT_MENU_ITEMS\.has\(label\)\) return false;/);
   // 管理清单不再包含常驻项；AI 视频退出常规页开关双写（入口恒显）
   const managerBlock = app.match(/const CONTEXT_MENU_MANAGER_GROUPS = \[[\s\S]*?\n\];/)[0];
-  for (const resident of ["粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加视频引用节点", "添加对话节点", "拓展"]) {
+  for (const resident of ["粘贴节点", "添加文字节点", "添加图片节点", "添加AI绘图节点", "添加AI视频节点", "添加参考视频节点", "添加对话节点", "拓展"]) {
     assert.ok(!managerBlock.includes(resident), `manager list must not contain resident item: ${resident}`);
   }
   assert.ok(!managerBlock.includes("添加调色盘") === false, "manager keeps non-resident items");
   assert.match(app, /const CONTEXT_MENU_FLAG_ITEMS = \{\s*"添加浏览器生图节点": "showBrowserNodeMenu",/);
   assert.doesNotMatch(app, /"添加AI视频节点": "showVideoNodeMenu"/);
   // AI 视频入口无条件加入空白处菜单；常规页开关 DOM/els/同步/监听四处全部移除
-  assert.match(app, /items\.push\(\["添加AI视频节点", \(\) => addAiVideoNode\(p\.x, p\.y, \[\]\)\], \["添加视频引用节点", \(\) => addVideoRefNode\(p\.x, p\.y\)\], \["添加对话节点"/);
+  assert.match(app, /items\.push\(\["添加AI视频节点", \(\) => addAiVideoNode\(p\.x, p\.y, \[\]\)\], \["添加参考视频节点", \(\) => addVideoRefNode\(p\.x, p\.y\)\], \["添加对话节点"/);
   assert.ok(!index.includes("showVideoNodeMenuToggle"), "settings card must drop the AI video toggle");
   assert.doesNotMatch(app, /els\.showVideoNodeMenu/);
 });

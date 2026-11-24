@@ -4305,46 +4305,129 @@ body.onboarding-api-step .settings-content { overflow: auto; }
   cursor: pointer;
 }
 
-/* 视频引用节点（video-ref）：本地视频文件引用，不复制文件进项目数据 */
-.video-ref-body {
+/* 视频卡片（video-ref 参考视频 / video-result 生成视频共用）：大预览 + 图标信息行 + 按钮行 */
+.video-card-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  padding: 8px 12px;
+  padding: 8px 10px;
 }
 
-.video-ref-file {
+.video-card-preview {
+  position: relative;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--node-control);
+}
+
+.video-card-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--node-control);
+}
+
+.video-card-preview.is-empty {
+  border: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--node-control) 55%, transparent);
+  gap: 6px;
+  padding: 8px;
+  grid-auto-flow: row;
+}
+
+.video-card-icon, .video-card-chip { color: var(--muted); }
+.video-card-icon { width: 34px; height: 34px; }
+.video-card-icon svg { width: 100%; height: 100%; display: block; }
+
+.video-card-empty-text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 90%;
+  overflow-wrap: anywhere;
+}
+
+.video-card-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.video-card-chip {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--node-control);
+}
+
+.video-card-chip svg { width: 16px; height: 16px; display: block; }
+
+.video-card-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
-  padding: 8px;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  background: var(--panel-solid);
 }
 
-.video-ref-name {
+.video-card-name {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.video-ref-meta {
+.video-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.video-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.video-card-actions button {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  background: var(--node-control);
+  border: 1px solid var(--panel-2);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: 28px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.video-card-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.video-ref-status { display: flex; }
-
+/* 参考视频状态徽章（嵌在卡片 meta 行内） */
 .video-ref-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
-  padding: 2px 8px;
+  flex: none;
+  min-height: 18px;
+  padding: 1px 7px;
   border-radius: 999px;
   font-size: 12px;
   border: 1px solid var(--line);
@@ -4355,28 +4438,28 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .video-ref-badge.is-uploading { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
 .video-ref-badge.is-path { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
 
-.video-ref-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.video-ref-actions button {
-  color: var(--text);
-  background: var(--panel-solid);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 12px;
-  padding: 4px 8px;
+/* AI 视频节点紧凑状态行（结果外置后不再有内嵌大预览） */
+.video-node-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-height: 28px;
-  cursor: pointer;
-}
-
-.video-ref-actions button:hover { background: color-mix(in srgb, var(--primary) 12%, var(--panel-solid)); }
-.video-ref-actions button:active { opacity: .75; }
-
-.video-ref-hint {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--node-control);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
-  overflow-wrap: anywhere;
 }
+
+.video-node-status .ai-spinner { width: 14px; height: 14px; flex: none; }
+.video-node-status.is-warning { color: var(--warning); }
+.video-node-status.is-muted.is-muted::after { content: ''; }
+
+.video-node-status .ai-redownload-btn { flex: none; }
+
+.video-preview-legacy { height: 150px; }
+
 /* Shared palette controls. Swatch colors are user data. */
 :root, .theme-dark { --palette-ink-dark: #454545; --palette-ink-light: #fff; }
 .quick-palette { display: grid; gap: 4px; min-width: 0; }
