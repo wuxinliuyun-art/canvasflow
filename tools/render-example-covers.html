@@ -1,0 +1,219 @@
+<!doctype html>
+<!-- 案例封面离线渲染页（dev 工具，随仓库入库；由 tools/render-example-covers.mjs 驱动无头 Edge 逐张截图）。
+     绘制逻辑逐行复刻 app.js screenshotCanvasGroup（编组截图），颜色固定暗色主题令牌值（与既有封面一致），
+     图片源用 modules/canvas-examples.js 内嵌 dataURL——不连服务、不碰用户画布实例。 -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #131316; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<script src="../modules/canvas-examples.js"></script>
+<script>
+"use strict";
+const GROUP_PAD_X = 16, GROUP_PAD_TOP = 48, GROUP_PAD_BOTTOM = 16;
+const NODE_WIDTH = 240, NODE_HEIGHT = 172;
+// .theme-dark 语义令牌值（styles.css），与画布暗色主题一致
+const COLORS = {
+  panel: "rgba(19, 19, 22, .92)",
+  panel2: "#26262a",
+  line: "#5c5c63",
+  text: "#f4f4f5",
+  muted: "#9a9aa1",
+  selected: "#8a8c92",
+  control: "#1c1c21",
+};
+const FONT_STACK = "Inter, 'HarmonyOS Sans SC', sans-serif";
+
+function nodeTitle(node) {
+  if (!node) return "节点";
+  switch (node.type) {
+    case "palette": return "调色盘";
+    case "text": return "文字节点";
+    case "variable": return "变量节点";
+    case "chat": return "AI对话";
+    case "browser-image": return "浏览器生图";
+    case "local-sd": return "本地 SD";
+    case "image": return "图片节点";
+    case "folder": return node.folderName || "图片文件夹";
+    case "ai-image": return node.seq ? `AI绘图 #${node.seq}` : "AI绘图";
+    case "ai-video": return node.seq ? `AI视频 #${node.seq}` : "AI视频";
+    case "video-ref": return "参考视频";
+    case "video-result": return "生成视频";
+    case "angle-image": return "角度变化";
+    case "screenshot-input": return `截图功能节点 #${node.screenshotSeq || 1}`;
+    case "tool-node": return node.toolName || "拓展节点";
+    case "group": return "多任务节点";
+    default: return "节点";
+  }
+}
+
+function nodeRect(node) {
+  return { x: Number(node.x) || 0, y: Number(node.y) || 0, w: Number(node.w) || NODE_WIDTH, h: Number(node.h) || NODE_HEIGHT };
+}
+
+function wrapText(context, text, maxWidth, maxLines) {
+  const paragraphs = String(text || "").trim().split(/\r?\n/);
+  const lines = [];
+  let truncated = false;
+  for (let p = 0; p < paragraphs.length && lines.length < maxLines; p += 1) {
+    let rest = paragraphs[p];
+    while (rest && lines.length < maxLines) {
+      if (context.measureText(rest).width <= maxWidth) { lines.push(rest); rest = ""; }
+      else {
+        let cut = rest.length;
+        while (cut > 1 && context.measureText(rest.slice(0, cut)).width > maxWidth) cut -= 1;
+        lines.push(rest.slice(0, Math.max(1, cut)));
+        rest = rest.slice(Math.max(1, cut));
+      }
+    }
+    if (rest) truncated = true;
+  }
+  if (truncated && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last.length > 1 && context.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+    lines[lines.length - 1] = `${last}…`;
+  }
+  return lines;
+}
+
+function loadImage(src) {
+  return new Promise(resolve => {
+    if (!src) return resolve(null);
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+async function render(example) {
+  const gid = Object.keys(example.groupFrames || {})[0];
+  const bounds = (gid && example.groupFrames[gid]) || { x: 0, y: 0, w: 800, h: 500 };
+  const members = example.nodes;
+  const internalEdges = example.edges || [];
+  const MAX_SIDE = 2400;
+  const scale = Math.min(2, MAX_SIDE / Math.max(bounds.w, bounds.h, 1));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bounds.w * scale));
+  canvas.height = Math.max(1, Math.round(bounds.h * scale));
+  canvas.style.width = `${canvas.width}px`;
+  canvas.style.height = `${canvas.height}px`;
+  document.body.appendChild(canvas);
+  const context = canvas.getContext("2d");
+  context.scale(scale, scale);
+
+  context.fillStyle = COLORS.panel;
+  context.fillRect(0, 0, bounds.w, bounds.h);
+  context.save();
+  context.globalAlpha = .5;
+  context.fillStyle = COLORS.selected;
+  context.fillRect(0, 0, bounds.w, bounds.h);
+  context.restore();
+  context.strokeStyle = COLORS.selected;
+  context.lineWidth = 1;
+  context.setLineDash([6, 4]);
+  context.strokeRect(.5, .5, bounds.w - 1, bounds.h - 1);
+  context.setLineDash([]);
+  context.fillStyle = COLORS.muted;
+  context.font = `14px ${FONT_STACK}`;
+  context.textBaseline = "middle";
+  context.fillText(example.title, 13, 24);
+
+  context.save();
+  context.translate(-bounds.x, -bounds.y);
+  context.strokeStyle = COLORS.line;
+  context.lineWidth = 2.2;
+  for (const edge of internalEdges) {
+    const from = members.find(node => node.id === edge.from?.node);
+    const to = members.find(node => node.id === edge.to?.node);
+    if (!from || !to) continue;
+    const a = nodeRect(from), b = nodeRect(to);
+    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+    context.beginPath();
+    context.moveTo(x1, y1);
+    context.bezierCurveTo(x1 + 60, y1, x2 - 60, y2, x2, y2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(x2, y2);
+    context.lineTo(x2 - 7, y2 - 4);
+    context.lineTo(x2 - 7, y2 + 4);
+    context.closePath();
+    context.fillStyle = COLORS.line;
+    context.fill();
+  }
+  for (const node of members) {
+    const rect = nodeRect(node);
+    context.save();
+    if (node.disabled) context.globalAlpha = .45;
+    context.beginPath();
+    context.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+    context.fillStyle = COLORS.panel;
+    context.fill();
+    context.strokeStyle = COLORS.line;
+    context.lineWidth = 1;
+    context.stroke();
+    context.fillStyle = COLORS.text;
+    context.font = `13px ${FONT_STACK}`;
+    context.textBaseline = "middle";
+    const headText = nodeTitle(node);
+    context.fillText(headText, rect.x + 13, rect.y + 23, rect.w - 26);
+    const bodyY = rect.y + 46, bodyH = rect.y + rect.h - bodyY - 8, bodyW = rect.w - 20, bodyX = rect.x + 10;
+    const imageSrc = node.image || node.generatedImage || "";
+    if (imageSrc) {
+      const image = await loadImage(imageSrc);
+      context.save();
+      context.beginPath();
+      context.roundRect(bodyX, bodyY, bodyW, Math.max(10, bodyH), 8);
+      context.clip();
+      context.fillStyle = COLORS.control || COLORS.panel2;
+      context.fillRect(bodyX, bodyY, bodyW, Math.max(10, bodyH));
+      if (image) {
+        const fit = Math.min(bodyW / image.naturalWidth, Math.max(10, bodyH) / image.naturalHeight);
+        const drawW = image.naturalWidth * fit, drawH = image.naturalHeight * fit;
+        context.drawImage(image, bodyX + (bodyW - drawW) / 2, bodyY + (Math.max(10, bodyH) - drawH) / 2, drawW, drawH);
+      } else {
+        context.fillStyle = COLORS.muted;
+        context.font = `12px ${FONT_STACK}`;
+        context.textAlign = "center";
+        context.fillText("图片", bodyX + bodyW / 2, bodyY + Math.max(10, bodyH) / 2);
+        context.textAlign = "left";
+      }
+      context.restore();
+    } else if (String(node.text || "").trim()) {
+      context.fillStyle = COLORS.text;
+      context.font = `12px ${FONT_STACK}`;
+      context.textBaseline = "top";
+      const lines = wrapText(context, node.text, bodyW, Math.max(1, Math.floor(bodyH / 18)));
+      lines.forEach((line, index) => context.fillText(line, bodyX, bodyY + 6 + index * 18));
+    } else {
+      context.fillStyle = COLORS.muted;
+      context.font = `12px ${FONT_STACK}`;
+      context.textBaseline = "middle";
+      context.textAlign = "center";
+      context.fillText(headText, rect.x + rect.w / 2, bodyY + Math.max(10, bodyH) / 2);
+      context.textAlign = "left";
+    }
+    context.restore();
+  }
+  context.restore();
+  document.title = `cover-ready:${canvas.width}x${canvas.height}`;
+}
+
+const exampleId = new URLSearchParams(location.search).get("id");
+const example = (window.CANVASFLOW_EXAMPLES || []).find(entry => entry.id === exampleId);
+if (!example) {
+  document.title = "cover-missing";
+  document.body.textContent = `未找到案例：${exampleId}`;
+} else {
+  render(example).catch(error => {
+    document.title = "cover-error";
+    document.body.textContent = String(error);
+  });
+}
+</script>
+</body>
+</html>

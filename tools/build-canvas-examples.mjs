@@ -17,6 +17,10 @@ import { pathToFileURL } from "node:url";
 const OUT_MODULE = "modules/canvas-examples.js";
 const COVER_OUT_DIR = "assets/examples";
 const DEFAULT_PROJECT_HINT = "案例演示";
+// 用户点名不入册的案例（2026-11-25）：按 id 排除，源项目里编组还在也不会被重新并回。
+const EXCLUDED_EXAMPLE_IDS = new Set([
+  "ex_canvas-group21", // 生成角色制动动作线稿图
+]);
 
 // 编组外框几何常量，与 app.js canvasGroupBounds 的 PAD_X/PAD_TOP/PAD_BOTTOM 保持一致
 const GROUP_PAD_X = 16;
@@ -197,7 +201,11 @@ function main() {
   const cases = extractExamplesFromProject(loadProjectJson(inputPath), { projectHint });
   if (!cases.length) throw new Error("没有提取到任何案例（需要成员 ≥2 且已命名的编组）");
   const existing = fs.existsSync(OUT_MODULE) ? loadExistingExamples(fs.readFileSync(OUT_MODULE, "utf8")) : [];
-  const merged = mergeExamples(cases, existing);
+  const merged = mergeExamples(cases, existing).filter(example => {
+    if (!EXCLUDED_EXAMPLE_IDS.has(example.id)) return true;
+    console.log(`[案例提取] 按排除清单移除「${example.title}」（${example.id}）`);
+    return false;
+  });
   console.log(`[案例提取] 现有案例 ${existing.length} 条，本次提取 ${cases.length} 条，合并后 ${merged.length} 条`);
   attachCovers(merged, coverDir);
 

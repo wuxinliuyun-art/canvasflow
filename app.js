@@ -3281,11 +3281,18 @@ function insertNodeIntoEdge(edgeId, nodeId) {
   if (toNode.type === "angle-image") state.edges = state.edges.filter(item => item.to.node !== toNode.id);
   state.edges.push({ id: uid("e"), from: { node: fromNode.id, port: "out" }, to: { node: nodeId, port: "in" }, label: edge.label || "" });
   state.edges.push({ id: uid("e"), from: { node: nodeId, port: "out" }, to: { node: toNode.id, port: "in" }, label: "" });
+  // 两端同属一个编组时，插入节点随链路入组并刷新组框（已在别的编组里的节点不抢）
+  let joinedGroup = "";
+  if (fromNode.canvasGroupId && fromNode.canvasGroupId === toNode.canvasGroupId && !node.canvasGroupId) {
+    node.canvasGroupId = fromNode.canvasGroupId;
+    joinedGroup = node.canvasGroupId;
+    canvasGroupBounds(canvasGroupMembers(joinedGroup));
+  }
   notifyVectorizeInputsChanged([nodeId, toNode.id]);
   pushHistory();
   render();
-  toast("已将节点插入连线，自动连接两端");
-  console.log("[连线插入] 节点已接入原连线两端", { previous: `${fromNode.id} -> ${toNode.id}`, inserted: nodeId });
+  toast(joinedGroup ? "已将节点插入连线，自动连接两端并加入编组" : "已将节点插入连线，自动连接两端");
+  console.log("[连线插入] 节点已接入原连线两端", { previous: `${fromNode.id} -> ${toNode.id}`, inserted: nodeId, joinedGroup });
   return true;
 }
 
@@ -16303,7 +16310,8 @@ function renderExamplesPanel() {
       : `<canvas class="example-cover" data-example-index="${index}" data-preview-width="248" data-preview-height="140"></canvas>`;
     return `<button type="button" class="example-card" data-example-index="${index}" title="${uiLanguage === "en" ? "Add to canvas" : "添加到画布"}">
       ${cover}
-      <span class="example-card-body"><strong>${title}</strong><small>${meta}</small></span>
+      <span class="example-card-name">${title}</span>
+      <span class="example-card-body"><small>${meta}</small></span>
     </button>`;
   }).join("");
   for (const canvas of els.examplesGrid.querySelectorAll("canvas.example-cover")) {
