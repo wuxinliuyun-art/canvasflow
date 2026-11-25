@@ -11,8 +11,10 @@ vm.createContext(context);
 vm.runInContext(app.slice(start, end), context);
 const markupStart = app.indexOf("function taskQueueErrorMarkup(");
 const markupEnd = app.indexOf("function moveQueuedTask(");
+const reStart = app.indexOf("const NETWORK_TRANSPORT_ERROR_RE");
+const reEnd = app.indexOf("\nfunction taskQueueErrorMarkup(", reStart);
 context.escapeHtml = value => String(value).replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-vm.runInContext(app.slice(markupStart, markupEnd), context);
+vm.runInContext(app.slice(reStart, reEnd) + "\n" + app.slice(markupStart, markupEnd), context);
 
 function response(status, body, ok = status >= 200 && status < 300) {
   return { status, ok, text: async () => body };
@@ -61,4 +63,15 @@ test("gpt-image-2 2K submissions take the official-channel route, other tiers st
   assert.equal(context.agtokenSubmitModelId("gpt-image-2", ""), "gpt-image-2");
   assert.equal(context.agtokenSubmitModelId("gpt-image-2.5-flare", "2k"), "gpt-image-2.5-flare");
   assert.equal(context.agtokenSubmitModelId("gpt-image-2官渠", "2k"), "gpt-image-2官渠");
+});
+
+test("transport-layer network errors carry the antivirus network-repair hint (2026-11-25 用户要求)", () => {
+  const ssl = context.taskQueueErrorMarkup("网络请求失败：agtoken 接口连接失败 ← The SSL connection could not be established, see inner exception. ← Received an unexpected EOF or 0 bytes from the transport stream.");
+  assert.match(ssl, /断网修复功能/);
+  const premature = context.taskQueueErrorMarkup("网络请求失败：agtoken 接口连接失败 ← The response ended prematurely. (ResponseEnded)");
+  assert.match(premature, /断网修复功能/);
+  const reset = context.taskQueueErrorMarkup("网络请求失败：远程主机强迫关闭了一个现有的连接");
+  assert.match(reset, /断网修复功能/);
+  assert.doesNotMatch(context.taskQueueErrorMarkup("参数错误：resolution 不支持"), /断网修复功能/, "参数类错误不给网络修复提示");
+  assert.doesNotMatch(context.taskQueueErrorMarkup("No available channel for model gpt-image-2-2k"), /断网修复功能/, "渠道错误已有官渠兜底，不给网络修复提示");
 });

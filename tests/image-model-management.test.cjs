@@ -148,7 +148,7 @@ test("默认模型回退走勾选视图：catalogModels 为空时兜底目录 de
 });
 
 test("?v= 基线：app.js 递增；model-catalog 与 canvas-runtime 成对", () => {
-  assert.match(html, /app\.js\?v=20261124-videocard4/);
+  assert.match(html, /app\.js\?v=20261124-videocard5/);
   const catalogMatch = html.match(/model-catalog\.js\?v=([^"]+)"/);
   const runtimeMatch = html.match(/canvas-runtime\.js\?v=([^"]+)"/);
   assert.ok(catalogMatch && runtimeMatch, "index.html 缺少 model-catalog/canvas-runtime 版本参数");

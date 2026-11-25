@@ -258,6 +258,7 @@ const UI_EN = {
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
   "图片文件夹": "Image Folder", "参考视频": "Reference Video", "生成视频": "Generated Video", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "编组截图": "Screenshot Group", "取消编组": "Ungroup",
+  "建议尝试使用杀毒软件的断网修复功能尝试修复网络": "Try your antivirus software's network repair tool to fix the connection",
   "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组": "Create a group from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
   "拖拽缩放": "Drag to resize", "空多任务": "Empty multi-task", "暂无图片": "No images", "添加图片": "Add Images", "清空": "Clear",
@@ -7516,12 +7517,19 @@ function renderTaskQueue() {
   }).join("") : `<div class="task-queue-empty">${translateUiString("还没有 AI 绘图任务")}</div>`;
 }
 
+// 传输层网络错误特征（SSL 被掐/连接被重置/响应中断）——多为本机代理节点或安全软件网络防护所致，
+// 命中时在红字报错后追加一条修复建议（2026-11-25 用户要求）
+const NETWORK_TRANSPORT_ERROR_RE = /SSL connection|unexpected EOF|transport stream|response ended prematurely|ResponseEnded|远程主机强迫关闭|中止了一个已建立的连接|ECONNRESET|socket hang up|ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED/i;
+
 function taskQueueErrorMarkup(error) {
   const message = String(error || "");
   const agtokenCheckLink = /AGToken.*(?:HTTP\s*524|任务结果未知)/i.test(message)
     ? `<a class="task-queue-error-link" href="https://agtoken.vip/usage-logs/task" target="_blank" rel="noopener noreferrer">打开 AGToken 任务记录，检查是否已生成</a>`
     : "";
-  return `<div class="task-queue-error" role="alert"><span>${escapeHtml(message)}</span>${agtokenCheckLink}</div>`;
+  const repairHint = NETWORK_TRANSPORT_ERROR_RE.test(message)
+    ? `<div class="task-error-hint">建议尝试使用杀毒软件的断网修复功能尝试修复网络</div>`
+    : "";
+  return `<div class="task-queue-error" role="alert"><span>${escapeHtml(message)}</span>${agtokenCheckLink}${repairHint}</div>`;
 }
 
 // 一键暂停按钮状态:按钮文字/提示随 aiQueuePaused 切换,状态类供样式高亮

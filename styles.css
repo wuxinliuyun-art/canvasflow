@@ -3401,6 +3401,7 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .task-queue-meta { color: var(--muted); font-size: 12px; }
 .task-queue-error { color: var(--danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
 .task-queue-error-link { display: block; width: fit-content; margin-top: 4px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.task-error-hint { margin-top: 4px; color: var(--danger); font-size: 12px; line-height: 1.5; font-weight: 600; }
 .task-queue-mini-progress { height: 3px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
 .task-queue-mini-progress span { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .2s ease; }
 .task-queue-actions { display: flex; flex-direction: column; gap: 3px; }
