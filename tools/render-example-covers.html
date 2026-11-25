@@ -1,7 +1,9 @@
 <!doctype html>
-<!-- 案例封面离线渲染页（dev 工具，随仓库入库；由 tools/render-example-covers.mjs 驱动无头 Edge 逐张截图）。
-     绘制逻辑逐行复刻 app.js screenshotCanvasGroup（编组截图），颜色固定暗色主题令牌值（与既有封面一致），
-     图片源用 modules/canvas-examples.js 内嵌 dataURL——不连服务、不碰用户画布实例。 -->
+<!-- 案例封面离线渲染页（dev 工具，随仓库入库；由 tools/render-example-covers.mjs 驱动无头 Chrome/Edge 逐张截图）。
+     绘制逻辑在 app.js screenshotCanvasGroup（编组截图）基础上增强：AI绘图/图片/拓展工具节点按真实画布
+     的控件结构补画近似 UI（按钮行、模型/分辨率条、说明/执行按钮），颜色固定暗色主题令牌值，
+     图片源用 modules/canvas-examples.js 内嵌 dataURL——不连服务、不碰用户画布实例。
+     节点类型高度下限与 tools/build-canvas-examples.mjs 的 RENDER_MIN_NODE_HEIGHTS 保持一致。 -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -16,17 +18,23 @@
 "use strict";
 const GROUP_PAD_X = 16, GROUP_PAD_TOP = 48, GROUP_PAD_BOTTOM = 16;
 const NODE_WIDTH = 240, NODE_HEIGHT = 172;
+// 与 build-canvas-examples.mjs RENDER_MIN_NODE_HEIGHTS 同步
+const RENDER_MIN_NODE_HEIGHTS = { "ai-image": 560, "tool-node": 296, "image": 296 };
 // .theme-dark 语义令牌值（styles.css），与画布暗色主题一致
 const COLORS = {
   panel: "rgba(19, 19, 22, .92)",
   panel2: "#26262a",
+  panelSolid: "#131316",
   line: "#5c5c63",
   text: "#f4f4f5",
   muted: "#9a9aa1",
   selected: "#8a8c92",
   control: "#1c1c21",
+  primary: "#78aaff",
 };
 const FONT_STACK = "Inter, 'HarmonyOS Sans SC', sans-serif";
+const CONTROL_H = 30;   // 下拉/按钮条高度
+const CONTROL_GAP = 8;
 
 function nodeTitle(node) {
   if (!node) return "节点";
@@ -52,7 +60,11 @@ function nodeTitle(node) {
 }
 
 function nodeRect(node) {
-  return { x: Number(node.x) || 0, y: Number(node.y) || 0, w: Number(node.w) || NODE_WIDTH, h: Number(node.h) || NODE_HEIGHT };
+  return {
+    x: Number(node.x) || 0, y: Number(node.y) || 0,
+    w: Number(node.w) || NODE_WIDTH,
+    h: Math.max(Number(node.h) || NODE_HEIGHT, RENDER_MIN_NODE_HEIGHTS[node.type] || 0),
+  };
 }
 
 function wrapText(context, text, maxWidth, maxLines) {
@@ -90,11 +102,87 @@ function loadImage(src) {
   });
 }
 
+function roundRectPath(context, x, y, w, h, r) {
+  context.beginPath();
+  context.roundRect(x, y, w, h, r);
+}
+
+// 控件条（下拉/输入近似）：圆角矩形 + 左对齐小字 + 右侧小箭头
+function drawControlBar(context, x, y, w, label) {
+  roundRectPath(context, x, y, w, CONTROL_H, 6);
+  context.fillStyle = COLORS.control;
+  context.fill();
+  context.strokeStyle = COLORS.line;
+  context.lineWidth = 1;
+  context.stroke();
+  context.fillStyle = COLORS.text;
+  context.font = `12px ${FONT_STACK}`;
+  context.textBaseline = "middle";
+  context.fillText(label, x + 10, y + CONTROL_H / 2 + 1, w - 26);
+  context.fillStyle = COLORS.muted;
+  context.beginPath();
+  const ax = x + w - 14;
+  context.moveTo(ax, y + CONTROL_H / 2 - 3);
+  context.lineTo(ax + 8, y + CONTROL_H / 2 - 3);
+  context.lineTo(ax + 4, y + CONTROL_H / 2 + 3);
+  context.closePath();
+  context.fill();
+}
+
+function drawButton(context, x, y, w, label, { primary = false } = {}) {
+  roundRectPath(context, x, y, w, CONTROL_H, 999);
+  context.fillStyle = primary ? "rgba(120, 170, 255, .18)" : COLORS.control;
+  context.fill();
+  context.strokeStyle = primary ? COLORS.primary : COLORS.line;
+  context.lineWidth = 1;
+  context.stroke();
+  context.fillStyle = primary ? COLORS.primary : COLORS.text;
+  context.font = `12px ${FONT_STACK}`;
+  context.textBaseline = "middle";
+  context.textAlign = "center";
+  context.fillText(label, x + w / 2, y + CONTROL_H / 2 + 1, w - 12);
+  context.textAlign = "left";
+}
+
+function drawImageArea(context, imageSrc, x, y, w, h, colors) {
+  return loadImage(imageSrc).then(image => {
+    context.save();
+    roundRectPath(context, x, y, w, Math.max(10, h), 8);
+    context.clip();
+    context.fillStyle = colors.control || colors.panel2;
+    context.fillRect(x, y, w, Math.max(10, h));
+    if (image) {
+      const fit = Math.min(w / image.naturalWidth, Math.max(10, h) / image.naturalHeight);
+      const drawW = image.naturalWidth * fit, drawH = image.naturalHeight * fit;
+      context.drawImage(image, x + (w - drawW) / 2, y + (Math.max(10, h) - drawH) / 2, drawW, drawH);
+    } else {
+      context.fillStyle = colors.muted;
+      context.font = `12px ${FONT_STACK}`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("图片", x + w / 2, y + Math.max(10, h) / 2);
+      context.textAlign = "left";
+    }
+    context.restore();
+  });
+}
+
 async function render(example) {
-  const gid = Object.keys(example.groupFrames || {})[0];
-  const bounds = (gid && example.groupFrames[gid]) || { x: 0, y: 0, w: 800, h: 500 };
   const members = example.nodes;
   const internalEdges = example.edges || [];
+  const rects = new Map(members.map(node => [node.id, nodeRect(node)]));
+  // 外框按（含高度下限的）成员现算——与 build-canvas-examples.mjs computeGroupFrame 同口径
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const rect of rects.values()) {
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.w);
+    maxY = Math.max(maxY, rect.y + rect.h);
+  }
+  const bounds = {
+    x: minX - GROUP_PAD_X, y: minY - GROUP_PAD_TOP,
+    w: (maxX - minX) + GROUP_PAD_X * 2, h: (maxY - minY) + GROUP_PAD_TOP + GROUP_PAD_BOTTOM,
+  };
   const MAX_SIDE = 2400;
   const scale = Math.min(2, MAX_SIDE / Math.max(bounds.w, bounds.h, 1));
   const canvas = document.createElement("canvas");
@@ -125,14 +213,14 @@ async function render(example) {
 
   context.save();
   context.translate(-bounds.x, -bounds.y);
+  // 组内连线
   context.strokeStyle = COLORS.line;
   context.lineWidth = 2.2;
   for (const edge of internalEdges) {
-    const from = members.find(node => node.id === edge.from?.node);
-    const to = members.find(node => node.id === edge.to?.node);
+    const from = rects.get(edge.from?.node);
+    const to = rects.get(edge.to?.node);
     if (!from || !to) continue;
-    const a = nodeRect(from), b = nodeRect(to);
-    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+    const x1 = from.x + from.w, y1 = from.y + from.h / 2, x2 = to.x, y2 = to.y + to.h / 2;
     context.beginPath();
     context.moveTo(x1, y1);
     context.bezierCurveTo(x1 + 60, y1, x2 - 60, y2, x2, y2);
@@ -145,12 +233,12 @@ async function render(example) {
     context.fillStyle = COLORS.line;
     context.fill();
   }
+  // 节点卡片
   for (const node of members) {
-    const rect = nodeRect(node);
+    const rect = rects.get(node.id);
     context.save();
     if (node.disabled) context.globalAlpha = .45;
-    context.beginPath();
-    context.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+    roundRectPath(context, rect.x, rect.y, rect.w, rect.h, 14);
     context.fillStyle = COLORS.panel;
     context.fill();
     context.strokeStyle = COLORS.line;
@@ -162,39 +250,58 @@ async function render(example) {
     const headText = nodeTitle(node);
     context.fillText(headText, rect.x + 13, rect.y + 23, rect.w - 26);
     const bodyY = rect.y + 46, bodyH = rect.y + rect.h - bodyY - 8, bodyW = rect.w - 20, bodyX = rect.x + 10;
+    // 控件区（按类型近似真实画布）：图片/文字画在控件区上方的剩余空间
+    const controlsH = node.type === "ai-image" ? CONTROL_H * 4 + CONTROL_GAP * 3
+      : node.type === "tool-node" ? CONTROL_H * 3 + CONTROL_GAP * 2
+      : node.type === "image" ? CONTROL_H
+      : 0;
+    const mediaBottom = bodyY + bodyH - controlsH;
+    const mediaH = Math.max(10, mediaBottom - bodyY);
     const imageSrc = node.image || node.generatedImage || "";
-    if (imageSrc) {
-      const image = await loadImage(imageSrc);
-      context.save();
-      context.beginPath();
-      context.roundRect(bodyX, bodyY, bodyW, Math.max(10, bodyH), 8);
-      context.clip();
-      context.fillStyle = COLORS.control || COLORS.panel2;
-      context.fillRect(bodyX, bodyY, bodyW, Math.max(10, bodyH));
-      if (image) {
-        const fit = Math.min(bodyW / image.naturalWidth, Math.max(10, bodyH) / image.naturalHeight);
-        const drawW = image.naturalWidth * fit, drawH = image.naturalHeight * fit;
-        context.drawImage(image, bodyX + (bodyW - drawW) / 2, bodyY + (Math.max(10, bodyH) - drawH) / 2, drawW, drawH);
-      } else {
-        context.fillStyle = COLORS.muted;
-        context.font = `12px ${FONT_STACK}`;
-        context.textAlign = "center";
-        context.fillText("图片", bodyX + bodyW / 2, bodyY + Math.max(10, bodyH) / 2);
-        context.textAlign = "left";
+    if (node.type === "ai-image") {
+      await drawImageArea(context, imageSrc, bodyX, bodyY, bodyW, mediaH, COLORS);
+      const half = Math.floor((bodyW - CONTROL_GAP) / 2);
+      let y = mediaBottom;
+      drawButton(context, bodyX, y, half, "重新生成", { primary: true });
+      drawButton(context, bodyX + half + CONTROL_GAP, y, bodyW - half - CONTROL_GAP, "清除");
+      y += CONTROL_H + CONTROL_GAP;
+      drawControlBar(context, bodyX, y, bodyW, String(node._model || "gpt-image-2"));
+      y += CONTROL_H + CONTROL_GAP;
+      drawControlBar(context, bodyX, y, half, `${node._resolution || "1K"}${node._quality ? ` · ${node._quality}` : ""}`);
+      drawControlBar(context, bodyX + half + CONTROL_GAP, y, bodyW - half - CONTROL_GAP, String(node._size || "1:1"));
+      y += CONTROL_H + CONTROL_GAP;
+      drawControlBar(context, bodyX, y, half, `张数 ${node._count || 1}`);
+      drawControlBar(context, bodyX + half + CONTROL_GAP, y, bodyW - half - CONTROL_GAP, "预计价格");
+    } else if (node.type === "tool-node") {
+      const values = node.toolValues && typeof node.toolValues === "object" ? Object.entries(node.toolValues).slice(0, 2) : [];
+      let y = mediaBottom;
+      for (let i = 0; i < 2; i += 1) {
+        const [key, value] = values[i] || ["说明", "—"];
+        drawControlBar(context, bodyX, y, bodyW, `${key}：${String(value).slice(0, 14)}`);
+        y += CONTROL_H + CONTROL_GAP;
       }
-      context.restore();
+      drawButton(context, bodyX, y, bodyW, "执行", { primary: true });
+    } else if (node.type === "image") {
+      await drawImageArea(context, imageSrc, bodyX, bodyY, bodyW, mediaH, COLORS);
+      const third = Math.floor((bodyW - CONTROL_GAP * 2) / 3);
+      const y = mediaBottom;
+      drawButton(context, bodyX, y, third, "上传");
+      drawButton(context, bodyX + third + CONTROL_GAP, y, third, "关键词反馈");
+      drawButton(context, bodyX + (third + CONTROL_GAP) * 2, y, bodyW - (third + CONTROL_GAP) * 2, "清除");
+    } else if (imageSrc) {
+      await drawImageArea(context, imageSrc, bodyX, bodyY, bodyW, mediaH, COLORS);
     } else if (String(node.text || "").trim()) {
       context.fillStyle = COLORS.text;
       context.font = `12px ${FONT_STACK}`;
       context.textBaseline = "top";
-      const lines = wrapText(context, node.text, bodyW, Math.max(1, Math.floor(bodyH / 18)));
+      const lines = wrapText(context, node.text, bodyW, Math.max(1, Math.floor((mediaH - 12) / 18)));
       lines.forEach((line, index) => context.fillText(line, bodyX, bodyY + 6 + index * 18));
     } else {
       context.fillStyle = COLORS.muted;
       context.font = `12px ${FONT_STACK}`;
       context.textBaseline = "middle";
       context.textAlign = "center";
-      context.fillText(headText, rect.x + rect.w / 2, bodyY + Math.max(10, bodyH) / 2);
+      context.fillText(headText, rect.x + rect.w / 2, bodyY + mediaH / 2);
       context.textAlign = "left";
     }
     context.restore();

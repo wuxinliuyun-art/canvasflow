@@ -3446,13 +3446,13 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .examples-head strong { font-size: 18px; font-weight: 600; }
 .examples-head span { color: var(--muted); font-size: 12px; }
 .examples-grid { flex: 1 1 auto; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 12px; padding: 16px 18px 20px; align-content: start; }
-.example-card { position: relative; display: grid; gap: 8px; padding: 0; border: 1px solid var(--panel-2); border-radius: 12px; overflow: hidden; text-align: left; background: var(--panel); color: var(--text); cursor: pointer; transition: border-color .15s, opacity .15s; }
+.example-card { display: grid; gap: 0; padding: 0; border: 1px solid var(--panel-2); border-radius: 12px; overflow: hidden; text-align: left; background: var(--panel); color: var(--text); cursor: pointer; transition: border-color .15s, opacity .15s; }
 .example-card:hover { border-color: var(--primary); }
 .example-card:active { opacity: .9; }
 .example-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .example-cover { display: block; width: 100%; height: 140px; object-fit: contain; background: var(--panel-2); }
-.example-card-name { position: absolute; top: 0; left: 0; right: 0; padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text); background: var(--panel-solid); border-bottom: 1px solid var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.example-card-body { display: grid; padding: 0 12px 12px; }
+.example-card-name { padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text); background: var(--panel-solid); border-bottom: 1px solid var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.example-card-body { display: grid; padding: 8px 12px 12px; }
 .example-card-body small { color: var(--muted); font-size: 12px; }
 .examples-empty { grid-column: 1 / -1; padding: 32px 0; color: var(--muted); font-size: 13px; text-align: center; }
 .examples-sidebar-open .minimap-panel { right: calc(var(--examples-sidebar-width) + 18px); bottom: 86px; }

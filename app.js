@@ -142,6 +142,30 @@ const DEFAULT_MULTI_NODE_TEMPLATES = [
 // UI language is stored separately from project data so switching projects never
 // changes the application language. New UI nodes are translated automatically.
 const UI_EN = {
+  "快速生产型 · 原生 gif/svg 输出": "Fast production · Native GIF/SVG output",
+  "AI 绘图结果新建图片节点并连线": "Create and connect an image node for AI image results",
+  "开启后，单张结果在 AI 节点右侧新建图片节点并连线；关闭则留在原节点预览。多任务、多张结果仍分别保留图片节点。设置对新加入队列的任务生效。": "When enabled, a single result creates a connected image node to the right of the AI node. When disabled, it stays in the original preview. Batch tasks and multiple results still use separate image nodes. Applies to newly queued tasks.",
+  "显示本地 SD 节点": "Show Local SD Node",
+  "右键菜单管理": "Context Menu Manager",
+  "取消勾选可隐藏画布空白处右键菜单中的对应选项，立即生效。粘贴、文字/图片/AI绘图/AI视频/对话等基础入口与「拓展」为常驻项，不在此列。": "Uncheck an item to hide it from the canvas context menu immediately. Paste, Text, Image, AI Image, AI Video, Chat, and Extensions remain available and are not listed here.",
+  "画布空白处": "Empty Canvas",
+  "添加调色盘": "Add Palette",
+  "添加本地 SD 节点": "Add Local SD Node",
+  "全部恢复显示": "Show All Items",
+  "右键菜单选项已全部恢复显示": "All context menu items are visible again",
+  "模型管理": "Model Manager",
+  "勾选后才会出现在 AI 绘图节点的模型下拉中；官渠等特殊渠道默认不勾选，按需开启。": "Only checked models appear in the AI Image model selector. Special channels, including official channels, are disabled by default; enable them as needed.",
+  "勾选后才会出现在对话节点的模型下拉中；未填写 Key 的站点暂时不可用。": "Only checked models appear in the Chat model selector. Providers without an API key are unavailable.",
+  "全不选": "Deselect All",
+  "全部取消勾选，再勾选需要的模型": "Deselect all models, then select the ones you need",
+  "当前站点目录为空。": "No models are available for this provider.",
+  "GPT Image 2（官方）": "GPT Image 2 (official)",
+  "GPT Image 2（ext · 便宜）": "GPT Image 2 (ext · budget)",
+  "GPT Image 2 官渠（满血）": "GPT Image 2 Official Channel (full capability)",
+  "GPT Image 2.5 Sunburst 官渠（满血）": "GPT Image 2.5 Sunburst Official Channel (full capability)",
+  "官方直连满血 · 各档同价约 ¥0.15/张": "Full-capability official channel · About ¥0.15/image at all resolutions",
+  "精修设计型 · 原生 gif/svg 输出": "Design refinement · Native GIF/SVG output",
+
   "调整界面语言、画布与工作流体验": "Tune the interface, canvas, and workflow experience",
   "CanvasFlow — Visual AI Image Workflow": "CanvasFlow — Visual AI Image Workflow",
   "拓展": "Extensions", "拓展节点": "Extension Node", "扩展服务": "Extension Service",
@@ -257,7 +281,7 @@ const UI_EN = {
   "该节点已有输出节点": "This node already has an output node", "已添加输出节点": "Output node added",
   "请先在设置中填入 API Key": "Enter an API Key in Settings first", "删除项目": "Delete Project",
   "文字节点": "Text Node", "图片节点": "Image Node", "多任务节点": "Multi-task Node", "输入端口": "Input port", "输出端口": "Output port",
-  "图片文件夹": "Image Folder", "参考视频": "Reference Video", "生成视频": "Generated Video", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "编组截图": "Screenshot Group", "取消编组": "Ungroup",
+  "图片文件夹": "Image Folder", "参考视频": "Reference Video", "生成视频": "Generated Video", "编组": "Group", "双击进入编组": "Double-click to enter group", "进入编组": "Enter Group", "创建编组": "Create Group", "重命名编组": "Rename Group", "取消编组": "Ungroup",
   "建议尝试使用杀毒软件的断网修复功能尝试修复网络": "Try your antivirus software's network repair tool to fix the connection",
   "添加图片文件夹": "Add Image Folder", "编辑连线名称": "Edit Connection Label", "删除连线": "Delete Connection", "保存项目 JSON": "Save Project JSON", "复制或剪切选中节点": "Copy or cut selected nodes", "将选中节点创建为编组": "Create a group from selected nodes",
   "图片将以缩略图保存在文件夹节点中，适合在画布上快速浏览和整理。": "Images are stored as thumbnails in a folder node for fast browsing and organization.",
@@ -335,6 +359,33 @@ const UI_EN = {
   "帮助与引导": "Help & Tour", "重新查看项目、底部操作区、右上工具和 API Key 设置说明。": "Review the project area, bottom controls, top-right tools, and API Key setup.", "查看新手引导": "View Getting Started Tour",
   "使用教程": "Tutorials", "新手引导与内置案例。": "Getting-started tour and built-in examples.", "新手引导": "Getting Started Tour",
   "常见问题": "FAQ", "按主题整理的常见问题，便于快速定位功能与排查问题。": "Common questions grouped by topic to help you find features and troubleshoot.",
+  "收纳": "Collapse",
+  "展开": "Expand",
+  "运行": "Run",
+  "收纳编组": "Collapse Group",
+  "展开编组": "Expand Group",
+  "运行整个编组": "Run Group",
+  "停止编组运行": "Stop Group",
+  "AI优化": "AI Optimize",
+  "优化提示词": "Optimize Prompt",
+  "还原优化前的提示词": "Restore Original Prompt",
+  "AGToken · 查看模型广场价格 ↗": "AGToken · View Model Pricing ↗",
+  "APIMart · 查看模型广场价格 ↗": "APIMart · View Model Pricing ↗",
+  "在 AGToken 模型广场查看对应模型及渠道价格": "View model and channel pricing on AGToken",
+  "背景处理": "Background",
+  "内置 U²-Net WASM 抠图，本地离线运行，不需要 Python。": "Built-in U²-Net WASM background removal. Runs offline; no Python required.",
+  "作品集手绘": "Portfolio Sketching",
+  "根据意向图生成新造型": "New Forms from a Reference",
+  "线稿上色": "Color a Line Drawing",
+  "高清修复": "Image Restoration",
+  "材质修改": "Change Materials",
+  "连续修改": "Iterative Editing",
+  "文字生成图片并抠图": "Text to Image and Background Removal",
+  "信息图表": "Infographic",
+  "作品集自我介绍页": "Portfolio Introduction",
+  "意向图生成效果图并修改细节": "Reference to Rendering and Detail Refinement",
+  "草图转线稿": "Sketch to Line Art",
+  "该案例没有节点，无法插入": "This example has no nodes to insert",
   "案例": "Examples", "点击卡片，在当前画布插入对应案例编组": "Click a card to insert its example group into the current canvas", "内置案例": "Built-in Examples", "常见用法已做成案例，点开后在当前画布插入对应编组。": "Common workflows ship as examples; open the panel to insert a group into the current canvas.", "打开案例面板": "Open Examples Panel", "添加到画布": "Add to canvas",
   "API 与账号": "API & Accounts",
   "API Key 在哪里填写？支持哪些渠道？": "Where do I enter my API Key? Which providers are supported?",
@@ -579,6 +630,9 @@ function translateEnglishString(source) {
   }
   if (UI_EN[source]) return UI_EN[source];
   const rules = [
+    [/^(GPT Image [\d.]+ (?:Flare|Sunburst))（(快速|质量)）$/, (_, name, mode) => `${name} (${mode === "快速" ? "fast" : "quality"})`],
+    [/^预计约 (.+)$/, (_, detail) => `Estimated ${detail.replace(/各档同价/g, "all tiers").replace(/按动作默认档/g, "default action tier").replace(/积分/g, "credits").replace(/张/g, "image").replace(/次/g, "call").replace(/（/g, "(").replace(/）/g, ")")}`],
+    [/^完成（(.+) 秒）$/, "Completed ($1 s)"],
     [/^删除变量“(.+)”？已有节点会保留快照并标记为失效。$/, 'Delete variable "$1"? Existing nodes will retain a snapshot and be marked invalid.'],
     [/^多节点模板 (\d+)$/, "Multi-node template $1"],
     [/^编辑选框 (\d+)$/, "Edit region $1"], [/^取消选框 (\d+)$/, "Remove region $1"], [/^选框 (\d+)$/, "Region $1"],
@@ -589,6 +643,8 @@ function translateEnglishString(source) {
     [/^无法提交：(.*)$/, (_, message) => `Unable to submit: ${translateEnglishString(message)}`],
     [/^分区抠图打开失败：(.*)$/, (_, message) => `Could not open region cutout: ${translateEnglishString(message)}`],
     [/^项目(\d+)$/, "Project $1"], [/^已新增 (\d+) 个项目$/, "Added $1 projects"], [/^AI绘图 #(\d+)$/, "AI Image #$1"], [/^输出节点 (\d+)$/, "Output Node $1"],
+    [/^(.+) · (\d+) 个节点( · 运行中)?$/, (_, title, count, running) => `${translateEnglishString(title)} · ${count} nodes${running ? " · Running" : ""}`],
+    [/^已添加案例「(.*)」$/, (_, title) => `Added example “${translateEnglishString(title)}”`],
     [/^编组 (\d+)$/, "Group $1"], [/^(\d+) 个节点 · 双击进入$/, "$1 nodes · Double-click to enter"],
     [/^已创建编组，包含 (\d+) 个节点$/, "Created a group containing $1 nodes"], [/^已创建文件夹节点，包含 (\d+) 张图片$/, "Created an image folder containing $1 images"],
     [/^已依次连接 (\d+) 个节点并添加 1 个 AI 绘图节点$/, "Connected $1 nodes in sequence and added 1 AI image node"],
@@ -661,6 +717,7 @@ function setUiLanguage(language) {
   document.querySelectorAll("[data-ui-language]").forEach(button => {
     button.setAttribute("aria-pressed", String(button.dataset.uiLanguage === uiLanguage));
   });
+  renderExamplesPanel();
   translateUiTree(document.documentElement);
 }
 
@@ -14909,7 +14966,6 @@ els.viewport.addEventListener("contextmenu", async ev => {
       showMenu(ev.clientX, ev.clientY, [
         [canvasGroupIsCollapsed(groupId) ? "展开编组" : "收纳编组", () => toggleCanvasGroupCollapse(groupId, !canvasGroupIsCollapsed(groupId))],
         ["重命名编组", () => beginCanvasGroupRename(groupId)],
-        ["编组截图", () => screenshotCanvasGroup(groupId)],
         ["取消编组", () => ungroupCanvasSelection()],
       ]);
       renderNodes();
@@ -14990,7 +15046,7 @@ els.viewport.addEventListener("contextmenu", async ev => {
     const items = [];
     if (state.clipboard?.nodes?.length) items.push(["粘贴节点", () => pasteNodes(state.clipboard, p)]);
     const canvasMenuGroupIds = [...new Set(state.nodes.filter(node => state.selected.has(node.id) && node.canvasGroupId).map(node => node.canvasGroupId))];
-    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => beginCanvasGroupRename(canvasMenuGroupIds[0])], ["编组截图", () => screenshotCanvasGroup(canvasMenuGroupIds[0])], ["取消编组", () => ungroupCanvasSelection()]);
+    if (canvasMenuGroupIds.length === 1) items.push(["重命名编组", () => beginCanvasGroupRename(canvasMenuGroupIds[0])], ["取消编组", () => ungroupCanvasSelection()]);
     const hasSelectionConnections = state.edges.some(edge => state.selected.has(edge.from.node) || state.selected.has(edge.to.node));
     items.push(
       ["保存为自定义组件", () => saveSelectionAsMultiNodeTemplate()],
@@ -16071,229 +16127,6 @@ function drawExamplePreview(canvas, example) {
   context.fillText(`${nodes.length}`, width - pad - 16, height - pad - 2);
 }
 
-// ===== 编组截图（2026-11-21）：把画布编组渲染成 PNG 存盘 =====
-// 文件名 = 编组名.png，与案例构建脚本的封面约定（--covers 目录里「文件名=编组标题」）直接对上，
-// 也可作为附件直接发给别人或 AI。纯几何手绘渲染（不用 DOM 序列化），颜色取自 #app 的语义令牌，跟随明暗主题。
-
-function groupScreenshotNodeTitle(node) {
-  if (!node) return "节点";
-  switch (node.type) {
-    case "palette": return "调色盘";
-    case "text": return "文字节点";
-    case "variable": return "变量节点";
-    case "chat": return "AI对话";
-    case "browser-image": return "浏览器生图";
-    case "local-sd": return "本地 SD";
-    case "image": return "图片节点";
-    case "folder": return node.folderName || "图片文件夹";
-    case "ai-image": return node.seq ? `AI绘图 #${node.seq}` : "AI绘图";
-    case "ai-video": return node.seq ? `AI视频 #${node.seq}` : "AI视频";
-    case "video-ref": return "参考视频";
-    case "video-result": return "生成视频";
-    case "angle-image": return "角度变化";
-    case "screenshot-input": return `截图功能节点 #${node.screenshotSeq || 1}`;
-    case "tool-node": return node.toolName || "拓展节点";
-    case "group": return "多任务节点";
-    default: return "节点";
-  }
-}
-
-// 纯函数（测试入口）：编组截图计划——成员、组内连线、标题、几何与落盘文件名。
-// 成员与组内连线口径与 tools/build-canvas-examples.mjs 的 extractExamplesFromProject 保持一致；
-// canvasGroupBounds 会顺带把外框几何刷新到最新（与拖拽后的画布外框一致）。
-function groupScreenshotPlan(groupId) {
-  const members = canvasGroupMembers(groupId);
-  if (members.length < 2) return null;
-  const memberIds = new Set(members.map(node => node.id));
-  const internalEdges = state.edges.filter(edge => memberIds.has(edge?.from?.node) && memberIds.has(edge?.to?.node));
-  const title = String(state.canvasGroupNames?.[groupId] || "").trim() || "编组";
-  const bounds = canvasGroupBounds(members);
-  return { groupId, title, members, internalEdges, bounds, fileName: `${safeName(title).slice(0, 40) || "编组"}.png` };
-}
-
-function loadGroupScreenshotImage(src) {
-  return new Promise(resolve => {
-    if (!src) return resolve(null);
-    const image = new Image();
-    const timer = setTimeout(() => resolve(null), 4000);
-    image.onload = () => { clearTimeout(timer); resolve(image); };
-    image.onerror = () => { clearTimeout(timer); resolve(null); };
-    image.src = src;
-  });
-}
-
-function groupScreenshotWrapText(context, text, maxWidth, maxLines) {
-  const paragraphs = String(text || "").trim().split(/\r?\n/);
-  const lines = [];
-  let truncated = false;
-  for (let p = 0; p < paragraphs.length && lines.length < maxLines; p += 1) {
-    let rest = paragraphs[p];
-    while (rest && lines.length < maxLines) {
-      if (context.measureText(rest).width <= maxWidth) { lines.push(rest); rest = ""; }
-      else {
-        let cut = rest.length;
-        while (cut > 1 && context.measureText(rest.slice(0, cut)).width > maxWidth) cut -= 1;
-        lines.push(rest.slice(0, Math.max(1, cut)));
-        rest = rest.slice(Math.max(1, cut));
-      }
-    }
-    if (rest) truncated = true;
-  }
-  if (truncated && lines.length) {
-    let last = lines[lines.length - 1];
-    while (last.length > 1 && context.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
-    lines[lines.length - 1] = `${last}…`;
-  }
-  return lines;
-}
-
-const _groupScreenshotBusy = new Set();
-
-async function screenshotCanvasGroup(groupId) {
-  if (_groupScreenshotBusy.has(groupId)) return;
-  const plan = groupScreenshotPlan(groupId);
-  if (!plan) { toast("编组至少要有 2 个节点才能截图"); return; }
-  _groupScreenshotBusy.add(groupId);
-  try {
-    const { bounds, members, internalEdges, title } = plan;
-    // 长边上限：封面卡片与对话附件都不需要原始分辨率，超大编组整体等比缩
-    const MAX_SIDE = 2400;
-    const scale = Math.min(2, MAX_SIDE / Math.max(bounds.w, bounds.h, 1));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bounds.w * scale));
-    canvas.height = Math.max(1, Math.round(bounds.h * scale));
-    const context = canvas.getContext("2d");
-    const appStyles = getComputedStyle(els.app || document.body);
-    const token = name => appStyles.getPropertyValue(name).trim();
-    const colors = {
-      panel: token("--panel") || "#ffffff",
-      panel2: token("--panel-2") || "#e0e2e5",
-      line: token("--line") || "#a7abb2",
-      text: token("--text") || "#202226",
-      muted: token("--muted") || "#6b7280",
-      selected: token("--selected") || "#858a92",
-      control: token("--node-control") || "",
-    };
-    context.scale(scale, scale);
-
-    // 背景 + 编组外框（同 .node-group-frame：面板底 + selected 50% 混合 + 虚线描边）
-    context.fillStyle = colors.panel;
-    context.fillRect(0, 0, bounds.w, bounds.h);
-    context.save();
-    context.globalAlpha = .5;
-    context.fillStyle = colors.selected;
-    context.fillRect(0, 0, bounds.w, bounds.h);
-    context.restore();
-    context.strokeStyle = colors.selected;
-    context.lineWidth = 1;
-    context.setLineDash([6, 4]);
-    context.strokeRect(.5, .5, bounds.w - 1, bounds.h - 1);
-    context.setLineDash([]);
-    // 编组标题（同 .node-group-title：顶部 46px 区，左 13px，muted 14px）
-    context.fillStyle = colors.muted;
-    context.font = "14px Inter, 'HarmonyOS Sans SC', sans-serif";
-    context.textBaseline = "middle";
-    context.fillText(title, 13, 24);
-
-    // 组内连线与节点按画布世界坐标绘制（整体平移到 bounds 局部系）
-    context.save();
-    context.translate(-bounds.x, -bounds.y);
-    context.strokeStyle = colors.line;
-    context.lineWidth = 2.2;
-    for (const edge of internalEdges) {
-      const from = members.find(node => node.id === edge.from?.node);
-      const to = members.find(node => node.id === edge.to?.node);
-      if (!from || !to) continue;
-      const a = canvasGroupNodeRect(from), b = canvasGroupNodeRect(to);
-      const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
-      context.beginPath();
-      context.moveTo(x1, y1);
-      context.bezierCurveTo(x1 + 60, y1, x2 - 60, y2, x2, y2);
-      context.stroke();
-      // 入口小箭头
-      context.beginPath();
-      context.moveTo(x2, y2);
-      context.lineTo(x2 - 7, y2 - 4);
-      context.lineTo(x2 - 7, y2 + 4);
-      context.closePath();
-      context.fillStyle = colors.line;
-      context.fill();
-    }
-    // 节点卡片（按 state.nodes 顺序 = 画布叠放次序）
-    for (const node of members) {
-      const rect = canvasGroupNodeRect(node);
-      context.save();
-      if (node.disabled) context.globalAlpha = .45;
-      context.beginPath();
-      context.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
-      context.fillStyle = colors.panel;
-      context.fill();
-      context.strokeStyle = colors.line;
-      context.lineWidth = 1;
-      context.stroke();
-      // 标题栏（同 .node-head 生效块：46px、13px 字、左 13px）
-      context.fillStyle = colors.text;
-      context.font = "13px Inter, 'HarmonyOS Sans SC', sans-serif";
-      context.textBaseline = "middle";
-      const headText = groupScreenshotNodeTitle(node);
-      context.fillText(headText, rect.x + 13, rect.y + 23, rect.w - 26);
-      // 正文
-      const bodyY = rect.y + 46, bodyH = rect.y + rect.h - bodyY - 8, bodyW = rect.w - 20, bodyX = rect.x + 10;
-      const imageSrc = node.image || node.generatedImage || "";
-      if (imageSrc) {
-        const image = await loadGroupScreenshotImage(imageSrc);
-        context.save();
-        context.beginPath();
-        context.roundRect(bodyX, bodyY, bodyW, Math.max(10, bodyH), 8);
-        context.clip();
-        context.fillStyle = colors.control || colors.panel2;
-        context.fillRect(bodyX, bodyY, bodyW, Math.max(10, bodyH));
-        if (image) {
-          const fit = Math.min(bodyW / image.naturalWidth, Math.max(10, bodyH) / image.naturalHeight);
-          const drawW = image.naturalWidth * fit, drawH = image.naturalHeight * fit;
-          context.drawImage(image, bodyX + (bodyW - drawW) / 2, bodyY + (Math.max(10, bodyH) - drawH) / 2, drawW, drawH);
-        } else {
-          context.fillStyle = colors.muted;
-          context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
-          context.textAlign = "center";
-          context.fillText("图片", bodyX + bodyW / 2, bodyY + Math.max(10, bodyH) / 2);
-          context.textAlign = "left";
-        }
-        context.restore();
-      } else if (String(node.text || "").trim()) {
-        context.fillStyle = colors.text;
-        context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
-        context.textBaseline = "top";
-        const lines = groupScreenshotWrapText(context, node.text, bodyW, Math.max(1, Math.floor(bodyH / 18)));
-        lines.forEach((line, index) => context.fillText(line, bodyX, bodyY + 6 + index * 18));
-      } else {
-        context.fillStyle = colors.muted;
-        context.font = "12px Inter, 'HarmonyOS Sans SC', sans-serif";
-        context.textBaseline = "middle";
-        context.textAlign = "center";
-        context.fillText(headText, rect.x + rect.w / 2, bodyY + Math.max(10, bodyH) / 2);
-        context.textAlign = "left";
-      }
-      context.restore();
-    }
-    context.restore();
-
-    const dataUrl = canvas.toDataURL("image/png");
-    const response = await apiFetch("/api/save-export-files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderName: "编组截图", baseFolder: "export", files: [{ name: plan.fileName, data: dataUrl }] }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
-    toast(`编组截图已保存：${result.files?.[0] || plan.fileName}`);
-  } catch (error) {
-    toast(`编组截图失败：${error?.message || error}`);
-  } finally {
-    _groupScreenshotBusy.delete(groupId);
-  }
-}
-
 function renderExamplesPanel() {
   const examples = Array.isArray(window.CANVASFLOW_EXAMPLES) ? window.CANVASFLOW_EXAMPLES : [];
   if (!examples.length) {
@@ -16301,16 +16134,17 @@ function renderExamplesPanel() {
     return;
   }
   els.examplesGrid.innerHTML = examples.map((example, index) => {
-    const title = escapeHtml(example.title || "");
+    const title = escapeHtml(translateUiString(example.title || ""));
     const meta = uiLanguage === "en"
       ? `${example.nodes.length} nodes · ${example.edges.length} connections`
       : `${example.nodes.length} 个节点 · ${example.edges.length} 条连线`;
-    const cover = example.cover
-      ? `<img class="example-cover" src="${escapeHtml(example.cover)}" alt="${title}" loading="lazy">`
+    const coverPath = uiLanguage === "en" ? (example.coverEn || example.cover) : example.cover;
+    const cover = coverPath
+      ? `<img class="example-cover" src="${escapeHtml(coverPath)}" alt="${title}" loading="lazy">`
       : `<canvas class="example-cover" data-example-index="${index}" data-preview-width="248" data-preview-height="140"></canvas>`;
     return `<button type="button" class="example-card" data-example-index="${index}" title="${uiLanguage === "en" ? "Add to canvas" : "添加到画布"}">
-      ${cover}
       <span class="example-card-name">${title}</span>
+      ${cover}
       <span class="example-card-body"><small>${meta}</small></span>
     </button>`;
   }).join("");

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Version = "",
     [string]$MinimumHostVersion = "",
     [string]$OutputPath = ""
@@ -66,6 +66,17 @@ $files = @(
     "assets/examples/ex_canvas-group62.png",
     "assets/examples/ex_canvas-group74.png",
     "assets/examples/ex_canvas-group98.png",
+    "assets/examples/ex_canvas-group19.en.png",
+    "assets/examples/ex_canvas-group20-2.en.png",
+    "assets/examples/ex_canvas-group20.en.png",
+    "assets/examples/ex_canvas-group31.en.png",
+    "assets/examples/ex_canvas-group47.en.png",
+    "assets/examples/ex_canvas-group52.en.png",
+    "assets/examples/ex_canvas-group6.en.png",
+    "assets/examples/ex_canvas-group62.en.png",
+    "assets/examples/ex_canvas-group63.en.png",
+    "assets/examples/ex_canvas-group74.en.png",
+    "assets/examples/ex_canvas-group98.en.png",
     "builtin-templates/rerender-style.jpg",
     "builtin-templates/rerender-product.png",
     "builtin-templates/builtin-marker-style.png",

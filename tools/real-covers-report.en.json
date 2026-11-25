@@ -1,0 +1,108 @@
+{
+  "renderer": "真实 app.js DOM + styles.css / Chromium screenshot",
+  "blockedRequests": [
+    "/api/comfyui/config"
+  ],
+  "errors": [],
+  "covers": [
+    {
+      "id": "ex_canvas-group20",
+      "title": "作品集手绘",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group20.en.png?v=8910058cbf03",
+      "width": 1948,
+      "height": 1034
+    },
+    {
+      "id": "ex_canvas-group19",
+      "title": "根据意向图生成新造型",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group19.en.png?v=1c0b45ccd838",
+      "width": 1948,
+      "height": 1034
+    },
+    {
+      "id": "ex_canvas-group52",
+      "title": "线稿上色",
+      "nodes": 4,
+      "edges": 3,
+      "cover": "assets/examples/ex_canvas-group52.en.png?v=8089502bd6f9",
+      "width": 2588,
+      "height": 1222
+    },
+    {
+      "id": "ex_canvas-group47",
+      "title": "高清修复",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group47.en.png?v=e32cac8e6de9",
+      "width": 1948,
+      "height": 1222
+    },
+    {
+      "id": "ex_canvas-group31",
+      "title": "材质修改",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group31.en.png?v=24a5a61902eb",
+      "width": 2148,
+      "height": 1222
+    },
+    {
+      "id": "ex_canvas-group20-2",
+      "title": "连续修改",
+      "nodes": 11,
+      "edges": 10,
+      "cover": "assets/examples/ex_canvas-group20-2.en.png?v=a34641d2e8fa",
+      "width": 3204,
+      "height": 1096
+    },
+    {
+      "id": "ex_canvas-group6",
+      "title": "文字生成图片并抠图",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group6.en.png?v=e8f63368ee52",
+      "width": 1988,
+      "height": 1034
+    },
+    {
+      "id": "ex_canvas-group63",
+      "title": "信息图表",
+      "nodes": 2,
+      "edges": 1,
+      "cover": "assets/examples/ex_canvas-group63.en.png?v=8d1f231a4c57",
+      "width": 1508,
+      "height": 1034
+    },
+    {
+      "id": "ex_canvas-group62",
+      "title": "作品集自我介绍页",
+      "nodes": 2,
+      "edges": 1,
+      "cover": "assets/examples/ex_canvas-group62.en.png?v=e939e8ba4392",
+      "width": 1508,
+      "height": 1034
+    },
+    {
+      "id": "ex_canvas-group74",
+      "title": "意向图生成效果图并修改细节",
+      "nodes": 6,
+      "edges": 5,
+      "cover": "assets/examples/ex_canvas-group74.en.png?v=a0409668c9b0",
+      "width": 3204,
+      "height": 1000
+    },
+    {
+      "id": "ex_canvas-group98",
+      "title": "草图转线稿",
+      "nodes": 4,
+      "edges": 3,
+      "cover": "assets/examples/ex_canvas-group98.en.png?v=8077a63a7e55",
+      "width": 2588,
+      "height": 1222
+    }
+  ]
+}

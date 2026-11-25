@@ -107,7 +107,9 @@ test("提取脚本纯函数：分桶/排序/净化/无名编组跳过", async ()
   assert.ok(dirty.image.startsWith("data:image/"), "缩略图 dataURL 保留");
   const cleaned = second.nodes.find(node => node.id === "n2");
   assert.ok(!("outputPath" in cleaned), "作者机器的导出路径剥除");
-  assert.strictEqual(second.groupFrames.g2.h, 396, "已有 frame 原样保留");
+  // 组框始终现算（缓存帧可能过期）：g2 成员 n1 image(100,100,240,300) + n2 text(400,110,250,180)
+  // → right 650 / bottom 400，PAD 后 x=84 y=52 w=582 h=364
+  assert.strictEqual(second.groupFrames.g2.h, 364, "组框按成员现算（含类型高度下限）");
 });
 
 test("提取脚本：找不到目标项目时报出项目名清单", async () => {
@@ -164,4 +166,51 @@ test("生成模块：新手引导编组已并入（连续修改撞号 -2，老�
     "先收录的老案例 id 保持稳定（封面映射不破）");
   assert.strictEqual(examples.find(example => example.title === "材质修改").id, "ex_canvas-group31");
   assert.strictEqual(examples.find(example => example.title === "文字生成图片并抠图").id, "ex_canvas-group6");
+});
+
+test("真实案例封面：内容摘要与随包 PNG 一致，替换截图后不复用旧缓存", () => {
+  const { createHash } = require("node:crypto");
+  for (const example of loadExamplesModule()) {
+    const [file, query] = example.cover.split("?");
+    const bytes = fs.readFileSync(path.join(root, file));
+    assert.strictEqual(bytes.subarray(1, 4).toString(), "PNG");
+    const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
+    assert.strictEqual(query, `v=${digest}`, example.title);
+  }
+});
+
+test("作品集手绘：全部输入沿组内连线可到达 AI 绘图，保留原案例 id", () => {
+  const example = loadExamplesModule().find(e => e.id === "ex_canvas-group20");
+  const ai = example.nodes.find(n => n.type === "ai-image");
+  for (const node of example.nodes.filter(n => n.id !== ai.id)) {
+    const seen = new Set([node.id]);
+    for (const id of seen) for (const edge of example.edges.filter(e => e.from.node === id)) seen.add(edge.to.node);
+    assert.ok(seen.has(ai.id), `${node.type} 必须连通 AI`);
+  }
+});
+
+test("案例英文：标题、动态数量、价格、语言切换与英文封面同步", () => {
+  const app = read("app.js");
+  const dictionary = app.slice(app.indexOf("const UI_EN ="), app.indexOf("let uiLanguage ="));
+  const translation = app.slice(app.indexOf("function translateEnglishString("), app.indexOf("function translateUiTree("));
+  const render = app.slice(app.indexOf("function renderExamplesPanel("), app.indexOf('\n$("settingsBtn").onclick', app.indexOf("function renderExamplesPanel(")));
+  const grid = { innerHTML: "", querySelectorAll: () => [] };
+  const examples = loadExamplesModule();
+  const harness = new Function("window", "els", "escapeHtml", `${dictionary}\nlet uiLanguage = 'en';\n${translation}\n${render}\nreturn { translateEnglishString, setLanguage(language) { uiLanguage = language; renderExamplesPanel(); } };`)({ CANVASFLOW_EXAMPLES: examples }, { examplesGrid: grid }, s => s);
+  for (const e of examples) assert.doesNotMatch(harness.translateEnglishString(e.title), /[\u4e00-\u9fff]/, e.title);
+  assert.equal(harness.translateEnglishString("作品集手绘 · 3 个节点"), "Portfolio Sketching · 3 nodes");
+  assert.equal(harness.translateEnglishString("收纳"), "Collapse");
+  assert.doesNotMatch(harness.translateEnglishString("预计约 ¥0.02（1K ¥0.02/张 × 1 张）"), /[\u4e00-\u9fff]/);
+  harness.setLanguage("en");
+  assert.match(grid.innerHTML, /Portfolio Sketching/);
+  assert.match(grid.innerHTML, /ex_canvas-group20\.en\.png/);
+  harness.setLanguage("zh-CN");
+  assert.match(grid.innerHTML, /作品集手绘/);
+  assert.doesNotMatch(grid.innerHTML, /\.en\.png/);
+  assert.match(app, /function setUiLanguage\([\s\S]*?renderExamplesPanel\(\)/);
+  for (const e of examples) {
+    const [file, query] = e.coverEn.split("?");
+    const digest = require("node:crypto").createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex").slice(0, 12);
+    assert.equal(query, `v=${digest}`);
+  }
 });

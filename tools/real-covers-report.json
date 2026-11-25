@@ -1,0 +1,18 @@
+{
+  "renderer": "真实 app.js DOM + styles.css / Chromium screenshot",
+  "blockedRequests": [
+    "/api/comfyui/config"
+  ],
+  "errors": [],
+  "covers": [
+    {
+      "id": "ex_canvas-group20",
+      "title": "作品集手绘",
+      "nodes": 3,
+      "edges": 2,
+      "cover": "assets/examples/ex_canvas-group20.png?v=3b49a19d130a",
+      "width": 1948,
+      "height": 1034
+    }
+  ]
+}

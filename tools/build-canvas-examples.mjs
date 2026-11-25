@@ -8,10 +8,11 @@
 // 合并（2026-11-21）：重跑时读取现有 modules/canvas-examples.js 按 id 并入——现有案例保留
 //（封面沿用）、新案例追加；id 与现有案例冲突时后来者加 -2/-3 后缀；标题相同的案例视为
 // 同一案例的更新（沿用既有 id，封面映射保持稳定）。源项目被删/改名不会丢已收录案例。
-// 封面升级：用画布上的「编组截图」（右键编组）生成 编组名.png 后重跑 --covers 即可。
+// 封面必须使用真实节点截图；经用户授权后运行 tools/capture-real-example-covers.mjs。
 
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const OUT_MODULE = "modules/canvas-examples.js";
@@ -26,6 +27,14 @@ const EXCLUDED_EXAMPLE_IDS = new Set([
 const GROUP_PAD_X = 16;
 const GROUP_PAD_TOP = 48;
 const GROUP_PAD_BOTTOM = 16;
+// 画布上节点是内容驱动高度（syncContentDrivenNodeHeights 会按设置面板撑高），存档里的 h 可能
+// 是旧 UI 时代的较小值；组框与封面渲染按这些类型下限取高，保证封面比例与真实画布一致
+// （节点数据本身的 h 不改，只影响组框计算）。tools/render-example-covers.html 同步维护一份。
+const RENDER_MIN_NODE_HEIGHTS = {
+  "ai-image": 560, // 图片 + 重新生成/清除 + 模型/分辨率画质/比例张数/价格行
+  "tool-node": 296, // 拓展工具的参数区 + 执行按钮
+  "image": 296, // 图片 + 上传/关键词反馈/清除按钮行
+};
 
 // 构建期净化：只剥运行态与作者机器特有的引用；缩略图 dataURL、assetId（目标机缺失时
 // materializeReferenceImage 有缩略图兜底）、generationPrompt、variableChoices、_sdParamValues 等保留。
@@ -54,7 +63,7 @@ function computeGroupFrame(members) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const node of members) {
     const w = Number(node.w) || 240;
-    const h = Number(node.h) || 200;
+    const h = Math.max(Number(node.h) || 200, RENDER_MIN_NODE_HEIGHTS[node.type] || 0);
     minX = Math.min(minX, node.x);
     minY = Math.min(minY, node.y);
     maxX = Math.max(maxX, node.x + w);
@@ -80,7 +89,6 @@ export function extractExamplesFromProject(projectJson, { projectHint = DEFAULT_
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const edges = Array.isArray(data.edges) ? data.edges : [];
   const names = data.canvasGroupNames || {};
-  const frames = data.canvasGroupFrames || {};
 
   const buckets = new Map();
   for (const node of nodes) {
@@ -101,7 +109,9 @@ export function extractExamplesFromProject(projectJson, { projectHint = DEFAULT_
     const internalEdges = edges.filter(edge => memberIds.has(edge?.from?.node) && memberIds.has(edge?.to?.node));
     const sanitizedMembers = JSON.parse(JSON.stringify(members));
     for (const node of sanitizedMembers) stripFields(node);
-    const frame = frames[gid] ? { ...frames[gid] } : computeGroupFrame(members);
+    // 组框始终按成员现算：缓存帧可能过期（节点重排后没刷新）且不含类型高度下限，
+    // 曾导致封面按旧框裁剪、与画布排布不符（2026-11-25 实踩）
+    const frame = computeGroupFrame(members);
     cases.push({
       id: `ex_${gid}`,
       title: String(title).trim(),
@@ -140,6 +150,7 @@ export function mergeExamples(cases, existing) {
     const same = titleIndex.get(example.title);
     if (same !== undefined) {
       example.id = existing[same].id;
+      if (existing[same].coverEn) example.coverEn = existing[same].coverEn;
       merged[same] = example;
       continue;
     }
@@ -157,7 +168,10 @@ function attachCovers(cases, coverDir) {
   if (fs.existsSync(COVER_OUT_DIR)) {
     for (const example of cases) {
       const existing = fs.readdirSync(COVER_OUT_DIR).find(name => name.replace(/\.[^.]+$/, "") === example.id && /\.(png|jpe?g|webp)$/i.test(name));
-      if (existing) example.cover = `${COVER_OUT_DIR.replace(/\\/g, "/")}/${existing}`;
+      if (existing) {
+        const digest = createHash("sha256").update(fs.readFileSync(path.join(COVER_OUT_DIR, existing))).digest("hex").slice(0, 12);
+        example.cover = `${COVER_OUT_DIR.replace(/\\/g, "/")}/${existing}?v=${digest}`;
+      }
     }
   }
   if (!coverDir) return;
@@ -191,14 +205,16 @@ function main() {
   let inputPath = "data/app-state.json";
   let coverDir = "";
   let projectHint = DEFAULT_PROJECT_HINT;
+  let onlyTitle = "";
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--covers") coverDir = args[++i];
+    else if (args[i] === "--title") onlyTitle = args[++i];
     else if (args[i] === "--project") projectHint = args[++i];
     else inputPath = args[i];
   }
   if (!inputPath || !fs.existsSync(inputPath)) throw new Error(`输入文件不存在：${inputPath}（用法见文件头注释）`);
 
-  const cases = extractExamplesFromProject(loadProjectJson(inputPath), { projectHint });
+  const cases = extractExamplesFromProject(loadProjectJson(inputPath), { projectHint }).filter(example => !onlyTitle || example.title === onlyTitle);
   if (!cases.length) throw new Error("没有提取到任何案例（需要成员 ≥2 且已命名的编组）");
   const existing = fs.existsSync(OUT_MODULE) ? loadExistingExamples(fs.readFileSync(OUT_MODULE, "utf8")) : [];
   const merged = mergeExamples(cases, existing).filter(example => {
@@ -206,6 +222,9 @@ function main() {
     console.log(`[案例提取] 按排除清单移除「${example.title}」（${example.id}）`);
     return false;
   });
+  // 组框统一按（含类型高度下限的）成员现算：源项目已不存在的老案例（如新手引导并入的）
+  // 拿不到新提取的组框，也要用同一口径，否则封面渲染与画布比例不符
+  for (const example of merged) example.groupFrames = { [Object.keys(example.groupFrames)[0]]: computeGroupFrame(example.nodes) };
   console.log(`[案例提取] 现有案例 ${existing.length} 条，本次提取 ${cases.length} 条，合并后 ${merged.length} 条`);
   attachCovers(merged, coverDir);
 
