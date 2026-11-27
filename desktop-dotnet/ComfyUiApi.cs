@@ -57,7 +57,14 @@ internal sealed class ComfyUiApi
                     catch { }
                 }
             }
-            if (upgraded || builtinLeftovers.Count > 0) SaveStore(parsed);
+            if (upgraded || builtinLeftovers.Count > 0)
+            {
+                try { SaveStore(parsed); }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Trace.TraceWarning($"[本地SD] 工作流升级结果保存失败，保留已读取的工作流：{error.GetType().Name}");
+                }
+            }
             return parsed;
         }
         catch { return new JsonObject { ["config"] = new JsonObject { ["serverUrl"] = "http://127.0.0.1:8188", ["installPath"] = "", ["launchPath"] = "" }, ["workflows"] = new JsonArray() }; }

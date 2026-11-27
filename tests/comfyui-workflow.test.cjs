@@ -302,9 +302,12 @@ test("workflows with real output nodes never get a virtual injection point", () 
 });
 
 // 2026-11-14 用户要求清除内置模板残留（"内置放大/局部重绘这种需要蒙版输入的没法正常运行"）
-test("loadStore sweeps builtin template leftovers from old installs", () => {
-  const os = require("node:os");
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasflow-comfy-"));
+test("loadStore sweeps builtin template leftovers from old installs", t => {
+  // Use the writable workspace: the Windows sandbox temp filesystem can reject atomic replacement.
+  const fixtureRoot = path.join(__dirname, "..", ".codex-tmp");
+  fs.mkdirSync(fixtureRoot, { recursive: true });
+  const dataRoot = fs.mkdtempSync(path.join(fixtureRoot, "comfy-"));
+  t.after(() => fs.rmSync(dataRoot, { recursive: true, force: true }));
   const storeDir = path.join(dataRoot, "data");
   fs.mkdirSync(storeDir, { recursive: true });
   const workflow = { "1": { class_type: "KSampler", inputs: { seed: 1 } } };
@@ -320,7 +323,26 @@ test("loadStore sweeps builtin template leftovers from old installs", () => {
   // 清扫结果落盘（重启后不会回来）
   const persisted = JSON.parse(fs.readFileSync(path.join(storeDir, "comfyui.json"), "utf8"));
   assert.equal(persisted.workflows.length, 1);
-  fs.rmSync(dataRoot, { recursive: true, force: true });
+});
+
+test("loadStore preserves readable workflows when migration cannot be saved", () => {
+  const vm = require("node:vm");
+  const source = fs.readFileSync(path.join(__dirname, "..", "modules", "comfyui-server.js"), "utf8");
+  const start = source.indexOf("function loadStore(");
+  const end = source.indexOf("function saveStore(", start);
+  const warnings = [];
+  const context = {
+    fs: { readFileSync: () => JSON.stringify({ workflows: [{ name: "我的工作流", workflow: {} }] }) },
+    storePath: () => "fixture.json",
+    detectWorkflowMapping: () => ({}),
+    saveStore: () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); },
+    console: { log() {}, warn: message => warnings.push(message) }
+  };
+  vm.runInNewContext(source.slice(start, end), context);
+  const store = context.loadStore("fixture");
+  assert.equal(store.workflows[0].name, "我的工作流");
+  assert.equal(store.workflows[0].mappingVersion, 2);
+  assert.match(warnings[0], /EACCES/);
 });
 
 // ---------- 全参数面板（2026-11-14 用户要求"把 ComfyUI 节点参数在画布中显示，修改后再回传"）----------

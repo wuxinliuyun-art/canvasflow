@@ -181,7 +181,10 @@ function loadStore(dataRoot) {
         catch { /* 工作流损坏则保留旧映射 */ }
       }
     }
-    if (upgraded || builtinLeftovers.length) saveStore(dataRoot, store);
+    if (upgraded || builtinLeftovers.length) {
+      try { saveStore(dataRoot, store); }
+      catch (error) { console.warn(`[本地SD] 工作流升级结果保存失败，保留已读取的工作流：${error.code || error.name}`); }
+    }
     return store;
   } catch { return { config: { serverUrl: "http://127.0.0.1:8188", installPath: "", launchPath: "" }, workflows: [] }; }
 }
