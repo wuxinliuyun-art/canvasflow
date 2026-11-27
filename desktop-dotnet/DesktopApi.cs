@@ -61,9 +61,12 @@ internal sealed class DesktopApi
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(120) };
         // agtoken 为同步接口，官方建议超时上限 600 秒
-        _agtokenHttp = new HttpClient(new HttpClientHandler
+        _agtokenHttp = new HttpClient(new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
+            ConnectTimeout = TimeSpan.FromSeconds(30),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
             AutomaticDecompression = DecompressionMethods.All
         }) { Timeout = TimeSpan.FromSeconds(600) };
         _version = ReadVersion();
@@ -486,23 +489,31 @@ internal sealed class DesktopApi
     // agtoken 与 APIMart 请求格式彼此独立：单上游、不回退 APIMart Key、600 秒超时
     private async Task<DesktopApiResponse> ProxyAgtokenAsync(HttpMethod method, string apiPath, string? body, string apiKey, CancellationToken cancellationToken)
     {
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            using var request = new HttpRequestMessage(method, AgtokenBaseUrl + apiPath);
-            // agtoken 的同步生图响应可能直接携带体积很大的 base64 图片。
-            // 固定使用 HTTP/1.1，避开部分网关/代理在 HTTP/2 长响应结束前关闭流而触发 ResponseEnded。
-            request.Version = HttpVersion.Version11;
-            request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
-            if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-            using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _log($"[AGToken代理] {apiPath} -> {(int)response.StatusCode}", false);
-            return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
-        }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
-        {
-            throw new HttpRequestException("agtoken 接口连接失败", error);
+            try
+            {
+                using var request = new HttpRequestMessage(method, AgtokenBaseUrl + apiPath);
+                request.Version = HttpVersion.Version11;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+                if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var response = await _agtokenHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _log($"[AGToken代理] {apiPath} -> {(int)response.StatusCode}", false);
+                return new DesktopApiResponse((int)response.StatusCode, responseBody, response.Content.Headers.ContentType?.ToString() ?? "application/json");
+            }
+            catch (HttpRequestException error) when (attempt == 0 && !cancellationToken.IsCancellationRequested && AgtokenTransport.CanRetry(error))
+            {
+                _log($"[AGToken代理] {apiPath} TLS 握手中断，尚未发送业务请求，1 秒后重试一次。类别={error.HttpRequestError}", false);
+                await Task.Delay(1000, cancellationToken);
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested) throw;
+                _log($"[AGToken代理] {apiPath} 失败，类别={(error is HttpRequestException httpError ? httpError.HttpRequestError.ToString() : "Timeout")}，尝试次数={attempt + 1}", true);
+                throw new HttpRequestException(AgtokenTransport.FailureMessage(error), error);
+            }
         }
     }
 

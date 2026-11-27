@@ -295,8 +295,30 @@ async function latestReleaseInfo() {
   return releaseCache;
 }
 
-function proxyRequest(method, targetUrl, headers, body, timeoutMs = 120000) {
+async function proxyRequest(method, targetUrl, headers, body, timeoutMs = 120000) {
+  const agtoken = new URL(targetUrl).origin === AGTOKEN_BASE_URL;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await proxyRequestOnce(method, targetUrl, headers, body, timeoutMs);
+    } catch (error) {
+      if (!agtoken) throw error;
+      if (attempt === 0 && error.beforeTlsHandshake && ["ECONNRESET", "EPIPE"].includes(error.code)) {
+        console.warn("[AGToken] TLS 握手中断，尚未发送业务请求，1 秒后重试一次");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      const hint = error.beforeTlsHandshake
+        ? "HTTPS 安全连接建立失败：请检查代理、VPN、安全软件、系统时间及 DNS，或换手机热点对比。"
+        : "连接中断或超时：任务结果未知，请先到站点任务记录确认是否已生成，再决定重试，避免重复扣费。";
+      throw new Error(`agtoken ${hint}（${error.code || "NETWORK_ERROR"}）`, { cause: error });
+    }
+  }
+}
+
+function proxyRequestOnce(method, targetUrl, headers, body, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
+    let socketAssigned = false;
+    let tlsEstablished = false;
     const parsed = new URL(targetUrl);
     const options = {
       method,
@@ -312,14 +334,29 @@ function proxyRequest(method, targetUrl, headers, body, timeoutMs = 120000) {
     const proxyReq = https.request(options, proxyRes => {
       const chunks = [];
       proxyRes.on("data", chunk => chunks.push(chunk));
+      proxyRes.on("error", reject);
+      proxyRes.on("aborted", () => reject(Object.assign(new Error("响应接收中断"), { code: "ECONNRESET" })));
       proxyRes.on("end", () => {
         const data = Buffer.concat(chunks);
         resolve({ status: proxyRes.statusCode, headers: proxyRes.headers, body: data });
       });
     });
 
-    proxyReq.on("error", reject);
-    proxyReq.setTimeout(timeoutMs, () => { proxyReq.destroy(); reject(new Error("timeout")); });
+    proxyReq.on("socket", socket => {
+      socketAssigned = true;
+      // Reused sockets have completed their handshake before this request.
+      tlsEstablished = !socket.connecting && socket.encrypted && !!socket.getProtocol?.();
+      if (!tlsEstablished) socket.once("secureConnect", () => { tlsEstablished = true; });
+    });
+    proxyReq.on("error", error => {
+      error.beforeTlsHandshake = socketAssigned && !tlsEstablished && !proxyReq.reusedSocket;
+      reject(error);
+    });
+    proxyReq.setTimeout(timeoutMs, () => {
+      const error = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+      proxyReq.destroy(error);
+      reject(error);
+    });
 
     if (body) proxyReq.write(body);
     proxyReq.end();
