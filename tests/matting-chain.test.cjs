@@ -63,6 +63,7 @@ test("上游收集切片：AI 节点从抠图节点的结果图片节点取图�
   const nodes = { m1: matting, o1: out, a1: ai };
   const edges = [{ id: "e1", from: { node: "m1", port: "out" }, to: { node: "a1", port: "in" } }];
   const context = vm.createContext({
+    state: { settings: {} },
     findNode: id => nodes[id] || null,
     buildIncomingIndex: () => {
       const map = new Map();

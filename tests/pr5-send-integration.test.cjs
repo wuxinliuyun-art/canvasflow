@@ -452,6 +452,7 @@ test('10B 扇入四支线：3 图 1 文字拆 4 任务，图一/图三批注各�
     { id: 'e4', from: { node: 'n4', port: 'out' }, to: { node: 'n5', port: 'in' } },
   ];
   const context = {
+    state: { settings: {} },
     findNode: id => nodes[id] || null,
     buildIncomingIndex: () => {
       const map = new Map();
@@ -550,6 +551,7 @@ test('11 组节点上游透传：文字与上游样式图随分支到达每个�
     { id: 'e3', from: { node: 'grp', port: 'out' }, to: { node: 'ai', port: 'in' } },
   ];
   const context = {
+    state: { settings: {} },
     findNode: id => nodes[id] || null,
     buildIncomingIndex: () => {
       const map = new Map();
@@ -646,6 +648,7 @@ test('12 纯文字组按文字节点拆任务：参考图进每个任务,混合�
     { id: 'e2', from: { node: 'grp', port: 'out' }, to: { node: 'ai', port: 'in' } },
   ];
   const context = {
+    state: { settings: {} },
     findNode: id => nodes[id] || null,
     buildIncomingIndex: () => {
       const map = new Map();

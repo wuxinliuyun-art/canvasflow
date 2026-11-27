@@ -82,13 +82,14 @@ const PROJECT_FOLDER_KEY = "canvasflow.projectFolder.v1";
 const GLOBAL_LIBRARY_KEY = "canvasflow.globalLibrary.v1";
 const ONBOARDING_VERSION = 1;
 const DEFAULT_TEXT_TEMPLATES = [
-  { id: "builtin_text_model_line_art_v1", name: "模特转线稿", content: "将第二张图中的模特照片变成线稿，外轮廓稍微粗一点，白色背景，模特服装和长相参考第一张图，人物动作和第二张图中人物动作保持一致，不要任何颜色填充", revision: 1 },
   { id: "builtin_text_image_line_art_v1", name: "图片转线稿", content: "照片变成线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
   { id: "builtin_text_multi_view_v1", name: "多视角参考", content: "生成参考图的正前侧、左侧、右侧、顶侧，四个视角的视图", revision: 1 },
   { id: "builtin_text_cmf_transfer_v1", name: "cmf迁移", content: "将第二张图的材质迁移应用到一张图的产品上", revision: 1 },
   { id: "builtin_text_hd_restore_v1", name: "高清修复", content: "严格参考输入图片重新绘制，保持原有主体、结构、轮廓、比例、视角、构图、颜色和材质一致，不增加或删除元素。修复模糊、噪点、压缩痕迹和锯齿，重建清晰自然的边缘与细节，真实准确的材质表现，细腻柔和的光影，主体完整居中，背景简洁干净，专业高品质视觉效果，高清，高细节，8K。", revision: 1 },
-  { id: "builtin_text_photo_line_art_v1", name: "照片转线稿", content: "照片转线稿，外轮廓稍微粗一点，白色背景，不要文字，不要颜色填充", revision: 1 },
 ];
+// 已下线的内置文字模板（一次性清扫旧存档已注入条目）：照片转线稿与图片转线稿重复；
+// 模特转线稿由案例演示面板提供更直观的演示（2026-11-27 用户要求）
+const RETIRED_BUILTIN_TEXT_IDS = ["builtin_text_photo_line_art_v1", "builtin_text_model_line_art_v1"];
 // 自带自定义组件（多节点模板）：随软件分发，启动注入全局素材库。
 // BUILTIN_MULTI_NODE_SEED_VERSION 递增才会向已有用户补发新组件；
 // 用户删除过的内置组件记录在 builtinMultiNodeRemovedIds，不随种子版本升级复活。
@@ -142,9 +143,10 @@ const DEFAULT_MULTI_NODE_TEMPLATES = [
 // UI language is stored separately from project data so switching projects never
 // changes the application language. New UI nodes are translated automatically.
 const UI_EN = {
+  "搜索案例关键词": "Search examples by keyword",
+  "没有匹配的案例，请尝试其他关键词": "No matching examples. Try another keyword.",
   "快速生产型 · 原生 gif/svg 输出": "Fast production · Native GIF/SVG output",
   "AI 绘图结果新建图片节点并连线": "Create and connect an image node for AI image results",
-  "开启后，单张结果在 AI 节点右侧新建图片节点并连线；关闭则留在原节点预览。多任务、多张结果仍分别保留图片节点。设置对新加入队列的任务生效。": "When enabled, a single result creates a connected image node to the right of the AI node. When disabled, it stays in the original preview. Batch tasks and multiple results still use separate image nodes. Applies to newly queued tasks.",
   "显示本地 SD 节点": "Show Local SD Node",
   "右键菜单管理": "Context Menu Manager",
   "取消勾选可隐藏画布空白处右键菜单中的对应选项，立即生效。粘贴、文字/图片/AI绘图/AI视频/对话等基础入口与「拓展」为常驻项，不在此列。": "Uncheck an item to hide it from the canvas context menu immediately. Paste, Text, Image, AI Image, AI Video, Chat, and Extensions remain available and are not listed here.",
@@ -227,7 +229,7 @@ const UI_EN = {
   "画布": "Canvas", "AI绘图": "AI Image", "快捷键": "Shortcuts", "界面语言": "Interface Language",
   "网格对齐距离": "Grid spacing", "开启网格吸附": "Enable grid snapping", "平滑连线": "Smooth edges",
   "创建节点或连线时自动对齐": "Auto-align when creating nodes or edges",
-  "图片重叠时打开图片编辑": "Open image editor when images overlap",
+  "图片重叠时打开图片置入": "Open image insert when images overlap",
   "ZIP 压缩包导出（兼容性最好，推荐）": "Export as ZIP (best compatibility, recommended)",
   "导出文件夹": "Export folder", "export（项目文件夹）": "export (project folder)",
   "复制路径": "Copy Path", "查看导出文件": "View Exported Files",
@@ -296,7 +298,7 @@ const UI_EN = {
   "批量删除": "Delete Selected", "添加文字节点": "Add Text Node",
   "添加图片节点": "Add Image Node", "添加AI绘图节点": "Add AI Image Node", "添加矢量化节点": "Add Vectorize Node", "图片矢量化": "Vectorize Image", "图片置入ppt": "Images to PPT", "自动抠图": "Auto Cutout", "添加图片置入ppt节点": "Add Images-to-PPT Node", "添加自动抠图节点": "Add Auto Cutout Node", "添加AI视频节点": "Add AI Video Node", "添加参考视频节点": "Add Reference Video Node", "节点对齐": "Arrange Nodes", "对齐所选节点": "Arrange Selected Nodes",
   "已新建标签页": "New project created", "至少保留一个项目": "At least one project must remain", "已删除项目（Ctrl+Z 可撤回）": "Project deleted (Ctrl+Z to restore)",
-  "上传图片文件": "Upload Image Files", "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
+  "上传图片文件夹": "Upload Image Folder", "文件夹中没有图片文件": "No image files found in the folder",
   "文件夹上传": "Folder Upload", "确认导入图片": "Confirm Image Import", "画布只保存缩略图；执行 AI 时读取本地原图。项目使用期间请勿移动或删除原文件夹。": "Only thumbnails are stored on the canvas. AI tasks read the local originals, so keep the source folder in place while using the project.",
   "确认上传": "Upload", "所选文件夹": "Selected folder",
   "请先输入 API Key": "Enter an API Key first", "API Key 有效": "API Key is valid", "API Key 无效": "API Key is invalid",
@@ -738,7 +740,7 @@ const state = {
   canvasGroupCollapsed: {},
   selectedCanvasGroupId: "",
   view: { x: 120, y: 90, scale: 1 },
-  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
+  settings: { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, combineParallelInputs: false, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: false, showScreenshotNodeMenu: false, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {} },
   customLibrary: { textTemplates: [], imageMaterials: [], multiNodeTemplates: [], variableDefinitions: [] },
   nextNode: 1,
   nextEdge: 1,
@@ -880,6 +882,13 @@ async function loadGlobalLibraryFromDisk() {
     // Persist immediately after the first decision, including an intentionally empty library.
     globalLibrary.builtinDefaultsInitialized = true;
     await seedBuiltinMultiNodeTemplates();
+    // 已下线内置文字模板的一次性清扫（RETIRED_BUILTIN_TEXT_IDS），标记后不重复执行
+    if (!globalLibrary.builtinRetiredTextSwept) {
+      const beforeCount = globalLibrary.textTemplates.length;
+      globalLibrary.textTemplates = globalLibrary.textTemplates.filter(item => !RETIRED_BUILTIN_TEXT_IDS.includes(item.id));
+      if (globalLibrary.textTemplates.length !== beforeCount) console.log("[内置组件] 已移除下线的内置文字模板", RETIRED_BUILTIN_TEXT_IDS.filter(id => !globalLibrary.textTemplates.some(item => item.id === id)));
+      globalLibrary.builtinRetiredTextSwept = true;
+    }
     console.log(`[加载] 本地素材库：文字=${globalLibrary.textTemplates.length}，图片=${globalLibrary.imageMaterials.length}，多节点=${globalLibrary.multiNodeTemplates.length}，变量=${globalLibrary.variableDefinitions.length}`);
     if (migrated) console.log(`[迁移] 已从浏览器存储合并 ${migrated} 个素材到本地文件`);
     saveGlobalLibrary();
@@ -987,6 +996,7 @@ const els = {
   autoAlign: $("autoAlignToggle"),
   editOnOverlap: $("editOnOverlapToggle"),
   textMergeOnOverlap: $("textMergeOnOverlapToggle"),
+  combineParallelInputs: $("combineParallelInputsToggle"),
   aiResultAsImageNode: $("aiResultAsImageNodeToggle"),
   showBrowserNodeMenu: $("showBrowserNodeMenuToggle"),
   showLocalSdNodeMenu: $("showLocalSdNodeMenuToggle"),
@@ -1185,6 +1195,7 @@ const els = {
   examplesCloseBtn: $("examplesCloseBtn"),
   examplesOpenBtn: $("examplesOpenBtn"),
   examplesGrid: $("examplesGrid"),
+  examplesSearchInput: $("examplesSearchInput"),
   replayOnboardingBtn: $("replayOnboardingBtn"),
   apiSettingsCard: $("apiSettingsCard"),
   onboardingTour: $("onboardingTour"),
@@ -1359,10 +1370,17 @@ function restoreData(data) {
     ? data.annotations.filter(item => item && typeof item === "object" && item.id).map(item => ({ id: String(item.id), text: String(item.text || ""), x: Number(item.x) || 0, y: Number(item.y) || 0 }))
     : [];
   state.selectedAnnotationId = "";
-  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: true, showScreenshotNodeMenu: true, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
+  state.settings = { gridSize: 40, snap: true, smoothEdges: true, autoAlign: true, editOnOverlap: true, textMergeOnOverlap: true, combineParallelInputs: false, aiResultAsImageNode: false, browserExtensionEnabled: true, browserPromptOptimizationEnabled: false, browserPromptPageUrl: "", showBrowserNodeMenu: true, showVideoNodeMenu: true, showLocalSdNodeMenu: false, showScreenshotNodeMenu: false, canvasBackground: "grid", theme: "dark", exportFolderLabel: "", projectFolderLabel: "", apiKey: "", agtokenApiKey: "", apiType: "agtoken", customApiBaseUrl: "", customApiHeaders: "", chatDisabledModels: [], chatDefaultModel: "", chatCustomSites: [], chatCustomKeys: {}, chatSiteModels: {}, chatSiteModelsFetched: {}, imageModelToggles: {}, hiddenMenuItems: [], defaultImageModel: "gpt-image-2.5-flare", defaultResolution: "1k", defaultSize: "1:1", model: "gpt-image-2", resolution: "1k", quality: "medium", defaultRatio: "1:1", zipExport: false, exportInputs: false, projectExportFolder: false, customMaterials: [], uiColors: {}, ...(data.settings || {}) };
   if (!state.settings._gridStepMigrated) {
     if (Number(state.settings.gridSize) === 20) state.settings.gridSize = 40;
     state.settings._gridStepMigrated = true;
+  }
+  // 本地 SD / 截图功能 右键入口改常闭（2026-11-27 用户要求）：旧存档沿袭旧默认的 true 一次性翻转；
+  // 打过标记后用户在「右键菜单管理」或常规页重新勾选的 true 不再被改动
+  if (!state.settings._menuDefaultClosedMigrated) {
+    if (state.settings.showLocalSdNodeMenu === true) state.settings.showLocalSdNodeMenu = false;
+    if (state.settings.showScreenshotNodeMenu === true) state.settings.showScreenshotNodeMenu = false;
+    state.settings._menuDefaultClosedMigrated = true;
   }
   state.settings.gridSize = Math.min(200, Math.max(10, Math.round(Number(state.settings.gridSize) || 40)));
   if (!catalogModels().some(model => model.id === state.settings.defaultImageModel)) {
@@ -1620,6 +1638,7 @@ function syncSettingsPanel() {
   els.autoAlign.checked = state.settings.autoAlign !== false;
   els.editOnOverlap.checked = state.settings.editOnOverlap !== false;
   els.textMergeOnOverlap.checked = state.settings.textMergeOnOverlap !== false;
+  els.combineParallelInputs.checked = state.settings.combineParallelInputs === true;
   els.aiResultAsImageNode.checked = state.settings.aiResultAsImageNode === true;
   els.showBrowserNodeMenu.checked = state.settings.showBrowserNodeMenu !== false;
   els.showBrowserNodeMenu.disabled = state.settings.browserExtensionEnabled === false;
@@ -3017,7 +3036,7 @@ function ungroupNode(groupId) {
 function splitMultiInputAiNode(nodeId) {
   const node = findNode(nodeId);
   if (!node || node.type !== "ai-image") return [nodeId];
-  if (node.keepCombinedInputs) return [nodeId];
+  if (node.keepCombinedInputs || state.settings.combineParallelInputs === true) return [nodeId];
 
   const incoming = buildIncomingIndex();
   const directEdges = incoming.get(nodeId) || [];
@@ -6153,7 +6172,8 @@ function collectUpstreamForAI(nodeId, incoming) {
   incoming = incoming || buildIncomingIndex();
   const result = { texts: [], images: [], groupImages: [], groupTexts: [], orderedRefs: [], branches: [] };
   const aiNode = findNode(nodeId);
-  const keepCombined = aiNode?.type !== "tool-node" && aiNode?.keepCombinedInputs === true;
+  const keepCombined = aiNode?.type !== "tool-node" && (aiNode?.keepCombinedInputs === true
+    || (aiNode?.type === "ai-image" && state.settings.combineParallelInputs === true));
   const groupsSeen = new Set();
 
   function imageRef(n, image, assetId) {
@@ -6262,6 +6282,7 @@ function collectUpstreamForAI(nodeId, incoming) {
       }
     }
     branchLists.length = 0;
+    flat.sort((a, b) => (a._x || 0) - (b._x || 0));
     branchLists.push({ texts: combinedTexts, images: flat });
   }
   result.branches = branchLists;
@@ -10876,9 +10897,15 @@ function startAnnotationEdit(id, selectAll = false) {
   try { el.contentEditable = "plaintext-only"; } catch { el.contentEditable = "true"; }
   el.classList.add("is-editing");
   el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
   if (selectAll) {
-    const range = document.createRange();
-    range.selectNodeContents(el);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    // 再次编辑：光标落到文字末尾。focus 默认停在段首，长文本下光标不明显，容易被误读成“没有出现输入框”
+    range.collapse(false);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
@@ -10942,6 +10969,7 @@ if (els.annotations) {
     if (!el) return;
     ev.preventDefault();
     ev.stopPropagation();
+    if (el.isContentEditable) return; // 已在编辑中：不吞原生双击选词
     startAnnotationEdit(el.dataset.id, false);
   });
 
@@ -11436,6 +11464,10 @@ els.viewport.addEventListener("mousedown", ev => {
   els.projectMenu.classList.add("hidden");
   if (ev.target.closest(".minimap-panel")) return;
   lastPointerWorld = screenToWorld(ev.clientX, ev.clientY);
+  // 标注编辑中的点击/拖拽属于原生文本操作（定位光标、选字）：
+  // plaintext-only 不匹配下方 [contenteditable='true'] 守卫，放行会走到空白画布分支——
+  // els.viewport.focus() 抢焦点触发 focusout 立即提交编辑，还会启动框选把选字变成拉框
+  if (ev.target.closest(".canvas-annotation.is-editing")) return;
   if (state.selectedAnnotationId) {
     state.selectedAnnotationId = "";
     syncAnnotationSelectionClasses();
@@ -14822,6 +14854,12 @@ function generationWorkflowMenuItems(node) {
   return supported && node?.hasWorkflowMeta === true ? [["还原作图流程", () => restoreAiWorkflowFromNode(node)]] : [];
 }
 
+// 拖入/替换/上传进来的图片若带作图流程元数据(PNG iTXt),同样点亮 hasWorkflowMeta 让右键出现「还原作图流程」
+function syncImageNodeWorkflowMeta(node, dataUrl) {
+  if (workflowReferencesFromMeta(readGenerationMetadataFromPng(dataUrl) || {}).length) node.hasWorkflowMeta = true;
+  else delete node.hasWorkflowMeta;
+}
+
 async function restoreAiWorkflowFromNode(node) {
   if (!node) return;
   const assetBridge = window.canvasflowDesktop || desktop;
@@ -14836,24 +14874,18 @@ async function restoreAiWorkflowFromNode(node) {
     if (!refs.length) return toast("该图片没有参考图清单，无法还原完整作图流程（只有关键词可用「提取生成所用关键词」）");
     const prompt = String(node.generationPrompt || meta.prompt || "").trim();
     const model = String(meta["CanvasFlow.Model"] || "").trim();
-    // 重建链路:新 AI 节点放结果节点左侧,输入列(关键词+参考图)再往左一列;按发送顺序纵排(同列同 x 按 created 排序)
+    // 重建链路:串联形态 文字 → 图1 → 图2 → … → 新 AI 节点,横向一排(AI 最右紧贴结果节点左侧,链上节点向左逐个排开)。
+    // 不能并联:AI 节点多条直连入线会被 splitMultiInputAiNode 在生成时拆成多个任务,无法复现原图;
+    // 串联经图片节点(汇聚)把关键词与全部参考图带进同一个任务(2026-11-27 用户反馈)。
     const aiPos = findFreeNodePosition(node.x - (NODE_WIDTH + 60), node.y, NODE_WIDTH, AI_NODE_HEIGHT);
     const aiNode = addNode("ai-image", aiPos.x, aiPos.y, false);
     if (model && modelCatalogEntry(model)) aiNode._model = model;
-    const inputX = aiNode.x - (NODE_WIDTH + 60);
-    let cursorY = aiNode.y;
-    const createdIds = [aiNode.id];
-    if (prompt) {
-      const textPos = findFreeNodePosition(inputX, cursorY, NODE_WIDTH, NODE_HEIGHT);
-      const textNode = addNode("text", textPos.x, textPos.y, false);
-      textNode.text = prompt;
-      state.edges.push({ id: uid("e"), from: { node: textNode.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
-      createdIds.push(textNode.id);
-      cursorY = textPos.y + NODE_HEIGHT + 40;
-    }
+    const chain = [];
     let restored = 0;
     const failed = [];
-    for (const assetId of refs) {
+    // 从贴近 AI 的槽位向左逐个创建参考图(倒序创建,发送顺序里越靠后的越贴近 AI),文字节点最后创建在最左
+    for (let index = refs.length - 1; index >= 0; index -= 1) {
+      const assetId = refs[index];
       let record = null;
       try {
         record = await assetBridge.readAsset(assetId);
@@ -14861,17 +14893,27 @@ async function restoreAiWorkflowFromNode(node) {
         console.warn("[还原作图流程] 参考原图读取失败", { assetId, message: error.message });
       }
       if (!/^data:image/.test(String(record?.dataUrl || ""))) { failed.push(assetId); continue; }
-      const pos = findFreeNodePosition(inputX, cursorY, NODE_WIDTH, IMAGE_NODE_HEIGHT);
+      const pos = findFreeNodePosition(aiNode.x - (chain.length + 1) * (NODE_WIDTH + 60), aiNode.y, NODE_WIDTH, IMAGE_NODE_HEIGHT);
       const refNode = addNode("image", pos.x, pos.y, false);
       refNode.image = record.dataUrl;
-      refNode.fileName = String(record.fileName || "") || `参考图-${restored + 1}.png`;
+      refNode.fileName = String(record.fileName || "") || `参考图-${index + 1}.png`;
       refNode.mime = String(record.mime || (record.dataUrl.match(/^data:([^;,]+)/)?.[1]) || "image/png");
       await externalizeImageField(refNode, "image", "imageAssetId", refNode.fileName);
-      state.edges.push({ id: uid("e"), from: { node: refNode.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
-      createdIds.push(refNode.id);
-      cursorY = pos.y + (Number(refNode.h) || IMAGE_NODE_HEIGHT) + 40;
+      chain.unshift(refNode);
       restored++;
     }
+    if (prompt) {
+      const textPos = findFreeNodePosition(aiNode.x - (chain.length + 1) * (NODE_WIDTH + 60), aiNode.y, NODE_WIDTH, NODE_HEIGHT);
+      const textNode = addNode("text", textPos.x, textPos.y, false);
+      textNode.text = prompt;
+      chain.unshift(textNode);
+    }
+    for (let i = 0; i < chain.length - 1; i += 1) {
+      state.edges.push({ id: uid("e"), from: { node: chain[i].id, port: "out" }, to: { node: chain[i + 1].id, port: "in" }, label: "" });
+    }
+    const chainTail = chain[chain.length - 1];
+    state.edges.push({ id: uid("e"), from: { node: chainTail.id, port: "out" }, to: { node: aiNode.id, port: "in" }, label: "" });
+    const createdIds = [aiNode.id, ...chain.map(node => node.id)];
     state.selected = new Set(createdIds);
     pushHistory();
     render();
@@ -15280,7 +15322,10 @@ window.addEventListener("blur", () => {
 window.addEventListener("wheel", ev => { if (ev.ctrlKey || ev.metaKey) ev.preventDefault(); }, { passive: false, capture: true });
 
 els.viewport.addEventListener("pointerdown", ev => {
-  if (ev.target.closest("button,input,textarea,select,video,[contenteditable='true']")) return;
+  // 标注编辑态是 contenteditable="plaintext-only"，不匹配 [contenteditable='true']；
+  // 捕获阶段抢焦点会让标注 focusout 立即提交编辑，必须整体放行标注
+  // （非编辑态点击标注由标注自己的 mousedown 聚焦画布，行为不变）
+  if (ev.target.closest("button,input,textarea,select,video,[contenteditable='true'],[contenteditable='plaintext-only'],.canvas-annotation")) return;
   els.viewport.focus({ preventScroll: true });
 }, true);
 
@@ -15489,6 +15534,7 @@ els.viewport.addEventListener("drop", async ev => {
           node.fileName = source.fileName;
           node.mime = source.mime;
           await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+          syncImageNodeWorkflowMeta(node, source.image);
           createdIds.push(node.id);
         }
         state.selected = new Set([aiNode.id, ...createdIds]);
@@ -15509,6 +15555,7 @@ els.viewport.addEventListener("drop", async ev => {
       node.fileName = sources[0].fileName;
       node.mime = sources[0].mime;
       await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+      syncImageNodeWorkflowMeta(node, sources[0].image);
       state.selected = new Set([node.id]);
       pushHistory();
       render();
@@ -15525,6 +15572,7 @@ els.viewport.addEventListener("drop", async ev => {
       node.fileName = source.fileName;
       node.mime = source.mime;
       await externalizeImageField(node, "image", "imageAssetId", node.fileName);
+      syncImageNodeWorkflowMeta(node, source.image);
       createdIds.push(node.id);
     }
     state.selected = new Set(createdIds);
@@ -16058,6 +16106,8 @@ function addCanvasExample(example) {
   };
   pasteNodes(data, exampleViewportAnchor());
   toast(`已添加案例「${example.title || ""}」`);
+  // 案例面板全屏显示时画布被完全盖住，插入后收起面板让用户直接看到结果
+  setExamplesPanelOpen(false);
 }
 
 // 卡片无截图封面时的几何示意图：按画布数据重绘节点块与连线（同 renderMinimap 的几何画法）
@@ -16133,21 +16183,21 @@ function renderExamplesPanel() {
     els.examplesGrid.innerHTML = `<div class="examples-empty">${uiLanguage === "en" ? "No built-in examples yet" : "暂无内置案例"}</div>`;
     return;
   }
-  els.examplesGrid.innerHTML = examples.map((example, index) => {
+  const keywords = String(els.examplesSearchInput?.value || "").normalize("NFKC").toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const cards = examples.map((example, index) => {
+    const searchable = [example.title, translateEnglishString(example.title || ""), ...(example.nodes || []).flatMap(node => [node.text, node.prompt, node.toolName])].filter(Boolean).join(" ").normalize("NFKC").toLocaleLowerCase();
+    if (!keywords.every(keyword => searchable.includes(keyword))) return "";
     const title = escapeHtml(translateUiString(example.title || ""));
-    const meta = uiLanguage === "en"
-      ? `${example.nodes.length} nodes · ${example.edges.length} connections`
-      : `${example.nodes.length} 个节点 · ${example.edges.length} 条连线`;
     const coverPath = uiLanguage === "en" ? (example.coverEn || example.cover) : example.cover;
     const cover = coverPath
       ? `<img class="example-cover" src="${escapeHtml(coverPath)}" alt="${title}" loading="lazy">`
       : `<canvas class="example-cover" data-example-index="${index}" data-preview-width="248" data-preview-height="140"></canvas>`;
-    return `<button type="button" class="example-card" data-example-index="${index}" title="${uiLanguage === "en" ? "Add to canvas" : "添加到画布"}">
+    return `<button type="button" class="example-item" data-example-index="${index}" title="${uiLanguage === "en" ? "Add to canvas" : "添加到画布"}">
       <span class="example-card-name">${title}</span>
-      ${cover}
-      <span class="example-card-body"><small>${meta}</small></span>
+      <span class="example-card">${cover}</span>
     </button>`;
   }).join("");
+  els.examplesGrid.innerHTML = cards || `<div class="examples-empty" role="status">${escapeHtml(translateUiString("没有匹配的案例，请尝试其他关键词"))}</div>`;
   for (const canvas of els.examplesGrid.querySelectorAll("canvas.example-cover")) {
     drawExamplePreview(canvas, examples[Number(canvas.dataset.exampleIndex)]);
   }
@@ -16157,6 +16207,7 @@ $("settingsBtn").onclick = () => setSettingsSidebarOpen(els.settings.classList.c
 $("closeSettingsBtn").onclick = () => setSettingsSidebarOpen(false);
 els.examplesBtn.onclick = () => setExamplesPanelOpen(els.examplesPanel.classList.contains("hidden"));
 els.examplesCloseBtn.onclick = () => setExamplesPanelOpen(false);
+els.examplesSearchInput.addEventListener("input", renderExamplesPanel);
 els.examplesOpenBtn.onclick = () => setExamplesPanelOpen(true);
 els.examplesGrid.addEventListener("click", event => {
   const card = event.target.closest("[data-example-index]");
@@ -16641,10 +16692,15 @@ els.composerText.addEventListener("keydown", ev => {
     createNodesFromComposer();
   }
 });
-els.composerUploadBtn.onclick = (ev) => {
+// 点击直接打开系统文件对话框：input[multiple] 原生支持 Ctrl/Shift 加选，多选后各自生成图片节点；
+// 文件夹上传收进按钮右键（桌面走壳桥 pick-image-folder，浏览器走 webkitdirectory 隐藏 input）
+els.composerUploadBtn.onclick = () => {
+  els.composerFileInput.click();
+};
+els.composerUploadBtn.oncontextmenu = (ev) => {
+  ev.preventDefault();
   const r = els.composerUploadBtn.getBoundingClientRect();
   showMenu(r.left, r.top, [
-    ["上传图片文件", () => els.composerFileInput.click()],
     ["上传图片文件夹", () => {
       if (window.chrome?.webview) window.chrome.webview.postMessage({ type: "pick-image-folder" });
       else els.composerFolderInput.click();
@@ -17014,6 +17070,11 @@ els.editOnOverlap.onchange = () => {
 
 els.aiResultAsImageNode.onchange = () => {
   state.settings.aiResultAsImageNode = els.aiResultAsImageNode.checked;
+  pushHistory();
+};
+
+els.combineParallelInputs.onchange = () => {
+  state.settings.combineParallelInputs = els.combineParallelInputs.checked;
   pushHistory();
 };
 

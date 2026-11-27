@@ -85,12 +85,27 @@ test("还原实现：按哈希从素材仓库取原图、重建链路、校验�
   assert.match(app, /if \(model && modelCatalogEntry\(model\)\) aiNode\._model = model;/);
   assert.match(app, /to: \{ node: aiNode\.id, port: "in" \}, label: "" \}/);
   assert.match(app, /AI 节点未自动生成/);
+  // 串联接线（2026-11-27 用户反馈）：文字 → 图1 → 图2 → … → AI；并联多直连会被 splitMultiInputAiNode 拆任务
+  assert.match(app, /串联形态 文字 → 图1 → 图2 → … → 新 AI 节点/);
+  assert.match(app, /from: \{ node: chain\[i\]\.id, port: "out" \}, to: \{ node: chain\[i \+ 1\]\.id, port: "in" \}, label: "" \}/);
+  assert.match(app, /const chainTail = chain\[chain\.length - 1\];/);
   const fnStart = app.indexOf("async function restoreAiWorkflowFromNode");
   const fnEnd = app.indexOf("async function extractGenerationKeywords", fnStart);
-  assert.ok(!app.slice(fnStart, fnEnd).includes("enqueueAiNode("), "还原流程不得自动入队生成");
+  const restoreSlice = app.slice(fnStart, fnEnd);
+  assert.ok(!restoreSlice.includes("enqueueAiNode("), "还原流程不得自动入队生成");
+  assert.ok(!/from: \{ node: textNode\.id/.test(restoreSlice), "文字节点不得直连 AI（必须串联）");
+  assert.ok(!/from: \{ node: refNode\.id/.test(restoreSlice), "参考图节点不得直连 AI（必须串联）");
 });
 
 test("预览置入：注入带清单的图点亮 hasWorkflowMeta，否则熄灭", () => {
   assert.match(app, /if \(workflowReferencesFromMeta\(readGenerationMetadataFromPng\(payload\.image\) \|\| \{\}\)\.length\) target\.hasWorkflowMeta = true;/);
   assert.match(app, /else delete target\.hasWorkflowMeta;/);
+});
+
+test("拖入图片同样点亮 hasWorkflowMeta（2026-11-27 用户反馈：拖回画布的生成结果还原不出来）", () => {
+  assert.match(app, /function syncImageNodeWorkflowMeta\(node, dataUrl\) \{/);
+  assert.match(app, /if \(workflowReferencesFromMeta\(readGenerationMetadataFromPng\(dataUrl\) \|\| \{\}\)\.length\) node\.hasWorkflowMeta = true;/);
+  // 三个拖放入画布路径都要同步：拖到图片节点上替换 / 拖到空白处新建 / 拖到 AI 节点后的多余图
+  assert.match(app, /syncImageNodeWorkflowMeta\(node, sources\[0\]\.image\);/);
+  assert.match(app, /syncImageNodeWorkflowMeta\(node, source\.image\);/);
 });

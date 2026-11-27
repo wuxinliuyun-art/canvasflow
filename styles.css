@@ -9,6 +9,7 @@
   --panel: #ffffff;
   --panel-solid: #ffffff;
   --panel-2: #e0e2e5;
+  --example-cover-bg: #454649; /* 固定匹配内置深色截图的编组底色 */
   --text: #202226;
   --muted: #6b7280;
   --line: #a7abb2;
@@ -77,6 +78,7 @@ html, body, .app {
   --panel: rgba(19, 19, 22, .92);
   --panel-solid: #131316;
   --panel-2: #26262a;
+  --example-cover-bg: #454649;
   --checker-a: #34343a;
   --checker-b: #26262b;
   --text: #f4f4f5;
@@ -730,6 +732,7 @@ button:disabled { opacity: .42; cursor: default; transform: none; }
 }
 
 .resize-handle:hover { opacity: .8; }
+.node.text .resize-handle { right: 4px; bottom: 4px; }
 
 .image-preview {
   height: 70px;
@@ -3127,6 +3130,8 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .node.group .node-body { min-height: 0; overflow: hidden; }
 .node.group .image-actions { flex: 0 0 auto; }
 .node.text .node-body {
+  /* 裁剪渐隐层和缩放手柄，避免底部矩形覆盖节点圆角。 */
+  border-radius: 0 0 16px 16px;
   height: calc(100% - 46px);
   padding-top: 0;
   min-width: 0;
@@ -3428,7 +3433,8 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--examples-sidebar-width);
+  left: 0;
+  width: 100vw;
   max-height: none;
   display: flex;
   flex-direction: column;
@@ -3445,15 +3451,19 @@ body.onboarding-step-project .project-shell > #newCanvasBtn { transition: none; 
 .examples-head > div { display: grid; gap: 3px; }
 .examples-head strong { font-size: 18px; font-weight: 600; }
 .examples-head span { color: var(--muted); font-size: 12px; }
-.examples-grid { flex: 1 1 auto; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 12px; padding: 16px 18px 20px; align-content: start; }
-.example-card { display: grid; gap: 0; padding: 0; border: 1px solid var(--panel-2); border-radius: 12px; overflow: hidden; text-align: left; background: var(--panel); color: var(--text); cursor: pointer; transition: border-color .15s, opacity .15s; }
-.example-card:hover { border-color: var(--primary); }
-.example-card:active { opacity: .9; }
-.example-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.example-cover { display: block; width: 100%; height: 140px; object-fit: contain; background: var(--panel-2); }
-.example-card-name { padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text); background: var(--panel-solid); border-bottom: 1px solid var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.example-card-body { display: grid; padding: 8px 12px 12px; }
-.example-card-body small { color: var(--muted); font-size: 12px; }
+.examples-search { flex: 0 0 auto; padding: 12px 20px 0; }
+.examples-search input { display: block; box-sizing: border-box; width: min(480px, 100%); min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-solid); color: var(--text); font: inherit; font-size: 14px; }
+.examples-search input::placeholder { color: var(--muted); }
+.examples-search input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.examples-grid { flex: 1 1 auto; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); grid-auto-rows: max-content; gap: 24px 12px; padding: 16px 18px 20px; align-content: start; }
+.examples-grid .example-item { display: grid; min-width: 0; gap: 4px; padding: 0; border: 0; border-radius: 0; text-align: left; background: transparent; color: var(--text); cursor: pointer; transition: opacity .15s; }
+.examples-grid .example-item:hover { background: transparent; }
+.example-card { display: block; min-width: 0; border: 1px solid var(--panel-2); border-radius: 12px; overflow: hidden; background: var(--example-cover-bg); }
+.example-item:hover .example-card { border-color: var(--primary); }
+.example-item:active { opacity: .9; }
+.example-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.example-cover { display: block; width: 100%; height: 140px; object-fit: contain; background: var(--example-cover-bg); }
+.example-card-name { display: block; min-width: 0; padding: 0 4px; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .examples-empty { grid-column: 1 / -1; padding: 32px 0; color: var(--muted); font-size: 13px; text-align: center; }
 .examples-sidebar-open .minimap-panel { right: calc(var(--examples-sidebar-width) + 18px); bottom: 86px; }
 .examples-sidebar-open .composer-dock {
@@ -3989,8 +3999,10 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .extension-head-actions { display: inline-flex; gap: 8px; }
 .extension-icon-btn { width: 34px; height: 34px; min-height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .extension-icon-btn svg { width: 17px; height: 17px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.extension-list { display: grid; gap: 6px; }
-.extension-accordion { display: grid; gap: 8px; }
+/* minmax(0,1fr)：auto 轨道会被行内 nowrap 长描述的内容固有宽度撑破容器，
+   右侧启用开关被 .extension-section 的 overflow:hidden 裁掉（窄面板必现） */
+.extension-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.extension-accordion { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .extension-section { margin-bottom: 0; padding: 0; overflow: hidden; }
 .extension-section > summary { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 8px 12px; cursor: pointer; list-style: none; }
 .extension-section > summary::-webkit-details-marker { display: none; }
@@ -4010,7 +4022,7 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 .cep-panel-actions { display: flex; gap: 8px; margin-top: 8px; }
 .cep-panel-actions #cepStatusLine { margin-top: 8px; }
 #cepStatusLine { white-space: pre-line; }
-.extension-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--panel-2); border-radius: 9px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
+.extension-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border: 1px solid var(--panel-2); border-radius: 9px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
 .extension-item.dragging { opacity: .5; }
 .extension-item[data-disabled="1"] .extension-item-info { opacity: .55; }
 .extension-drag-handle { flex: 0 0 auto; width: 22px; height: 34px; display: grid; place-items: center; cursor: grab; color: color-mix(in srgb, var(--text) 45%, transparent); border-right: 1px solid var(--panel-2); margin-right: 2px; }
@@ -4977,3 +4989,21 @@ body.onboarding-api-step .settings-content { overflow: auto; }
 
 /* 钢笔参数只在选中钢笔时展开，工具入口保持常显。 */
 .lightbox-selection-options #lightboxPenTool[aria-pressed="false"] ~ :not(button) { display: none; }
+
+/* 并联任务开关：问号展开内联示意，不遮挡设置内容。 */
+.parallel-task-setting { display: grid; grid-template-columns: minmax(0, max-content) 24px; align-items: center; column-gap: 8px; }
+.parallel-task-help { display: contents; }
+.parallel-task-help[open]::details-content { display: contents; }
+.parallel-task-help:not([open]) > .parallel-task-explanation { display: none; }
+.parallel-task-help > summary { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; color: var(--muted); cursor: pointer; list-style: none; border-radius: 50%; }
+.parallel-task-help > summary::-webkit-details-marker { display: none; }
+.parallel-task-help > summary:hover { color: var(--text); background: var(--accent-soft); }
+.parallel-task-help > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.parallel-task-help > summary svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.parallel-task-explanation { grid-column: 1 / -1; min-width: 0; margin: 8px 0 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); font-size: 12px; line-height: 1.6; }
+.parallel-task-explanation p { margin: 0; }
+.parallel-task-diagram { display: block; width: 100%; max-width: 480px; height: auto; margin: 12px 0; overflow: visible; }
+.parallel-task-diagram path { fill: none; stroke: var(--muted); stroke-width: 2; }
+.parallel-task-diagram rect { fill: var(--panel-solid); stroke: var(--line); }
+.parallel-task-diagram text { fill: var(--text); font-size: 14px; text-anchor: middle; dominant-baseline: central; }
+.parallel-task-example { margin: 12px 0; overflow-wrap: anywhere; }

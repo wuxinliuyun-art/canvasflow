@@ -181,13 +181,17 @@ test('dashed brush size follows display scale and hides during picking', () => {
   const start = script.indexOf('    function syncBrushRing(');
   const end = script.indexOf('    const onCanvas', start);
   const hidden = new Set(['hidden']);
-  const context = { brushPoint: null, picking: false, busy: false, lightboxPanSpaceDown: false, lightboxViewDrag: null, preview: { width: 1000 }, eventCanvas: { getBoundingClientRect: () => ({ width: 500 }) }, field: () => ({ value: 72 }), brushRing: { style: {}, classList: { add: value => hidden.add(value), remove: value => hidden.delete(value) } } };
+  const context = { brushPoint: null, picking: false, busy: false, lightboxPaintMode: 'idle', lightboxPanSpaceDown: false, lightboxViewDrag: null, preview: { width: 1000 }, eventCanvas: { getBoundingClientRect: () => ({ width: 500 }) }, field: () => ({ value: 72 }), brushRing: { style: {}, classList: { add: value => hidden.add(value), remove: value => hidden.delete(value) } } };
   vm.runInNewContext(script.slice(start, end), context);
   context.syncBrushRing({ clientX: 300, clientY: 200 });
   assert.equal(context.brushRing.style.width, '36px');
   assert.equal(context.brushRing.style.height, '36px');
   assert.equal(hidden.has('hidden'), false);
   context.picking = true; context.syncBrushRing();
+  assert.equal(hidden.has('hidden'), true);
+  context.picking = false; context.syncBrushRing();
+  assert.equal(hidden.has('hidden'), false);
+  context.lightboxPaintMode = 'pen'; context.syncBrushRing();
   assert.equal(hidden.has('hidden'), true);
 });
 

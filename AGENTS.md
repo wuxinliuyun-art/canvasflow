@@ -17,6 +17,11 @@
 - 原因:旧标签页里跑着旧版前端脚本(HTML/CSS/JS 更新后不会自动到达已打开的页面),在旧标签上验证会得出"改了没生效/时好时坏"的错误结论;多个标签并存还会互相覆盖 localStorage 里的项目设置。
 - 服务器侧配套:`server.js` 对前端文件按 mtime 实时读盘(不做启动快照),`index.html` 响应头 `Cache-Control: no-store`;桌面版 WebView2 对 index.html 强制不缓存。三者任一被改回旧模式,本规范的前提即失效。
 
+## 功能验收纪律（2026-11-27 用户明确要求）
+
+- **新做的功能完成后，必须先请用户确认能否正常使用**：会话说明改了什么、请用户测什么（与上方浏览器测试规范一致——由用户自己实测，自动化验证不替代用户验收），用户确认可用之前该功能视为未完成。
+- **没有经过测试（用户未确认可用）的功能，不建议直接发布**：发布内容（Release、应用内发版、安装包、界面热更新）里不应包含未经验收的新功能；确实要随版发布时，必须在发布前向用户明确指出哪些功能未经其验收，由用户决定是否放行。
+
 ## 已知问题 / 踩坑记录
 
 ### 中文 BAT 使用 UTF-8 时被 CMD 错误解析
@@ -449,3 +454,9 @@
 - 右键菜单「还原作图流程」（`generationWorkflowMenuItems`，仅 image/ai-image 两类）：**只在 `hasWorkflowMeta === true` 时显示**（2026-11-20 用户明确要求"只有包含作图流程才显示，不然不显示"），旧图/无清单图一律隐藏。还原动作 `restoreAiWorkflowFromNode`：从素材仓库读原图 → 解析 References → 在结果节点左侧重建 新 AI 节点（模型经 `modelCatalogEntry` 校验后回填 `_model`）+ 输入列（关键词文字节点 + 参考图节点按发送顺序纵排，同列同 x 靠 created 保序）→ 连线成链；**不自动生成**，位置经 `findFreeNodePosition` 避让，Ctrl+Z 可整体撤销。
 - 「把图片放回 AI 节点内部预览」（`injectImageIntoAiPreview`，叠放合成第三模式 aiInject + 文件拖入）会按放入图的 PNG 元数据**同步点亮/熄灭** `hasWorkflowMeta`——换成没有流程信息的图会清掉旧标记，防止还原菜单指向对不上的数据。
 - 避免：`workflowMetaForTask` 的新依赖会牵连 vm 切片测试——`tests/task-result-edge.test.cjs` 的 harness 已加 `workflowMetaForTask: () => null` 桩，改 applyQueuedResult 时勿删；跨 realm 数组断言用 JSON.stringify 比较；`CanvasFlow.References` 的可见性判据是节点标记而非运行时读 PNG（内嵌图是 webp 缩略图、元数据已丢失，读原图是异步的不能进同步菜单构建）。
+
+### 设置面板 grid 轨道溢出坑（2026-11-26）
+
+- **SAFMN 轻量放大拓展已整体移除（2026-11-26 用户拍板「效果不好」，勿重新引入）**：曾以拓展形式接入官方 SAFMN-L 真实场景超分（`extensions-presets/SAFMN放大/`，含 89MB 权重与 CPU torch 私有 venv，均已删）。实测结论：图形边缘锐化尚可但整体画质提升有限、重退化下小字被抹平，用户不满意；画布放大质量基准仍是 Real-ESRGAN 高清拓展。若将来再做放大类拓展，先与用户确认模型选型再动手。
+- **自动抠图-通用在本机就位（2026-11-26）+ venv 版 DLL 坑变体**：`models/birefnet-general.onnx`（972MB）已从 rembg 官方 release（`BiRefNet-general-epoch_244.onnx`，rembg 下载时重命名为 birefnet-general）就位，sha256/md5 双哈希过 `模型校验.txt`；`.gitignore` 已挡 models/*.onnx。**轻量版的 System32 古董 msvcp140.dll 段错误坑在 .venv 路线同样中招，且把 DLL 放 `.venv/Scripts`（exe 目录）无效**——onnxruntime 的 pyd 经 LOAD_WITH_ALTERED_SEARCH_PATH 加载，依赖 DLL 只认 **pyd 同目录**（`.venv/Lib/site-packages/onnxruntime/capi/`）；修法 = 把 `自动抠图-U2Net/runtime/` 的 5 个新版 VC DLL 复制进该 capi 目录（本机已做，删 .venv 重建后需重做）。python-path.txt 指向的是另一台机器的 uv Python（git 同步来的），本机不存在时 run.py 自动回退系统 Python 建 .venv，属预期不修。内置对比：画布自带 WASM 抠图（onnxruntime-web 28MB + u2netp 4.5MB）是「能跑」档，拓展 BiRefNet 是质量档，两者并存。
+- **设置面板 grid auto 轨道溢出（「拓展没有开关」实踩）**：`.extension-list`/`.extension-accordion` 是 `display:grid` 但**未定义列宽**——auto 轨道按行内容的固有宽度（拓展描述 `white-space:nowrap` 很长）撑到 ~590px，超出面板容器后被 `.extension-section` 的 `overflow:hidden` 裁掉右侧，行尾的「启用」开关（flex:0 0 auto 不收缩）整段不可见；窗口/面板越窄越必现，宽窗口不触发，故此前未被发现（与 SAFMN 无关，任何拓展行都中招）。修法：两处 grid 加 `grid-template-columns: minmax(0, 1fr)` + `.extension-item` 加 `min-width: 0`（flex 子项的 `min-width:0` 只允许自身在定宽容器内收缩，**改变不了它向父级上报的固有宽度**——grid 轨道取的是后者，这是本次的认知点）。验证走静态复现页（临时目录同款 CSS+markup + getBoundingClientRect 量轨道宽），未开用户画布。styles `?v=`=`20261126-exttoggle1`（app 停在 `20261125-settingsen1`）；chat-thread-ui / canvas-minimap-enhancements / image-annotation-editor 三处基线已同步。新 grid 容器装「nowrap 长文本行」时一律 `minmax(0,1fr)` 起手。
